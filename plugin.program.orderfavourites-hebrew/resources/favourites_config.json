@@ -178,11 +178,6 @@
       "icon": "wizard_pov_il.png",
       "action": "RunAddon(\"plugin.program.kodipovilwizard\")"
     },
-    "fast_update": {
-      "name": "[B][COLOR blue]עדכון מהיר - Wizard[/COLOR][/B]",
-      "icon": "fast_update_pov_il.png",
-      "action": "PlayMedia(\"plugin://plugin.program.kodipovilwizard/?mode=install&action=quick_update&name=Kodi+POV+IL+-+FENtastic&auto_quick_update=false\")"
-    },
     "rd_status": {
       "name": "[B]סטטוס מנוי Real Debrid[/B]",
       "icon": "RD_Account_Status.png",

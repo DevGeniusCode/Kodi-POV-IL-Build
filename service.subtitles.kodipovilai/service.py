@@ -461,7 +461,6 @@ def _run_build_startup_repairs():
         # keeps every cached thumbnail, and affects Kodi after its next start.
         _maybe_optimize_32bit_artwork,
         _maybe_patch_idanplus_channels,
-        _maybe_patch_pov_genre_icons,
         _maybe_patch_pov_hebrew_genres,
         _maybe_patch_pov_hebrew_ui,
         _maybe_patch_mdblist_reauth,
@@ -476,11 +475,9 @@ def _run_build_startup_repairs():
         _maybe_patch_umbrella_language,
         _maybe_patch_skin_watched_poster,
         _maybe_add_tonight_entry,
-        _maybe_seed_recent_updates_tile,
         _maybe_fix_idanplus_youtube_id,
         _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
-        _maybe_reload_for_tiles,
         # LAST on purpose: it reports on the pass above, so it has
         # to run after everything it reports on.
         _report_patcher_health,
@@ -963,49 +960,6 @@ def _tile_reload_worker():
         pass
 
 
-def _maybe_reload_for_tiles():
-    """LAST startup step: if build_icons_patcher dropped stale tile textures this
-    boot (a TILE_REFRESH_GEN bump, or a FORCE_SYNC tile whose bytes changed), do
-    one skin reload so the fresh home-tile art shows now rather than only on the
-    next restart -- the cache entries are already gone, ReloadSkin re-caches them
-    from disk. Runs on a BACKGROUND thread: the reload + bounded focus-restore
-    (~1-11s) must not block the rest of main() (autosub listener registration,
-    etc.). Gen-triggered reloads are one-off per generation (marker-gated in the
-    patcher, and only after the marker actually persisted)."""
-    if not _TILE_REFRESH_NEEDED[0]:
-        return
-    _TILE_REFRESH_NEEDED[0] = False
-    try:
-        import threading
-        threading.Thread(target=_tile_reload_worker,
-                         name='pov-tile-reload', daemon=True).start()
-    except Exception:
-        # Couldn't spawn a thread -> run inline (still fully guarded).
-        _tile_reload_worker()
-
-def _maybe_patch_pov_genre_icons():
-    """Re-icon POV's genre navigator rows to the stable
-    povil_icons set we ship (AF3 cached shortcut rows)."""
-    if _skip_pov_patchers():
-        return
-    try:
-        from resources.lib import af3_home_patcher, kodi_utils
-    except Exception:
-        return
-    try:
-        if af3_home_patcher._patch_pov_genre_icons():
-            kodi_utils.log(
-                'pov genre icons: repointed navigator rows to '
-                'povil_icons', level='INFO')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'pov genre icons patch failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-
-
 def _maybe_patch_pov_hebrew_genres():
     """Translate POV's genre menu labels to Hebrew (all skins). POV's genre
     names come from the dict keys of modules/meta_lists.py; a POV self-update
@@ -1097,31 +1051,6 @@ def _maybe_patch_pov_hebrew_ui():
             kodi_utils.log(
                 'pov_hebrew_ui_patcher failed: {0}'.format(e),
                 level='WARNING')
-        except Exception:
-            pass
-
-
-def _maybe_seed_recent_updates_tile():
-    """Put the "10 העדכונים האחרונים" tile on the home screen, once ever.
-
-    Deliberately runs right after the personal-tiles restore, so it looks at a
-    favourites.xml that has already been repaired if it needed repairing --
-    otherwise a mid-repair file could be read as "no closing tag" and the offer
-    would be silently skipped for that boot.
-    """
-    try:
-        from resources.lib import recent_updates_tile_patcher, kodi_utils
-    except Exception:
-        return
-    try:
-        status = recent_updates_tile_patcher.ensure_patched()
-        if status not in ('already_seen', 'no_kodi', 'no_favourites'):
-            kodi_utils.log('recent_updates_tile_patcher: {0}'.format(status),
-                           level='INFO')
-    except Exception as e:
-        try:
-            kodi_utils.log('recent_updates_tile_patcher failed: {0}'.format(e),
-                           level='WARNING')
         except Exception:
             pass
 

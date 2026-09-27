@@ -1,8 +1,8 @@
 # File: plugin.program.kodipovilwizard/resources/libs/patches/pov_combined_discover.py
 
 import xbmc
-from resources.lib.indexers.tmdb_api import base_url, get_tmdb, EXPIRES_4_HOURS
-from resources.lib.caches.main_cache import cache_object
+from indexers.tmdb_api import base_url, get_tmdb, EXPIRES_4_HOURS
+from caches.main_cache import cache_object
 
 def _build_url(endpoint):
     """

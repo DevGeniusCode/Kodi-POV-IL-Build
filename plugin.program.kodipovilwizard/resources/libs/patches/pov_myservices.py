@@ -20,7 +20,7 @@ LABEL_CONNECTED_ALL = 'מחובר ✓ · מסונכרן לכל התוספים'
 LABEL_DISCONNECTED_ALL = 'לא מחובר · לחץ לחיבור בכל התוספים'
 LABEL_CONNECTED_POV_ONLY = 'מחובר ל-POV בלבד · לחץ לחיבור בכל התוספים'
 LABEL_CONNECTED_POV = 'מחובר ✓ · לחץ לניהול'
-LABEL_DISCONNECTED_POV = 'לא מחובר · לחץ לחיבור'
+LABEL_DISCONNECTED_POV = 'לא מחובר · לחץ לחיבור ל-POV'
 LABEL_ADVANCED_POV_ONLY = 'חיבור ל-POV בלבד (מתקדם)'
 LABEL_ADVANCED_POV_SUB = 'התפריט המקורי של POV, ללא סנכרון לשאר התוספים'
 
@@ -163,8 +163,8 @@ def get_authorize_override(orig_authorize):
 
         # Table structure: (service_name, provider_type, icon, am_prefix, am_keys, pov_class_names)
         SERVICE_INTEGRATIONS = (
-            ('trakt',         'pov',  'trakt.png',       None,        (),                                     ('Trakt',)),
-            ('mdblist',       'am',   'mdblist.png',     'mdblist',   ('mdblist.token',),                     ('MDBList',)),
+            ('trakt',         'am',   'trakt.png',       'trakt',     ('trakt.token',),                       ('Trakt',)),
+            ('mdblist',       'am',   'mdblist.png',     'mdblist',   ('mdblist.apikey',),                    ('MDBList',)),
             ('tmdblist',      'pov',  'tmdb.png',        None,        (),                                     ('TMDBList', 'TMDbList')),
             ('real-debrid',   'am',   'realdebrid.png',  'realdebrid',('realdebrid.token',),                  ('RealDebrid',)),
             ('premiumize.me', 'am',   'premiumize.png',  'premiumize',('premiumize.token',),                  ('Premiumize',)),
