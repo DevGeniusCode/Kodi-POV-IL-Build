@@ -1,85 +1,264 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <window type="dialog" id="12209">
-		<visible>Window.IsActive(fullscreenvideo) + ![Window.IsActive(videoosd) | Window.IsActive(1125)] + Player.Paused + !String.IsEmpty(VideoPlayer.Plot)</visible>
-		<visible>![Window.IsActive(sliderdialog) | Window.IsActive(subtitlesearch)] + !System.HasActiveModalDialog + String.IsEmpty(Window(home).Property(MoranSubsChooserOpen))</visible>
-		<include>top2bottomslideanimation</include>
+	<visible>Window.IsActive(fullscreenvideo) + ![Window.IsActive(videoosd) | Window.IsActive(1125)] + Player.Paused + !String.IsEmpty(VideoPlayer.Plot)</visible>
+	<visible>![Window.IsActive(sliderdialog) | Window.IsActive(subtitlesearch)] + !System.HasActiveModalDialog + String.IsEmpty(Window(home).Property(MoranSubsChooserOpen))</visible>
+	<include>top2bottomslideanimation</include>
 	<controls>
 
-	
-	<control type="group">
-	<top>100</top>
-	<height>320</height>
-		<control type="image">
-			<top>-200</top>
-			<height>520</height>
-			<texture>colors/white.png</texture>
-			<colordiffuse>black</colordiffuse>
+		<!-- ============ BACKDROP: dimmed video + faint fanart (fade only) ============ -->
+		<control type="group">
+			<visible>Player.Paused</visible>
+			<animation type="Visible">
+				<effect type="fade" start="0" end="100" time="300"/>
+			</animation>
+			<animation type="Hidden">
+				<effect type="fade" start="100" end="0" time="250"/>
+			</animation>
+			<control type="image">
+				<texture>colors/white.png</texture>
+				<colordiffuse>D9000000</colordiffuse>
+			</control>
+			<control type="image">
+				<aspectratio>scale</aspectratio>
+				<colordiffuse>3CFFFFFF</colordiffuse>
+				<texture>$VAR[NowPlayingFanartVar]</texture>
+			</control>
 		</control>
-	<control type="group">
-	<height>300</height>
-	<width>550</width>
-		<control type="image">
-			<texture border="16">icons/box21.png</texture>
-			<colordiffuse>gray</colordiffuse>
+
+		<!-- ============ FOREGROUND: fades in while rising 40px ============ -->
+		<control type="group">
+			<visible>Player.Paused</visible>
+			<animation type="Visible">
+				<effect type="slide" start="0,40" end="0,0" time="300" tween="cubic" easing="out"/>
+				<effect type="fade" start="0" end="100" time="300"/>
+			</animation>
+			<animation type="Hidden">
+				<effect type="slide" start="0,0" end="0,40" time="250" tween="cubic" easing="in"/>
+				<effect type="fade" start="100" end="0" time="250"/>
+			</animation>
+
+			<!-- Clearlogo, top right (falls back to nothing if the item has none) -->
+			<control type="image">
+				<top>70</top>
+				<right>120</right>
+				<width>380</width>
+				<height>130</height>
+				<aspectratio align="right" aligny="center">keep</aspectratio>
+				<texture>$VAR[PlayerClearLogoVar]</texture>
+			</control>
+
+			<!-- Main content block: poster on the left, info column on the right -->
+			<control type="group">
+				<top>190</top>
+				<height>700</height>
+				<left>120</left>
+				<right>120</right>
+
+				<!-- Poster -->
+				<control type="group">
+					<top>50</top>
+					<width>400</width>
+					<height>600</height>
+					<control type="image">
+						<top>5</top>
+						<left>5</left>
+						<right>5</right>
+						<bottom>5</bottom>
+						<texture fallback="kodirdil/fallbacks/videodefault.jpg" diffuse="masks/poster-50.png">$VAR[NowPlayingPosterVar]</texture>
+					</control>
+				</control>
+
+				<!-- Studio logo, top right of the info column -->
+				<control type="image">
+					<top>40</top>
+					<right>0</right>
+					<width>180</width>
+					<height>50</height>
+					<aspectratio align="right" aligny="center" scalediffuse="false">keep</aspectratio>
+					<texture>$VAR[StudiologoShortCutPath]$VAR[Studiologotextureinfo]</texture>
+				</control>
+
+				<!-- Info column -->
+				<control type="grouplist">
+					<top>60</top>
+					<left>460</left>
+					<right>0</right>
+					<height>640</height>
+					<orientation>vertical</orientation>
+					<itemgap>12</itemgap>
+
+					<!-- "Paused" badge -->
+					<control type="group">
+						<width>220</width>
+						<height>44</height>
+						<control type="image">
+							<texture border="20" flipx="true" colordiffuse="44ffffff">kodirdil/overlays/gradient-box.png</texture>
+						</control>
+						<control type="image">
+							<texture border="20" colordiffuse="44ffffff">kodirdil/overlays/gradient-box.png</texture>
+						</control>
+						<control type="image">
+							<left>22</left>
+							<top>10</top>
+							<width>16</width>
+							<height>24</height>
+							<texture colordiffuse="white">kodirdil/overlays/media-pause-512.png</texture>
+						</control>
+						<control type="label">
+							<left>50</left>
+							<right>16</right>
+							<aligny>center</aligny>
+							<font>font20_title</font>
+							<label>$LOCALIZE[700040]</label>
+						</control>
+					</control>
+
+					<!-- Title (+ year) -->
+					<control type="label">
+						<height max="60">auto</height>
+						<font>font45_title</font>
+						<scroll>true</scroll>
+						<label>[B][COLOR yellow]$VAR[PausedInfoViewOSDTitle][/COLOR][/B]</label>
+					</control>
+
+					<!-- Season / episode + episode title (episodes only) -->
+					<control type="label">
+						<height max="45">auto</height>
+						<font>font32_title</font>
+						<scroll>true</scroll>
+						<label>$VAR[Episode_prefix] [COLOR button_focus]•[/COLOR] $INFO[VideoPlayer.Title]</label>
+						<visible>VideoPlayer.Content(episodes)</visible>
+					</control>
+
+					<!-- Genre | runtime in words | rating (separators come from the existing variables) -->
+					<control type="label">
+						<height max="40">auto</height>
+						<font>font10</font>
+						<scroll>true</scroll>
+						<label>[B]$INFO[VideoPlayer.Genre] $VAR[SetHenDurationAndTimeOSD] $VAR[RatingAndVotesOSD][/B]</label>
+					</control>
+
+					<!-- Tagline -->
+					<control type="label">
+						<height max="36">auto</height>
+						<font>font10</font>
+						<textcolor>B3FFFFFF</textcolor>
+						<scroll>true</scroll>
+						<label>[I]$INFO[VideoPlayer.Tagline][/I]</label>
+						<visible>!String.IsEmpty(VideoPlayer.Tagline)</visible>
+					</control>
+
+					<!-- Plot -->
+					<control type="textbox">
+						<height>280</height>
+						<font>font10</font>
+						<autoscroll time="4000" fade="4000" repeat="4500">System.IdleTime(5) + Player.Paused</autoscroll>
+						<label fallback="$LOCALIZE[700041]">$INFO[VideoPlayer.Plot]</label>
+					</control>
+
+					<!-- Technical flags (nested includes are intentional: they land in the <nested /> slot of the include) -->
+					<control type="grouplist">
+						<width>900</width>
+						<height>50</height>
+						<orientation>horizontal</orientation>
+						<itemgap>0</itemgap>
+						<include content="SetPauseTendedFlagsVideosOSd">
+							<param name="groupwidth">120</param>
+							<param name="label">AudioLanguage</param>
+							<param name="freetext">-Audio</param>
+						</include>
+						<include content="SetPauseTendedFlagsVideosOSd">
+							<param name="groupwidth">120</param>
+							<param name="label">VideoResolution</param>
+							<param name="freetext">HD</param>
+							<include content="SetPauseTendedFlagsVideosOSd">
+								<param name="groupwidth">120</param>
+								<param name="label">VideoAspect</param>
+								<param name="freetext"></param>
+							</include>
+							<include content="SetPauseTendedFlagsVideosOSd">
+								<param name="groupwidth">120</param>
+								<param name="icon">audiocodec</param>
+								<param name="label3">AudioCodec</param>
+							</include>
+							<include content="SetPauseTendedFlagsVideosOSd">
+								<param name="groupwidth">120</param>
+								<param name="label">VideoCodec</param>
+								<param name="freetext"></param>
+							</include>
+							<include content="SetPauseTendedFlagsVideosOSd">
+								<param name="groupwidth">120</param>
+								<param name="label">AudioChannels</param>
+								<param name="freetext">Ch</param>
+							</include>
+							<include content="SetPauseTendedFlagsVideosOSd">
+								<param name="groupwidth">120</param>
+								<param name="label2">Player.Process(VideoFPS)</param>
+								<param name="freetext">fps</param>
+							</include>
+						</include>
+					</control>
+
+					<!-- Progress: elapsed | ends at | remaining -->
+					<control type="group">
+						<height>64</height>
+						<control type="image">
+							<top>11</top>
+							<height>18</height>
+							<texture border="16">kodirdil/overlays/progress-back.png</texture>
+							<colordiffuse>55FFFFFF</colordiffuse>
+						</control>
+						<control type="progress">
+							<left>3</left>
+							<right>3</right>
+							<height>13</height>
+							<texturebg>-</texturebg>
+							<midtexture colordiffuse="button_focus" border="10.8">kodirdil/overlays/progress-mid.png</midtexture>
+							<info>Player.Progress</info>
+						</control>
+						<control type="label">
+							<top>26</top>
+							<left>0</left>
+							<width>300</width>
+							<height>36</height>
+							<font>font10</font>
+							<label>$INFO[Player.Time]</label>
+						</control>
+						<control type="label">
+							<top>26</top>
+							<left>0</left>
+							<right>0</right>
+							<height>36</height>
+							<align>center</align>
+							<font>font10</font>
+							<label>[COLOR button_focus][B]$LOCALIZE[31080]:[/B][/COLOR] $INFO[Player.FinishTime]</label>
+						</control>
+						<control type="label">
+							<top>26</top>
+							<right>0</right>
+							<width>300</width>
+							<height>36</height>
+							<align>right</align>
+							<font>font10</font>
+							<label>-$INFO[Player.TimeRemaining]</label>
+						</control>
+					</control>
+				</control>
+			</control>
+
+			<!-- Source filename: small, dim, bottom of the screen -->
+			<control type="label">
+				<left>120</left>
+				<right>120</right>
+				<bottom>50</bottom>
+				<height>36</height>
+				<font>font20_title</font>
+				<textcolor>80FFFFFF</textcolor>
+				<scroll>true</scroll>
+				<label>[COLOR button_focus]$LOCALIZE[39030]:[/COLOR] $INFO[Window(10000).Property(subs.player_filename)]</label>
+				<visible>!String.IsEmpty(Player.Filename)</visible>
+			</control>
 		</control>
-		<control type="image">
-			<top>5</top>
-			<left>5</left>
-			<right>5</right>
-			<bottom>5</bottom>
-			<texture>$VAR[PausedTendIconOSD]</texture>
-		</control>
-	</control>
-	<control type="grouplist">
-		<left>570</left>
-		<height>300</height>
-		<bottom>20</bottom>
-		<align>bottom</align>
-		<control type="label">
-			<font>font45_title</font>
-			<height max="55">auto</height>
-			<label>$VAR[PausedInfoViewOSDTitle]</label>
-		</control>
-		<control type="label">
-			<height max="45">auto</height>
-			<font>font32_title</font>
-			<label>$INFO[VideoPlayer.Genre]</label>
-			<visible>!String.IsEmpty(VideoPlayer.Genre)</visible>
-		</control>
-		<!-- <control type="label"> -->
-			<!-- <height max="45">auto</height> -->
-			<!-- <label>עונה $INFO[VideoPlayer.Season,[COLOR button_focus](,)[/COLOR]] פרק $INFO[VideoPlayer.Episode,[COLOR button_focus](,)[/COLOR]]</label> -->
-			<!-- <visible>$EXP[__episode_OSD] + !String.IsEmpty(VideoPlayer.Season)</visible> -->
-		<!-- </control> -->
-		<control type="label">
-			<height max="45">auto</height>
-			<label>$VAR[BuildDataOSd]</label>
-		</control>
-		<control type="textbox">
-			<height max="245">auto</height>
-			<label>$VAR[__Osdprettyplayerlabeltime][CR]$INFO[VideoPlayer.Plot]</label>
-			<autoscroll>true</autoscroll>
-		</control>
-	</control>
-	</control>
-	<include>SeekBarEnabled</include>
-	
-	<control type="image">
-		<top>100</top>
-		<right>100</right>
-		<width>320</width>
-		<height>120</height>
-		<aspectratio>keep</aspectratio>
-		<texture>$INFO[Player.Art(clearlogo)]</texture>
-	</control>
-	<control type="label">
-		<align>center</align>
-		<aligny>center</aligny>
-		<centertop>50%</centertop>
-		<centerleft>50%</centerleft>
-		<label>בהשהייה</label>
-		<font>WeatherTemp</font>
-		<animation condition="Player.Paused" effect="fade" start="50" end="100" time="1500" pulse="true">Conditional</animation>
-	</control>
+
 	</controls>
 </window>

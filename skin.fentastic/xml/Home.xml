@@ -3,10 +3,10 @@
 	<defaultcontrol>9000</defaultcontrol>
 	<backgroundcolor>background</backgroundcolor>
 	<onload condition="!Skin.HasSetting(firsttimerun)">ActivateWindow(1112)</onload>
-  <onload condition="Skin.HasSetting(firsttimerun)">RunScript(script.fentastic.helper,mode=check_for_update&amp;skin_id=skin.fentastic)</onload>
+	<onload condition="Skin.HasSetting(firsttimerun)">RunScript(script.fentastic.helper,mode=check_for_update&amp;skin_id=skin.fentastic)</onload>
 	<onload>RunScript(script.fentastic.helper,mode=check_for_profile_change&amp;skin_id=skin.fentastic)</onload>
-  <onload condition="String.IsEmpty(Window(Home).Property(fentastic.starting_widgets))">RunScript(script.fentastic.helper,mode=starting_widgets)</onload>
-  <onload condition="String.IsEmpty(Window(Home).Property(fentastic.starting_widgets))">SetProperty(fentastic.starting_widgets,true)</onload>
+	<onload condition="String.IsEmpty(Window(Home).Property(fentastic.starting_widgets))">RunScript(script.fentastic.helper,mode=starting_widgets)</onload>
+	<onload condition="String.IsEmpty(Window(Home).Property(fentastic.starting_widgets))">SetProperty(fentastic.starting_widgets,true)</onload>
 	<onload>RunScript(script.fentastic.helper,mode=modify_keymap)</onload>
 	<onload>RunScript(script.fentastic.helper,mode=fix_black_screen)</onload>
 	<onload condition="String.IsEmpty(Skin.String(current_search_provider))">Skin.SetString(current_search_provider,0)</onload>
@@ -31,9 +31,13 @@
 			<!-- WIDGETS GROUP -->
 			<control type="group" id="2000">
 				<left>462</left>
+				<include condition="!Skin.String(SidebarMode,Expanded)">PanelPosition_Wide</include>
+
 				<include>OpenClose_Right</include>
 				<visible>!Skin.HasSetting(TrailerPlaying)</visible>
 				<animation effect="slide" time="700" start="1380,0" end="0,0" tween="sine" easing="inout">VisibleChange</animation>
+				<!-- KODI-RD-IL: COLLAPSIBLE SIDEBAR WIDGET SLIDE -->
+				<animation effect="slide" start="0,0" end="-350,0" time="300" tween="sine" easing="inout" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
 				<control type="group" id="27000">
 					<visible>false</visible>
 					<include content="Visible_Right_Delayed">
@@ -822,25 +826,34 @@
 				<visible>!Skin.HasSetting(TrailerPlaying)</visible>
 				<animation effect="slide" time="700" start="-492,0" end="0,0" tween="sine" easing="inout">VisibleChange</animation>
 				<depth>DepthContentPanel</depth>
-				<include>OpenClose_Left</include>
-				<include content="ContentPanel">
-					<param name="width" value="900" />
-				</include>
+				<!--				<include>OpenClose_Left</include>-->
+
+				<!-- KODI-RD-IL: COLLAPSIBLE SIDEBAR BACKGROUND SLIDE -->
+				<control type="group">
+					<animation effect="slide" start="0,0" end="-350,0" time="300" tween="sine" easing="inout" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
+					<include content="ContentPanel">
+						<param name="width" value="900" />
+					</include>
+				</control>
+
 				<control type="group">
 					<animation effect="slide" time="300" start="-492,0" end="0,0" tween="sine" easing="inout">VisibleChange</animation>
-					<visible allowhiddenfocus="true">![String.IsEqual(ListItem.DBtype,movie) | String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBtype,season) | String.IsEqual(ListItem.DBtype,episode)]</visible>
+					<visible allowhiddenfocus="true">$EXP[IsSidebarCollapsed] | ![String.IsEqual(ListItem.DBtype,movie) | String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBtype,season) | String.IsEqual(ListItem.DBtype,episode)]</visible>
 					<!-- TODO Add sideblade panel for direct editing of widgets, hiding sections, other shortcuts -->
 					<control type="fixedlist" id="9000">
 						<left>25</left>
 						<top>240</top>
-            <width>492</width>
+						<width>492</width>
 						<bottom>-10</bottom>
 						<movement>7</movement>
 						<focusposition>0</focusposition>
 						<onfocus>ClearProperty(listposition,home)</onfocus>
 						<onright>SetFocus($INFO[Container(9000).ListItem.Property(menu_id)])</onright>
-						<onup>700</onup>
-						<ondown>700</ondown>
+						<!-- KODI-RD-IL: COLLAPSIBLE SIDEBAR NAV FIX -->
+						<onup condition="$EXP[IsSidebarCollapsed]">701</onup>
+						<onup condition="!$EXP[IsSidebarCollapsed]">700</onup>
+						<ondown condition="$EXP[IsSidebarCollapsed]">701</ondown>
+						<ondown condition="!$EXP[IsSidebarCollapsed]">700</ondown>
 						<scrolltime tween="cubic" easing="out">500</scrolltime>
 						<focusedlayout height="95">
 							<control type="group">
@@ -853,12 +866,13 @@
 									<width>395</width>
 									<height>95</height>
 									<texture colordiffuse="button_focus">masks/categorywidget.png</texture>
-									<animation effect="fade" start="100" end="0" time="0" condition="[!Control.HasFocus(9000) + !ControlGroup(700).HasFocus] | System.HasActiveModalDialog">Conditional</animation>
+									<animation effect="fade" start="100" end="0" time="0" condition="[!Control.HasFocus(9000) + !ControlGroup(700).HasFocus + !ControlGroup(701).HasFocus] | System.HasActiveModalDialog">Conditional</animation>
+									<!-- KODI-RD-IL: COLLAPSIBLE SIDEBAR BACKGROUND ZOOM -->
+									<animation effect="zoom" start="100,100" end="25,100" time="300" tween="sine" easing="inout" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
 								</control>
 								<!-- ########### -->
 							</control>
 							<!-- SideMenu Focused Icons -->
-							
 							<!-- KODI-RD-IL ADDITION - MENU ICON -->
 							<control type="image">
 								<left>5</left>
@@ -868,7 +882,6 @@
 								<texture>$INFO[ListItem.Art(thumb)]</texture>
 							</control>
 							<!-- ########### -->
-							
 							<control type="label">
 								<include>FocusBounce</include>
 								<left>65</left>
@@ -876,16 +889,18 @@
 								<height>95</height>
 								<width>315</width>
 								<aligny>center</aligny>
-								
+
 								<!-- KODI-RD-IL ADDITION -->
 								<align>right</align>
 								<!-- ########### -->
-								
+
 								<font>font45</font>
 								<textcolor>darkgrey</textcolor>
 								<label>$INFO[ListItem.Label]</label>
 								<shadowcolor>text_shadow</shadowcolor>
-								<visible>ControlGroup(700).HasFocus</visible>
+								<visible>ControlGroup(700).HasFocus | ControlGroup(701).HasFocus</visible>
+								<!-- KODI-RD-IL: COLLAPSIBLE SIDEBAR TEXT FADE -->
+								<animation effect="fade" start="100" end="0" time="200" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
 							</control>
 							<control type="label">
 								<include>FocusBounce</include>
@@ -894,45 +909,47 @@
 								<height>95</height>
 								<width>315</width>
 								<aligny>center</aligny>
-								
+
 								<!-- KODI-RD-IL ADDITION -->
 								<align>right</align>
 								<!-- ########### -->
-								
+
 								<font>font52_title</font>
 								<label>$INFO[ListItem.Label]</label>
 								<textcolor>unfocused_text</textcolor>
 								<shadowcolor>text_shadow</shadowcolor>
-								<visible>!ControlGroup(700).HasFocus</visible>
+								<visible>![ControlGroup(700).HasFocus | ControlGroup(701).HasFocus]</visible>
+								<!-- KODI-RD-IL: COLLAPSIBLE SIDEBAR TEXT FADE -->
+								<animation effect="fade" start="100" end="0" time="200" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
 							</control>
 						</focusedlayout>
 						<itemlayout height="90">
-						
-						<!-- KODI-RD-IL ADDITION - MENU ICON -->
-						<control type="image">
-							<left>5</left>
-							<top>1</top>
-							<width>95</width>
-							<height>95</height>
-							<texture>$INFO[ListItem.Art(thumb)]</texture>
-						</control>
-						<!-- ########### -->
-						
+							<!-- KODI-RD-IL ADDITION - MENU ICON -->
+							<control type="image">
+								<left>5</left>
+								<top>1</top>
+								<width>95</width>
+								<height>95</height>
+								<texture>$INFO[ListItem.Art(thumb)]</texture>
+							</control>
+							<!-- ########### -->
 							<control type="label">
 								<left>65</left>
 								<top>0</top>
 								<height>95</height>
 								<width>315</width>
 								<aligny>center</aligny>
-								
+
 								<!-- KODI-RD-IL ADDITION -->
 								<align>right</align>
 								<!-- ########### -->
-								
+
 								<font>font45</font>
 								<textcolor>darkgrey</textcolor>
 								<label>$INFO[ListItem.Label]</label>
 								<shadowcolor>text_shadow</shadowcolor>
+								<!-- KODI-RD-IL: COLLAPSIBLE SIDEBAR TEXT FADE -->
+								<animation effect="fade" start="100" end="0" time="200" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
 							</control>
 						</itemlayout>
 						<content>
@@ -1040,10 +1057,13 @@
 							</item>
 						</content>
 					</control>
+
+					<!-- KODI-RD-IL: EXPANDED TOP BUTTONS (HORIZONTAL) -->
 					<control type="grouplist" id="700">
+						<visible>!$EXP[IsSidebarCollapsed]</visible>
 						<orientation>horizontal</orientation>
 						<itemgap>0</itemgap>
-            <left>45</left>
+						<left>45</left>
 						<width>380</width>
 						<height>110</height>
 						<top>115</top>
@@ -1095,6 +1115,64 @@
 							<param name="visible" value="Player.HasMedia" />
 						</include>
 					</control>
+
+					<!-- KODI-RD-IL: COLLAPSED SIDEBAR BUTTONS (VERTICAL - BOTTOM ALIGNED) -->
+					<control type="grouplist" id="701">
+						<visible>$EXP[IsSidebarCollapsed]</visible>
+						<orientation>vertical</orientation>
+						<itemgap>-45</itemgap>
+						<left>15</left>
+						<width>90</width>
+						<bottom>30</bottom>
+						<align>bottom</align>
+						<onup>SetFocus(9000,99,absolute)</onup>
+						<ondown>SetFocus(9000,0,absolute)</ondown>
+						<onright>2000</onright>
+						<include content="IconButton" condition="Skin.HasSetting(OneClickClose)">
+							<param name="control_id" value="801" />
+							<param name="onclick" value="Quit()" />
+							<param name="icon" value="icons/power.png" />
+							<param name="label" value="$LOCALIZE[33060]" />
+						</include>
+						<include content="IconButton" condition="!Skin.HasSetting(OneClickClose)">
+							<param name="control_id" value="802" />
+							<param name="onclick" value="ActivateWindow(shutdownmenu)" />
+							<param name="icon" value="icons/power.png" />
+							<param name="label" value="$LOCALIZE[33060]" />
+						</include>
+						<include content="IconButton">
+							<param name="control_id" value="803" />
+							<param name="onclick" value="ActivateWindow(settings)" />
+							<param name="icon" value="icons/settings.png" />
+							<param name="label" value="$LOCALIZE[21417]" />
+						</include>
+						<include content="IconButton" condition="Skin.HasSetting(NoSearchResultsWindow)">
+							<param name="control_id" value="804" />
+							<param name="onclick" value="ActivateWindow(1107)" />
+							<param name="icon" value="icons/search.png" />
+							<param name="label" value="$LOCALIZE[137]" />
+						</include>
+						<include content="IconButton" condition="!Skin.HasSetting(NoSearchResultsWindow) + Skin.HasSetting(DefaultSearchWindowBehavior)">
+							<param name="control_id" value="805" />
+							<param name="onclick" value="RunScript(script.fentastic.helper,mode=search_input)" />
+							<param name="icon" value="icons/search.png" />
+							<param name="label" value="$LOCALIZE[137]" />
+						</include>
+						<include content="IconButton" condition="!Skin.HasSetting(NoSearchResultsWindow) + !Skin.HasSetting(DefaultSearchWindowBehavior)">
+							<param name="control_id" value="806" />
+							<param name="onclick" value="RunScript(script.fentastic.helper,mode=open_search_window)" />
+							<param name="icon" value="icons/search.png" />
+							<param name="label" value="$LOCALIZE[137]" />
+						</include>
+						<include content="IconButton">
+							<param name="control_id" value="807" />
+							<param name="onclick" value="Fullscreen" />
+							<param name="icon" value="icons/now-playing/fullscreen.png" />
+							<param name="label" value="$LOCALIZE[31000]" />
+							<param name="visible" value="Player.HasMedia" />
+						</include>
+					</control>
+
 				</control>
 
 				<control type="group">
@@ -1102,6 +1180,9 @@
 					<width>550</width>
 					<visible>String.IsEqual(ListItem.DBtype,movie) | String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBtype,season) | String.IsEqual(ListItem.DBtype,episode)</visible>
 					<include>OpenClose_Left</include>
+					<!-- KODI-RD-IL: EXPANDED WIDGET INFO HIDES WHEN COLLAPSED -->
+					<animation effect="fade" start="100" end="0" time="200" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
+
 					<control type="image">
 						<left>30</left>
 						<top>50</top>
@@ -1121,11 +1202,11 @@
 						<!-- KODI-RD-IL CHANGES -->
 						<label>[COLOR yellow]$INFO[ListItem.Label][/COLOR]</label>
 						<!-- ##################### -->
-						
+
 						<!-- KODI-RD-IL ADDITION -->
 						<align>right</align>
 						<!-- ##################### -->
-						
+
 						<visible>String.IsEmpty(ListItem.Art(clearlogo))</visible>
 					</control>
 					<control type="group">
@@ -1136,11 +1217,11 @@
 							<width>410</width>
 							<bottom>60</bottom>
 							<label>$VAR[InfoPanel]</label>
-						
+
 							<!-- KODI-RD-IL ADDITION -->
 							<align>right</align>
 							<!-- ##################### -->
-							
+
 							<textcolor>unfocused_text</textcolor>
 							<autoscroll delay="10000" time="3000" repeat="10000">Skin.HasSetting(autoscroll)</autoscroll>
 						</control>
@@ -1150,11 +1231,11 @@
 							<width>410</width>
 							<bottom>60</bottom>
 							<label>$VAR[InfoPanelEpisode]</label>
-						
+
 							<!-- KODI-RD-IL ADDITION -->
 							<align>right</align>
 							<!-- ##################### -->
-							
+
 							<textcolor>unfocused_text</textcolor>
 							<autoscroll delay="10000" time="3000" repeat="10000">Skin.HasSetting(autoscroll)</autoscroll>
 						</control>
@@ -1169,11 +1250,11 @@
 							<!-- KODI-RD-IL CHANGES -->
 							<label>$LOCALIZE[700015] $INFO[ListItem.Season], $LOCALIZE[700016] $INFO[ListItem.Episode]</label>
 							<!-- ##################### -->
-						
+
 							<!-- KODI-RD-IL ADDITION -->
 							<align>right</align>
 							<!-- ##################### -->
-							
+
 							<visible>String.IsEqual(ListItem.DbType,episode)</visible>
 						</control>
 					</control>
@@ -1228,8 +1309,7 @@
 				</control>
 			</control>
 			<control type="group">
-        <animation effect="slide" time="300" start="-492,0" end="0,0" tween="sine" easing="inout">VisibleChange</animation>
-        <visible>![String.IsEqual(ListItem.DBtype,movie) | String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBtype,season) | String.IsEqual(ListItem.DBtype,episode)] + !Skin.HasSetting(TrailerPlaying)</visible>
+				<animation effect="slide" time="300" start="-492,0" end="0,0" tween="sine" easing="inout">VisibleChange</animation>
 				<depth>DepthBars</depth>
 				<animation effect="slide" end="0,-90" time="300" tween="sine" easing="inout" condition="$EXP[infodialog_active]">conditional</animation>
 				<animation effect="fade" start="0" end="100" time="300">WindowOpen</animation>
@@ -1237,27 +1317,57 @@
 				<!-- KODI-RD-IL CHANGES -->
 				<top>30</top>
 				<left>90</left>
-		<!-- KODI-RD-IL ADDITION -->
-		<control type="image">
-			<left>-45</left>
-			<top>-70</top>
-			<aspectratio>keep</aspectratio>
-			<width>350</width>
-			<height>208</height>
-			<texture>special://skin/media/kodirdil/group_logo/kodirdil-vendor_logo.png</texture>
-		</control>
-		<!-- ##################### -->
+
+				<!-- KODI-RD-IL ADDITION - WIDE LOGO (EXPANDED) -->
+				<control type="image">
+					<left>-45</left>
+					<top>-70</top>
+					<aspectratio>keep</aspectratio>
+					<width>350</width>
+					<height>208</height>
+					<texture>special://skin/media/kodirdil/group_logo/kodirdil-vendor_logo.png</texture>
+					<visible>![String.IsEqual(ListItem.DBtype,movie) | String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBtype,season) | String.IsEqual(ListItem.DBtype,episode)] + !Skin.HasSetting(TrailerPlaying)</visible>
+					<animation effect="fade" start="100" end="0" time="200" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
+				</control>
+
+				<!-- KODI-RD-IL ADDITION - SQUARE LOGO (COLLAPSED) -->
+				<control type="image">
+					<left>-60</left>
+					<!--					<top>-20</top>-->
+					<aspectratio>keep</aspectratio>
+					<width>90</width>
+					<height>200</height>
+					<texture>special://skin/media/kodirdil/group_logo/kodirdil-logo.png</texture>
+					<visible>$EXP[IsSidebarCollapsed]</visible>
+					<animation effect="fade" start="0" end="100" time="200" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
+				</control>
 			</control>
-		<!-- KODI-RD-IL ADDITION -->
-		<control type="label">
-			<description>KODI-RD-IL - Kodi Version</description>
-			<left>15</left>
-			<bottom>0</bottom>
-			<height>50</height>
-			<font>font25_title</font>
-			<label>$LOCALIZE[700062]: $INFO[System.BuildVersionShort]</label>
-		</control>
-		<!-- ##################### -->
+
+			<!-- KODI-RD-IL ADDITION - FULL VERSION LABEL -->
+			<control type="label">
+				<description>KODI-RD-IL - Kodi Version Full</description>
+				<left>15</left>
+				<bottom>0</bottom>
+				<height>50</height>
+				<width>400</width>
+				<font>font25_title</font>
+				<label>$LOCALIZE[700062]: $INFO[System.BuildVersionShort]</label>
+				<animation effect="fade" start="100" end="0" time="200" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
+			</control>
+
+			<!-- KODI-RD-IL ADDITION - SHORT VERSION LABEL -->
+			<control type="label">
+				<description>KODI-RD-IL - Kodi Version Short</description>
+				<left>22</left>
+				<bottom>0</bottom>
+				<height>50</height>
+				<width>100</width>
+				<font>font25_title</font>
+				<align>center</align>
+				<label>v$INFO[System.BuildVersionShort]</label>
+				<visible>$EXP[IsSidebarCollapsed]</visible>
+				<animation effect="fade" start="0" end="100" time="200" condition="$EXP[IsSidebarCollapsed]">Conditional</animation>
+			</control>
 		</control>
 	</controls>
 </window>

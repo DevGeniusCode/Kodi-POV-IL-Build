@@ -118,8 +118,8 @@
 		<label></label>
 		<font></font>
 	</include>
-	
-	
+
+
 	<include name="AdvancedGlobalViewBackGround">
 	<control type="group">
 		<top>-10</top>
@@ -141,12 +141,12 @@
 			<texture>colors/white.png</texture>
 			<colordiffuse>black</colordiffuse>
 			<animation condition="true" effect="fade" start="100" end="25" time="0">Conditional</animation>
-		</control>	
+		</control>
 		<control type="image">
 			<texture>colors/white.png</texture>
 			<colordiffuse>FF181818</colordiffuse>
 			<animation condition="true" effect="fade" start="100" end="55" time="0">Conditional</animation>
-		</control>	
+		</control>
 		<control type="image">
 			<texture colordiffuse="FF181818" background="true">common/trailerwindow.png</texture>
 			<animation condition="true" effect="fade" start="100" end="55" time="0">Conditional</animation>
@@ -159,8 +159,8 @@
 		</control>
 		</control>
 	</include>
-	
-	
+
+
 	<include name="RatingCircle">
 		<param name="animation">False</param>
 		<definition>
@@ -825,12 +825,12 @@
 		</definition>
 	</include>
 	<include name="DialogBackgroundCommons">
-	
+
 		<!-- KODI-RD-IL ADDITION -->
 		<param name="logovisible" default="true"/>
 		<definition>
 		<!-- ##################### -->
-		
+
 		<control type="image">
 			<left>-2000</left>
 			<top>-2000</top>
@@ -869,23 +869,23 @@
 				<texture colordiffuse="dialog_bg">$PARAM[diffusetexture]</texture>
 			</control>
 			<control type="label" id="$PARAM[header_id]">
-				<posx>0</posx> 
+				<posx>0</posx>
 				<top>20</top>
-				<width>$PARAM[width]</width> 
+				<width>$PARAM[width]</width>
 				<height>70</height>
 				<font>font32_title</font>
 				<label>$PARAM[header_label]</label>
-				<align>center</align> 
+				<align>center</align>
 				<aligny>center</aligny>
 				<textcolor>unfocused_text</textcolor>
 				<shadowcolor>black</shadowcolor>
 			</control>
 			<control type="radiobutton">
-			
+
 			<!-- KODI-RD-IL ADDITION -->
 			<visible>$PARAM[logovisible]</visible>
 			<!-- ##################### -->
-			
+
 				<right>30</right>
 				<top>25</top>
 				<width>48</width>
@@ -913,11 +913,11 @@
 				<visible>Skin.HasSetting(touchmode)</visible>
 			</control>
 		</control>
-		
+
 	<!-- KODI-RD-IL ADDITION -->
 	</definition>
 	<!-- ##################### -->
-	
+
 	</include>
 	<include name="TopBar">
 		<param name="sublabel">$INFO[Container.SortMethod,$LOCALIZE[31022]: ,  ∙  ]$INFO[Container.CurrentItem,, / ]$INFO[Container.NumItems]</param>
@@ -1268,11 +1268,11 @@
 					<texture flipy="true">frame/InfoBar.png</texture>
 				</control>
 				<control type="group">
-				
+
 					<!-- KODI-RD-IL ADDITION -->
 					<!-- <left>1720</left> -->
 					<!-- ##################### -->
-					
+
 					<visible>$PARAM[info_visible]</visible>
 					<visible>!System.HasActiveModalDialog</visible>
 					<visible>!Skin.HasSetting(touchmode)</visible>
@@ -1655,7 +1655,7 @@
 	<include name="VisibleFadeEffect">
 		<animation effect="fade" time="1300">VisibleChange</animation>
 	</include>
-	
+
 	<include name="RainDropAnimationBackground">
 		<control type="group">
 			<visible>Skin.HasSetting(HideRainDrops) + ![Player.HasVideo + Player.HasAudio] + Skin.HasSetting(no_fanart)</visible>
@@ -1788,7 +1788,7 @@
 			</control>
 		</control>
 	</include>
-	
+
 	<include name="ProgressBar">
 		<control type="progress">
 			<left>$PARAM[left]</left>
@@ -1816,30 +1816,30 @@
 				<!-- KODI-RD-IL CHANGES -->
 				<label>$LOCALIZE[700015] $INFO[ListItem.Season], $LOCALIZE[700016] $INFO[ListItem.Episode]</label>
 				<!-- ##################### -->
-			
+
 				<!-- KODI-RD-IL ADDITION -->
 				<align>right</align>
 				<!-- ##################### -->
-				
+
 				<textcolor>unfocused_text</textcolor>
 				<visible>String.IsEqual(ListItem.DbType,episode)</visible>
 			</control>
 			<control type="textbox">
 				<height>auto</height>
 				<label>$VAR[InfoPanelTop]</label>
-			
+
 				<!-- KODI-RD-IL ADDITION -->
 				<align>right</align>
 				<!-- ##################### -->
-				
+
 				<textcolor>unfocused_text</textcolor>
 			</control>
 			<control type="grouplist">
-			
+
 				<!-- KODI-RD-IL ADDITION -->
 				<align>right</align>
 				<!-- ##################### -->
-				
+
 				<height>90</height>
 				<orientation>horizontal</orientation>
 				<itemgap>$PARAM[ratings_spacing]</itemgap>
@@ -1996,11 +1996,11 @@
 				<height max="$PARAM[height_alt_movie]">auto</height>
 				<bottom>70</bottom>
 				<label>$VAR[InfoPanelBottom]</label>
-			
+
 				<!-- KODI-RD-IL ADDITION -->
 				<align>right</align>
 				<!-- ##################### -->
-				
+
 				<textcolor>unfocused_text</textcolor>
 				<autoscroll delay="5000" time="2000" repeat="5000">Skin.HasSetting(autoscroll)</autoscroll>
 				<visible>Skin.HasSetting(Enable.AlternateInfo) + [String.IsEqual(ListItem.DBtype,movie) | String.IsEqual(ListItem.DBtype,episode) | String.IsEqual(ListItem.DBtype,season)]</visible>
@@ -2009,18 +2009,22 @@
 				<height max="$PARAM[height_alt_tvshow]">auto</height>
 				<bottom>70</bottom>
 				<label>$VAR[InfoPanelBottom]</label>
-			
+
 				<!-- KODI-RD-IL ADDITION -->
 				<align>right</align>
 				<!-- ##################### -->
-				
+
 				<textcolor>unfocused_text</textcolor>
 				<autoscroll delay="5000" time="2000" repeat="5000">Skin.HasSetting(autoscroll)</autoscroll>
 				<visible>Skin.HasSetting(Enable.AlternateInfo) + String.IsEqual(ListItem.DBtype,tvshow)</visible>
 			</control>
 		</control>
 	</include>
-	
+	<include file="Includes_ModernMediaInfoBar.xml" />
+	<include name="PanelPosition_Wide">
+		<width>110r</width>
+	</include>
+
 	<!-- KODI-RD-IL ADDITION -->
 	<include name="syncfakebutton">
 		<control type="image" id="2232320">
@@ -2048,7 +2052,7 @@
 			<visible>!String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
 		</control>
 	</include>
-	
+
 	<include name="FrameBox">
 		<param name="visible" default="1123"/>
 		<param name="flip" default="false"/>
@@ -2069,7 +2073,7 @@
 			<nested />
 		</definition>
 	</include>
-		
+
 	<include name="MediaLabelFlag">
 		<param name="labelflag">$INFO[Player.Process(VideoFPS)]</param>
 		<param name="freelabel">fps</param>
@@ -2094,13 +2098,13 @@
 			</control>
 		</definition>
 	</include>
-	
+
 	<include name="pre_fix_setview_flags">
 			<include content="preFix_Flags_Positions">
 			<param name="condition">Control.IsVisible(55)</param>
 			<param name="end">GlobalPadfixLeft</param>
 		</include>
-	
+
 		<include content="preFix_Flags_Positions">
 			<param name="condition">Container.Content(seasons) | Control.IsVisible(502)</param>
 			<param name="end">PadLeft</param>
@@ -2110,7 +2114,7 @@
 			<param name="end">PadFixLeft</param>
 		</include>
 	</include>
-	
+
 	<!-- IMAX Button - not used currently.
 	<include name="ToggleButtonObj">
 	<param name="icon" default="imax_off_white.png"/>
@@ -2134,7 +2138,7 @@
 	<include name="In">
 		<onclick>ZoomIn</onclick>
 	</include>
-	
+
 	<include name="NextPreviousIndicator">
 		<control type="group">
 		<animation effect="fade" start="0" end="100" time="550">VisibleChange</animation>
@@ -2150,7 +2154,7 @@
 		</control>
 		<nested />
 	</include>
-	
+
 	<include name="SetPauseTendedFlagsVideosOSd">
 		<param name="flag_w" default="125"/>
 		<param name="flag_h" default="50"/>
@@ -2193,16 +2197,16 @@
 			<nested />
 		</definition>
 	</include>
-	
+
 	<include name="FrameBorder">
 		<include content="FrameBox">
 			<include content="FrameBox">
 				<param name="flip">true</param>
 				<param name="colordif">blue</param>
-			</include>	
+			</include>
 		</include>
 	</include>
-	
+
 	<include name="Label_prefix">
 		<control type="textbox" id="1">
 			<animation type="Visible">
@@ -2227,13 +2231,13 @@
 		</control>
 		<nested />
 	</include>
-	
+
 	<include name="SetFadeLabel">
 		<include content="TimeFadeLabel">
 			<param name="id">$PARAM[id]</param>
 		</include>
 	</include>
-	
+
 	<include name="TimeFadeLabel">
 		<param name="id" default="$PARAM[id]"/>
 		<definition>
@@ -2257,12 +2261,12 @@
 			<nested />
 		</definition>
 	</include>
-	
+
 	<include name="ContentTarget">
 		<content condition="!VideoPlayer.Content(LiveTv)">$INFO[Control.GetLabel(9102)]</content>
 		<content condition="VideoPlayer.Content(LiveTv)">pvr://channels/tv/*</content>
 	</include>
-	
+
 	<include name="ListPrompLevel">
 		<control type="group">
 			<animation type="WindowOpen">
@@ -2341,7 +2345,7 @@
 		</control>
 		</control>
 	</include>
-		
+
 	<include name="SetPrompLevel">
 		<include content="ListPrompLevel">
 			<param name="content1">plugin://plugin.video.idanplus/?iconimage=special%3A%2F%2Fhome%2Faddons%2Fplugin.video.idanplus%2Ficon.png&amp;mode=1&amp;module&amp;moredata&amp;name=%5bB%5d%d7%98%d7%9c%d7%95%d7%99%d7%96%d7%99%d7%94%5b%2fB%5d&amp;url=</param>
@@ -2352,14 +2356,14 @@
 		</include>
 	</include>
 	<!-- ##################### -->
-		
+
 	<include name="ReplaceSourcePlayer">
 	<onload>SetProperty(PovAutoPlayerMovie,RunPlugIn($VAR[OsdReplaceSourceStartPoint]&mediatype=movie&tmdb_id=$VAR[_Fix_TMDB_ID]&autoplay=true),home)</onload>
 	<onload>SetProperty(PovNoAutoPlayerMovie,RunPlugIn($VAR[OsdReplaceSourceStartPoint]&mediatype=movie&tmdb_id=$VAR[_Fix_TMDB_ID]&autoplay=false),home)</onload>
 	<onload>SetProperty(PovAutoPlayerEpisode,RunPlugin($VAR[OsdReplaceSourceStartPoint]&mediatype=episode&tmdb_id=$VAR[_Fix_TMDB_ID]&season=$INFO[VideoPlayer.Season]&episode=$INFO[VideoPlayer.Episode]&query=$INFO[VideoPlayer.Title]&autoplay=true),home)</onload>
 	<onload>SetProperty(PovNoAutoPlayerEpisode,RunPlugin($VAR[OsdReplaceSourceStartPoint]&mediatype=episode&tmdb_id=$VAR[_Fix_TMDB_ID]&season=$INFO[VideoPlayer.Season]&episode=$INFO[VideoPlayer.Episode]&query=$INFO[VideoPlayer.TvShowTite]&autoplay=false),home)</onload>
 	</include>
-	
+
 	<include name="BaseMainMenu">
 	<param name="id">9000</param>
 	<param name="animation">BasedMenuAnimationOsdSettings</param>
@@ -2408,7 +2412,7 @@
 	</control>
 	</definition>
 	</include>
-	
+
 	<include name="_FixOsdFlags">
 	<param name="left">0</param>
 	<definition>
@@ -2447,14 +2451,14 @@
 	</control>
 	</definition>
 	</include>
-	
+
 	<include name="OsdBackWindowInfo">
 		<onload>SetProperty(getosdtitlevar,$INFO[VideoPlayer.Title],home)</onload>
 		<onload>SetProperty(getosdgenrevar,$INFO[VideoPlayer.Genre],home)</onload>
 		<onload>SetProperty(getosdplotvar,$ESCINFO[VideoPlayer.Plot],home)</onload>
 		<onload>SetProperty(getosdyearvar,$ESCINFO[VideoPlayer.Year,(,)],home)</onload>
 	</include>
-	
+
 	<include name="PauseTendViewType">
 	<control type="group">
 		<visible>Player.Paused + $EXP[PauseTendOsd]</visible>
@@ -2474,7 +2478,7 @@
 				<width>1702</width>
 				<height>592</height>
 				<texture diffuse="masks/landscape-502.png">lists/contentpanel-fade.png</texture>
-		</control>	
+		</control>
 		<control type="image" id="1">
 			<animation type="Visible">
 			<effect type="slide" start="150" end="0" time="250" tween="sine" easing="inout"/>
@@ -2506,7 +2510,7 @@
 				<width>282</width>
 				<height>100</height>
 				<texture border="20" flipx="true" colordiffuse="44ffffff">kodirdil/overlays/gradient-box.png</texture>
-		</control>	
+		</control>
 			<control type="image" id="1">
 			<animation type="Visible">
 			<effect type="slide" start="150" end="0" time="250" tween="sine" easing="inout"/>
@@ -2522,7 +2526,7 @@
 				<width>282</width>
 				<height>100</height>
 				<texture border="20" colordiffuse="44ffffff">kodirdil/overlays/gradient-box.png</texture>
-		</control>	
+		</control>
 			<control type="image" id="1">
 			<animation type="Visible">
 			<effect type="slide" start="150" end="0" time="250" tween="sine" easing="inout"/>
@@ -2538,7 +2542,7 @@
 				<width>22</width>
 				<height>32</height>
 				<texture colordiffuse="white">kodirdil/overlays/media-pause-512.png</texture>
-		</control>	
+		</control>
 		<control type="image" id="1">
 			<animation type="Visible">
 			<effect type="slide" start="-150" end="0" time="250" tween="sine" easing="inout"/>
@@ -2554,7 +2558,7 @@
 				<width>392</width>
 				<height>592</height>
 				<texture fallback="kodirdil/fallbacks/videodefault.jpg" diffuse="masks/poster-50.png">$VAR[NowPlayingPosterVar]</texture>
-			</control>		
+			</control>
 
 		<control type="image" id="1">
 			<animation type="Visible">
@@ -2571,8 +2575,8 @@
 				<width>220</width>
 				<height>122</height>
 				<texture diffuse="masks/landscape-502.png">$VAR[NowPlayingFanartVar]</texture>
-		</control>	
-			
+		</control>
+
 			<control type="textbox" id="1">
 				<animation type="Visible">
 				<effect type="slide" start="150" end="0" time="250" tween="sine" easing="inout"/>
@@ -2629,7 +2633,7 @@
 					<height>72</height>
 					<aspectratio align="center" aligny="center" scalediffuse="false">keep</aspectratio>
 					<texture>kodirdil/studiologos/$INFO[VideoPlayer.Studio].png</texture>
-			</control>					
+			</control>
 				<control type="textbox" id="1">
 				<animation type="Visible">
 				<effect type="slide" start="150" end="0" time="250" tween="sine" easing="inout"/>
@@ -2786,14 +2790,14 @@
 				</include>
 			</include>
 		</control>
-		
+
 	<include content="SetFadeLabel">
 		<param name="id">12333</param>
 	</include>
-	
+
 	</control>
 	</include>
-	
+
 <include name="_roundedFlagosd_">
 <param name="groupwidth">220</param>
 <param name="groupwidth">130</param>

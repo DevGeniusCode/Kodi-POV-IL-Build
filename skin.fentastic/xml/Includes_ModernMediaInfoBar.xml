@@ -1,0 +1,632 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<includes>
+
+    <!-- ================================================================== -->
+    <!-- Includes_ModernMediaInfoBar.xml                                     -->
+    <!-- Poster artwork + single-line browsing info bar (ListItem based).    -->
+    <!--                                                                     -->
+    <!-- Register once in Includes.xml:                                      -->
+    <!--     <include file="Includes_ModernMediaInfoBar.xml" />              -->
+    <!--                                                                     -->
+    <!-- Usage in View_51_Poster.xml (any param can be omitted):             -->
+    <!--     <include content="ModernPosterArt">                             -->
+    <!--         <param name="left" value="105"/>                            -->
+    <!--         <param name="top" value="180"/>                             -->
+    <!--         <param name="width" value="480"/>                           -->
+    <!--         <param name="height" value="720"/>                          -->
+    <!--         <param name="visible" value="Control.IsVisible(51)"/>       -->
+    <!--     </include>                                                      -->
+    <!--     <include content="ModernMediaInfoBar">                          -->
+    <!--         <param name="visible" value="Control.IsVisible(51)"/>       -->
+    <!--     </include>                                                      -->
+    <!--   With no other params the bar sits at 5% / 87%, 90% wide and 4%    -->
+    <!--   high of its parent. left, top, width and height accept pixels,    -->
+    <!--   percentages ("12%") or far-edge offsets ("136r").                 -->
+    <!--   Optional: compact=false forces every chip, show_genre=false etc.  -->
+    <!--                                                                     -->
+    <!-- Strictly title-level browsing metadata: no resolution, codec,       -->
+    <!-- channel or aspect-ratio flags anywhere in this file.                -->
+    <!-- ================================================================== -->
+
+
+    <!-- ================================================================== -->
+    <!-- 1. EXPRESSIONS                                                      -->
+    <!-- ================================================================== -->
+
+    <expression name="ModernIsMovie">String.IsEqual(ListItem.DBType,movie)</expression>
+    <expression name="ModernIsTVShow">String.IsEqual(ListItem.DBType,tvshow)</expression>
+    <expression name="ModernIsSeason">String.IsEqual(ListItem.DBType,season)</expression>
+    <expression name="ModernIsEpisode">String.IsEqual(ListItem.DBType,episode)</expression>
+    <expression name="ModernIsSeries">[$EXP[ModernIsTVShow] | $EXP[ModernIsSeason]]</expression>
+
+    <!-- POV parents-guide list (container 2055) has items. Only true inside POV's Extras window. -->
+    <expression name="ModernHasPG">[Integer.IsGreater(Container(2055).NumItems,0)]</expression>
+
+    <!-- Small display: the bar drops its lowest-priority chips instead of clipping the end. -->
+    <!-- Threshold is the physical screen width; override with the compact param.           -->
+    <expression name="ModernCompact">[!Integer.IsGreater(System.ScreenWidth,1599)]</expression>
+
+    <!-- Any rating available (Kodi default, IMDb, TMDb, or TMDb Helper / OMDb properties) -->
+    <expression name="ModernHasRating">[!String.IsEmpty(ListItem.Rating) | !String.IsEmpty(ListItem.Rating(imdb)) | !String.IsEmpty(ListItem.Rating(tmdb)) | !String.IsEmpty(ListItem.Property(IMDb_Rating)) | !String.IsEmpty(ListItem.Property(TMDb_Rating))]</expression>
+
+    <expression name="ModernHasTop250">[Integer.IsGreater(ListItem.Top250,0) | Integer.IsGreater(ListItem.Property(top250),0)]</expression>
+
+    <!-- Something to show in the seasons / episodes chip -->
+    <expression name="ModernHasCounts">[[$EXP[ModernIsTVShow] + [!String.IsEmpty(ListItem.Property(TotalSeasons)) | !String.IsEmpty(ListItem.Property(TotalEpisodes))]] | [$EXP[ModernIsSeason] + [!String.IsEmpty(ListItem.Property(TotalEpisodes)) | !String.IsEmpty(ListItem.Episode)]]]</expression>
+
+
+    <!-- ================================================================== -->
+    <!-- 2. TRANSLATABLE LABELS (edit these strings, or point them at        -->
+    <!--    $LOCALIZE[...] ids from your strings.po)                         -->
+    <!-- ================================================================== -->
+
+    <variable name="ModernLblPerEp"><value>/ ep</value></variable>
+    <variable name="ModernLblTotal"><value>$LOCALIZE[20161]</value></variable>
+    <variable name="ModernLblWatched"><value>$LOCALIZE[16102]</value></variable>
+    <variable name="ModernLblNext"><value>$LOCALIZE[209]:</value></variable>
+    <variable name="ModernLblTop250"><value>Top 250</value></variable>
+    <variable name="ModernLblOscars"><value>Oscars</value></variable>
+    <variable name="ModernLblPGViolence"><value>V</value></variable>
+    <variable name="ModernLblPGNudity"><value>N</value></variable>
+    <variable name="ModernLblPGProfanity"><value>P</value></variable>
+    <variable name="ModernLblPGScary"><value>F</value></variable>
+    <variable name="ModernLblPGAlcohol"><value>A</value></variable>
+
+
+    <!-- ================================================================== -->
+    <!-- 3. VARIABLES                                                        -->
+    <!-- ================================================================== -->
+
+    <!-- Poster for movie / set / tvshow / season / episode, with fallbacks.  -->
+    <!-- Episodes have no poster of their own, so they resolve to the season  -->
+    <!-- poster, then the show poster, before ever falling back to the        -->
+    <!-- 16:9 thumb.                                                          -->
+    <variable name="ModernPosterVar">
+        <value condition="ListItem.IsParentFolder">DefaultFolderBackPoster.png</value>
+        <value condition="!String.IsEmpty(ListItem.Art(poster))">$INFO[ListItem.Art(poster)]</value>
+        <value condition="!String.IsEmpty(ListItem.Art(season.poster))">$INFO[ListItem.Art(season.poster)]</value>
+        <value condition="!String.IsEmpty(ListItem.Art(tvshow.poster))">$INFO[ListItem.Art(tvshow.poster)]</value>
+        <value condition="!String.IsEmpty(ListItem.Art(thumb))">$INFO[ListItem.Art(thumb)]</value>
+        <value condition="String.IsEmpty(ListItem.Icon) + [$EXP[ModernIsTVShow] | $EXP[ModernIsSeason] | $EXP[ModernIsEpisode]]">DefaultTVShows.png</value>
+        <value>$INFO[ListItem.Icon]</value>
+    </variable>
+
+    <!-- Runtime as "1 hr 32 mins" (same localized units as RI_Runtime) -->
+    <variable name="ModernRuntimeVar">
+        <value condition="String.IsEmpty(ListItem.Duration)"></value>
+        <value condition="String.IsEqual(ListItem.Duration(hh),00)">$INFO[ListItem.Duration(m)] $LOCALIZE[700067]</value>
+        <value>$INFO[ListItem.Duration(h)] $LOCALIZE[700066] $INFO[ListItem.Duration(m)] $LOCALIZE[700067]</value>
+    </variable>
+
+    <!-- Shows and seasons: Duration is the typical episode length -->
+    <variable name="ModernRuntimeChipVar">
+        <value condition="$EXP[ModernIsSeries]">$VAR[ModernRuntimeVar] $VAR[ModernLblPerEp]</value>
+        <value>$VAR[ModernRuntimeVar]</value>
+    </variable>
+
+    <!-- Total series / season runtime.                                       -->
+    <!-- Neither Kodi nor TMDb Helper exposes this, and skin XML cannot       -->
+    <!-- multiply episodes by minutes. If a script or service of yours sets   -->
+    <!-- ListItem.Property(TotalRuntime) as ready-made text (e.g. "18 hr"),   -->
+    <!-- the chip lights up automatically; otherwise it stays hidden and the  -->
+    <!-- runtime chip shows the per-episode length next to the episode count. -->
+    <variable name="ModernTotalRuntimeVar">
+        <value>$VAR[ModernLblTotal] $INFO[ListItem.Property(TotalRuntime)]</value>
+    </variable>
+
+    <!-- Release: air date for seasons / episodes, year otherwise -->
+    <variable name="ModernReleaseVar">
+        <value condition="[$EXP[ModernIsSeason] | $EXP[ModernIsEpisode]] + !String.IsEmpty(ListItem.Premiered)">$INFO[ListItem.Premiered]</value>
+        <value condition="!String.IsEmpty(ListItem.Year)">$INFO[ListItem.Year]</value>
+        <value>$INFO[ListItem.Premiered]</value>
+    </variable>
+
+    <!-- TV show status (localized like SetHebStatus, plus a raw fallback) -->
+    <variable name="ModernStatusVar">
+        <value condition="String.IsEqual(ListItem.Status,returning series) | String.IsEqual(ListItem.Status,continuing)">$LOCALIZE[700027]</value>
+        <value condition="String.IsEqual(ListItem.Status,in production)">$LOCALIZE[700028]</value>
+        <value condition="String.IsEqual(ListItem.Status,planned)">$LOCALIZE[700029]</value>
+        <value condition="String.IsEqual(ListItem.Status,canceled) | String.IsEqual(ListItem.Status,cancelled)">$LOCALIZE[700030]</value>
+        <value condition="String.IsEqual(ListItem.Status,ended)">$LOCALIZE[700031]</value>
+        <value>$INFO[ListItem.Status]</value>
+    </variable>
+
+    <!-- Status colour: ongoing green, pending amber, canceled red, ended soft grey -->
+    <variable name="ModernStatusColorVar">
+        <value condition="String.IsEqual(ListItem.Status,returning series) | String.IsEqual(ListItem.Status,continuing)">FF6BD66B</value>
+        <value condition="String.IsEqual(ListItem.Status,in production) | String.IsEqual(ListItem.Status,planned) | String.IsEqual(ListItem.Status,pilot) | String.IsEqual(ListItem.Status,upcoming)">FFF0B84A</value>
+        <value condition="String.IsEqual(ListItem.Status,canceled) | String.IsEqual(ListItem.Status,cancelled)">FFE5594F</value>
+        <value>FFCFCFCF</value>
+    </variable>
+
+    <!-- Singular / plural words from Kodi core strings (translated by Kodi itself) -->
+    <variable name="ModernSeasonWordVar">
+        <value condition="String.IsEqual(ListItem.Property(TotalSeasons),1)">$LOCALIZE[20373]</value>
+        <value>$LOCALIZE[33054]</value>
+    </variable>
+    <variable name="ModernEpisodeWordVar">
+        <value condition="String.IsEqual(ListItem.Property(TotalEpisodes),1)">$LOCALIZE[20359]</value>
+        <value>$LOCALIZE[20360]</value>
+    </variable>
+
+    <!-- "3 Seasons · 24 Episodes" (shows) / "10 Episodes" (seasons) -->
+    <variable name="ModernCountsVar">
+        <value condition="$EXP[ModernIsTVShow] + !String.IsEmpty(ListItem.Property(TotalSeasons)) + !String.IsEmpty(ListItem.Property(TotalEpisodes))">$INFO[ListItem.Property(TotalSeasons)] $VAR[ModernSeasonWordVar] · $INFO[ListItem.Property(TotalEpisodes)] $VAR[ModernEpisodeWordVar]</value>
+        <value condition="$EXP[ModernIsTVShow] + !String.IsEmpty(ListItem.Property(TotalSeasons))">$INFO[ListItem.Property(TotalSeasons)] $VAR[ModernSeasonWordVar]</value>
+        <value condition="$EXP[ModernIsSeries] + !String.IsEmpty(ListItem.Property(TotalEpisodes))">$INFO[ListItem.Property(TotalEpisodes)] $VAR[ModernEpisodeWordVar]</value>
+        <value condition="$EXP[ModernIsSeason] + !String.IsEmpty(ListItem.Episode)">$INFO[ListItem.Episode] $VAR[ModernEpisodeWordVar]</value>
+    </variable>
+
+    <!-- Rating: prefer IMDb, then TMDb, then Kodi default. Votes shown dimmed. -->
+    <variable name="ModernRatingVar">
+        <value condition="!String.IsEmpty(ListItem.Rating(imdb))">$INFO[ListItem.Rating(imdb)] [COLOR grey]IMDb[/COLOR]$INFO[ListItem.Votes(imdb), [COLOR grey](,)[/COLOR]]</value>
+        <value condition="!String.IsEmpty(ListItem.Property(IMDb_Rating))">$INFO[ListItem.Property(IMDb_Rating)] [COLOR grey]IMDb[/COLOR]$INFO[ListItem.Property(IMDb_Votes), [COLOR grey](,)[/COLOR]]</value>
+        <value condition="!String.IsEmpty(ListItem.Rating(tmdb))">$INFO[ListItem.Rating(tmdb)] [COLOR grey]TMDb[/COLOR]$INFO[ListItem.Votes(tmdb), [COLOR grey](,)[/COLOR]]</value>
+        <value condition="!String.IsEmpty(ListItem.Property(TMDb_Rating))">$INFO[ListItem.Property(TMDb_Rating)] [COLOR grey]TMDb[/COLOR]$INFO[ListItem.Property(TMDb_Votes), [COLOR grey](,)[/COLOR]]</value>
+        <value>$INFO[ListItem.Rating]$INFO[ListItem.Votes, [COLOR grey](,)[/COLOR]]</value>
+    </variable>
+
+    <!-- Network: TMDb Helper Network property is networks only (Studio mixes in producers) -->
+    <variable name="ModernNetworkVar">
+        <value condition="!String.IsEmpty(ListItem.Property(Network)) + [$EXP[ModernIsSeries] | $EXP[ModernIsEpisode]]">$INFO[ListItem.Property(Network)]</value>
+        <value>$INFO[ListItem.Studio]</value>
+    </variable>
+
+    <variable name="ModernTop250Var">
+        <value condition="Integer.IsGreater(ListItem.Top250,0)">#$INFO[ListItem.Top250] $VAR[ModernLblTop250]</value>
+        <value>#$INFO[ListItem.Property(top250)] $VAR[ModernLblTop250]</value>
+    </variable>
+
+
+    <!-- ================================================================== -->
+    <!-- 4. PARENTS GUIDE (POV addon, plugin.video.pov)                      -->
+    <!--                                                                     -->
+    <!-- How POV publishes it (resources/lib/windows/extras.py):             -->
+    <!-- * only inside POV's own Extras window, after it fetches IMDb data   -->
+    <!-- * as a list, control id 2055, one item per category, each with      -->
+    <!--     tikiskins.extras.thumbnail  icon file, identifies the category  -->
+    <!--     tikiskins.extras.ranking    UPPERCASE localized severity        -->
+    <!-- * NOT as Window(Home) or browse-view ListItem properties, so this   -->
+    <!--   chip stays hidden in View_51 and appears where container 2055     -->
+    <!--   exists. Use the ModernParentsGuideBadge include (section 8) in    -->
+    <!--   the skin file that hosts POV's Extras window.                     -->
+    <!--                                                                     -->
+    <!-- Category is matched by icon file (language independent):            -->
+    <!--     war.png = violence            porn.png = nudity / sex           -->
+    <!--     bad_language.png = profanity  horror.png = frightening          -->
+    <!--     drugs_alcohol.png = alcohol / drugs / smoking                   -->
+    <!-- Severity is matched by the word POV prints. The words below are     -->
+    <!-- English; POV translates them (strings 32996, 32997, 32998 in        -->
+    <!-- plugin.video.pov/resources/language/*/strings.po). If POV runs in   -->
+    <!-- another language, replace SEVERE, MODERATE and MILD in this section -->
+    <!-- with the uppercase translations. NONE is never translated.          -->
+    <!-- Green = none, lime = mild, amber = moderate, red = severe,          -->
+    <!-- white = category present but word not recognised.                   -->
+    <!-- A category POV did not return is simply left out of the chip.       -->
+    <!-- ================================================================== -->
+
+    <variable name="ModernPGViolenceVar">
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),SEVERE)]">[COLOR FFE5594F]$VAR[ModernLblPGViolence][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),MODERATE)]">[COLOR FFF0B84A]$VAR[ModernLblPGViolence][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),MILD)]">[COLOR FFC7D95A]$VAR[ModernLblPGViolence][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),war.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),NONE)]">[COLOR FF6BD66B]$VAR[ModernLblPGViolence][/COLOR]</value>
+        <!-- category present but severity word not recognised: plain white -->
+        <value condition="String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),war.png) | String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),war.png) | String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),war.png) | String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),war.png) | String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),war.png)">[COLOR FFFFFFFF]$VAR[ModernLblPGViolence][/COLOR]</value>
+    </variable>
+
+    <variable name="ModernPGNudityVar">
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),SEVERE)]">[COLOR FFE5594F]$VAR[ModernLblPGNudity][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),MODERATE)]">[COLOR FFF0B84A]$VAR[ModernLblPGNudity][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),MILD)]">[COLOR FFC7D95A]$VAR[ModernLblPGNudity][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),porn.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),NONE)]">[COLOR FF6BD66B]$VAR[ModernLblPGNudity][/COLOR]</value>
+        <!-- category present but severity word not recognised: plain white -->
+        <value condition="String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),porn.png) | String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),porn.png) | String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),porn.png) | String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),porn.png) | String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),porn.png)">[COLOR FFFFFFFF]$VAR[ModernLblPGNudity][/COLOR]</value>
+    </variable>
+
+    <variable name="ModernPGProfanityVar">
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),SEVERE)]">[COLOR FFE5594F]$VAR[ModernLblPGProfanity][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),MODERATE)]">[COLOR FFF0B84A]$VAR[ModernLblPGProfanity][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),MILD)]">[COLOR FFC7D95A]$VAR[ModernLblPGProfanity][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),bad_language.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),NONE)]">[COLOR FF6BD66B]$VAR[ModernLblPGProfanity][/COLOR]</value>
+        <!-- category present but severity word not recognised: plain white -->
+        <value condition="String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),bad_language.png) | String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),bad_language.png) | String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),bad_language.png) | String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),bad_language.png) | String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),bad_language.png)">[COLOR FFFFFFFF]$VAR[ModernLblPGProfanity][/COLOR]</value>
+    </variable>
+
+    <variable name="ModernPGScaryVar">
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),SEVERE)]">[COLOR FFE5594F]$VAR[ModernLblPGScary][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),MODERATE)]">[COLOR FFF0B84A]$VAR[ModernLblPGScary][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),MILD)]">[COLOR FFC7D95A]$VAR[ModernLblPGScary][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),horror.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),NONE)]">[COLOR FF6BD66B]$VAR[ModernLblPGScary][/COLOR]</value>
+        <!-- category present but severity word not recognised: plain white -->
+        <value condition="String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),horror.png) | String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),horror.png) | String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),horror.png) | String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),horror.png) | String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),horror.png)">[COLOR FFFFFFFF]$VAR[ModernLblPGScary][/COLOR]</value>
+    </variable>
+
+    <variable name="ModernPGAlcoholVar">
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),SEVERE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),SEVERE)]">[COLOR FFE5594F]$VAR[ModernLblPGAlcohol][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),MODERATE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),MODERATE)]">[COLOR FFF0B84A]$VAR[ModernLblPGAlcohol][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),MILD)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),MILD)]">[COLOR FFC7D95A]$VAR[ModernLblPGAlcohol][/COLOR]</value>
+        <value condition="[String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.ranking),NONE)] | [String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) + String.StartsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.ranking),NONE)]">[COLOR FF6BD66B]$VAR[ModernLblPGAlcohol][/COLOR]</value>
+        <!-- category present but severity word not recognised: plain white -->
+        <value condition="String.EndsWith(Container(2055).ListItemAbsolute(0).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) | String.EndsWith(Container(2055).ListItemAbsolute(1).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) | String.EndsWith(Container(2055).ListItemAbsolute(2).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) | String.EndsWith(Container(2055).ListItemAbsolute(3).Property(tikiskins.extras.thumbnail),drugs_alcohol.png) | String.EndsWith(Container(2055).ListItemAbsolute(4).Property(tikiskins.extras.thumbnail),drugs_alcohol.png)">[COLOR FFFFFFFF]$VAR[ModernLblPGAlcohol][/COLOR]</value>
+    </variable>
+
+    <!-- Coloured letters, e.g. V N P F A -->
+    <variable name="ModernPGLabelVar">
+        <value>$VAR[ModernPGViolenceVar,, ]$VAR[ModernPGNudityVar,, ]$VAR[ModernPGProfanityVar,, ]$VAR[ModernPGScaryVar,, ]$VAR[ModernPGAlcoholVar]</value>
+    </variable>
+
+
+    <!-- ================================================================== -->
+    <!-- 5. POSTER ART                                                       -->
+    <!-- ================================================================== -->
+
+    <include name="ModernPosterArt">
+        <param name="left" default="4"/>
+        <param name="top" default="4"/>
+        <param name="width" default="476"/>
+        <param name="height" default="716"/>
+        <param name="visible" default="true"/>
+        <param name="diffuse" default="masks/poster-50.png"/>
+        <param name="aspect" default="scale"/>
+        <param name="fallback" default="DefaultMovies.png"/>
+        <definition>
+            <control type="image">
+                <left>$PARAM[left]</left>
+                <top>$PARAM[top]</top>
+                <width>$PARAM[width]</width>
+                <height>$PARAM[height]</height>
+                <visible>$PARAM[visible]</visible>
+                <fadetime>200</fadetime>
+                <aspectratio align="center" aligny="center" scalediffuse="false">$PARAM[aspect]</aspectratio>
+                <texture diffuse="$PARAM[diffuse]" fallback="$PARAM[fallback]" background="true">$VAR[ModernPosterVar]</texture>
+            </control>
+        </definition>
+    </include>
+
+
+    <!-- ================================================================== -->
+    <!-- 6. INFO CHIP (one auto-width pill)                                  -->
+    <!-- A non-focusable button: no id, disabled, so it can never steal      -->
+    <!-- focus from the poster wall. Width follows the text between          -->
+    <!-- min_width and max_width, which is what lets the bar stay one line.  -->
+    <!-- ================================================================== -->
+
+    <include name="ModernInfoChip">
+        <param name="label" default=""/>
+        <param name="visible" default="true"/>
+        <param name="height" default="100%"/>
+        <param name="min_width" default="48"/>
+        <param name="max_width" default="600"/>
+        <param name="font" default="font20_title"/>
+        <param name="textcolor" default="white"/>
+        <param name="bg_color" default="CCFFFFFF"/>
+        <param name="bg_texture" default="flags/flag.png"/>
+        <param name="bg_border" default="8"/>
+        <param name="text_offset" default="18"/>
+        <definition>
+            <control type="button">
+                <width min="$PARAM[min_width]" max="$PARAM[max_width]">auto</width>
+                <height>$PARAM[height]</height>
+                <visible>$PARAM[visible]</visible>
+                <enable>false</enable>
+                <label>[B]$PARAM[label][/B]</label>
+                <font>$PARAM[font]</font>
+                <textcolor>$PARAM[textcolor]</textcolor>
+                <disabledcolor>$PARAM[textcolor]</disabledcolor>
+                <shadowcolor>text_shadow</shadowcolor>
+                <align>center</align>
+                <aligny>center</aligny>
+                <textoffsetx>$PARAM[text_offset]</textoffsetx>
+                <texturefocus border="$PARAM[bg_border]" colordiffuse="$PARAM[bg_color]">$PARAM[bg_texture]</texturefocus>
+                <texturenofocus border="$PARAM[bg_border]" colordiffuse="$PARAM[bg_color]">$PARAM[bg_texture]</texturenofocus>
+            </control>
+        </definition>
+    </include>
+
+
+    <!-- ================================================================== -->
+    <!-- 7. MODERN MEDIA INFO BAR                                            -->
+    <!-- Chips are listed in priority order. If the bar is too narrow the    -->
+    <!-- last chips are clipped, so turn extras off with show_* params.      -->
+    <!-- ================================================================== -->
+
+    <include name="ModernMediaInfoBar">
+        <!-- Placement. Defaults are percentages of the parent control (normally the   -->
+        <!-- window), so the bar lands in the same place in any skin resolution folder -->
+        <!-- or aspect ratio. Plain pixels ("945") and "NNr" (from the far edge) also  -->
+        <!-- work if you pass them.                                                     -->
+        <param name="top" default="87%"/>
+        <param name="left" default="5%"/>
+        <param name="width" default="90%"/>
+        <param name="height" default="4%"/>
+        <param name="visible" default="true"/>
+        <param name="align" default="center"/>
+        <param name="itemgap" default="12"/>
+
+        <!-- Look -->
+        <param name="font" default="font20_title"/>
+        <param name="textcolor" default="white"/>
+        <param name="chip_bg" default="CCFFFFFF"/>
+        <param name="chip_texture" default="flags/flag.png"/>
+        <param name="chip_border" default="8"/>
+        <param name="chip_offset" default="18"/>
+        <param name="chip_max" default="380"/>
+
+        <!-- Responsive: true hides the lowest-priority chips (total runtime, watched  -->
+        <!-- progress, awards, genre). Default follows the physical screen width.       -->
+        <param name="compact" default="$EXP[ModernCompact]"/>
+
+        <!-- Per-chip switches (true / false / any visibility condition) -->
+        <param name="show_status" default="true"/>
+        <param name="show_age" default="true"/>
+        <param name="show_pg" default="true"/>
+        <param name="show_release" default="false"/>
+        <param name="show_runtime" default="true"/>
+        <param name="show_endtime" default="true"/>
+        <param name="show_counts" default="false"/>
+        <param name="show_totalruntime" default="true"/>
+        <param name="show_progress" default="true"/>
+        <param name="show_next" default="true"/>
+        <param name="show_rating" default="false"/>
+        <param name="show_network" default="false"/>
+        <param name="show_awards" default="true"/>
+        <param name="show_genre" default="false"/>
+        <definition>
+            <control type="group">
+                <left>$PARAM[left]</left>
+                <top>$PARAM[top]</top>
+                <width>$PARAM[width]</width>
+                <height>$PARAM[height]</height>
+                <visible>$PARAM[visible]</visible>
+                <animation effect="fade" start="0" end="100" time="300">Visible</animation>
+                <animation effect="fade" start="100" end="0" time="200">Hidden</animation>
+                <control type="grouplist">
+                    <left>0</left>
+                    <top>0</top>
+                    <width>100%</width>
+                    <height>100%</height>
+                    <orientation>horizontal</orientation>
+                    <align>$PARAM[align]</align>
+                    <itemgap>$PARAM[itemgap]</itemgap>
+
+                    <!-- Show status (TV shows): green = ongoing, amber = planned / in production, red = canceled, grey = ended -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_status] + $EXP[ModernIsTVShow] + !String.IsEmpty(ListItem.Status)"/>
+                        <param name="label" value="• $VAR[ModernStatusVar]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$VAR[ModernStatusColorVar]"/>
+                    </include>
+
+                    <!-- Age rating badge -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_age] + !String.IsEmpty(ListItem.Mpaa)"/>
+                        <param name="label" value="$INFO[ListItem.Mpaa]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                    </include>
+
+                    <!-- Content advisory from POV Extras: V violence, N nudity / sex, P profanity, F frightening, A alcohol / drugs. Letter colour = severity -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_pg] + $EXP[ModernHasPG]"/>
+                        <param name="label" value="$VAR[ModernPGLabelVar]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                    </include>
+
+                    <!-- Release year (movies / shows) or air date (seasons / episodes) -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_release] + [!String.IsEmpty(ListItem.Year) | !String.IsEmpty(ListItem.Premiered)]"/>
+                        <param name="label" value="$VAR[ModernReleaseVar]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                    </include>
+
+                    <!-- Runtime: full length for movies / episodes, per-episode length for shows / seasons -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_runtime] + !String.IsEmpty(ListItem.Duration) + [$EXP[ModernIsMovie] | $EXP[ModernIsEpisode] | $EXP[ModernIsSeries]]"/>
+                        <param name="label" value="$VAR[ModernRuntimeChipVar]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                    </include>
+
+                    <!-- Estimated finish time if played now (movies / episodes) -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_endtime] + !String.IsEmpty(ListItem.EndTime) + !String.IsEmpty(ListItem.Duration) + [$EXP[ModernIsMovie] | $EXP[ModernIsEpisode]]"/>
+                        <param name="label" value="$LOCALIZE[31080]: $INFO[ListItem.EndTime]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                    </include>
+
+                    <!-- Seasons and episodes count (shows / seasons) -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_counts] + $EXP[ModernHasCounts]"/>
+                        <param name="label" value="$VAR[ModernCountsVar]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                    </include>
+
+                    <!-- Total series / season runtime (needs the optional TotalRuntime property, see ModernTotalRuntimeVar) -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_totalruntime] + $EXP[ModernIsSeries] + !String.IsEmpty(ListItem.Property(TotalRuntime)) + ![$PARAM[compact]]"/>
+                        <param name="label" value="$VAR[ModernTotalRuntimeVar]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                    </include>
+
+                    <!-- Watched progress (shows / seasons, library items with watched episodes) -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_progress] + $EXP[ModernIsSeries] + Integer.IsGreater(ListItem.Property(WatchedEpisodes),0) + !String.IsEmpty(ListItem.Property(TotalEpisodes)) + ![$PARAM[compact]]"/>
+                        <param name="label" value="$INFO[ListItem.Property(WatchedEpisodes)] / $INFO[ListItem.Property(TotalEpisodes)] $VAR[ModernLblWatched]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                    </include>
+
+                    <!-- Next episode air date (TMDb Helper Next_Aired property, TV shows) -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_next] + $EXP[ModernIsTVShow] + !String.IsEmpty(ListItem.Property(Next_Aired))"/>
+                        <param name="label" value="$VAR[ModernLblNext] $INFO[ListItem.Property(Next_Aired)]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="button_focus"/>
+                    </include>
+
+                    <!-- User rating and vote count (IMDb, then TMDb, then the default Kodi rating) -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_rating] + $EXP[ModernHasRating]"/>
+                        <param name="label" value="$VAR[ModernRatingVar]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                    </include>
+
+                    <!-- TV network / production studio -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_network] + [!String.IsEmpty(ListItem.Studio) | !String.IsEmpty(ListItem.Property(Network))]"/>
+                        <param name="label" value="$VAR[ModernNetworkVar]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                        <param name="max_width" value="$PARAM[chip_max]"/>
+                    </include>
+
+                    <!-- IMDb Top 250 position -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_awards] + $EXP[ModernHasTop250] + ![$PARAM[compact]]"/>
+                        <param name="label" value="$VAR[ModernTop250Var]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="FFF0B84A"/>
+                    </include>
+
+                    <!-- Oscar wins (OMDb data via TMDb Helper) -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_awards] + Integer.IsGreater(ListItem.Property(Oscar_Wins),0) + ![$PARAM[compact]]"/>
+                        <param name="label" value="$INFO[ListItem.Property(Oscar_Wins)] $VAR[ModernLblOscars]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="FFF0B84A"/>
+                    </include>
+
+                    <!-- Genres (lowest priority; together with total runtime, progress and awards it is hidden in compact mode) -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$PARAM[show_genre] + !String.IsEmpty(ListItem.Genre) + ![$PARAM[compact]]"/>
+                        <param name="label" value="$INFO[ListItem.Genre]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$PARAM[textcolor]"/>
+                        <param name="max_width" value="$PARAM[chip_max]"/>
+                    </include>
+                </control>
+            </control>
+        </definition>
+    </include>
+
+
+    <!-- ================================================================== -->
+    <!-- 8. STANDALONE PARENTS GUIDE BADGE                                   -->
+    <!-- Same chip as in the bar, for the skin window that hosts POV's       -->
+    <!-- Extras dialog (that window must contain the list with id 2055).     -->
+    <!-- Hidden automatically when the list is empty or missing.             -->
+    <!-- ================================================================== -->
+
+    <include name="ModernParentsGuideBadge">
+        <param name="left" default="0"/>
+        <param name="top" default="0"/>
+        <param name="height" default="44"/>
+        <param name="visible" default="true"/>
+        <param name="font" default="font20_title"/>
+        <param name="textcolor" default="white"/>
+        <param name="chip_bg" default="CCFFFFFF"/>
+        <param name="chip_texture" default="flags/flag.png"/>
+        <param name="chip_border" default="8"/>
+        <param name="chip_offset" default="18"/>
+        <definition>
+            <control type="group">
+                <left>$PARAM[left]</left>
+                <top>$PARAM[top]</top>
+                <height>$PARAM[height]</height>
+                <visible>$PARAM[visible] + $EXP[ModernHasPG]</visible>
+                <include content="ModernInfoChip">
+                    <param name="label" value="$VAR[ModernPGLabelVar]"/>
+                    <param name="height" value="100%"/>
+                    <param name="font" value="$PARAM[font]"/>
+                    <param name="textcolor" value="$PARAM[textcolor]"/>
+                    <param name="bg_color" value="$PARAM[chip_bg]"/>
+                    <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                    <param name="bg_border" value="$PARAM[chip_border]"/>
+                    <param name="text_offset" value="$PARAM[chip_offset]"/>
+                </include>
+            </control>
+        </definition>
+    </include>
+
+</includes>

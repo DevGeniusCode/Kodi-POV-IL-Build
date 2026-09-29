@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <includes>
 
-	
+
 	<expression name="infodialog_active">Window.IsActive(musicinformation) | Window.IsActive(songinformation) | Window.IsActive(movieinformation) | Window.IsActive(addoninformation) | Window.IsActive(pvrguideinfo) | Window.IsActive(pvrrecordinginfo) | Window.IsActive(pictureinfo) | Window.IsVisible(script-embuary-video.xml) | Window.IsVisible(script-embuary-person.xml) | Window.IsVisible(script-embuary-image.xml)</expression>
 	<expression name="sidebar_visible">ControlGroup(9000).HasFocus | Control.HasFocus(6130) | Control.HasFocus(6131)</expression>
 	<expression name="ProgessBarMovie">String.IsEqual(ListItem.DBtype,movie) + !String.IsEmpty(Container($PARAM[id]).ListItem.Property(WatchedProgress)) + !Integer.IsEqual(Container($PARAM[id]).ListItem.Property(WatchedProgress),0)</expression>
-	
+
 	<!-- KODI-RD-IL ADDITION -->
 	<expression name="HomeScreenOff">![Window.IsActive(home) | Control.IsVisible(50) | Control.IsVisible(54) | Control.IsVisible(56) | Control.IsVisible(500) | Control.IsVisible(501) | Control.IsVisible(504)]</expression>
 	<expression name="SkinZoomToggle">Skin.HasSetting(ZoomToggle)</expression>
@@ -52,4 +52,8 @@
 	<expression name="groupcontrol8">![ControlGroup(201).HasFocus() | Control.HasFocus(202) | Control.HasFocus(15000) | Control.HasFocus(500323)]</expression>
 	<expression name="groupcontrol9">Control.HasFocus(202) + Container(202).HasFocus(470) + Container(500323).IsUpdating</expression>
 	<expression name="groupcontrol10">[Container(202).HasFocus(120) | Container(202).HasFocus(121) | Container(202).HasFocus(122) | Container(202).HasFocus(123)]</expression>
+	<!-- KODI-RD-IL: Sidebar Collapsed Expression -->
+	<expression name="IsSidebarCollapsed">
+		Skin.String(SidebarMode,Collapsed) | [[String.IsEmpty(Skin.String(SidebarMode)) | Skin.String(SidebarMode,Auto)] + !Control.HasFocus(9000) + !ControlGroup(700).HasFocus + !ControlGroup(701).HasFocus]
+	</expression>
 </includes>

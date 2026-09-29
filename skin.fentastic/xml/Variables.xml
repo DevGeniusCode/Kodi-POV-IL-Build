@@ -13,48 +13,48 @@
 	<variable name="AutoCompletionContentVar">
 		<value condition="System.AddonIsEnabled(plugin.program.autocompletion) + !System.HasHiddenInput">plugin://plugin.program.autocompletion?info=autocomplete&amp;&amp;id=$INFO[Control.GetLabel(312).index(1)]&amp;&amp;limit=9</value>
 	</variable>
-	
+
 	<variable name="GlobalBasedImage">
 	<value>colors/white.png</value>
 	</variable>
-	
+
 	<variable name="stripoutosdbuttons">
 	<value>osd/fullscreen/buttons</value>
 	</variable>
-	
+
 	<variable name="631viewtypeicon">
 	<value condition="$EXP[__tvshow] | $EXP[__season] | $EXP[__episode] | $EXP[__Movies]">$INFO[ListItem.Art(fanart)]</value>
 	<value condition="![$EXP[__tvshow] | $EXP[__season] | $EXP[__episode] | $EXP[__Movies]]">$INFO[ListItem.Icon]</value>
 	<value>$INFO[ListItem.Icon]</value>
 	</variable>
-	
+
 	<variable name="StudioStatustvshow">
 	<value condition="!String.IsEmpty(ListItem.Studio) + $EXP[__tvshow] | $EXP[__season] | $EXP[__episode] | $EXP[__Movies]">[COLOR red]רשת:[/COLOR] $INFO[ListItem.Studio]</value>
 	</variable>
-	
-	
+
+
 	<variable name="PausedInfoViewOSDTitle">
 	<value condition="!String.IsEmpty(VideoPlayer.TvShowTitle)">$INFO[VideoPlayer.TvShowTitle] $INFO[VideoPlayer.Year,(,)]</value>
 	<value condition="!String.IsEmpty(VideoPlayer.Title)">$INFO[VideoPlayer.Title] $INFO[VideoPlayer.Year,(,)]</value>
 	</variable>
 
-	
+
 	<variable name="SkinVariables_DBID_Lookup">
     <!-- אם המשתמש ממוקד בסרט -->
     <value condition="String.IsEqual(ListItem.DBType, movie)">plugin://script.skinvariables/?info=get_dbitem_movie_details&amp;dbid=$VAR[setIdContainer]</value>
-    
+
     <!-- אם המשתמש ממוקד באוסף סרטים (Set) -->
     <value condition="String.IsEqual(ListItem.DBType, set)">plugin://script.skinvariables/?info=get_dbitem_movieset_details&amp;dbid=$VAR[setIdContainer]</value>
-    
+
     <!-- אם המשתמש ממוקד בסדרת טלוויזיה -->
     <value condition="String.IsEqual(ListItem.DBType, tvshow)">plugin://script.skinvariables/?info=get_dbitem_tvshow_details&amp;dbid=$VAR[setIdContainer]</value>
-    
+
     <!-- אם המשתמש ממוקד בעונה ספציפית -->
     <value condition="String.IsEqual(ListItem.DBType, season)">plugin://script.skinvariables/?info=get_dbitem_season_details&amp;dbid=$VAR[setIdContainer]</value>
-    
+
     <!-- אם המשתמש ממוקד בפרק ספציפי -->
     <value condition="String.IsEqual(ListItem.DBType, episode)">plugin://script.skinvariables/?info=get_dbitem_episode_details&amp;dbid=$VAR[setIdContainer]</value>
-    
+
     <!-- אם המשתמש ממוקד בהרחבה/תוסף (Addon) -->
     <value condition="String.IsEqual(ListItem.DBType, addon)">plugin://script.skinvariables/?info=get_dbitem_addon_details&amp;dbid=$VAR[setIdContainer]</value>
 </variable>
@@ -64,19 +64,19 @@
 	<value condition="Control.HasFocus(51)">$INFO[Container(51).ListItem.DBID]</value>
 	<value condition="Control.HasFocus(52)">$INFO[Container(52).ListItem.DBID]</value>
 </variable>
-	
+
 	<variable name="LockViewLayoutSetFocusColor">
 	<value condition="!String.IsEmpty(Skin.String(viewtypelockfocuscolor)">$INFO[Skin.String(viewtypelockfocuscolor)]</value>
 	<value>FFFFFF</value>
 	</variable>
-	
+
 	<variable name="LockedPlayerOSd">
 	<value condition="$EXP[__SimplePlayerVisiblity]">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
 	<value condition="$EXP[__AdvancedPlayerVisiblity]">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
 	<value condition="$EXP[__NetflixPlayerVisiblity]">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
 	<value condition="$EXP[__PrettyplayerPlayerVisiblity]">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
 	</variable>
-	
+
 	<variable name="LockViewTypes_VAR">
 	<value condition="String.IsEqual(Skin.String(lock.view.type),posterviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
 	<value condition="String.IsEqual(Skin.String(lock.view.type),shitposterviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
@@ -86,11 +86,11 @@
 	<value condition="String.IsEqual(Skin.String(lock.view.type),widepanelpostersviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
 	<value condition="String.IsEqual(Skin.String(lock.view.type),widepanelfanartsviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
 	<value condition="String.IsEqual(Skin.String(lock.view.type),listviewtype)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
-	<value condition="String.IsEqual(Skin.String(lock.view.type),AdvancedViewList)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>	
+	<value condition="String.IsEqual(Skin.String(lock.view.type),AdvancedViewList)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
 	<value condition="String.IsEqual(Skin.String(lock.view.type),AdvancedWideViewList)">https://www.iconsdb.com/icons/preview/white/lock-7-xxl.png</value>
 	</variable>
-	
-	
+
+
 	<variable name="__viewtypelockimage__">
 	<value condition="Container(9001).HasFocus(100)">viewtypes/51.png</value>
 	<value condition="Container(9001).HasFocus(101)">viewtypes/53.png</value>
@@ -104,7 +104,7 @@
 	<value condition="Container(9001).HasFocus(109)">viewtypes/630.png</value>
 	<value condition="Container(9001).HasFocus(110)">viewtypes/631.png</value>
 	</variable>
-	
+
 	<variable name="LockedViewTypeLabel">
 	<value condition="String.IsEqual(Skin.String(lock.view.type),posterviewtype)">התצוגה נעולה על תצוגת פוסטרים</value>
 	<value condition="String.IsEqual(Skin.String(lock.view.type),shitposterviewtype)">התצוגה נעולה על תצוגת פוסטרים shift</value>
@@ -118,15 +118,15 @@
 	<value condition="String.IsEqual(Skin.String(lock.view.type),AdvancedViewList)">התצוגה נעולה על רשימה תצוגה מתקדמת</value>
 	<value condition="String.IsEqual(Skin.String(lock.view.type),AdvancedWideViewList)">התצוגה נעולה על רשימה רחבה תצוגה מתקדמת</value>
 	</variable>
-	
+
 	<variable name="LockedPlayerLabelOSd">
 	<value condition="$EXP[__SimplePlayerVisiblity]">הנגן נעול על נגן פשוט</value>
 	<value condition="$EXP[__AdvancedPlayerVisiblity]">הנגן נעול על נגן מתקדם</value>
 	<value condition="$EXP[__NetflixPlayerVisiblity]">הנגן נעול על נגן נטפליקס</value>
 	<value condition="$EXP[__PrettyplayerPlayerVisiblity]">הנגן נעול על נגן למבוגרים</value>
 	</variable>
-	
-	
+
+
 	<variable name="__NetflixCheckStatuWindowOpen_Osd__">
 	<value condition="![Window.IsActive(1126) | Window.IsActive(1127)]">הצג Flags</value>
 	</variable>
@@ -134,19 +134,19 @@
 	<variable name="__NetflixCheckStatuWindowOpenIdan_Osd__">
 	<value condition="Window.IsActive(1127)">חזור לסגירה</value>
 	</variable>
-	
+
 	<variable name="pauseddbtype_osd">
 	<value condition="$EXP[__Movies_OSD]">סרט</value>
 	<value condition="$EXP[__episode_OSD]">פרק</value>
 	</variable>
-	
+
 	<variable name="ifpauseddbtype_osd">
 	<value condition="$EXP[__Movies_OSD] + Player.Paused">הסרט מושהה</value>
 	<value condition="$EXP[__Movies_OSD] + !Player.Paused">השהה סרט</value>
 	<value condition="$EXP[__episode_OSD] + Player.Paused">הפרק מושהה</value>
 	<value condition="$EXP[__episode_OSD] + !Player.Paused">השהה פרק</value>
 	</variable>
-	
+
 	<variable name="NetFlixMenuLeftLabel">
 	<value condition="ControlGroup(201).HasFocus(43300)">הקודם</value>
 	<value condition="ControlGroup(201).HasFocus(43301)">העבר אחורה</value>
@@ -161,7 +161,7 @@
 	<value condition="ControlGroup(201).HasFocus(43311)">העבר קדימה</value>
 	<value condition="ControlGroup(201).HasFocus(43312)">הבא</value>
 	</variable>
-	
+
 	<variable name="__FixSeasonLabel__">
 	<value condition="String.Contains(ListItem.Label,Season 1)">עונה 1</value>
 	<value condition="String.Contains(ListItem.Label,Season 2)">עונה 2</value>
@@ -182,7 +182,7 @@
 	<value condition="String.Contains(ListItem.Label,Season 17)">עונה 17</value>
 	<value>$INFO[ListItem.Label]</value>
 	</variable>
-	
+
 	<variable name="TrailerTrueOrFalse">
 	<value condition="String.IsEmpty(ListItem.Trailer)">אין קדימון</value>
 	<value condition="!String.IsEmpty(ListItem.Trailer)">יש קדימון</value>
@@ -193,13 +193,13 @@
 	<value condition="$EXP[__episode_OSD]+ !$EXP[__CheckIdanplus_OSD]">לוח שידורים בסדרות לפי מעקב הסדרות שלך בטראקט</value>
 	<value condition="$EXP[__CheckIdanplus_OSD]">לחץ לוידג'ט עידן פלוס</value>
 	</variable>
-	
-	
+
+
 	<variable name="CheckNetflixBgButtonsStatus">
 	<value condition="!Skin.HasSetting(removenetflixbuttonsbg)">לחץ לביטול רקע בכפתורים</value>
 	<value condition="Skin.HasSetting(removenetflixbuttonsbg)">לחץ להפעלת רקע בכפתורים</value>
 	</variable>
-	
+
 	<variable name="StartTime_Osd_VAR">
 	<value condition="!VideoPlayer.Content(LiveTv)">$INFO[Player.Time(hh:mm:ss)]</value>
 	<value condition="VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg">$INFO[PVR.TimeShiftStart(hh:mm:ss)]</value>
@@ -212,34 +212,34 @@
 	<value condition="!$EXP[IDANPlusCheck_OSd]">$INFO[Player.TimeRemaining(hh:mm:ss)]</value>
 	<!-- <value></value> -->
 	</variable>
-	
+
 	<variable name="osd_middle_info_var">
 	<value condition="$EXP[__Movies_OSD] | $EXP[__episode_OSD]">$INFO[VideoPlayer.Genre]</value>
 	<value condition="VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg">$INFO[VideoPlayer.StartTime,מתחיל (,)] •  $INFO[VideoPlayer.EndTime,מסתיים (,)]</value>
 	<value>$INFO[VideoPlayer.Genre]</value>
 	</variable>
-	
-	
+
+
 	<variable name="translatestatus">
 	<value condition="String.IsEqual(ListItem.Status,returning series)">[COLOR red]מצב הסדרה:[/COLOR] סדרה חוזרת | </value>
 	<value condition="String.IsEqual(ListItem.Status,in production)">[COLOR red]מצב הסדרה:[/COLOR] הסדרה בהפקה | </value>
 	<value condition="String.IsEqual(ListItem.Status,planned)">[COLOR red]מצב הסדרה:[/COLOR] הסדרה בתכנון | </value>
 	<value condition="String.IsEqual(ListItem.Status,ended)">[COLOR red]מצב הסדרה:[/COLOR] הסדרה הסתיימה | </value>
 	</variable>
-	
+
 	<variable name="translatestatusnocolor">
 	<value condition="String.IsEqual(ListItem.Status,returning series)">סדרה חוזרת</value>
 	<value condition="String.IsEqual(ListItem.Status,in production)">הסדרה בהפקה</value>
 	<value condition="String.IsEqual(ListItem.Status,planned)">הסדרה בתכנון</value>
 	<value condition="String.IsEqual(ListItem.Status,ended)">הסדרה הסתיימה</value>
 	</variable>
-	
+
 	<variable name="osd_middle_info_next_var">
 	<value condition="$EXP[__Movies_OSD] | $EXP[__episode_OSD]">$INFO[VideoPlayer.offset(1).Genre]</value>
 	<value condition="VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg">$INFO[VideoPlayer.StartTime,מתחיל (,)] •  $INFO[VideoPlayer.EndTime,מסתיים (,)]</value>
 	<value>אין מידע</value>
-	</variable>	
-	
+	</variable>
+
 	<variable name="osd_middle_info_previous_var">
 	<value condition="$EXP[__Movies_OSD] | $EXP[__episode_OSD]">$INFO[VideoPlayer.offset(-1).Genre]</value>
 	<value condition="VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg">$INFO[VideoPlayer.StartTime,מתחיל (,)] •  $INFO[VideoPlayer.EndTime,מסתיים (,)]</value>
@@ -252,26 +252,26 @@
 	<value condition="$EXP[__livetv_OSD] + VideoPlayer.HasEpg">$INFO[VideoPlayer.StartTime,מתחיל(,)] $INFO[VideoPlayer.EndTime,מסתיים(,)]</value>
 	<value>$INFO[VideoPlayer.Title]</value>
 	</variable>
-	
+
 	<variable name="globalviewtypeinfo">
 	<value>$VAR[globalviewtimegenre]$VAR[globalviewtimeyear]$VAR[GetDurationTime]$VAR[checktplayeditemEndtimePlayed]$VAR[checktimeplayeditem]$VAR[translatestatus]$VAR[StudioStatustvshow]</value>
 	</variable>
-	
+
 	<variable name="globalviewtimegenre">
 	<value condition="!String.IsEmpty(ListItem.Genre)">[COLOR red]ז'אנר:[/COLOR] $INFO[ListItem.Genre] | </value>
-	</variable>	
+	</variable>
 	<variable name="globalviewtimeyear">
 	<value condition="!String.IsEmpty(ListItem.Year)">[COLOR red]שנה:[/COLOR] $INFO[ListItem.Year] | </value>
 	</variable>
-	
-	
+
+
 	<variable name="checktplayeditemEndtimePlayed">
 	<value condition="!String.IsEmpty(ListItem.EndTime) + Integer.IsGreater(ListItem.PercentPlayed,5) + $EXP[__Movies] | $EXP[__episode]">[COLOR red]בהמשך מאותה נקודת צפיה יסתיים בשעה:[/COLOR] $INFO[ListItem.EndTime] | </value>
 	</variable>
 	<variable name="checktimeplayeditem">
 	<value condition="!String.IsEmpty(ListItem.EndTime) + Integer.IsEqual(ListItem.PercentPlayed,0) + $EXP[__Movies] | $EXP[__episode]">[COLOR red]יסתיים בשעה:[/COLOR] $INFO[ListItem.EndTime] </value>
 	</variable>
-	
+
 	<variable name="GetDurationTime">
 	<value condition="String.IsEqual(ListItem.Duration(hh),00) + $EXP[__Movies] | $EXP[__episode]">[COLOR red]אורך:[/COLOR] $INFO[ListItem.Duration(mm)] דקות | </value>
 	<value condition="String.IsEqual(ListItem.Duration(hh),01) + $EXP[__Movies] | $EXP[__episode]">[COLOR red]אורך:[/COLOR] שעה ו $INFO[ListItem.Duration(mm)] דקות | </value>
@@ -279,8 +279,8 @@
 	<value condition="String.IsEqual(ListItem.Duration(hh),03) + $EXP[__Movies] | $EXP[__episode]">[COLOR red]אורך:[/COLOR] שלוש שעות ו $INFO[ListItem.Duration(mm)] דקות | </value>
 	<value condition="String.IsEqual(ListItem.Duration(hh),04) + $EXP[__Movies] | $EXP[__episode]">[COLOR red]אורך:[/COLOR] ארבע שעות ו $INFO[ListItem.Duration(mm)] דקות | </value>
 	</variable>
-	
-	
+
+
 	<variable name="GetDurationCleanTime">
 	<value condition="String.IsEqual(ListItem.Duration(hh),00) + $EXP[__Movies] | $EXP[__episode]">$INFO[ListItem.Duration(mm)] דקות</value>
 	<value condition="String.IsEqual(ListItem.Duration(hh),01) + $EXP[__Movies] | $EXP[__episode]">שעה ו $INFO[ListItem.Duration(mm)] דקות </value>
@@ -288,67 +288,67 @@
 	<value condition="String.IsEqual(ListItem.Duration(hh),03) + $EXP[__Movies] | $EXP[__episode]">שלוש שעות ו $INFO[ListItem.Duration(mm)] דקות</value>
 	<value condition="String.IsEqual(ListItem.Duration(hh),04) + $EXP[__Movies] | $EXP[__episode]">ארבע שעות ו $INFO[ListItem.Duration(mm)] דקות</value>
 	</variable>
-	
+
 	<variable name="netflix_playerpaused_label">
 	<value condition="Player.Paused">[B]מושהה[/B]</value>
 	<value condition="!Player.Paused">[B]מנגן עכשיו[/B]</value>
 	</variable>
-	
+
 	<variable name="netflix_playerpaused_Icon">
 	<value condition="Player.Paused">osd/fullscreen/buttons/pause.png</value>
 	<value condition="!Player.Paused">osd/fullscreen/buttons/play.png</value>
 	</variable>
-	
+
 	<variable name="middlelabelInfo_OSD_Var">
 	<value condition="$EXP[MoviesTvShowsExpression_OSD]">$INFO[VideoPlayer.Genre]</value>
 	<value condition="$EXP[LivetvExpressionEPG_OSD]">מתחיל [COLOR button_focus]$INFO[VideoPlayer.StartTime][/COLOR] מסתיים [COLOR button_focus]$INFO[VideoPlayer.EndTime][/COLOR]</value>
 	<value>No Information</value>
 	</variable>
-	
+
 	<variable name="build_Episodes_Url_OSD">
 	<value condition="$EXP[__episode_OSD]">$VAR[PovStartPoint_OSD]build_episode_list&season=$VAR[OsdSeasonInfo]&tmdb_id=$VAR[__FixTmdbOsd__]</value>
 	</variable>
-	
+
 	<variable name="middlelabelInfo_Next_OSD_Var">
 	<value condition="!String.IsEmpty(VideoPlayer.offset(1).Genre)">$INFO[VideoPlayer.offset(1).Genre]</value>
 	<value condition="VideoPlayer.Content(LiveTv) + VideoPlayer.HasEpg">מתחיל [COLOR button_focus]$INFO[VideoPlayer.NextStartTime][/COLOR] מסתיים [COLOR button_focus]$INFO[VideoPlayer.NextEndTime][/COLOR]</value>
 	<value>No Information</value>
 	</variable>
-	
+
 	<variable name="NextTitleInfo_Next_OSD">
 	<value condition="!String.IsEmpty(VideoPlayer.offset(1).Title)">$INFO[VideoPlayer.offset(1).Title]</value>
 	<value condition="!String.IsEmpty(Player.offset(1).Title)">$INFO[Player.offset(1).Title]</value>
 	<value>No Title</value>
 	</variable>
-	
+
 	<variable name="PreviousTitleInfo_Next_OSD">
 	<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Title)">$INFO[VideoPlayer.offset(-1).Title]</value>
 	<value condition="!String.IsEmpty(Player.offset(-1).Title)">$INFO[Player.offset(-1).Title]</value>
 	<value>No Title</value>
 	</variable>
-	
+
 	<variable name="NextTitleInfoYear_Next_OSD">
 	<value condition="!String.IsEmpty(VideoPlayer.offset(1).Year)">$INFO[VideoPlayer.offset(1).Year]</value>
 	<value condition="!String.IsEmpty(Player.offset(1).Year)">$INFO[Player.offset(1).Year]</value>
 	</variable>
-	
+
 	<variable name="PreviousTitleInfoYear_Next_OSD">
 	<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Year)">$INFO[VideoPlayer.offset(-1).Year]</value>
 	<value condition="!String.IsEmpty(Player.offset(-1).Year)">$INFO[Player.offset(-1).Year]</value>
 	</variable>
-	
+
 	<variable name="PovStartPoint_OSD">
 	<value>plugin://plugin.video.pov/?mode=</value>
 	</variable>
-	
+
 	<variable name="__FixTmdbOsd__">
 	<value>$INFO[VideoPlayer.UniqueID(tmdb)]</value>
 	</variable>
-	
+
 	<variable name="__FixTmdbVAR__">
 	<value>$INFO[ListItem.UniqueID(tmdb)]</value>
 	</variable>
-	
+
 	<variable name="OsdSeasonInfo">
 	<value>$INFO[VideoPlayer.Season]</value>
 	</variable>
@@ -357,7 +357,7 @@
 	<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Genre)">$INFO[VideoPlayer.offset(-1).Genre]</value>
 	<value>No Information</value>
 	</variable>
-	
+
 	<variable name="bottomlabelinfo_Previous_OSD_Var">
 	<value>$INFO[VideoPlayer.offset(-1).Plot]</value>
 	</variable>
@@ -365,25 +365,25 @@
 	<variable name="bottomlabelinfo_Next_OSD_Var">
 	<value>$INFO[VideoPlayer.offset(1).Plot]</value>
 	</variable>
-	
+
 	<variable name="_FixaudiolangugeOsd">
 		<value condition="String.IsEqual(VideoPlayer.AudioLanguage,eng)">אנגלית</value>
 		<value condition="String.IsEqual(VideoPlayer.AudioLanguage,heb)">עברית</value>
 		<value condition="String.IsEqual(VideoPlayer.AudioLanguage,ita)">איטלקית</value>
 		<value>$INFO[VideoPlayer.AudioLanguage]</value>
 	</variable>
-	
+
 	<variable name="NextShowIcon_OSD_Var">
 	<value condition="!String.IsEmpty(VideoPlayer.offset(1).Cover)">$INFO[VideoPlayer.offset(1).Cover]</value>
-	<value condition="!String.IsEmpty(VideoPlayer.offset(1).Icon)">$INFO[VideoPlayer.offset(1).Icon]</value>	
+	<value condition="!String.IsEmpty(VideoPlayer.offset(1).Icon)">$INFO[VideoPlayer.offset(1).Icon]</value>
 	</variable>
-	
+
 	<variable name="PreviousShowIcon_OSD_Var">
 	<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Cover)">$INFO[VideoPlayer.offset(-1).Cover]</value>
 	<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Icon)">$INFO[VideoPlayer.offset(-1).Icon]</value>
 	<value condition="!String.IsEmpty(VideoPlayer.offset(-1).Icon)">$INFO[VideoPlayer.offset(-1).Icon]</value>
 	</variable>
-	
+
 	<variable name="__Osdprettyplayerlabel">
 	<value condition="$EXP[__Movies_OSD]">[B]שנה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Year][/COLOR][/B] [B]סגנון: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Genre][/COLOR][/B]</value>
 	<value condition="$EXP[__episode_OSD]">[B]שנה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Year][/COLOR][/B] [B]סגנון: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Genre][/COLOR][/B] [B]תאריך יציאת הפרק: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Premiered][/COLOR][/B]</value>
@@ -393,33 +393,33 @@
 	<variable name="__Osdprettyplayerlabeltime">
 	<value condition="$EXP[__episode_OSD] | $EXP[__Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.FinishTime][/COLOR][/B] [B]:אחוזי צפיה עד כה [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.Progress]% אחוז[/COLOR][/B] $VAR[__Osdprettyplayerlabelepisode]</value>
 	</variable>
-	
+
 	<variable name="__Osdprettyplayernextlabeltime">
 	<value condition="$EXP[__episode_OSD] | $EXP[__Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).FinishTime][/COLOR][/B] [B]:אחוזי צפיה עד כה [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(1).Progress]% אחוז[/COLOR][/B] $VAR[__Osdprettyplayerlabelnextepisode]</value>
-	</variable>	
-	
+	</variable>
+
 	<variable name="__Osdprettyplayerpreviouslabeltime">
 	<value condition="$EXP[__episode_OSD] | $EXP[__Movies_OSD]">[B]נשאר עד סוף הצפיה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).TimeRemaining][/COLOR][/B] [B]מסתיים: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).FinishTime][/COLOR][/B] [B]:אחוזי צפיה עד כה [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[Player.offset(-1).Progress]% אחוז[/COLOR][/B] $VAR[__Osdprettyplayerlabelpreviousepisode]</value>
 	</variable>
-	
+
 	<variable name="__osdprettylabelpercent">
 	<value>$INFO[Player.TimeRemaining(hh:mm:ss)] • $INFO[Player.Time(hh:mm:ss)] • $INFO[Player.Progress]%</value>
 	</variable>
-	
+
 	<variable name="StudiologoShortCutPath">
 	<value>kodirdil/studiologos/</value>
-	</variable>	
-	
+	</variable>
+
 	<variable name="Studiologotextureinfo">
 	<value>$INFO[VideoPlayer.Studio].png</value>
 	</variable>
-	
-	
-	
+
+
+
 	<variable name="__Osdprettyplayerlabelepisode">
 	<value condition="$EXP[__episode_OSD]">[B]עונה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Season,(,)][/COLOR][/B] [B]פרק: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.Episode,(,)][/COLOR][/B]</value>
 	</variable>
-	
+
 	<variable name="__Osdprettyplayerlabelnextepisode">
 	<value condition="$EXP[__episode_OSD]">[B]עונה: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.offset(1).Season,(,)][/COLOR][/B] [B]פרק: [COLOR $INFO[Skin.String(osdprettychangecolortext)]]$INFO[VideoPlayer.offset(1).Episode,(,)][/COLOR][/B]</value>
 	</variable>
@@ -434,28 +434,28 @@
 	<value condition="!String.IsEmpty(VideoPlayer.offset(1).Cover]">$INFO[VideoPlayer.offset(1).Cover]</value>
 	<value>$INFO[VideoPlayer.offset(1).Cover]</value>
 	</variable>
-	
+
 	<variable name="texturecurrentimage">
 	<value condition="!String.IsEmpty(Player.Art(fanart)">$INFO[Player.Art(fanart)]</value>
 	<value condition="!String.IsEmpty(Player.Art(landscape)">$INFO[Player.Art(landscape)]</value>
 	<value condition="!String.IsEmpty(VideoPlayer.Cover)">$INFO[VideoPlayer.Cover]</value>
 	<value>$INFO[VideoPlayer.Cover]</value>
 	</variable>
-	
+
 	<variable name="PausedTendIconOSD">
 	<value condition="$EXP[__Movies_OSD]">$INFO[Player.Art(fanart)]</value>
 	<value condition="$EXP[__episode_OSD]">$INFO[Player.Icon]</value>
 	<value>$INFO[VideoPlayer.Cover]</value>
 	</variable>
-	
+
 	<variable name="RatingAndVotesOSD">
 	<value condition="!String.IsEmpty(VideoPlayer.RatingAndVotes)">[COLOR button_focus]|[/COLOR] $INFO[VideoPlayer.RatingAndVotes]</value>
 	</variable>
-	
+
 	<variable name="TagLineOsd_">
 	<value condition="!String.IsEmpty(VideoPlayer.TagLine)">[COLOR button_focus]|[/COLOR] $INFO[VideoPlayer.TagLine]</value>
 	</variable>
-	
+
 	<variable name="SetHenDurationAndTimeOSD">
 	<value condition="String.IsEqual(VideoPlayer.Duration(hh),00)">[COLOR button_focus]|[/COLOR] דקות $INFO[VideoPlayer.Duration(mm)]</value>
 	<value condition="String.IsEqual(VideoPlayer.Duration(hh),01)">[COLOR button_focus]|[/COLOR] שעה ו $INFO[VideoPlayer.Duration(mm)] דקות</value>
@@ -464,11 +464,11 @@
 	<value condition="String.IsEqual(VideoPlayer.Duration(hh),04)">[COLOR button_focus]|[/COLOR] ארבע שעות ו $INFO[VideoPlayer.Duration(mm)] דקות</value>
 	<value>$INFO[VideoPlayer.Duration]</value>
 	</variable>
-	
+
 	<variable name="BuildDataOSd">
 	<value>$VAR[RatingAndVotesOSD] $VAR[TagLineOsd_] $VAR[SetHenDurationAndTimeOSD]</value>
 	</variable>
-	
+
 	<variable name="texturepreviousimage">
 	<value condition="!String.IsEmpty(Player.offset(-1).Art(fanart)]">$INFO[Player.offset(-1).Art(fanart)]</value>
 	<value condition="!String.IsEmpty(Player.offset(-1).Art(landscape)]">$INFO[Player.offset(-1).Art(landscape)]</value>
@@ -482,30 +482,30 @@
 		<value condition="String.IsEqual(VideoPlayer.SubtitlesLanguage,ita)">איטלקית</value>
 		<value>$INFO[VideoPlayer.AudioLanguage]</value>
 	</variable>
-	
+
 	<variable name="SetDefaultColorpretttyosd">
 	<value condition="!String.IsEmpty(Skin.String(osdprettychangecolor))">$INFO[Skin.String(osdprettychangecolor)]</value>
 	<value>FF1A4876</value>
 	</variable>
-	
+
 	<variable name="LeftCornerFixTitle_osd">
 	<value condition="$EXP[__Movies_OSD] | $EXP[__livetv_OSD]">$INFO[VideoPlayer.Title][CR][B][COLOR button_focus]שנה[/COLOR][/B] $INFO[VideoPlayer.Year,(,)]</value>
 	<value condition="$EXP[__episode_OSD]">$INFO[VideoPlayer.Title] [COLOR button_focus]$INFO[VideoPlayer.Year,(,)][/COLOR][CR]עונה:$INFO[VideoPlayer.Season,[COLOR button_focus](,)[/COLOR]] פרק:$INFO[VideoPlayer.Episode,[COLOR button_focus](,)[/COLOR]]</value>
 	<value>$INFO[VideoPlayer.Title]</value>
 	</variable>
-	
+
 	<variable name="FixIdanPlusContent__OSD">
 	<value condition="$EXP[__Movies_OSD] + !$EXP[__CheckIdanplus_OSD]">plugin://plugin.video.pov/?action=trakt_watchlist&mode=build_movie_list&name=Movies</value>
 	<value condition="$EXP[__episode_OSD] + !$EXP[__CheckIdanplus_OSD]">plugin://plugin.video.pov/?mode=build_my_calendar&name=TraktCalendar</value>
 	<value condition="$EXP[__CheckIdanplus_OSD]">plugin://plugin.video.idanplus/?iconimage=C%253A%255CUsers%255CNetag%255CAppData%255CRoaming%255CKodi%255Caddons%255Cplugin.video.idanplus%255Cicon.png&amp;mode=1&amp;module&amp;moredata&amp;name=%5bB%5d%d7%98%d7%9c%d7%95%d7%99%d7%96%d7%99%d7%94%5b%2fB%5d&amp;url</value>
 	</variable>
-	
+
 	<variable name="LeftCornerFixMiddle_osd">
 	<value condition="$EXP[__Movies_OSD] | $EXP[__episode_OSD]">$INFO[Player.Time(hh:mm:ss)] [COLOR yellow]/[/COLOR] $INFO[Player.TimeRemaining(hh:mm:ss)]</value>
 	<value condition="$EXP[__livetv_OSD] + VideoPlayer.HasEpg">[COLOR yellow]מתחיל[/COLOR] $INFO[VideoPlayer.StartTime,[,]) [COLOR yellow]מסתיים[/COLOR] [VideoPlayer.EndTime,[,])</value>
 	<value>$INFO[Player.Time(hh:mm:ss)]</value>
-	</variable>	
-		
+	</variable>
+
 	<variable name="InfoListPathVar">
 		<value condition="String.IsEmpty(Container.PluginName)">$INFO[ListItem.FolderPath]</value>
 		<value></value>
@@ -527,7 +527,7 @@
 		<value condition="Skin.HasSetting(playerplaylist_osd)">התווסף לרשימת הכפתורים</value>
 		<value condition="!Skin.HasSetting(playerplaylist_osd)">הוסר מרשימת הכפתורים</value>
 	</variable>
-	
+
 	<variable name="MusicInfoTextboxVar">
 		<value condition="String.IsEqual(ListItem.DbType,song)">$INFO[ListItem.Comment,[B]$LOCALIZE[569][/B][CR][COLOR=white],[/COLOR]]</value>
 		<value condition="String.IsEqual(ListItem.DbType,album)">$INFO[ListItem.Property(Album_Description),[COLOR=white],[/COLOR]]</value>
@@ -582,12 +582,12 @@
 	<variable name="FanartThumbVar">
 		<value condition="!String.IsEmpty(Listitem.Art(poster))">$INFO[Listitem.Art(thumb)]</value>
 	</variable>
-	
+
 	<variable name="_FixIdanPlusPVR">
 		<value condition="VideoPlayer.Content(LiveTv)">pvr://channels/tv/*</value>
 		<value condition="!VideoPlayer.Content(LiveTv)osdbottom">plugin://plugin.video.idanplus/?iconimage=C%253A%255CUsers%255CNetag%255CAppData%255CRoaming%255CKodi%255Caddons%255Cplugin.video.idanplus%255Cicon.png&amp;mode=1&amp;module&amp;moredata&amp;name=%5bB%5d%d7%98%d7%9c%d7%95%d7%99%d7%96%d7%99%d7%94%5b%2fB%5d&amp;url</value>
 	</variable>
-	
+
 	<variable name="PosterThumbVar">
 		<value condition="!String.IsEmpty(Listitem.Art(poster))">$INFO[Listitem.Art(poster)]</value>
 		<value condition="!String.IsEmpty(Listitem.Art(thumb))">$INFO[Listitem.Art(poster)]</value>
@@ -815,7 +815,7 @@
 		<!-- <value>$INFO[ListItem.Year]</value>
 		 -->
 	</variable>
-	
+
 	<variable name="PlaybackStateLabel">
 		<value condition="Player.Rewinding2x">מריץ אחורה x2</value>
 		<value condition="Player.Rewinding4x">מריץ אחורה x4</value>
@@ -828,7 +828,7 @@
 		<value condition="Player.Forwarding16x">מריץ קדימה x16</value>
 		<value condition="Player.Forwarding32x">מריץ קדימה x32</value>
 	</variable>
-	
+
 	<variable name="VideoPlayerForwardRewindVar">
 		<value condition="Player.Forwarding2x | Player.Rewinding2x">2x</value>
 		<value condition="Player.Forwarding4x | Player.Rewinding4x">4x</value>
@@ -891,7 +891,7 @@
 		<value condition="Control.HasFocus(70054) + Playlist.IsRandom">$LOCALIZE[590]: $LOCALIZE[16041]</value>
 		<value condition="Control.HasFocus(70054)">$LOCALIZE[590]: $LOCALIZE[16039]</value>
 		<value condition="Control.HasFocus(70055)">$LOCALIZE[24013]</value>
-		
+
 		<!-- KODI-RD-IL ADDITION -->
 		<value condition="Control.HasFocus(599)">[B]Zoom In[/B]</value>
 		<value condition="Control.HasFocus(598)">[B]Zoom Out[/B]</value>
@@ -902,7 +902,7 @@
 		<value condition="Control.HasFocus(700455)">[B]$LOCALIZE[700045][/B]</value>
 		<value condition="Control.HasFocus(700456)">[B]$LOCALIZE[700059][/B]</value>
 		<!-- ##################### -->
-		
+
 	</variable>
 	<variable name="SkinSettingsHelpTextVar">
 		<value condition="Container(9000).HasFocus(1)">$LOCALIZE[31129]</value>
@@ -1042,7 +1042,7 @@
 		<value condition="ListItem.HasReminder">icons/pvr/timers/bell.png</value>
 		<value>icons/pvr/timers/recording.png</value>
   </variable>
-  
+
 	<variable name="SeekRewindForwardTime">
 		<value condition="Player.Forwarding2x | Player.Rewinding2x">x2</value>
 		<value condition="Player.Forwarding4x | Player.Rewinding4x">x4</value>
@@ -1056,7 +1056,7 @@
 		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.TvShowTitle] $INFO[VideoPlayer.Year,(,)]</value>
 		<value>$INFO[VideoPlayer.Title] $INFO[VideoPlayer.Year,(,)]</value>
 	</variable>
-	
+
 	<variable name="OsdTitleNextLabelVar">
 		<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(LiveTv)">$INFO[VideoPlayer.offset(1).Title] $INFO[VideoPlayer.offset(1).Year,(,)]</value>
 		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.offset(1).TvShowTitle] $INFO[VideoPlayer.offset(1).Year,(,)]</value>
@@ -1067,7 +1067,7 @@
 		<value condition="VideoPlayer.Content(episodes)">$INFO[VideoPlayer.offset(-1).TvShowTitle] $INFO[VideoPlayer.offset(-1).Year,(,)]</value>
 		<value>$INFO[VideoPlayer.offset(-1).Title] $INFO[VideoPlayer.offset(-1).Year,(,)]</value>
 	</variable>
-	
+
 	<variable name="PlayerTitleDBTYPE">
 		<value condition="VideoPlayer.Content(movies)">[COLOR button_focus]שם הסרט:[/COLOR]</value>
 		<value condition="VideoPlayer.Content(episodes)">[COLOR button_focus]שם הפרק:[/COLOR]</value>
@@ -1156,7 +1156,7 @@
 	<variable name="PlayerControlsPlayImageVar">
 		<value condition="Player.Playing">osd/fullscreen/buttons/pause.png</value>
 		<value>osd/fullscreen/buttons/play.png</value>
-	</variable>	
+	</variable>
 	<variable name="PlayerControlsPlayImageVar1">
 		<value condition="Player.Plaused">osd/fullscreen/buttons/pause.png</value>
 		<value condition="!Player.Paused">osd/fullscreen/buttons/play.png</value>
@@ -1316,6 +1316,12 @@
     <value>Open shutdown menu</value>
 	</variable>
 
+	<variable name="SidebarModeVar">
+		<value condition="String.IsEqual(Skin.String(SidebarMode),Expanded)">Expanded</value>
+		<value condition="String.IsEqual(Skin.String(SidebarMode),Collapsed)">Collapsed</value>
+		<value>Auto</value>
+	</variable>
+
 	<variable name="LandscapeSwitchVar">
     <value condition="Skin.HasSetting(UseLandscape)">Landscape</value>
     <value condition="!Skin.HasSetting(UseLandscape)">Clearlogo</value>
@@ -1410,7 +1416,7 @@
     <value condition="String.IsEqual(Skin.String(current_search_provider),3)">plugin://plugin.video.pov/?mode=build_trakt_list.search_trakt_lists&amp;search_title=$INFO[Skin.String(SearchInputTraktEncoded)]</value>
     <value>plugin://plugin.video.pov/?mode=build_trakt_list.search_trakt_lists&amp;query=$INFO[Skin.String(SearchInputTraktEncoded)]</value>
 	</variable>
-	
+
 	<variable name="_ReplaceSubtitle">
 	<value condition="String.IsEqual(Skin.String(subtitlesearch),darksubs)">חיפוש כתובית דרך דארקסאבס</value>
 	<value condition="String.IsEqual(Skin.String(subtitlesearch),kodisubtitle)">חיפוש כתובית דרך קודי</value>
@@ -1585,7 +1591,7 @@
 		<!-- EPISODES -->
 		<value condition="!ListItem.IsCollection + String.IsEqual(ListItem.DBtype,episode)">$VAR[RI_Aired]$VAR[RI_Mpaa]$VAR[RI_Network]$VAR[RI_RuntimeEpisodes]$VAR[RI_Endsat]</value>
 	</variable>
-	
+
 	<variable name="InfoPanelBottom">
 		<!-- COLLECTIONS -->
 		<!-- MOVIES, TVSHOWS, SEASONS, EPISODES -->
@@ -1612,26 +1618,26 @@
 	<variable name="InfoPanelEpisode">
 		<value condition="!ListItem.IsCollection + String.IsEqual(ListItem.DBtype,episode)">$VAR[_Aired]$VAR[_Mpaa]$VAR[_Network]$VAR[_RuntimeEpisodes]$VAR[_Endsat][CR]$VAR[_Plot][CR]</value>
 	</variable>
-	
+
 	<variable name="OsdReplaceSourceStartPoint">
 		<value>plugin://plugin.video.pov/?mode=play_media</value>
 	</variable>
-	
+
 	<variable name="AutoPlaySetToTrue">
 		<value>&autoplay=true</value>
 	</variable>
-	
+
 	<!-- KODI-RD-IL ADDITION -->
 	<variable name="BoxFrame">
 		<value>kodirdil/overlays/</value>
 	</variable>
-	
+
 	<!-- Custom_1122_PlayerPauseWindow.xml - Playing Label -->
 	<variable name="NowPlayingLabelVar">
 		<value condition="!String.IsEmpty(VideoPlayer.TvShowTitle)">$INFO[VideoPlayer.TvShowTitle]</value>
 		<value>$INFO[VideoPlayer.Title]</value>
 	</variable>
-	
+
 	<!-- Custom_1122_PlayerPauseWindow.xml - Playing Fanart -->
 	<variable name="NowPlayingFanartVar">
 		<value condition="!String.IsEmpty(Player.Art(fanart))">$INFO[Player.Art(fanart)]</value>
@@ -1640,50 +1646,50 @@
 		<value condition="!String.IsEmpty(Player.Icon)">$INFO[Player.Icon]</value>
 		<value>DefaultNoPreview.png</value>
 	</variable>
-	
+
 	<variable name="viewtypefanartview">
 	<value condition="$EXP[__Movies] | $EXP[__tvshow] | $EXP[__season] + !String.IsEmpty(ListItem.Art(fanart))">$INFO[ListItem.Art(fanart)]</value>
 	<value condition="$EXP[__Movies] | $EXP[__tvshow] | $EXP[__season] + !String.IsEmpty(ListItem.Art(landscape))">$INFO[ListItem.Art(landscape)]</value>
 	<value condition="$EXP[__episode]">$INFO[ListItem.Icon]</value>
 	<value>$INFO[ListItem.Icon]</value>
 	</variable>
-	
+
 	<variable name="generalviewtypefanartview">
 	<value condition="!String.IsEmpty(ListItem.Art(fanart))">$INFO[ListItem.Art(fanart)]</value>
 	<value condition="!String.IsEmpty(ListItem.Art(landscape))">$INFO[ListItem.Art(landscape)]</value>
 	<value>$INFO[ListItem.Icon]</value>
 	</variable>
-	
+
 	  <!--set your label flag -->
   	<variable name="NoLabelFlagFound">
 	<value>$INFO[Player.Process(VideoFPS)]</value>
 	</variable>
-	
+
 	<variable name="SetLabelflag">
 	<value condition="!String.IsEmpty(Player.Process(VideoFPS)">$VAR[NoLabelFlagFound]</value>
 	</variable>
-	
+
 	<variable name="NextPreviousIndicator">
 		<value>kodirdil/arrows/circle-down.png</value>
 	</variable>
-	
-	<!-- Clear Art Logo for Poster View Type -->	
+
+	<!-- Clear Art Logo for Poster View Type -->
 	<variable name="ClearArtLogo">
 		<value condition="!String.IsEmpty(ListItem.Art(clearlogo))">$INFO[ListItem.Art(clearlogo)]</value>
 		<value condition="String.IsEmpty(ListItem.Art(clearlogo))">$INFO[ListItem.Art(clearart)]</value>
 	</variable>
 
-		
+
 	<variable name="AutoPlaySetToFalse">
 		<value>&autoplay=false</value>
 	</variable>
-	
-	<!-- Seasons Label -->	
+
+	<!-- Seasons Label -->
 	<variable name="SeasonCorrectLabel">
 		<value condition="Integer.IsEqual(ListItem.Property(TotalSeasons),1)">$LOCALIZE[700015]</value>
 		<value condition="!Integer.IsEqual(ListItem.Property(TotalSeasons),1)">$LOCALIZE[7000151]</value>
 	</variable>
-	
+
 	<!-- TV Show InfoPanel Status Hebrew Translation -->
 	<variable name="SetHebStatus">
 		<value condition="String.IsEqual(ListItem.Status,returning series)">$LOCALIZE[700027]</value>
@@ -1692,13 +1698,13 @@
 		<value condition="String.IsEqual(ListItem.Status,canceled)">$LOCALIZE[700030]</value>
 		<value condition="String.IsEqual(ListItem.Status,ended)">$LOCALIZE[700031]</value>
 	</variable>
-	
-	<!-- Episode Prefix -->	
+
+	<!-- Episode Prefix -->
 	<variable name="Episode_prefix">
 		<value condition="VideoPlayer.Content(episodes)">[B][COLOR white]$LOCALIZE[700015][/COLOR] [COLOR button_focus]$INFO[VideoPlayer.Season][/COLOR][/B] / [B][COLOR white]$LOCALIZE[700016][/COLOR] [COLOR button_focus]$INFO[VideoPlayer.Episode][/COLOR][/B]</value>
 	</variable>
 	<!-- ##################### -->
-	
+
 
 	<variable name="__PlayerChoose">
 	<value condition="String.IsEqual(Skin.String(__chooseplayer),__simpleplayer)">נגן פשוט</value>

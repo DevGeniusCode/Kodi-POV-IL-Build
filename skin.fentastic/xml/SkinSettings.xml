@@ -228,6 +228,17 @@
 					<onclick>Skin.ToggleSetting(OneClickClose)</onclick>
 					<selected>Skin.HasSetting(OneClickClose)</selected>
 				</control>
+				<!-- KODI-RD-IL: Sidebar Mode Settings Button -->
+				<control type="button" id="637010">
+					<label>תצוגת תפריט צד (Sidebar Mode)</label>
+					<label2>$VAR[SidebarModeVar]</label2>
+					<include>DefaultSettingButton</include>
+					<onclick condition="String.IsEmpty(Skin.String(SidebarMode)) | String.IsEqual(Skin.String(SidebarMode),Auto)">Skin.SetString(SidebarMode,Expanded)</onclick>
+					<onclick condition="String.IsEqual(Skin.String(SidebarMode),Expanded)">Skin.SetString(SidebarMode,Collapsed)</onclick>
+					<onclick condition="String.IsEqual(Skin.String(SidebarMode),Collapsed)">Skin.SetString(SidebarMode,Auto)</onclick>
+					<selected>Skin.HasSetting(SidebarMode)</selected>
+					<onclick>ReloadSkin()</onclick>
+				</control>
 				<!-- ALTERNATE INFOPANEL -->
 				<control type="radiobutton" id="63702">
 					<label>Enable alternate InfoPanel</label>
@@ -419,7 +430,7 @@
 				<pagecontrol>60</pagecontrol>
 				<ondown>648</ondown>
 				<visible>Container(9000).HasFocus(4)</visible>
-				<!-- RATINGS -->	
+				<!-- RATINGS -->
 				<control type="button" id="6480">
 					<label>Enter MDbList API Key</label>
 					<label2>$INFO[Skin.String(mdblist_api_key)]</label2>
@@ -645,7 +656,7 @@
 					<selected>Skin.HasSetting(show_musicvideoposter)</selected>
 				</control>
 			</control>
-			
+
 			<control type="grouplist" id="622">
 				<top>133</top>
 				<left>25</left>

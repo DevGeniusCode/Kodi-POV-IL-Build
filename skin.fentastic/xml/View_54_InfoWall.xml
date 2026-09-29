@@ -232,25 +232,25 @@
 				<visible>!ListItem.IsParentFolder</visible>
 			</control>
 			<control type="label">
-					<left>117</left>
-					<top>171</top>
-					<width>169</width>
-					<label>$INFO[ListItem.Property(WatchedEpisodes)]$INFO[ListItem.Property(TotalEpisodes), / ,]</label>
-					<font>font20_title</font>
-					<shadowcolor>text_shadow</shadowcolor>
-					<align>right</align>
-					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id]) + String.IsEqual(ListItem.DBType,tvshow)</visible>
-					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
-				</control>
-				<control type="image">
-					<left>293</left>
-					<top>173</top>
-					<width>24</width>
-					<height>24</height>
-					<texture>lists/played-total.png</texture>
-					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id]) + String.IsEqual(ListItem.DBType,tvshow)</visible>
-					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
-				</control>
+				<left>117</left>
+				<top>171</top>
+				<width>169</width>
+				<label>$INFO[ListItem.Property(WatchedEpisodes)]$INFO[ListItem.Property(TotalEpisodes), / ,]</label>
+				<font>font20_title</font>
+				<shadowcolor>text_shadow</shadowcolor>
+				<align>right</align>
+				<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id]) + String.IsEqual(ListItem.DBType,tvshow)</visible>
+				<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+			</control>
+			<control type="image">
+				<left>293</left>
+				<top>173</top>
+				<width>24</width>
+				<height>24</height>
+				<texture>lists/played-total.png</texture>
+				<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id]) + String.IsEqual(ListItem.DBType,tvshow)</visible>
+				<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+			</control>
 			<control type="label">
 				<left>131</left>
 				<top>173</top>
@@ -505,25 +505,25 @@
 				<visible>!ListItem.IsParentFolder</visible>
 			</control>
 			<control type="label">
-					<left>220</left>
-					<top>228</top>
-					<width>169</width>
-					<label>$INFO[ListItem.Property(WatchedEpisodes)]$INFO[ListItem.Property(TotalEpisodes), / ,]</label>
-					<font>font20_title</font>
-					<shadowcolor>text_shadow</shadowcolor>
-					<align>right</align>
-					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id]) + String.IsEqual(ListItem.DBType,tvshow)</visible>
-					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
-				</control>
-				<control type="image">
-					<left>396</left>
-					<top>230.5</top>
-					<width>24</width>
-					<height>24</height>
-					<texture>lists/played-total.png</texture>
-					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id]) + String.IsEqual(ListItem.DBType,tvshow)</visible>
-					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
-				</control>
+				<left>220</left>
+				<top>228</top>
+				<width>169</width>
+				<label>$INFO[ListItem.Property(WatchedEpisodes)]$INFO[ListItem.Property(TotalEpisodes), / ,]</label>
+				<font>font20_title</font>
+				<shadowcolor>text_shadow</shadowcolor>
+				<align>right</align>
+				<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id]) + String.IsEqual(ListItem.DBType,tvshow)</visible>
+				<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+			</control>
+			<control type="image">
+				<left>396</left>
+				<top>230.5</top>
+				<width>24</width>
+				<height>24</height>
+				<texture>lists/played-total.png</texture>
+				<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id]) + String.IsEqual(ListItem.DBType,tvshow)</visible>
+				<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+			</control>
 			<control type="label">
 				<left>231</left>
 				<top>230</top>
@@ -696,28 +696,110 @@
 
 	<include name="InfoWallMovieLayout">
 		<param name="focused">false</param>
-		<param name="folderfocused">false</param>
 		<definition>
 			<control type="group">
-			<visible>!Container.Content(episodes)</visible>
+				<visible>String.IsEmpty(ListItem.Art(poster))</visible>
+				<include content="ProgressBar">
+					<param name="left" value="35"/>
+					<param name="top" value="265.9"/>
+					<param name="width" value="165"/>
+				</include>
+				<control type="image">
+					<include>FocusBounce</include>
+					<left>-4</left>
+					<top>-14</top>
+					<width>243</width>
+					<height>332</height>
+					<texture colordiffuse="button_focus">masks/poster.png</texture>
+					<bordersize>19</bordersize>
+					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id])</visible>
+					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+				</control>
+				<control type="image">
+					<include>FocusBounce</include>
+					<left>-4</left>
+					<top>-14</top>
+					<width>243</width>
+					<height>332</height>
+					<texture colordiffuse="button_focus">masks/poster.png</texture>
+					<bordersize>19</bordersize>
+					<visible>$PARAM[focused] + [Control.IsVisible(54) | Control.IsVisible(500)]</visible>
+					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+				</control>
+				<control type="textbox">
+					<left>40</left>
+					<top>194</top>
+					<width>157</width>
+					<height>80</height>
+					<font>font27</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<label>$INFO[ListItem.Label]</label>
+					<textcolor>focused_text</textcolor>
+					<autoscroll time="1000" delay="500" repeat="2000">$PARAM[focused] + Control.HasFocus($PARAM[list_id])</autoscroll>
+					<visible>!ListItem.IsParentFolder + $PARAM[focused] + Control.HasFocus($PARAM[list_id])</visible>
+				</control>
+				<control type="textbox">
+					<left>40</left>
+					<top>194</top>
+					<width>157</width>
+					<height>80</height>
+					<font>font27</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<label>$INFO[ListItem.Label]</label>
+					<textcolor>unfocused_text</textcolor>
+					<visible>!ListItem.IsParentFolder + ![$PARAM[focused] + Control.HasFocus($PARAM[list_id])]</visible>
+				</control>
+				<control type="image">
+					<left>4</left>
+					<top>-1</top>
+					<width>230</width>
+					<height>230</height>
+					<texture colordiffuse="focused_text" fallback="DefaultMovies.png" background="true">$INFO[ListItem.Icon]</texture>
+					<aspectratio>scale</aspectratio>
+					<bordersize>20</bordersize>
+					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id])</visible>
+				</control>
+				<control type="image">
+					<left>4</left>
+					<top>-1</top>
+					<width>230</width>
+					<height>230</height>
+					<texture colordiffuse="unfocused_text" fallback="DefaultMovies.png" background="true">$INFO[ListItem.Icon]</texture>
+					<aspectratio>scale</aspectratio>
+					<bordersize>20</bordersize>
+					<visible>![$PARAM[focused] + Control.HasFocus($PARAM[list_id])]</visible>
+				</control>
+			</control>
+			<control type="group">
+				<visible>!String.IsEmpty(ListItem.Art(poster))</visible>
 				<include content="ProgressBar">
 					<param name="left" value="35"/>
 					<param name="top" value="266"/>
 					<param name="width" value="165"/>
 				</include>
-	
 				<control type="image">
-					<!-- <left>15</left> -->
-					<top>-10</top>
-					<!-- 310 -->
-					<width>235</width>
-					<!-- 427 -->
-					<height>324</height>
-					<texture diffuse="masks/poster.png">$INFO[ListItem.Icon]</texture>
-					<bordertexture colordiffuse="white">masks/poster.png</bordertexture>
-					<bordersize>2</bordersize>
-					<visible>$PARAM[iconfocused]</visible>
-					<visible>[String.IsEqual(ListItem.DBTYPE,tvshow) | String.IsEqual(ListItem.DBTYPE,season) | String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)]</visible>
+					<include>FocusBounce</include>
+					<left>-4</left>
+					<top>-14</top>
+					<width>243</width>
+					<height>332</height>
+					<texture colordiffuse="button_focus">masks/poster.png</texture>
+					<bordersize>19</bordersize>
+					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id])</visible>
+					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+				</control>
+				<control type="image">
+					<include>FocusBounce</include>
+					<left>-4</left>
+					<top>-14</top>
+					<width>243</width>
+					<height>332</height>
+					<texture colordiffuse="button_focus">masks/poster.png</texture>
+					<bordersize>19</bordersize>
+					<visible>$PARAM[focused] + [Control.IsVisible(54) | Control.IsVisible(500)]</visible>
+					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
 				</control>
 				<control type="image">
 					<!-- <left>15</left> -->
@@ -726,47 +808,9 @@
 					<width>235</width>
 					<!-- 427 -->
 					<height>324</height>
-					<texture diffuse="masks/poster.png">$INFO[ListItem.Icon]</texture>
-					<bordersize>2</bordersize>
-					<visible>$PARAM[iconnofocused]</visible>
-					<visible>[String.IsEqual(ListItem.DBTYPE,tvshow) | String.IsEqual(ListItem.DBTYPE,season) | String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)]</visible>
-				</control>
-				<control type="image">
-					<!-- <left>15</left> -->
-					<top>-10</top>
-					<!-- 310 -->
-					<width>235</width>
-					<!-- 427 -->
-					<height>324</height>
-					<texture diffuse="masks/poster.png">$INFO[ListItem.Icon]</texture>
-					<bordersize>2</bordersize>
-					<colordiffuse>white</colordiffuse>
-					<visible>![String.IsEqual(ListItem.DBTYPE,tvshow) | String.IsEqual(ListItem.DBTYPE,season) | String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)]</visible>
-				</control>
-				<control type="image">
-					<!-- <left>15</left> -->
-					<top>-10</top>
-					<!-- 310 -->
-					<width>235</width>
-					<!-- 427 -->
-					<height>324</height>
-					<texture diffuse="masks/poster.png">masks/poster.png</texture>
-					<bordersize>2</bordersize>
-					<colordiffuse>25FFFFFF</colordiffuse>
-					<visible>![String.IsEqual(ListItem.DBTYPE,tvshow) | String.IsEqual(ListItem.DBTYPE,season) | String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)]</visible>
-				</control>
-				<control type="image">
-					<!-- <left>15</left> -->
-					<top>-10</top>
-					<!-- 310 -->
-					<width>235</width>
-					<!-- 427 -->
-					<height>324</height>
-					<texture diffuse="masks/poster.png">masks/poster.png</texture>
-					<bordersize>2</bordersize>
-					<colordiffuse>35FFFFFF</colordiffuse>
-					<visible>![String.IsEqual(ListItem.DBTYPE,tvshow) | String.IsEqual(ListItem.DBTYPE,season) | String.IsEqual(ListItem.DBTYPE,episode) | String.IsEqual(ListItem.DBTYPE,movie)]</visible>
-					<visible>$PARAM[iconfocusedfolder]</visible>
+					<texture diffuse="masks/poster.png" background="true">$INFO[ListItem.Art(poster)]</texture>
+					<!-- <aspectratio>scale</aspectratio> -->
+					<bordersize>20</bordersize>
 				</control>
 				<control type="image">
 					<left>20</left>
@@ -820,117 +864,88 @@
 				</control>
 			</control>
 			<control type="group">
-			<visible>Container.Content(episodes)</visible>
-				<include content="ProgressBar">
-					<param name="left" value="35"/>
-					<param name="top" value="266"/>
-					<param name="width" value="165"/>
+				<visible>String.IsEqual(ListItem.DBtype,tvshow)</visible>
+				<top>320</top>
+				<control type="image">
+					<left>20</left>
+					<top>-106</top>
+					<width>195</width>
+					<height>80</height>
+					<texture colordiffuse="CCFFFFFF">overlays/overlayfade8.png</texture>
+					<visible>!String.IsEmpty(ListItem.Art(poster))</visible>
+					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id])</visible>
+					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+				</control>
+				<control type="label">
+					<left>-1</left>
+					<top>-59</top>
+					<width>169</width>
+					<label>$INFO[ListItem.Property(WatchedEpisodes)]$INFO[ListItem.Property(TotalEpisodes), / ,]</label>
+					<font>font20_title</font>
+					<shadowcolor>text_shadow</shadowcolor>
+					<align>right</align>
+					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id])</visible>
+					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+				</control>
+				<control type="image">
+					<left>178</left>
+					<top>-56.7</top>
+					<width>24</width>
+					<height>24</height>
+					<texture>lists/played-total.png</texture>
+					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id])</visible>
+					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+				</control>
+				<control type="image">
+					<left>20</left>
+					<top>-106</top>
+					<width>195</width>
+					<height>80</height>
+					<texture colordiffuse="CCFFFFFF">overlays/overlayfade8.png</texture>
+					<visible>!String.IsEmpty(ListItem.Art(poster))</visible>
+					<visible>$PARAM[focused] + [Control.IsVisible(54) | Control.IsVisible(500)]</visible>
+					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+				</control>
+				<control type="label">
+					<left>-1</left>
+					<top>-59</top>
+					<width>169</width>
+					<label>$INFO[ListItem.Property(WatchedEpisodes)]$INFO[ListItem.Property(TotalEpisodes), / ,]</label>
+					<font>font20_title</font>
+					<shadowcolor>text_shadow</shadowcolor>
+					<align>right</align>
+					<visible>$PARAM[focused] + [Control.IsVisible(54) | Control.IsVisible(500)]</visible>
+					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+				</control>
+				<control type="image">
+					<left>178</left>
+					<top>-56.7</top>
+					<width>24</width>
+					<height>24</height>
+					<texture>lists/played-total.png</texture>
+					<visible>$PARAM[focused] + [Control.IsVisible(54) | Control.IsVisible(500)]</visible>
+					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
+				</control>
+			</control>
+			<control type="image">
+				<left>23</left>
+				<top>259</top>
+				<width>32</width>
+				<height>32</height>
+				<texture>$VAR[WallWatchedIconVar]</texture>
+			</control>
+			<control type="group">
+				<left>168</left>
+				<top>-8</top>
+				<include content="RatingCircle" condition="Skin.HasSetting(circle_rating) | Skin.HasSetting(circle_userrating)">
+					<param name="left">-72</param>
+					<param name="top">17</param>
+					<param name="width">119</param>
+					<param name="height">119</param>
+					<param name="label-left">-6</param>
+					<param name="label-top">22</param>
+					<param name="cornerdiffuse">overlays/overlaybg3.png</param>
 				</include>
-				<control type="image">
-					<top>-10</top>
-					<width>535</width>
-					<height>324</height>
-					<texture diffuse="masks/landscape-502.png" background="true">$INFO[ListItem.Icon]</texture>
-					<bordertexture>masks/landscape-502.png</bordertexture>
-					<bordersize>2</bordersize>
-					<visible>$PARAM[imagevisible]</visible>
-					<visible>String.IsEqual(ListItem.DBTYPE,episode)</visible>
-				</control>
-				<control type="image">
-					<top>-10</top>
-					<width>535</width>
-					<height>324</height>
-					<texture diffuse="masks/landscape-502.png" background="true">$INFO[ListItem.Icon]</texture>
-					<bordersize>2</bordersize>
-					<visible>$PARAM[focused]</visible>
-					<visible>String.IsEqual(ListItem.DBTYPE,episode)</visible>
-				</control>	
-				<control type="image">
-					<top>-10</top>
-					<width>535</width>
-					<height>324</height>
-					<texture colordiffuse="white" background="true">$INFO[ListItem.Icon]</texture>
-					<bordersize>2</bordersize>
-					<visible>!String.IsEqual(ListItem.DBTYPE,episode)</visible>
-				</control>
-				<control type="image">
-					<top>-10</top>
-					<width>535</width>
-					<height>324</height>
-					<texture colordiffuse="15FFFFFF" background="true">masks/landscape-502.png</texture>
-					<bordersize>2</bordersize>
-					<visible>!String.IsEqual(ListItem.DBTYPE,episode)</visible>
-				</control>
-				<control type="image">
-					<top>-10</top>
-					<width>535</width>
-					<height>324</height>
-					<texture colordiffuse="85FFFFFF" background="true">masks/landscape-502.png</texture>
-					<bordersize>2</bordersize>
-					<visible>!String.IsEqual(ListItem.DBTYPE,episode)</visible>
-					<visible>$PARAM[noneepisodefocus]</visible>
-				</control>
-				<control type="image">
-					<left>20</left>
-					<top>214</top>
-					<width>80</width>
-					<height>80</height>
-					<texture>overlays/overlaybg.png</texture>
-					<visible>Listitem.IsCollection | ListItem.IsPlaying | Integer.IsGreater(ListItem.Playcount,0)</visible>
-				</control>
-				<control type="image">
-					<left>20</left>
-					<top>214</top>
-					<width>195</width>
-					<height>80</height>
-					<texture colordiffuse="CCFFFFFF">overlays/overlayfade8.png</texture>
-					<visible>!String.IsEmpty(ListItem.Art(poster))</visible>
-					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id]) + String.IsEqual(ListItem.DBtype,movie) + !String.IsEmpty(Container($PARAM[id]).ListItem.Property(WatchedProgress)) + !Integer.IsEqual(Container($PARAM[id]).ListItem.Property(WatchedProgress),0)</visible>
-					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
-				</control>
-				<control type="label">
-					<left>-73</left>
-					<top>261</top>
-					<width>280</width>
-					<label>$INFO[ListItem.Property(WatchedProgress)]% $LOCALIZE[700013]</label>
-					<font>font20_title</font>
-					<shadowcolor>text_shadow</shadowcolor>
-					<align>right</align>
-					<visible>$PARAM[focused] + Control.HasFocus($PARAM[list_id]) + String.IsEqual(ListItem.DBtype,movie) + !String.IsEmpty(Container($PARAM[id]).ListItem.Property(WatchedProgress)) + !Integer.IsEqual(Container($PARAM[id]).ListItem.Property(WatchedProgress),0)</visible>
-					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
-				</control>
-				<control type="image">
-					<left>20</left>
-					<top>214</top>
-					<width>195</width>
-					<height>80</height>
-					<texture colordiffuse="CCFFFFFF">overlays/overlayfade8.png</texture>
-					<visible>!String.IsEmpty(ListItem.Art(poster))</visible>
-					<visible>$PARAM[focused] + String.IsEqual(ListItem.DBtype,movie) + !String.IsEmpty(Container($PARAM[id]).ListItem.Property(WatchedProgress)) + !Integer.IsEqual(Container($PARAM[id]).ListItem.Property(WatchedProgress),0) + [Control.IsVisible(54) | Control.IsVisible(500)]</visible>
-					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
-				</control>
-				<control type="label">
-					<left>-73</left>
-					<top>261</top>
-					<width>280</width>
-					<label>$INFO[ListItem.Property(WatchedProgress)]% $LOCALIZE[700013]</label>
-					<font>font20_title</font>
-					<shadowcolor>text_shadow</shadowcolor>
-					<align>right</align>
-					<visible>$PARAM[focused] + String.IsEqual(ListItem.DBtype,movie) + !String.IsEmpty(Container($PARAM[id]).ListItem.Property(WatchedProgress)) + !Integer.IsEqual(Container($PARAM[id]).ListItem.Property(WatchedProgress),0) + [Control.IsVisible(54) | Control.IsVisible(500)]</visible>
-					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
-				</control>
-				<control type="label">
-					<left>25</left>
-					<align>left</align>
-					<height>25</height>
-					<top>275</top>
-					<width>250</width>
-					<font>font10</font>
-					<shadowcolor>black</shadowcolor>
-					<label>[B]עונה $INFO[ListItem.Season,([COLOR button_focus],[/COLOR])] פרק$INFO[ListItem.Episode,([COLOR button_focus],[/COLOR])][/B]</label>
-					<visible>String.IsEqual(ListItem.DBTYPE,episode)</visible>
-				</control>
 			</control>
 		</definition>
 	</include>
@@ -1111,7 +1126,7 @@
 					<width>195</width>
 					<label>$INFO[ListItem.Label]</label>
 					<font>font10</font>
-          <textcolor>unfocused_text</textcolor>
+					<textcolor>unfocused_text</textcolor>
 					<shadowcolor>text_shadow</shadowcolor>
 					<align>center</align>
 					<visible>!$PARAM[focused] + [Control.IsVisible(54) | Control.IsVisible(500)]</visible>
@@ -1129,7 +1144,7 @@
 				</control>
 			</control>
 			<control type="group">
-				<visible>String.IsEqual(ListItem.DBtype,tvshow)</visible>
+				<visible>String.IsEqual(ListItem.DBtype,tvshow) | String.IsEqual(ListItem.DBtype,season)</visible>
 				<top>320</top>
 				<control type="image">
 					<left>20</left>
@@ -1234,9 +1249,8 @@
 				<viewtype label="31101">icon</viewtype>
 				<preloaditems>2</preloaditems>
 				<pagecontrol>531</pagecontrol>
-				<visible>[String.IsEmpty(Skin.String(lock.view.type)) + [Container.Content(artists) | Container.Content(albums) | Container.Content(sets) | Container.Content(movies) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(musicvideos) | Container.Content(images) | Container.Content(videos) | Container.Content(games)]] | String.IsEqual(Skin.String(lock.view.type),panelviewtype)</visible>
 				<scrolltime tween="cubic" easing="out">500</scrolltime>
-				<!-- <visible>Container.Content(artists) | Container.Content(albums) | Container.Content(sets) | Container.Content(movies) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(musicvideos) | Container.Content(images) | Container.Content(videos) | Container.Content(games)</visible> -->
+				<visible>[String.IsEmpty(Skin.String(lock.view.type)) + [Container.Content(artists) | Container.Content(albums) | Container.Content(sets) | Container.Content(movies) | Container.Content(tvshows) | Container.Content(seasons) | Container.Content(musicvideos) | Container.Content(images) | Container.Content(videos) | Container.Content(games)]] | String.IsEqual(Skin.String(lock.view.type),panelviewtype)</visible>
 				<itemlayout height="415" width="263" condition="Container.Content(movies) | Container.Content(sets) | Container.Content(tvshows) | Container.Content(seasons) | [Container.Content(musicvideos) + Skin.HasSetting(show_musicvideoposter)]">
 					<control type="group">
 						<left>30</left>
