@@ -927,6 +927,9 @@
 					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
 				</control>
 			</control>
+
+			<include>IL_Release_Banner</include>
+
 			<control type="image">
 				<left>23</left>
 				<top>259</top>
@@ -1207,6 +1210,7 @@
 					<include condition="$PARAM[focused]">Animation_FocusTextureFade</include>
 				</control>
 			</control>
+			<include>IL_Release_Banner_Big</include>
 			<control type="image">
 				<left>26</left>
 				<top>311</top>

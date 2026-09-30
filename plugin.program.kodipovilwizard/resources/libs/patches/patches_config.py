@@ -444,6 +444,26 @@ PATCH_CONFIG = [
         )
     },
     {
+        "id": "wizard_il_release",
+        "name": "IL Release Countdown Hook (Movies)",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/movies.py",
+        "marker": "# WIZARD_IL_RELEASE_v1",
+        "anchor": "\t\t\tlistitem.setProperties(props)",
+        "action": "append_after",
+        "hook": (
+            "try:\n"
+            "    import sys, xbmcvfs\n"
+            "    p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "    sys.path.append(p) if p not in sys.path else None\n"
+            "    import il_release\n"
+            "    il_release.apply_release_property(imdb_id, listitem)\n"
+            "except Exception:\n"
+            "    pass"
+        )
+    },
+    {
         "id": "pov_network_id_fix",
         "name": "POV Movie Streaming Tile Fix",
         "description": "Shadows tmdb_movies_networks mapping to prevent Kodi hanging on streaming tiles.",

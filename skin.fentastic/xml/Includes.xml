@@ -161,6 +161,73 @@
 	</include>
 
 
+	<!-- Banner colour per release state (AARRGGBB). Tweak here, nowhere else. -->
+	<variable name="IL_ReleaseBannerColorVar">
+		<value condition="String.IsEqual(ListItem.Property(IL_release_state),released)">CC2E7D32</value> <!-- subtle green  -->
+		<value condition="String.IsEqual(ListItem.Property(IL_release_state),today)">F000A651</value>    <!-- vivid green   -->
+		<value condition="String.IsEqual(ListItem.Property(IL_release_state),soon)">F0F57C00</value>     <!-- vibrant orange (1-7 days) -->
+		<value>E0C62828</value>                                                                          <!-- red: far-off  -->
+	</variable>
+
+	<include name="IL_Release_Banner">
+		<param name="left">28</param>
+		<param name="top">222</param>
+		<param name="width">179</param>
+		<param name="height">32</param>
+		<param name="font">font12</param>
+		<definition>
+			<control type="group">
+				<left>$PARAM[left]</left>
+				<top>$PARAM[top]</top>
+				<width>$PARAM[width]</width>
+				<height>$PARAM[height]</height>
+				<visible>!String.IsEmpty(ListItem.Property(IL_release))</visible>
+				<!-- background -->
+				<control type="image">
+					<left>0</left>
+					<top>0</top>
+					<width>100%</width>
+					<height>100%</height>
+					<texture>colors/grey.png</texture>
+					<colordiffuse>$VAR[IL_ReleaseBannerColorVar]</colordiffuse>
+				</control>
+				<!-- thin highlight along the top edge -->
+				<control type="image">
+					<left>0</left>
+					<top>0</top>
+					<width>100%</width>
+					<height>2</height>
+					<texture colordiffuse="40FFFFFF">colors/grey.png</texture>
+				</control>
+				<!-- status text -->
+				<control type="label">
+					<left>0</left>
+					<top>0</top>
+					<width>100%</width>
+					<height>100%</height>
+					<align>center</align>
+					<aligny>center</aligny>
+					<font>$PARAM[font]</font>
+					<textcolor>FFFFFFFF</textcolor>
+					<shadowcolor>text_shadow</shadowcolor>
+					<label>$INFO[ListItem.Property(IL_release)]</label>
+				</control>
+			</control>
+		</definition>
+	</include>
+
+	<include name="IL_Release_Banner_Big">
+		<definition>
+			<include content="IL_Release_Banner">
+				<param name="left" value="28" />
+				<param name="top" value="266" />
+				<param name="width" value="219" />
+				<param name="height" value="36" />
+				<param name="font" value="font12" />
+			</include>
+		</definition>
+	</include>
+
 	<include name="RatingCircle">
 		<param name="animation">False</param>
 		<definition>

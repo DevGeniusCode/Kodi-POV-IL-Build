@@ -237,7 +237,6 @@
 					<onclick condition="String.IsEqual(Skin.String(SidebarMode),Expanded)">Skin.SetString(SidebarMode,Collapsed)</onclick>
 					<onclick condition="String.IsEqual(Skin.String(SidebarMode),Collapsed)">Skin.SetString(SidebarMode,Auto)</onclick>
 					<selected>Skin.HasSetting(SidebarMode)</selected>
-					<onclick>ReloadSkin()</onclick>
 				</control>
 				<!-- ALTERNATE INFOPANEL -->
 				<control type="radiobutton" id="63702">

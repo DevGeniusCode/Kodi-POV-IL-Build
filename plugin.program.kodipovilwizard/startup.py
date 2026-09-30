@@ -684,3 +684,14 @@ try:
 except Exception as _skin_upd_err:
     logging.log("[Skin Auto Update] startup hook failed: {0}".format(_skin_upd_err),
                 level=xbmc.LOGERROR)
+
+######################################
+# KODI-POV-IL - IL Release Fetcher Service
+######################################
+try:
+    from resources.libs.patches import il_fetcher
+    il_fetcher.start_service()
+except Exception as e:
+    from resources.libs.common import logging
+    import xbmc
+    logging.log("[IL Fetcher] Failed to start background service: {0}".format(e), level=xbmc.LOGERROR)
