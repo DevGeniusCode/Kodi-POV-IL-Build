@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "DevGeniusCode/Kodi-POV-IL-Build",
   "release_tag": "addons-latest",
-  "generated": "2026-09-30T00:33:19Z",
+  "generated": "2026-10-09T15:02:11Z",
   "manifest_url": "https://raw.githubusercontent.com/DevGeniusCode/Kodi-POV-IL-Build/main/manifest.json",
   "config": {
     "config_version": "2.0.6",
@@ -28,13 +28,13 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.4.3",
+      "version": "0.4.4",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.4.3.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.3.zip",
-      "size": 2188901,
-      "sha256": "8bc49c3d8ac12602151ddd2a35cc6cadbc0cd26d79625ce59363983dd45c05d0",
-      "updated": "2026-09-30T00:33:19Z"
+      "filename": "plugin.program.kodipovilwizard-0.4.4.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.4.zip",
+      "size": 2193213,
+      "sha256": "69fefe7d7eb28235047d49777ab57cc4d812228577d04495b5761e54fb326f08",
+      "updated": "2026-10-09T15:02:11Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
@@ -153,9 +153,9 @@
       "type": "skin",
       "filename": "skin.fentastic-1.0.30.zip",
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.fentastic-1.0.30.zip",
-      "size": 20861522,
-      "sha256": "60a75a455eb787c82d19db246da23c79961b92a898c96439a43e4a2459a32e92",
-      "updated": "2026-09-30T00:33:19Z"
+      "size": 20861538,
+      "sha256": "c4bb2895d5827271b459b6d387796a35a5805afc3c45c6cb1b8601a393dc6c7c",
+      "updated": "2026-10-09T15:02:11Z"
     },
     "skin.povil.nox": {
       "id": "skin.povil.nox",
