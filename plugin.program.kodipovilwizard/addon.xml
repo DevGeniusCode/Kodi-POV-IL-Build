@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.program.kodipovilwizard" name="[COLOR yellow]Kodi POV IL Wizard[/COLOR]" version="0.4.3" provider-name="MoranTheKing">
+<addon id="plugin.program.kodipovilwizard" name="[COLOR yellow]Kodi POV IL Wizard[/COLOR]" version="0.4.4" provider-name="DevGeniusCode">
     <requires>
         <import addon="xbmc.python" version="3.0.0" />
         <import addon="script.module.requests" />
         <import addon="script.module.six" />
+        <import addon="script.module.qrcode"/>
     </requires>
     
     <extension point="xbmc.python.pluginsource" library="default.py">

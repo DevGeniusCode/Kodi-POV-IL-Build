@@ -449,8 +449,31 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/menus/movies.py",
-        "marker": "# WIZARD_IL_RELEASE_v1",
+        "marker": "# WIZARD_IL_RELEASE_v2",
         "anchor": "\t\t\tlistitem.setProperties(props)",
+        "action": "append_after",
+        "hook": (
+            "try:\n"
+            "    import sys\n"
+            "    _il = sys.modules.get('il_release')\n"
+            "    if _il is None:\n"
+            "        import xbmcvfs\n"
+            "        p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "        sys.path.append(p) if p not in sys.path else None\n"
+            "        import il_release as _il\n"
+            "    _il.apply_release_property(imdb_id, listitem, meta_get('premiered'), meta_get('year'), meta_get('il_dates'))\n"
+            "except Exception:\n"
+            "    pass"
+        )
+    },
+    {
+        "id": "wizard_il_dates_extract",
+        "name": "IL Release Dates - extract TMDB release_dates (metadata)",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/metadata.py",
+        "marker": "# WIZARD_IL_DATES_EXTRACT_v1",
+        "anchor": "\t\tpremiered = parser.get_text('release_date')",
         "action": "append_after",
         "hook": (
             "try:\n"
@@ -458,10 +481,21 @@ PATCH_CONFIG = [
             "    p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
             "    sys.path.append(p) if p not in sys.path else None\n"
             "    import il_release\n"
-            "    il_release.apply_release_property(imdb_id, listitem)\n"
+            "    _il_dates = il_release.extract_dates(data)\n"
             "except Exception:\n"
-            "    pass"
+            "    _il_dates = None"
         )
+    },
+    {
+        "id": "wizard_il_dates_store",
+        "name": "IL Release Dates - store in movie meta (metadata)",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/metadata.py",
+        "marker": "# WIZARD_IL_DATES_STORE_v1",
+        "anchor": "\t\t\t'mpaa': parser.get_mpaa('release_dates', user_info['mpaa_region']),",
+        "action": "append_after",
+        "hook": "'il_dates': locals().get('_il_dates'),"
     },
     {
         "id": "pov_network_id_fix",

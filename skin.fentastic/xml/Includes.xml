@@ -166,13 +166,16 @@
 		<value condition="String.IsEqual(ListItem.Property(IL_release_state),released)">CC2E7D32</value> <!-- subtle green  -->
 		<value condition="String.IsEqual(ListItem.Property(IL_release_state),today)">F000A651</value>    <!-- vivid green   -->
 		<value condition="String.IsEqual(ListItem.Property(IL_release_state),soon)">F0F57C00</value>     <!-- vibrant orange (1-7 days) -->
+		<value condition="String.IsEqual(ListItem.Property(IL_release_state),theaters)">E0512DA8</value> <!-- purple -->
+		<value condition="String.IsEqual(ListItem.Property(IL_release_state),coming)">E0455A64</value>   <!-- slate -->
 		<value>E0C62828</value>                                                                          <!-- red: far-off  -->
 	</variable>
 
+
 	<include name="IL_Release_Banner">
-		<param name="left">28</param>
-		<param name="top">222</param>
-		<param name="width">179</param>
+		<param name="left">57</param>
+		<param name="top">0</param>
+		<param name="width">120</param>
 		<param name="height">32</param>
 		<param name="font">font12</param>
 		<definition>
@@ -188,17 +191,10 @@
 					<top>0</top>
 					<width>100%</width>
 					<height>100%</height>
-					<texture>colors/grey.png</texture>
+					<texture diffuse="buttons/dfo.png">colors/grey.png</texture>
 					<colordiffuse>$VAR[IL_ReleaseBannerColorVar]</colordiffuse>
 				</control>
-				<!-- thin highlight along the top edge -->
-				<control type="image">
-					<left>0</left>
-					<top>0</top>
-					<width>100%</width>
-					<height>2</height>
-					<texture colordiffuse="40FFFFFF">colors/grey.png</texture>
-				</control>
+
 				<!-- status text -->
 				<control type="label">
 					<left>0</left>
@@ -219,14 +215,15 @@
 	<include name="IL_Release_Banner_Big">
 		<definition>
 			<include content="IL_Release_Banner">
-				<param name="left" value="28" />
-				<param name="top" value="266" />
-				<param name="width" value="219" />
-				<param name="height" value="36" />
-				<param name="font" value="font12" />
+				<param name="left" value="67"/>
+				<param name="top" value="0"/>
+				<param name="width" value="140"/>
+				<param name="height" value="36"/>
+				<param name="font" value="font12"/>
 			</include>
 		</definition>
 	</include>
+
 
 	<include name="RatingCircle">
 		<param name="animation">False</param>

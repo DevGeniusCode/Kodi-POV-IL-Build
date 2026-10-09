@@ -15,7 +15,7 @@ values are carried over from the previous ``manifest.json`` (matched by id
 **and** version) so the manifest stays complete and accurate.
 
 Environment:
-  REPO          owner/repo            (default: MoranTheKing/Kodi-POV-IL-Build)
+  REPO          owner/repo            (default: DevGeniusCode/Kodi-POV-IL-Build)
   RELEASE_TAG   rolling release tag   (default: addons-latest)
   MANIFEST_OUT  output path           (default: <repo>/manifest.json)
 """
@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from kodi_addons import REPO_ROOT, discover_addons  # noqa: E402
 import build_config  # noqa: E402
 
-REPO = os.environ.get("REPO", "MoranTheKing/Kodi-POV-IL-Build")
+REPO = os.environ.get("REPO", "DevGeniusCode/Kodi-POV-IL-Build")
 RELEASE_TAG = os.environ.get("RELEASE_TAG", "addons-latest")
 MANIFEST_OUT = os.environ.get("MANIFEST_OUT", os.path.join(REPO_ROOT, "manifest.json"))
 DIST_DIR = os.path.join(REPO_ROOT, "dist")

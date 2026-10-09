@@ -99,6 +99,9 @@ _RULES = (
 	('mdblist',
 	 re.compile(r'^mdblist_'),
 	 re.compile(r'^(build_mdbl_list\.|mdblist\.|build_my_calendar_mdbl$)')),
+	('pov_local_only',
+	 re.compile(r'^favorites_(movies|tvshows)$'),
+	 re.compile(r'^$')),
 )
 
 # Canonical MDBList rows (routing rescued from the legacy AF3 patcher: POV's
@@ -287,6 +290,10 @@ def is_service_active(service):
 
 	if svc.startswith('!'):
 		return not is_service_active(svc[1:])
+
+	if svc == 'pov_local_only':
+		states = _snapshot()['svc']
+		return not (states.get('trakt') or states.get('tmdb') or states.get('mdblist'))
 
 	if svc == 'umbrella':
 		return _umbrella_installed()

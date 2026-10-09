@@ -45,7 +45,7 @@ BUILD_SKIN_SWITCH_IMAGE_URL = 'https://github.com/MoranTheKing/Kodi-POV-IL/raw/m
 # legacy text-file quick_update). Raw manifest.json produced by the new
 # Monorepo CI pipeline. The wizard polls this on startup and updates only
 # the addons whose version moved.
-MANIFEST_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL-Build/main/manifest.json'
+MANIFEST_URL = 'https://raw.githubusercontent.com/DevGeniusCode/Kodi-POV-IL-Build/main/manifest.json'
 
 #########################################################
 

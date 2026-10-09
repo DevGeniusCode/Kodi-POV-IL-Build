@@ -403,6 +403,86 @@ def copy_to_clipboard(txt):
 # instead of the deprecated urllib.request.FancyURLopener (which
 # Python 3.14 removed entirely). The class had no other callers.
 
+import qrcode
+import xbmcaddon
+
+def generate_code(data, filename):
+
+    temp_dir = xbmcvfs.translatePath("special://temp/")
+    imagefile = os.path.join(temp_dir, "{0}.png".format(filename))
+
+    img = qrcode.make(data)
+    img.save(imagefile)
+
+    return imagefile
+
+
+class QRWindow(xbmcgui.WindowXMLDialog):
+    def __init__(self, *args, **kwargs):
+        super(QRWindow, self).__init__()
+        self.image_path = kwargs.get('image_path')
+        self.title = kwargs.get('title', '')
+        self.message = kwargs.get('message', '')
+        self.url = kwargs.get('url', '')
+
+    def onInit(self):
+        if self.image_path:
+            self.getControl(2001).setImage(self.image_path)
+
+        if self.title:
+            self.getControl(101).setLabel(self.title)
+
+        if self.message:
+            self.getControl(102).setLabel(self.message)
+        if self.url:
+            self.getControl(104).setLabel(self.url)
+
+    def onClick(self, controlId):
+        if controlId in [103, 1]:
+            self.close()
+
+    def onAction(self, action):
+        if action.getId() in [92, 10]:
+            self.close()
+
+def show_result(message, url=None):
+    dialog = xbmcgui.Dialog()
+    addon_title = getattr(CONFIG, 'ADDONTITLE', 'Kodi POV IL Wizard')
+    color2 = getattr(CONFIG, 'COLOR2', 'white')
+
+    if url:
+        try:
+
+            fn = url.split('/')[-2] if '/' in url else "qrcode"
+            imagefile = generate_code(url, fn)
+
+            clean_message = message.replace(url, '').strip()
+
+            addon_path = xbmcvfs.translatePath(xbmcaddon.Addon().getAddonInfo('path'))
+
+            qr_dialog = QRWindow(
+                'loguploader.xml',
+                addon_path,
+                'Default',
+                '1080i',
+                image_path=imagefile,
+                title=addon_title,
+                message=clean_message,
+                url=url
+            )
+            qr_dialog.doModal()
+            del qr_dialog
+
+            try:
+                os.remove(imagefile)
+            except:
+                pass
+
+        except Exception as e:
+            xbmc.log('{0}: QR Generation failed - {1}'.format(addon_title, e), xbmc.LOGWARNING)
+            dialog.ok(addon_title, "[COLOR {0}]{1}[/COLOR]\n\n[COLOR yellow]{2}[/COLOR]".format(color2, message, url))
+    else:
+        dialog.ok(addon_title, "[COLOR {0}]{1}[/COLOR]".format(color2, message))
 
 def view_log_file():
     from resources.libs.gui import window

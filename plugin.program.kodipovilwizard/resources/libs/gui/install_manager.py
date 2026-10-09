@@ -194,6 +194,45 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
     def _refresh(self):
         jobs = self._snapshot()
 
+        # --- Calculate and update overall progress percentage (Overall Progress) ---
+        if jobs:
+            total_weight = len(jobs) * 100.0
+            current_weight = 0.0
+
+            for j in jobs:
+                state = j.get('state', 'pending')
+                if state in ('success', 'failed'):
+                    current_weight += 100.0
+                elif state == 'downloading':
+                    # Half weight for the download stage (0-50%)
+                    current_weight += (j.get('progress', 0) / 2.0)
+                elif state == 'downloaded':
+                    current_weight += 50.0
+                elif state == 'installing':
+                    # Half weight for the installation/extraction stage (50-100%)
+                    current_weight += 50.0 + (j.get('progress', 0) / 2.0)
+
+            overall_pct = int((current_weight / total_weight) * 100)
+
+            # 1. Allows using the variable in XML formatting with $INFO[Window.Property(OverallProgress)]
+            self.setProperty('OverallProgress', str(overall_pct))
+
+            # 2. Direct update of GUI controls:
+            overall_bar_id = 500   # The ID of the overall progress bar (Progress Control)
+            overall_label_id = 501 # The ID of the text displaying the percentage (Label Control)
+
+            try:
+                bar_ctrl = self._ctrl(overall_bar_id)
+                if bar_ctrl:
+                    bar_ctrl.setPercent(overall_pct)
+
+                label_ctrl = self._ctrl(overall_label_id)
+                if label_ctrl:
+                    label_ctrl.setLabel("{0}%".format(overall_pct))
+            except Exception:
+                pass
+        # ---------------------------------------------------------------
+
         # Sliding window: keep the active view locked to the first executing job
         first_active = 0
         for i, j in enumerate(jobs):
