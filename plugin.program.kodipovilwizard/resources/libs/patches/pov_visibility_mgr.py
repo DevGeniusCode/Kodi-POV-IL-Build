@@ -373,7 +373,7 @@ def filter_navigator_list(list_items, list_name=None):
         items = _coerce_list(list_items)
         if items is None:
             return list_items
-		    states = _snapshot()['svc']
+        states = _snapshot()['svc']
         kept = []
         for it in items:
             svc = service_of(it)
