@@ -377,7 +377,7 @@ def filter_navigator_list(list_items, list_name=None):
 		kept = []
 		for it in items:
 			svc = service_of(it)
-			if svc is None or states.get(svc, False):
+    			if svc is None or is_service_active(svc):
 				kept.append(it)
 		removed = len(items) - len(kept)
 		if removed:

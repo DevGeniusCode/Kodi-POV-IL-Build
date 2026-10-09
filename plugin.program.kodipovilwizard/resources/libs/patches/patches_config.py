@@ -1077,6 +1077,24 @@ PATCH_CONFIG = [
         )
     },
     {
+        "id": "pov_animated_networks",
+        "name": "Animated Networks Icons Toggle",
+        "description": "Dynamically swaps static network shortcut icons to animated ones based on Fentastic's no_slide_animations setting.",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/caches/navigator_cache.py",
+        "marker": "# WIZARD_POV_ANIMATED_NETWORKS_v1",
+        "anchor": "navigator_cache = NavigatorCache()",
+        "action": "append_after",
+        "hook": (
+            "import sys, xbmcvfs;\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
+            "sys.path.append(p) if p not in sys.path else None;\n"
+            "import pov_animated_networks;\n"
+            "pov_animated_networks.run(navigator_cache)"
+        )
+    },
+    {
         "id": "pov_aiostreams_credentials_fix",
         "name": "POV AIOStreams Credentials Guard",
         "description": "Prevents AIOStreams from swallowing all scrapes when enabled but missing user credentials.",
