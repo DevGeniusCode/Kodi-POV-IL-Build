@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "DevGeniusCode/Kodi-POV-IL-Build",
   "release_tag": "addons-latest",
-  "generated": "2026-10-09T20:07:58Z",
+  "generated": "2026-10-09T21:08:37Z",
   "manifest_url": "https://raw.githubusercontent.com/DevGeniusCode/Kodi-POV-IL-Build/main/manifest.json",
   "config": {
     "config_version": "2.0.6",
@@ -28,13 +28,13 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.4.6",
+      "version": "0.4.8",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.4.6.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.6.zip",
-      "size": 2194389,
-      "sha256": "6331647eaa37ee6590477d4476cf9b5ccec3f200e13225566431e6d3247ca078",
-      "updated": "2026-10-09T20:07:58Z"
+      "filename": "plugin.program.kodipovilwizard-0.4.8.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.8.zip",
+      "size": 2200737,
+      "sha256": "14deb19e20f78f68e48d9d65ebd081dfa14bc135267eebfbdf6e17f447d29eaf",
+      "updated": "2026-10-09T21:08:37Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
@@ -127,13 +127,13 @@
     "service.subtitles.kodipovilai": {
       "id": "service.subtitles.kodipovilai",
       "name": "MoranSubs",
-      "version": "0.3.15",
+      "version": "0.3.16",
       "type": "subtitle",
-      "filename": "service.subtitles.kodipovilai-0.3.15.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.15.zip",
-      "size": 3485575,
-      "sha256": "d84fc46b6dda398b81e623d997f90b88860990a9f08ab6d1e40bab2deff4d89e",
-      "updated": "2026-10-09T20:07:58Z"
+      "filename": "service.subtitles.kodipovilai-0.3.16.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.16.zip",
+      "size": 3482893,
+      "sha256": "52316a35bbd0f781c3003488666f56a8ebfa019a6be2a9ad2d3df16cc7a222d8",
+      "updated": "2026-10-09T21:08:37Z"
     },
     "skin.estuary": {
       "id": "skin.estuary",
