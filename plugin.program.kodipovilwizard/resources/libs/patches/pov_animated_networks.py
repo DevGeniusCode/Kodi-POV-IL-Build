@@ -2,6 +2,7 @@
 # Purpose: Dynamically swaps static network shortcut icons to animated ones based on the Fentastic skin's animation setting.
 
 import xbmc
+import xbmcvfs
 
 # Mapping of static icons to animated icons.
 # Supports full paths, relative paths, or exact URLs.

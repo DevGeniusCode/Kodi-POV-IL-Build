@@ -366,23 +366,25 @@ def _coerce_list(value):
 # Hook entry point (POV navigator.build_shortcut_folder_list)
 # ---------------------------------------------------------------------------
 def filter_navigator_list(list_items, list_name=None):
-	"""Return `list_items` without rows whose service is not connected, plus
-	the MDBList row when connected. Input is never mutated; on ANY failure the
-	original object is returned unchanged."""
-	try:
-		items = _coerce_list(list_items)
-		if items is None:
-			return list_items
-		states = _snapshot()['svc']
-		kept = []
-		for it in items:
-			svc = service_of(it)
-    			if svc is None or is_service_active(svc):
-				kept.append(it)
-		removed = len(items) - len(kept)
-		if removed:
-			_log('%r: hid %d unauthorised row(s)' % (list_name, removed), getattr(xbmc, 'LOGDEBUG', None))
-		return kept
-	except Exception as e:
-		_log('filter_navigator_list failed, list left untouched: %r' % (e,))
-		return list_items
+    """Return `list_items` without rows whose service is not connected, plus
+    the MDBList row when connected. Input is never mutated; on ANY failure the
+    original object is returned unchanged."""
+    try:
+        items = _coerce_list(list_items)
+        if items is None:
+            return list_items
+		    states = _snapshot()['svc']
+        kept = []
+        for it in items:
+            svc = service_of(it)
+            if svc is None or is_service_active(svc):
+                kept.append(it)
+
+        removed = len(items) - len(kept)
+        if removed:
+            _log('%r: hid %d unauthorised row(s)' % (list_name, removed), getattr(xbmc, 'LOGDEBUG', None))
+
+        return kept
+    except Exception as e:
+        _log('filter_navigator_list failed, list left untouched: %r' % (e,))
+        return list_items
