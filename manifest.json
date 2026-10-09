@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "DevGeniusCode/Kodi-POV-IL-Build",
   "release_tag": "addons-latest",
-  "generated": "2026-10-09T15:03:36Z",
+  "generated": "2026-10-09T19:48:14Z",
   "manifest_url": "https://raw.githubusercontent.com/DevGeniusCode/Kodi-POV-IL-Build/main/manifest.json",
   "config": {
     "config_version": "2.0.6",
@@ -28,24 +28,24 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.4.4",
+      "version": "0.4.5",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.4.4.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.4.zip",
-      "size": 2193213,
-      "sha256": "69fefe7d7eb28235047d49777ab57cc4d812228577d04495b5761e54fb326f08",
-      "updated": "2026-10-09T15:03:36Z"
+      "filename": "plugin.program.kodipovilwizard-0.4.5.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.5.zip",
+      "size": 2194356,
+      "sha256": "76f3887f16feb81a27125244c8755011ac0b491a6d3d3f10937e93260257c5d7",
+      "updated": "2026-10-09T19:48:14Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
       "name": "מועדפים ואייקונים",
-      "version": "1.4.5",
+      "version": "1.4.6",
       "type": "plugin",
-      "filename": "plugin.program.orderfavourites-hebrew-1.4.5.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.5.zip",
-      "size": 13333823,
-      "sha256": "e190eb1d5fb0688e1bffe4d002d9180d8c6a4bcfa0849a472ef62e25c0ef2a5c",
-      "updated": "2026-10-09T15:03:36Z"
+      "filename": "plugin.program.orderfavourites-hebrew-1.4.6.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.6.zip",
+      "size": 23777854,
+      "sha256": "75e782a41e26074c26d2a21ca7467ca53c340a8620a5b3c43bd3622dac3046e7",
+      "updated": "2026-10-09T19:48:14Z"
     },
     "repository.709": {
       "id": "repository.709",
