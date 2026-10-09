@@ -19,6 +19,7 @@
 
 import xbmc
 import xbmcgui
+import shutil
 
 import time
 from datetime import datetime
@@ -502,6 +503,7 @@ def wait_for_gui_ready(timeout=90):
 check_for_video()
 # Ensure that any needed folders are created
 tools.ensure_folders()
+sync_pov_language_file()
 
 # Ensure that the wizard's name matches its folder
 check.check_paths()
@@ -695,3 +697,33 @@ except Exception as e:
     from resources.libs.common import logging
     import xbmc
     logging.log("[IL Fetcher] Failed to start background service: {0}".format(e), level=xbmc.LOGERROR)
+
+
+def sync_pov_language_file():
+    """Copy Hebrew language file from wizard to plugin.video.pov as strings.po."""
+    try:
+        src_file = os.path.join(
+            CONFIG.ADDONS,
+            'plugin.program.kodipovilwizard',
+            'resources',
+            'text',
+            'pov.resource.language.he_il.strings.po'
+        )
+        dst_dir = os.path.join(
+            CONFIG.ADDONS,
+            'plugin.video.pov',
+            'resources',
+            'language',
+            'resource.language.he_il'
+        )
+        dst_file = os.path.join(dst_dir, 'strings.po')
+
+        if os.path.exists(src_file):
+            if not os.path.exists(dst_dir):
+                os.makedirs(dst_dir, exist_ok=True)
+            shutil.copy2(src_file, dst_file)
+            logging.log('[Language Sync] Successfully copied language file to plugin.video.pov as strings.po', level=xbmc.LOGINFO)
+        else:
+            logging.log('[Language Sync] Source file not found: {0}'.format(src_file), level=xbmc.LOGWARNING)
+    except Exception as err:
+        logging.log('[Language Sync] Failed to copy language file: {0}'.format(err), level=xbmc.LOGERROR)

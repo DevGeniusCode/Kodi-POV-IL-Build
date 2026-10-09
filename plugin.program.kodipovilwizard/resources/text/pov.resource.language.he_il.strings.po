@@ -1,0 +1,1120 @@
+# Kodi Media Center language file
+# Addon Name: POV
+# Addon id: plugin.video.pov
+# Addon Provider: kodifitzwell
+# Translator English: Tiki
+# Translator Hebrew: DevGeniusCode
+msgid ""
+msgstr ""
+
+msgctxt "#32028"
+msgid "Movies"
+msgstr "סרטים"
+
+msgctxt "#32029"
+msgid "TV Shows"
+msgstr "סדרות"
+
+msgctxt "#32043"
+msgid "Most Watched This Week"
+msgstr "הנצפים ביותר השבוע"
+
+msgctxt "#32107"
+msgid "Downloads"
+msgstr "הורדות"
+
+msgctxt "#32117"
+msgid "Internal Scrapers"
+msgstr "סקרייפרים פנימיים"
+
+msgctxt "#32118"
+msgid "External Scrapers"
+msgstr "סקרייפרים חיצוניים"
+
+msgctxt "#32130"
+msgid "No External Scrapers Enabled"
+msgstr "אין סקרייפרים חיצוניים מופעלים"
+
+msgctxt "#32131"
+msgid "Clear Scrapers Cache"
+msgstr "ניקוי מטמון סקרייפרים"
+
+msgctxt "#32132"
+msgid "Rescrape & Select Source"
+msgstr "סריקה מחדש ובחירת מקור"
+
+msgctxt "#32133"
+msgid "Scrape with ALL External Scrapers"
+msgstr "סריקה עם כל הסקרייפרים החיצוניים"
+
+msgctxt "#32134"
+msgid "Scrape with All Filters Ignored"
+msgstr "סריקה תוך התעלמות מכל המסננים"
+
+msgctxt "#32135"
+msgid "Scrape with Custom Values"
+msgstr "סריקה עם ערכים מותאמים אישית"
+
+msgctxt "#32136"
+msgid "Disable All Filters for Search?"
+msgstr "להשבית את כל המסננים לחיפוש?"
+
+msgctxt "#32151"
+msgid "[B]Extra Info[/B]"
+msgstr "[B]מידע נוסף[/B]"
+
+msgctxt "#32152"
+msgid "[B]Filter Results[/B]"
+msgstr "[B]סינון תוצאות[/B]"
+
+msgctxt "#32153"
+msgid "[B]Clear Filter[/B]"
+msgstr "[B]איפוס סינון[/B]"
+
+msgctxt "#32154"
+msgid "Filter by Quality"
+msgstr "סינון לפי איכות"
+
+msgctxt "#32157"
+msgid "Filter by Provider"
+msgstr "סינון לפי ספק"
+
+msgctxt "#32169"
+msgid "Filter Extra Info"
+msgstr "סינון לפי מידע נוסף"
+
+msgctxt "#32170"
+msgid "Filter Title"
+msgstr "סינון לפי כותרת"
+
+msgctxt "#32174"
+msgid "Playback"
+msgstr "ניגון"
+
+msgctxt "#32188"
+msgid "Include"
+msgstr "כלול"
+
+msgctxt "#32189"
+msgid "Exclude"
+msgstr "אל תכלול"
+
+msgctxt "#32193"
+msgid "Select"
+msgstr "בחירה"
+
+msgctxt "#32196"
+msgid "[B]Dropped Manager[/B]"
+msgstr "[B]ניהול תכנים שננטשו[/B]"
+
+msgctxt "#32197"
+msgid "[B]Favorites Manager[/B]"
+msgstr "[B]ניהול מועדפים[/B]"
+
+msgctxt "#32198"
+msgid "[B]Trakt Lists Manager[/B]"
+msgstr "[B]ניהול רשימות Trakt[/B]"
+
+msgctxt "#32199"
+msgid "[B]TMDb Lists Manager[/B]"
+msgstr "[B]ניהול רשימות TMDb[/B]"
+
+msgctxt "#32200"
+msgid "[B]MDBList Manager[/B]"
+msgstr "[B]ניהול רשימות MDBList[/B]"
+
+msgctxt "#32223"
+msgid "Sort Order"
+msgstr "סדר מיון"
+
+msgctxt "#32224"
+msgid "Ascending"
+msgstr "סדר עולה"
+
+msgctxt "#32225"
+msgid "Descending"
+msgstr "סדר יורד"
+
+msgctxt "#32226"
+msgid "Popularity"
+msgstr "פופולריות"
+
+msgctxt "#32227"
+msgid "Release Date"
+msgstr "תאריך יציאה"
+
+msgctxt "#32228"
+msgid "Title"
+msgstr "כותרת"
+
+msgctxt "#32240"
+msgid "Scraper Type"
+msgstr "סוג סקרייפר"
+
+msgctxt "#32241"
+msgid "Quality"
+msgstr "איכות"
+
+msgctxt "#32247"
+msgid "Settings"
+msgstr "הגדרות"
+
+msgctxt "#32449"
+msgid "Trending Recent"
+msgstr "טרנדים אחרונים"
+
+msgctxt "#32450"
+msgid "Search"
+msgstr "חיפוש"
+
+msgctxt "#32451"
+msgid "Discover"
+msgstr "גילוי"
+
+msgctxt "#32452"
+msgid "Popular People"
+msgstr "אישים פופולריים"
+
+msgctxt "#32453"
+msgid "Favorites"
+msgstr "מועדפים"
+
+msgctxt "#32454"
+msgid "My Lists"
+msgstr "הרשימות שלי"
+
+msgctxt "#32455"
+msgid "My Services"
+msgstr "השירותים שלי"
+
+msgctxt "#32456"
+msgid "Tools"
+msgstr "כלים"
+
+msgctxt "#32457"
+msgid "Root"
+msgstr "שורש"
+
+msgctxt "#32458"
+msgid "Trending"
+msgstr "טרנדים"
+
+msgctxt "#32459"
+msgid "Popular"
+msgstr "פופולרי"
+
+msgctxt "#32460"
+msgid "Premieres"
+msgstr "בכורות"
+
+msgctxt "#32461"
+msgid "Latest Releases"
+msgstr "הפצות אחרונות"
+
+msgctxt "#32463"
+msgid "Blockbusters"
+msgstr "שוברי קופות"
+
+msgctxt "#32468"
+msgid "Oscar Winners"
+msgstr "זוכי אוסקר"
+
+msgctxt "#32469"
+msgid "Up Coming"
+msgstr "בקרוב"
+
+msgctxt "#32470"
+msgid "Genres"
+msgstr "ז'אנרים"
+
+msgctxt "#32472"
+msgid "Years"
+msgstr "שנים"
+
+msgctxt "#32473"
+msgid "Certifications"
+msgstr "סיווגי גיל"
+
+msgctxt "#32474"
+msgid "Because You Watched..."
+msgstr "כי צפית ב..."
+
+msgctxt "#32475"
+msgid "Watched"
+msgstr "נצפה"
+
+msgctxt "#32476"
+msgid "In Progress"
+msgstr "בתהליך צפייה"
+
+msgctxt "#32477"
+msgid "Search"
+msgstr "חיפוש"
+
+msgctxt "#32480"
+msgid "Networks"
+msgstr "רשתות שידור"
+
+msgctxt "#32481"
+msgid "In Progress TV Shows"
+msgstr "סדרות בצפייה"
+
+msgctxt "#32482"
+msgid "In Progress Episodes"
+msgstr "פרקים בצפייה"
+
+msgctxt "#32483"
+msgid "Next Episodes"
+msgstr "הפרקים הבאים"
+
+msgctxt "#32484"
+msgid "Next Up:"
+msgstr "הבא בתור:"
+
+msgctxt "#32485"
+msgid "Premium Files"
+msgstr "קבצי פרימיום"
+
+msgctxt "#32486"
+msgid "History"
+msgstr "היסטוריה"
+
+msgctxt "#32487"
+msgid "Help"
+msgstr "עזרה"
+
+msgctxt "#32493"
+msgid "User"
+msgstr "משתמש"
+
+msgctxt "#32494"
+msgid "Account Info"
+msgstr "פרטי חשבון"
+
+msgctxt "#32496"
+msgid "Cloud Storage"
+msgstr "אחסון ענן"
+
+msgctxt "#32497"
+msgid "Clear %s Cache"
+msgstr "ניקוי מטמון %s"
+
+msgctxt "#32498"
+msgid "Recently Added"
+msgstr "נוספו לאחרונה"
+
+msgctxt "#32499"
+msgid "Collection"
+msgstr "אוסף"
+
+msgctxt "#32500"
+msgid "Watchlist"
+msgstr "רשימת צפייה"
+
+msgctxt "#32501"
+msgid "Lists"
+msgstr "רשימות"
+
+msgctxt "#32502"
+msgid "Liked Lists"
+msgstr "רשימות שאהבתי"
+
+msgctxt "#32503"
+msgid "Recommended"
+msgstr "מומלצים"
+
+msgctxt "#32504"
+msgid "Random"
+msgstr "אקראי"
+
+msgctxt "#32505"
+msgid "Recently Aired"
+msgstr "שודרו לאחרונה"
+
+msgctxt "#32506"
+msgid "Episodes"
+msgstr "פרקים"
+
+msgctxt "#32507"
+msgid "People"
+msgstr "אנשים"
+
+msgctxt "#32508"
+msgid "Changelog"
+msgstr "יומן שינויים"
+
+msgctxt "#32509"
+msgid "Log Viewer"
+msgstr "מציג יומן אירועים"
+
+msgctxt "#32510"
+msgid "Log Utils"
+msgstr "כלי יומן אירועים"
+
+msgctxt "#32512"
+msgid "Settings Files and Caches"
+msgstr "קבצי הגדרות ומטמונים"
+
+msgctxt "#32513"
+msgid "Manager"
+msgstr "מנהל"
+
+msgctxt "#32514"
+msgid "Shortcut Folders"
+msgstr "תיקיות קיצורי דרך"
+
+msgctxt "#32515"
+msgid "Set Views"
+msgstr "הגדרת תצוגות"
+
+msgctxt "#32516"
+msgid "Set view and then click here"
+msgstr "הגדר תצוגה ולאחר מכן לחץ כאן"
+
+msgctxt "#32523"
+msgid "Databases"
+msgstr "מסדי נתונים"
+
+msgctxt "#32524"
+msgid "Cache"
+msgstr "מטמון"
+
+msgctxt "#32525"
+msgid "All"
+msgstr "הכל"
+
+msgctxt "#32526"
+msgid "Clean"
+msgstr "ניקוי"
+
+msgctxt "#32527"
+msgid "Meta"
+msgstr "מטא-דאטה"
+
+msgctxt "#32529"
+msgid "Start Full Scrape"
+msgstr "התחל סריקה מלאה"
+
+msgctxt "#32531"
+msgid "Videos"
+msgstr "סרטונים"
+
+msgctxt "#32536"
+msgid "Show"
+msgstr "סדרה"
+
+msgctxt "#32537"
+msgid "Season"
+msgstr "עונה"
+
+msgctxt "#32538"
+msgid "Episode"
+msgstr "פרק"
+
+msgctxt "#32540"
+msgid "Kodi"
+msgstr "קודי"
+
+msgctxt "#32541"
+msgid "Single Random Play"
+msgstr "ניגון אקראי יחיד"
+
+msgctxt "#32542"
+msgid "Continual Random Play"
+msgstr "ניגון אקראי רציף"
+
+msgctxt "#32543"
+msgid "Year"
+msgstr "שנה"
+
+msgctxt "#32573"
+msgid "No Results"
+msgstr "אין תוצאות"
+
+msgctxt "#32574"
+msgid "Error"
+msgstr "שגיאה"
+
+msgctxt "#32575"
+msgid "Failed"
+msgstr "נכשל"
+
+msgctxt "#32576"
+msgid "Success"
+msgstr "הצלחה"
+
+msgctxt "#32577"
+msgid "[B]Please Wait..[/B]"
+msgstr "[B]נא להמתין...[/B]"
+
+msgctxt "#32578"
+msgid "[B]Checking Debrid Providers[/B]"
+msgstr "[B]בודק ספקי Debrid[/B]"
+
+msgctxt "#32579"
+msgid "[B]Remaining Debrid Checks:[/B] %s"
+msgstr "[B]בדיקות Debrid שנותרו:[/B] %s"
+
+msgctxt "#32580"
+msgid "[B]Remaining providers:[/B] %s"
+msgstr "[B]ספקים שנותרו:[/B] %s"
+
+msgctxt "#32583"
+msgid "Provider"
+msgstr "ספק"
+
+msgctxt "#32584"
+msgid "Size"
+msgstr "גודל"
+
+msgctxt "#32592"
+msgid "Similar"
+msgstr "דומים"
+
+msgctxt "#32593"
+msgid "Recommended"
+msgstr "מומלצים"
+
+msgctxt "#32602"
+msgid "Add To"
+msgstr "הוספה אל"
+
+msgctxt "#32603"
+msgid "Remove From"
+msgstr "הסרה מ-"
+
+msgctxt "#32604"
+msgid "RE-CACHE %s INFO"
+msgstr "רענון מטמון מידע עבור %s"
+
+msgctxt "#32606"
+msgid "Trailer"
+msgstr "טריילר"
+
+msgctxt "#32607"
+msgid "Reviews"
+msgstr "ביקורות"
+
+msgctxt "#32612"
+msgid "More from"
+msgstr "עוד מאת"
+
+msgctxt "#32615"
+msgid "Studio"
+msgstr "אולפן"
+
+msgctxt "#32616"
+msgid "Posters"
+msgstr "כרזות"
+
+msgctxt "#32617"
+msgid "Fanart"
+msgstr "פאנארט"
+
+msgctxt "#32619"
+msgid "Tagline"
+msgstr "שורת מחץ"
+
+msgctxt "#32620"
+msgid "Premiered"
+msgstr "תאריך בכורה"
+
+msgctxt "#32621"
+msgid "Rating"
+msgstr "דירוג"
+
+msgctxt "#32622"
+msgid "Runtime"
+msgstr "משך זמן"
+
+msgctxt "#32623"
+msgid "Votes"
+msgstr "הצבעות"
+
+msgctxt "#32624"
+msgid "Genre/s"
+msgstr "ז'אנרים"
+
+msgctxt "#32625"
+msgid "Budget"
+msgstr "תקציב"
+
+msgctxt "#32626"
+msgid "Revenue"
+msgstr "הכנסות"
+
+msgctxt "#32627"
+msgid "Director"
+msgstr "במאי"
+
+msgctxt "#32628"
+msgid "Writer/s"
+msgstr "כותבים"
+
+msgctxt "#32629"
+msgid "Homepage"
+msgstr "דף הבית"
+
+msgctxt "#32630"
+msgid "Status"
+msgstr "סטטוס"
+
+msgctxt "#32631"
+msgid "Type"
+msgstr "סוג"
+
+msgctxt "#32632"
+msgid "Classification"
+msgstr "סיווג"
+
+msgctxt "#32633"
+msgid "Created By"
+msgstr "נוצר על ידי"
+
+msgctxt "#32634"
+msgid "Last"
+msgstr "אחרון"
+
+msgctxt "#32635"
+msgid "Next"
+msgstr "הבא"
+
+msgctxt "#32636"
+msgid "Seasons"
+msgstr "עונות"
+
+msgctxt "#32641"
+msgid "Open"
+msgstr "פתיחה"
+
+msgctxt "#32642"
+msgid "[B]Mark Watched %s[/B]"
+msgstr "[B]סמן כנצפה %s[/B]"
+
+msgctxt "#32643"
+msgid "[B]Mark Unwatched %s[/B]"
+msgstr "[B]סמן כלא נצפה %s[/B]"
+
+msgctxt "#32645"
+msgid "[B]Extras...[/B]"
+msgstr "[B]תוספות...[/B]"
+
+msgctxt "#32646"
+msgid "[B]Options...[/B]"
+msgstr "[B]אפשרויות...[/B]"
+
+msgctxt "#32649"
+msgid "[B]Exit Movie List[/B]"
+msgstr "[B]יציאה מרשימת הסרטים[/B]"
+
+msgctxt "#32650"
+msgid "[B]Exit TV Show List[/B]"
+msgstr "[B]יציאה מרשימת הסדרות[/B]"
+
+msgctxt "#32651"
+msgid "[B]Clear Progress[/B]"
+msgstr "[B]איפוס התקדמות[/B]"
+
+msgctxt "#32652"
+msgid "[B]Browse...[/B]"
+msgstr "[B]עיון...[/B]"
+
+msgctxt "#32653"
+msgid "[B]Browse Season...[/B]"
+msgstr "[B]עיון בעונה...[/B]"
+
+msgctxt "#32654"
+msgid "Start"
+msgstr "התחלה"
+
+msgctxt "#32655"
+msgid "End"
+msgstr "סיום"
+
+msgctxt "#32656"
+msgid "Clear All Filters"
+msgstr "איפוס כל המסננים"
+
+msgctxt "#32657"
+msgid "Keywords"
+msgstr "מילות מפתח"
+
+msgctxt "#32658"
+msgid "Language"
+msgstr "שפה"
+
+msgctxt "#32659"
+msgid "Region"
+msgstr "אזור"
+
+msgctxt "#32660"
+msgid "Companies"
+msgstr "חברות הפקה"
+
+msgctxt "#32661"
+msgid "Minimum"
+msgstr "מינימום"
+
+msgctxt "#32663"
+msgid "Number of Votes"
+msgstr "מספר הצבעות"
+
+msgctxt "#32664"
+msgid "Cast"
+msgstr "צוות שחקנים"
+
+msgctxt "#32665"
+msgid "Adult"
+msgstr "למבוגרים"
+
+msgctxt "#32666"
+msgid "[B]SAVE & BROWSE RESULTS FOR:[/B]  [I]%s[/I]"
+msgstr "[B]שמור ועיין בתוצאות עבור:[/B]  [I]%s[/I]"
+
+msgctxt "#32668"
+msgid "Change"
+msgstr "שינוי"
+
+msgctxt "#32669"
+msgid "Optional"
+msgstr "אופציונלי"
+
+msgctxt "#32670"
+msgid "Filter"
+msgstr "סינון"
+
+msgctxt "#32671"
+msgid "Clear"
+msgstr "איפוס"
+
+msgctxt "#32672"
+msgid "Similar to"
+msgstr "דומה ל-"
+
+msgctxt "#32673"
+msgid "Recommended based on"
+msgstr "מומלץ על סמך"
+
+msgctxt "#32676"
+msgid "Are you sure?"
+msgstr "האם אתה בטוח?"
+
+msgctxt "#32686"
+msgid "Filters Ignored"
+msgstr "התעלם ממסננים"
+
+msgctxt "#32687"
+msgid "Download this Torrent to your [B]%s[/B] Cloud?"
+msgstr "להוריד טורנט זה לענן ה-[B]%s[/B] שלך?"
+
+msgctxt "#32688"
+msgid "Complete file is [B]%dMB[/B]"
+msgstr "הקובץ המלא הוא [B]%dMB[/B]"
+
+msgctxt "#32689"
+msgid "Continue with download?"
+msgstr "להמשיך בהורדה?"
+
+msgctxt "#32690"
+msgid "Multi File Pack Download Started..."
+msgstr "הורדת חבילת קבצים מרובים החלה..."
+
+msgctxt "#32691"
+msgid "Download Progress: "
+msgstr "התקדמות הורדה: "
+
+msgctxt "#32692"
+msgid "No URL found for Download. Pick another Source: "
+msgstr "לא נמצא קישור להורדה. בחר מקור אחר: "
+
+msgctxt "#32697"
+msgid "Export List"
+msgstr "ייצוא רשימה"
+
+msgctxt "#32698"
+msgid "Remove From History"
+msgstr "הסרה מההיסטוריה"
+
+msgctxt "#32699"
+msgid "Clear All History"
+msgstr "ניקוי כל ההיסטוריה"
+
+msgctxt "#32702"
+msgid "Make New Shortcut Folder"
+msgstr "יצירת תיקיית קיצור דרך חדשה"
+
+msgctxt "#32703"
+msgid "[B]Delete Shortcut Folder[/B]"
+msgstr "[B]מחיקת תיקיית קיצור דרך[/B]"
+
+msgctxt "#32705"
+msgid "[B]Edit Menu[/B]"
+msgstr "[B]עריכת תפריט[/B]"
+
+msgctxt "#32706"
+msgid "[B]Browse Removed item[/B]"
+msgstr "[B]עיון בפריט שהוסר[/B]"
+
+msgctxt "#32707"
+msgid "Place [B]%s[/B] below [B]%s[/B]"
+msgstr "מקם את [B]%s[/B] מתחת ל-[B]%s[/B]"
+
+msgctxt "#32708"
+msgid "Place [B]%s[/B] at Top of List"
+msgstr "מקם את [B]%s[/B] בראש הרשימה"
+
+msgctxt "#32709"
+msgid "Top Position"
+msgstr "מיקום עליון"
+
+msgctxt "#32712"
+msgid "Move"
+msgstr "הזזה"
+
+msgctxt "#32713"
+msgid "Remove"
+msgstr "הסרה"
+
+msgctxt "#32716"
+msgid "Move [B]%s[/B] to a different position in the list"
+msgstr "העבר את [B]%s[/B] למיקום אחר ברשימה"
+
+msgctxt "#32717"
+msgid "Remove [B]%s[/B] from the list"
+msgstr "הסר את [B]%s[/B] מהרשימה"
+
+msgctxt "#32718"
+msgid "Add [B]%s[/B] to a different Menu list"
+msgstr "הוסף את [B]%s[/B] לרשימת תפריט אחרת"
+
+msgctxt "#32719"
+msgid "Add [B]%s[/B] to a [B]Shortcut Folder[/B]"
+msgstr "הוסף את [B]%s[/B] ל-[B]תיקיית קיצור דרך[/B]"
+
+msgctxt "#32721"
+msgid "Re-add a removed item from [B]%s[/B] Menu"
+msgstr "הוסף מחדש פריט שהוסר מתפריט [B]%s[/B]"
+
+msgctxt "#32722"
+msgid "Restore [B]%s[/B] Menu to default"
+msgstr "שחזר את תפריט [B]%s[/B] לברירת המחדל"
+
+msgctxt "#32723"
+msgid "Check if [B]%s[/B] Menu has New Menu items"
+msgstr "בדוק אם יש פריטי תפריט חדשים בתפריט [B]%s[/B]"
+
+msgctxt "#32724"
+msgid "Reload [B]%s[/B]"
+msgstr "טען מחדש את [B]%s[/B]"
+
+msgctxt "#32725"
+msgid "Add a [B]Shortcut Folder[/B] to [B]%s[/B] Menu"
+msgstr "הוסף [B]תיקיית קיצור דרך[/B] לתפריט [B]%s[/B]"
+
+msgctxt "#32726"
+msgid "No New Items"
+msgstr "אין פריטים חדשים"
+
+msgctxt "#32727"
+msgid "New item %s Exists"
+msgstr "פריט חדש %s קיים"
+
+msgctxt "#32728"
+msgid "Would you like to add this to the Menu?"
+msgstr "האם ברצונך להוסיף זאת לתפריט?"
+
+msgctxt "#32730"
+msgid "[B]Add to a Menu[/B]"
+msgstr "[B]הוסף לתפריט[/B]"
+
+msgctxt "#32731"
+msgid "[B]Add to a Shortcut Folder[/B]"
+msgstr "[B]הוסף לתיקיית קיצור דרך[/B]"
+
+msgctxt "#32736"
+msgid "Cancelled"
+msgstr "בוטל"
+
+msgctxt "#32742"
+msgid "folder"
+msgstr "תיקייה"
+
+msgctxt "#32743"
+msgid "file"
+msgstr "קובץ"
+
+msgctxt "#32744"
+msgid "[B]Add to Cloud[/B]"
+msgstr "[B]הוספה לענן[/B]"
+
+msgctxt "#32745"
+msgid "[B]Download Pack[/B]"
+msgstr "[B]הורדת חבילה[/B]"
+
+msgctxt "#32746"
+msgid "[B]Browse Pack[/B]"
+msgstr "[B]עיון בחבילה[/B]"
+
+msgctxt "#32747"
+msgid "[B]Download File[/B]"
+msgstr "[B]הורדת קובץ[/B]"
+
+msgctxt "#32748"
+msgid "[B]Rename %s[/B]"
+msgstr "[B]שינוי שם של %s[/B]"
+
+msgctxt "#32749"
+msgid "[B]Download Archive[/B]"
+msgstr "[B]הורדת ארכיון[/B]"
+
+msgctxt "#32750"
+msgid "[B]Expires:[/B] %s"
+msgstr "[B]תפוגה:[/B] %s"
+
+msgctxt "#32751"
+msgid "[B]Days Remaining:[/B] %s"
+msgstr "[B]ימים שנותרו:[/B] %s"
+
+msgctxt "#32754"
+msgid "[B]Customer ID:[/B] %s"
+msgstr "[B]מזהה לקוח:[/B] %s"
+
+msgctxt "#32755"
+msgid "[B]Username:[/B] %s"
+msgstr "[B]שם משתמש:[/B] %s"
+
+msgctxt "#32757"
+msgid "[B]Status:[/B] %s"
+msgstr "[B]סטטוס:[/B] %s"
+
+msgctxt "#32758"
+msgid "[B]Account:[/B] %s"
+msgstr "[B]חשבון:[/B] %s"
+
+msgctxt "#32759"
+msgid "[B]Fidelity Points:[/B] %s"
+msgstr "[B]נקודות נאמנות:[/B] %s"
+
+msgctxt "#32761"
+msgid "[B]Data Used:[/B] %s"
+msgstr "[B]נתונים שנוצלו:[/B] %s"
+
+msgctxt "#32762"
+msgid "[B]Data Remaining:[/B] %s"
+msgstr "[B]נתונים שנותרו:[/B] %s"
+
+msgctxt "#32772"
+msgid "[B]Current Subscription:[/B]"
+msgstr "[B]מנוי נוכחי:[/B]"
+
+msgctxt "#32776"
+msgid "[B]Like List[/B]"
+msgstr "[B]לייק לרשימה[/B]"
+
+msgctxt "#32780"
+msgid "[B]Make a new %s list[/B]"
+msgstr "[B]צור רשימת %s חדשה[/B]"
+
+msgctxt "#32781"
+msgid "[B]Delete list[/B]"
+msgstr "[B]מחק רשימה[/B]"
+
+msgctxt "#32783"
+msgid "[B]Unlike List[/B]"
+msgstr "[B]הסר לייק מרשימה[/B]"
+
+msgctxt "#32785"
+msgid "Delete"
+msgstr "מחיקה"
+
+msgctxt "#32788"
+msgid "%smins"
+msgstr "%s דק'"
+
+msgctxt "#32789"
+msgid "Finish Watching"
+msgstr "סיום צפייה"
+
+msgctxt "#32791"
+msgid "Subtitles Rate Limited. Retrying in 10 secs..."
+msgstr "הורדת כתוביות הוגבלה. ניסיון חוזר בעוד 10 שניות..."
+
+msgctxt "#32792"
+msgid "Local Subtitles Found"
+msgstr "נמצאו כתוביות מקומיות"
+
+msgctxt "#32793"
+msgid "Downloaded Subtitles Found"
+msgstr "נמצאו כתוביות שהורדו"
+
+msgctxt "#32794"
+msgid "No Subtitles Found"
+msgstr "לא נמצאו כתוביות"
+
+msgctxt "#32798"
+msgid "Images"
+msgstr "תמונות"
+
+msgctxt "#32799"
+msgid "Next Page"
+msgstr "העמוד הבא"
+
+msgctxt "#32800"
+msgid "Jump To..."
+msgstr "מעבר אל..."
+
+msgctxt "#32813"
+msgid "Removed Settings: [B]%s[/B]"
+msgstr "הגדרות שהוסרו: [B]%s[/B]"
+
+msgctxt "#32815"
+msgid "List Data"
+msgstr "נתוני רשימה"
+
+msgctxt "#32816"
+msgid "Clearing"
+msgstr "מנקה"
+
+msgctxt "#32821"
+msgid "Jump to %s Starting with %s"
+msgstr "מעבר אל %s המתחיל ב-%s"
+
+msgctxt "#32822"
+msgid "Jump to Page %s"
+msgstr "מעבר לעמוד %s"
+
+msgctxt "#32824"
+msgid "Yes"
+msgstr "כן"
+
+msgctxt "#32828"
+msgid "No"
+msgstr "לא"
+
+msgctxt "#32829"
+msgid "Pre-Scrape"
+msgstr "סריקה מוקדמת"
+
+msgctxt "#32830"
+msgid "Sources"
+msgstr "מקורות"
+
+msgctxt "#32831"
+msgid "Resume Point: [B]%s[/B]"
+msgstr "נקודת המשך: [B]%s[/B]"
+
+msgctxt "#32832"
+msgid "Resume"
+msgstr "המשך צפייה"
+
+msgctxt "#32833"
+msgid "Start Over"
+msgstr "התחל מחדש"
+
+msgctxt "#32839"
+msgid "OK"
+msgstr "אישור"
+
+msgctxt "#32840"
+msgid "Cancel"
+msgstr "ביטול"
+
+msgctxt "#32841"
+msgid "Options"
+msgstr "אפשרויות"
+
+msgctxt "#32842"
+msgid "Scrapers"
+msgstr "סקרייפרים"
+
+msgctxt "#32846"
+msgid "Multiselect..."
+msgstr "בחירה מרובה..."
+
+msgctxt "#32847"
+msgid "Select Genres to Include in Search"
+msgstr "בחר ז'אנרים להכללה בחיפוש"
+
+msgctxt "#32848"
+msgid "Yesterday"
+msgstr "אתמול"
+
+msgctxt "#32849"
+msgid "Today"
+msgstr "היום"
+
+msgctxt "#32850"
+msgid "Tomorrow"
+msgstr "מחר"
+
+msgctxt "#32853"
+msgid "Upload Kodi Log to Pastebin"
+msgstr "העלאת יומן Kodi אל Pastebin"
+
+msgctxt "#32855"
+msgid "Show Log Errors Only?"
+msgstr "להציג שגיאות יומן בלבד?"
+
+msgctxt "#32978"
+msgid "Set Language Invoker (ADVANCED!!)"
+msgstr "הגדרת Language Invoker (למתקדמים!!)"
+
+msgctxt "#32979"
+msgid "[B]Reuse Langauage Invoker[/B] is currently set to %s.[CR][CR]Do you wish to change this setting to %s?"
+msgstr "[B]שימוש חוזר ב-Language Invoker[/B] מוגדר כעת ל-%s.[CR][CR]האם ברצונך לשנות הגדרה זו ל-%s?"
+
+msgctxt "#32980"
+msgid "Changing this setting may cause addon instability. Continue?"
+msgstr "שינוי הגדרה זו עלול לגרום לאי-יציבות של ההרחבה. להמשיך?"
+
+msgctxt "#32981"
+msgid "Refreshing addon.xml by profile reload."
+msgstr "מרענן את addon.xml באמצעות טעינה מחדש של הפרופיל."
+
+msgctxt "#32984"
+msgid "Trivia"
+msgstr "טריוויה"
+
+msgctxt "#32985"
+msgid "Contains Spoilers"
+msgstr "מכיל ספוילרים"
+
+msgctxt "#32986"
+msgid "Blunders"
+msgstr "טעויות ופספוסים"
+
+msgctxt "#32989"
+msgid "Parental Guide"
+msgstr "מדריך הורים"
+
+msgctxt "#32990"
+msgid "Sex & Nudity"
+msgstr "מין ועירום"
+
+msgctxt "#32991"
+msgid "Violence & Gore"
+msgstr "אלימות ומראות קשים"
+
+msgctxt "#32992"
+msgid "Profanity"
+msgstr "גסויות ושפה בוטה"
+
+msgctxt "#32993"
+msgid "Alcohol, Drugs & Smoking"
+msgstr "אלכוהול, סמים ועישון"
+
+msgctxt "#32994"
+msgid "Frightening & Intense Scenes"
+msgstr "סצנות מפחידות ואינטנסיביות"
+
+msgctxt "#32996"
+msgid "Mild"
+msgstr "קל"
+
+msgctxt "#32997"
+msgid "Moderate"
+msgstr "מתון"
+
+msgctxt "#32998"
+msgid "Severe"
+msgstr "חמור"
