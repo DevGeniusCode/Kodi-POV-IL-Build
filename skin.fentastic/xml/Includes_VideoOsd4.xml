@@ -479,7 +479,7 @@
 </control>
 <!-- ###### check for update -->
 
-<!-- ######## arrows --->
+<!-- ######## arrows -->
 <control type="group">
 <animation effect="fade" start="0" end="100" time="500" delay="500">Visible</animation>
 <animation effect="fade" start="0" end="100" time="0">Hidden</animation>
@@ -501,7 +501,7 @@
 	<colordiffuse>15FFFFFF</colordiffuse>
 </control>
 </control>
-<!-- ######## arrows --->
+<!-- ######## arrows -->
 <control type="group">
 <include>Animation_BottomSlide</include>
 <visible>$EXP[__Movies_OSD] | $EXP[__episode_OSD] + [Window.IsActive(videoosd) + !$EXP[__CheckIdanplus_OSD]]</visible>
@@ -579,7 +579,7 @@
 		<height max="100">auto</height>
 			<texture>$VAR[PlayerClearLogoVar]</texture>
 			<aspectratio>keep</aspectratio>
-			<visible>!String.IsEmpty(Player.Art(clearlogo)</visible>
+			<visible>!String.IsEmpty(Player.Art(clearlogo))</visible>
 		</control>
 	</control>	
 	<control type="group">
@@ -589,7 +589,7 @@
 		<height max="100">auto</height>
 			<aspectratio>keep</aspectratio>
 			<texture>$VAR[StudiologoShortCutPath]$VAR[Studiologotextureinfo]</texture>
-			<visible>String.IsEmpty(Player.Art(clearlogo)</visible>
+			<visible>String.IsEmpty(Player.Art(clearlogo))</visible>
 		</control>
 	</control>
 	</control>

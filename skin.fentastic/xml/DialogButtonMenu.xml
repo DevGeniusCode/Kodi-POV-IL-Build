@@ -95,7 +95,7 @@
 						<label>[B][COLOR blue]$LOCALIZE[13012][/COLOR][/B]</label>
 						<!-- Original - <onclick>Quit()</onclick> -->
 						<!-- Force Close Kodi Script:  -->
-						<onclick>RunScript(&quot;plugin.close.kodi&quot;)</onclick>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?action=force_close)</onclick>
 						<visible>System.ShowExitButton</visible>
 					</item>
 					<item>
@@ -104,19 +104,9 @@
 						<onclick>Addon.OpenSettings(plugin.video.pov)</onclick>
 					</item>
 					<item>
-						<!-- Open DarkSubs Settings  -->
-						<label>[B][COLOR blue]$LOCALIZE[700051][/COLOR][/B]</label>
-						<onclick>Addon.OpenSettings(service.subtitles.All_Subs)</onclick>
-					</item>
-					<item>
 						<!-- Clear POV Cache  -->
 						<label>[B][COLOR blue]$LOCALIZE[700052][/COLOR][/B]</label>
 						<onclick>PlayMedia(&quot;plugin://plugin.video.pov/?mode=clear_all_cache&amp;isFolder=false&amp;iconImage=https%3A%2F%2Fi.imgur.com%2FRDNxy36.png&quot;)</onclick>
-					</item>
-					<item>
-						<!-- Clear DarkSubs Cache  -->
-						<label>[B][COLOR blue]$LOCALIZE[700053][/COLOR][/B]</label>
-						<onclick>RunScript(special://home/addons/service.subtitles.All_Subs/resources/modules/clean_cache_functions.py, clean_all_cache)</onclick>
 					</item>
 					<item>
 						<!-- Build Switch Skin  -->

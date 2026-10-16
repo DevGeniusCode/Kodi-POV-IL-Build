@@ -217,7 +217,7 @@
 			<label>חפש כתובית</label>
 			<icon>osd/fullscreen/buttons/subs.png</icon>
 			<visible>VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)</visible>
-			<onclick condition="String.IsEqual(Skin.String(subtitlesearch),darksubs)">RunScript(service.subtitles.All_Subs,sub_window_unpause)</onclick>
+			<onclick condition="String.IsEqual(Skin.String(subtitlesearch),darksubs)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
 			<onclick condition="String.IsEqual(Skin.String(subtitlesearch),kodisubtitle)">ActivateWindow(subtitlesearch)</onclick>
 		</item>	
 		<item>

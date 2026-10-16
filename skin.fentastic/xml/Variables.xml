@@ -1642,8 +1642,8 @@
 	</variable>
 	
 	<variable name="viewtypefanartview">
-	<value condition="$EXP[__Movies] | $EXP[__tvshow] | $EXP[__season] + !String.IsEmpty(ListItem.Art(fanart)">$INFO[ListItem.Art(fanart)]</value>
-	<value condition="$EXP[__Movies] | $EXP[__tvshow] | $EXP[__season] + !String.IsEmpty(ListItem.Art(landscape)">$INFO[ListItem.Art(landscape)]</value>
+	<value condition="$EXP[__Movies] | $EXP[__tvshow] | $EXP[__season] + !String.IsEmpty(ListItem.Art(fanart))">$INFO[ListItem.Art(fanart)]</value>
+	<value condition="$EXP[__Movies] | $EXP[__tvshow] | $EXP[__season] + !String.IsEmpty(ListItem.Art(landscape))">$INFO[ListItem.Art(landscape)]</value>
 	<value condition="$EXP[__episode]">$INFO[ListItem.Icon]</value>
 	<value>$INFO[ListItem.Icon]</value>
 	</variable>
@@ -1669,8 +1669,8 @@
 	
 	<!-- Clear Art Logo for Poster View Type -->	
 	<variable name="ClearArtLogo">
-		<value condition="!String.IsEmpty(ListItem.Art(clearlogo)">$INFO[ListItem.Art(clearlogo)]</value>
-		<value condition="String.IsEmpty(ListItem.Art(clearlogo)">$INFO[ListItem.Art(clearart)]</value>
+		<value condition="!String.IsEmpty(ListItem.Art(clearlogo))">$INFO[ListItem.Art(clearlogo)]</value>
+		<value condition="String.IsEmpty(ListItem.Art(clearlogo))">$INFO[ListItem.Art(clearart)]</value>
 	</variable>
 
 		

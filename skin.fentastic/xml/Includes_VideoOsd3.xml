@@ -231,7 +231,7 @@
 						<height>76</height>
 						<texturenofocus colordiffuse="grey_a">kodirdil/subtitles_window/choose_subs.png</texturenofocus>
 						<texturefocus colordiffuse="button_focus">kodirdil/subtitles_window/choose_subs.png</texturefocus>
-						<onclick condition="!Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">RunScript(service.subtitles.All_Subs,sub_window_unpause)</onclick>
+						<onclick condition="!Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
 						<onclick condition="Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">ActivateWindow(SubtitleSearch)</onclick>
 						<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
 						<!-- If current playing addon is NOT Idan Plus -->
@@ -356,6 +356,13 @@
 					<!-- <onright>600</onright> -->
 					<onright>70046</onright>
 					<!-- ##################### -->
+					<control type="radiobutton" id="700460">
+						<include content="OSDButton">
+							<param name="texture" value="icons\infodialogs\update.png"/>
+						</include>
+						<include>__ChooseSourceOsd__</include>
+						<visible>!VideoPlayer.Content(livetv)</visible>
+					</control>
 					<control type="radiobutton" id="804">
 						<include content="OSDButton">
 							<param name="texture" value="osd/fullscreen/buttons/home.png"/>

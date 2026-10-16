@@ -148,7 +148,7 @@
 					</control>
 				</control>
 			</control>
-
+		</control>
 		<control type="group">
 			<visible>!Window.IsVisible(playerprocessinfo)</visible>
 			<visible>[Player.ShowInfo | Window.IsActive(fullscreeninfo)] + VideoPlayer.Content(LiveTV)</visible>
@@ -283,7 +283,6 @@
 					<visible>Integer.IsGreater(Playlist.Length(video),1)</visible>
 				</control>
 			</control>
-		</control>
 		</control>
 	</controls>
 </window>
