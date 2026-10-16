@@ -1,3 +1,61 @@
+0.3.35
+- "בחירת כתוביות" opens at once with what needs no network -- the subtitles inside the video, the AI translations and a search made in the last minutes -- and fills in the subtitle sources and the community pool by itself when their search finishes ("מחפש כתוביות נוספות…" shows meanwhile). The highlighted subtitle stays the same when the list grows, an AI translation row can be picked once the search is done (the pool may hold it ready-made), and a title with nothing at all says so in the window.
+
+0.3.34
+- "בחירת כתוביות" no longer stops the video while it prepares the list: a small progress bar shows instead, and the video pauses only once the window is open. A second press while it is preparing is ignored.
+- Subtitle searches reuse one that ran to the end in the last two minutes for the same title and release, also when it found subtitles and when the player has no release name, so "בחירת כתוביות" no longer searches every source again on each press. A search that ran out of time is repeated, and Kodi's own subtitle dialog always searches.
+- "בחירת כתוביות" skips the subtitle-timing ranking when the list has no human Hebrew subtitle for it to check.
+
+0.3.33
+- "בחירת כתוביות" answers at once: playback pauses and Kodi's busy spinner shows while the list is prepared, instead of seconds of playback with no sign the press was taken.
+- When a search that ran to the end found no subtitle at all (as at the start of a title no source has), opening "בחירת כתוביות" in the next two minutes no longer searches every source again; a search that ran out of time is repeated, and Kodi's own subtitle dialog always searches.
+
+0.3.32
+- AI translation: read far more of an Arabic reference without vowel marks -- feminine and masculine verb endings, commands, questions and forms of address -- so the gender check finds far more errors when no Hebrew subtitle exists (19 instead of 1 in two measured episodes).
+- AI translation: when Gemini is briefly overloaded, retry the gender and leftover-English repairs instead of dropping them, ask again when a gender repair comes back empty, and never accept a repair that still contradicts the Hebrew reference.
+- Arctic Fuse 3 3.3.12: keep the discover grid on POV while typing a search; the redesigned discover tab no longer stops the fix from applying.
+- AI translation: check who is speaking and who is spoken to against the human reference, not only the person addressed, and use the reference's own words to catch "את אוהבת" said to a man or "אני יודעת" said by one; rewrite only lines that then carry the right gender.
+- AI translation: read the speaker's gender from Polish, Czech, Slovak, Serbian, Croatian and Portuguese references too.
+- AI translation: keep the Hebrew reference working on Netflix subtitles that split each caption in two, and translate such captions as one line, without lost or doubled lines.
+- AI translation: include an episode's guest characters in the cast, so their gender is known.
+- AI translation: repair lines where the free model mixed in letters from another alphabet (Thai, Chinese, Korean...), drop translator notes and sound cues it left in English, fix single English letters inside Hebrew words and stuttered pronouns left in the old gender, and remove speaker names such as "Celeste:".
+- AI translation: entries a fallback reference left out are requested again instead of staying in English.
+- Show the Gemini daily quota by Google's reset time (midnight Pacific, about 10:00 in Israel) instead of UTC midnight.
+- Never write the OpenSubtitles or Bing keys to the Kodi log.
+- SubSync: read the image (PGS) subtitles of Blu-ray rips as the captions they are, so files with only PGS tracks can confirm an in-sync subtitle, and fix TV/web subtitles across the disc's act breaks when held-out parts of the disc track and a second PGS language of the same disc confirm the map.
+
+0.3.31
+- Stop the Nox player OSD fix from shrinking neighbouring buttons on later starts, and restore the buttons it already shrank.
+- Idan Plus: Kan 11, Kan Educational 23 and the Kan archive play again after changes on Kan's website, and i24NEWS English lists its programs again after its old catalog service shut down.
+- Never start the automatic subtitle search on Idan Plus live channels or VOD, also when they are started from a home widget or a favourite.
+
+0.3.30
+- Restore automatic subtitle timing checks in the modular package; it had stopped identifying the playing release and left every subtitle unverified.
+- Correct real multi-second offsets between differently segmented subtitles using speech-coverage corroboration, and stop weak sub-second nudges of subtitles that are already synchronized.
+- Stop trusting release names that only look alike (WEB-DL/DTS-HD groups, different streaming services, extended versus theatrical cuts) and check trusted subtitles against the playing file's own subtitle track.
+- Require a second independent reference before a provider subtitle can apply a large correction, and never apply one global shift that would mis-time a differently cut region.
+- Stop reporting unadjusted viewing as a human timing confirmation, and let the playing file decide before any shared timing record.
+- Skip subtitles that name another episode, try proven alternatives against an exact reference when the file has no subtitle track, and accept provider references with harmless layout errors.
+- Check large multi-track files many times faster, keeping background work light on low-power devices.
+- Fix subtitles from broadcast and web releases on Blu-ray copies whose act breaks shift each section by a few seconds, proving every section on held-out timing and an independent track before rewriting anything.
+- Use the audio of MP4 files without a subtitle track to tell whether a subtitle fits the whole episode, and let it choose among timelines proposed by provider subtitles.
+- Never mark a subtitle as synchronized when the playing file shows that different parts of the episode are off by different amounts, and stop treating an episode title in a subtitle name as a release group.
+
+0.3.23
+- Restore MDBList library items in Arctic Fuse personal widgets; upgrade the old routes in place while preserving positions and removed widgets.
+
+0.3.22
+- Verify subscription-notice settings were accepted by Kodi before confirming a saved choice.
+
+0.3.21
+- Repair Estuary's legacy icon/text source-button pair, including radiobuttons and old bare-ampersand URLs; preserve native actions and separate layouts.
+- Reload the active skin after removing a duplicate when it is safe to do so.
+
+0.3.16
+- Keep automatic subtitle selection active when a previous film's AI translation is still running; cancel obsolete Gemini retries after playback or the selected subtitle changes.
+- Pass already-discovered Hebrew alternatives to the background timing verifier and restore verified fallback selection ownership.
+- Show when initial timing is still being checked, and log why verification is skipped.
+
 0.2.552
 - Expand background timing evidence beyond the picker languages only after the normal proof abstains, so a verified cross-cut correction can use an independent provider family without changing visible results or bypassing conflicts.
 

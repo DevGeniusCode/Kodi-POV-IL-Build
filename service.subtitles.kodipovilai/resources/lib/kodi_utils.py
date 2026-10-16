@@ -9,6 +9,7 @@ import hashlib
 import json
 import time
 import urllib.parse
+import re
 
 try:
     import xbmc
@@ -412,6 +413,36 @@ def notify(msg, title=None, icon=None, time_ms=4000):
         pass
 
 
+_EXPLICIT_EPISODE_RE = re.compile(
+    r'(?i)(?<![a-z0-9])s0*(\d{1,2})e0*(\d{1,3})(?![a-z0-9])')
+# Older scene names: "Show.2014.201.HDTV-LOL" (S02E01, right after the
+# show year) and "Show.2x01". Without these a wrong-season subtitle
+# passed the episode guard (field: S02E01 offered for S01E01).
+_YEAR_EPISODE_RE = re.compile(
+    r'(?i)(?<![a-z0-9])(?:19[5-9]\d|20[0-3]\d)[ ._-]+([1-9])(\d{2})'
+    r'(?![a-z0-9])')
+_CROSS_EPISODE_RE = re.compile(
+    r'(?i)(?<![a-z0-9])(\d{1,2})x(\d{2,3})(?![a-z0-9])')
+
+
+def release_conflicts_with_episode(name, season, episode):
+    """Reject a remembered source name explicitly naming another episode.
+
+    A window property can survive autoplay and is not bound to the current
+    player item.  Names without an explicit SxxEyy remain inconclusive.
+    """
+    try:
+        expected = (int(season), int(episode))
+    except (TypeError, ValueError):
+        return False
+    text = str(name or '')
+    matches = (_EXPLICIT_EPISODE_RE.findall(text)
+               or _CROSS_EPISODE_RE.findall(text)
+               or _YEAR_EPISODE_RE.findall(text))
+    return bool(matches and any(
+        (int(s), int(e)) != expected for s, e in matches))
+
+
 def current_video_info():
     """Best-effort snapshot of what Kodi is currently playing.
     Returns a dict with imdb_id, tmdb_id, title, year, season,
@@ -464,7 +495,11 @@ def current_video_info():
     # (set by pov_source_name_patcher / subs_filename_publisher, the same
     # one DarkSubs reads). This is the most reliable release name for
     # sync-% matching on debrid streams.
-    info['picked_release'] = gi('Window(10000).Property(subs.player_filename)')
+    picked = gi('Window(10000).Property(subs.player_filename)')
+    if release_conflicts_with_episode(
+            picked, info['season'], info['episode']):
+        picked = ''
+    info['picked_release'] = picked
     info['is_episode'] = bool(info['tvshow'] and info['episode'])
     return info
 
@@ -644,7 +679,8 @@ def subtitle_candidate_identity(link):
 def _new_subtitle_selection_token(link):
     try:
         seed = '{0}\0{1}\0{2}'.format(
-            time.time_ns(), threading.get_ident(), link or '')
+            time.time_ns(), threading.get_ident(),
+            (link or '') + '\0' + os.urandom(16).hex())
         return hashlib.sha256(seed.encode('utf-8', 'replace')).hexdigest()[:24]
     except Exception:
         return hashlib.sha256(
@@ -669,7 +705,7 @@ def clear_subtitle_sync_status():
         pass
 
 
-def set_current_subtitle(link):
+def set_current_subtitle(link, renew=False):
     """Remember which subtitle (by its candidate link) is currently applied,
     so the picker can mark it as '» נוכחית' next time it opens. Stored on the
     home window so it's visible across the service / picker processes."""
@@ -688,9 +724,11 @@ def set_current_subtitle(link):
             old_token = win.getProperty(_CURRENT_SUB_TOKEN_PROP) or ''
         except Exception:
             old_token = ''
-        # A verdict belongs to one selected candidate. Re-selecting the same
-        # one preserves its result; selecting anything else invalidates it.
-        if old_link != new_link:
+        # A verdict belongs to one selection event. Internal delivery retries
+        # may preserve the token, but an explicit picker click passes
+        # ``renew=True`` so even re-selecting the same row invalidates an older
+        # background worker and can never be mistaken for its automatic claim.
+        if old_link != new_link or (renew and new_link):
             clear_subtitle_sync_status()
             # Background and manual-delay records are token-scoped. Retire only
             # the selection being replaced, so a late process cannot erase the

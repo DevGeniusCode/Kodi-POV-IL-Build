@@ -224,7 +224,7 @@ def _handle_download(handle, params):
     # Remember this as the currently-applied subtitle so the picker marks it
     # '» נוכחית' next time it opens.
     try:
-        kodi_utils.set_current_subtitle(link)
+        kodi_utils.set_current_subtitle(link, renew=True)
     except Exception:
         pass
     try:
@@ -1680,7 +1680,7 @@ def _show_gemini_usage():
 
 def _handle_show_gemini_usage(_params):
     """RunScript entry point so the dialog can be opened from
-    anywhere, e.g. a Wizard button or a remote shortcut."""
+    anywhere, e.g. a remote shortcut."""
     _show_gemini_usage()
 
 
@@ -2173,8 +2173,8 @@ def _handle_open_tmdb_notice(_params):
         'נקבה) ולבחור צורות עברית נכונות.\n\n'
         'אופציונלי: אם תרצה להשתמש ב-key משלך (למשל אם ה-key '
         'המשותף נחסם זמנית, או אם אתה משתמש ב-TMDB Helper '
-        'באופן כללי), פתח את ה-Wizard → "חיבור שירותים" → TMDB '
-        'וחבר key אישי. הוא יוחל אוטומטית מאותו רגע, בלי '
+        'באופן כללי), פתח את הגדרות TMDB Helper וחבר key אישי. '
+        'הוא יוחל אוטומטית מאותו רגע, בלי '
         'restart, וידרוס את ה-key המובנה.'
     )
     xbmcgui.Dialog().ok('Kodi POV IL — TMDB', body)
@@ -2397,7 +2397,7 @@ def _handle_translate_file(params):
     # DarkSubs invoked this delivery outside MoranSubs's own picker, so bind
     # the timing job here. Without this, a status from an earlier subtitle
     # could be mistaken for the translation being produced now.
-    kodi_utils.set_current_subtitle(link)
+    kodi_utils.set_current_subtitle(link, renew=True)
     _timing_selection = kodi_utils.current_subtitle_selection(
         expected_link=link)
 

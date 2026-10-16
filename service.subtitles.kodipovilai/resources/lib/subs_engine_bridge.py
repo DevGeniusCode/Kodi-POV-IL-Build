@@ -69,6 +69,9 @@ def _detect_release_name(info):
     cands = []
     # POV's captured pick is the most reliable release name -- prefer it.
     pr = (info.get('picked_release') or '').strip()
+    if kodi_utils.release_conflicts_with_episode(
+            pr, info.get('season'), info.get('episode')):
+        pr = ''
     if pr:
         cands.append(pr)
     for key in ('filepath', 'li_filename'):
@@ -84,6 +87,9 @@ def _detect_release_name(info):
             cands.append(v)
     best, best_score = '', -1
     for c in cands:
+        if kodi_utils.release_conflicts_with_episode(
+                c, info.get('season'), info.get('episode')):
+            continue
         sc = _release_score(c)
         # tie-break: prefer the longer (more specific) string
         if sc > best_score or (sc == best_score and len(c) > len(best)):
@@ -100,11 +106,20 @@ def _release_ready(info):
     release before its pre-search and (b) refuse to cache a search done before
     the release settled -- which is why users previously had to exit + re-enter
     the subtitle list to get correct percentages."""
-    if (info.get('picked_release') or '').strip():
+    if ((info.get('picked_release') or '').strip()
+            and not kodi_utils.release_conflicts_with_episode(
+                info.get('picked_release'), info.get('season'),
+                info.get('episode'))):
         return True
-    if (info.get('li_filename') or '').strip():
+    if ((info.get('li_filename') or '').strip()
+            and not kodi_utils.release_conflicts_with_episode(
+                info.get('li_filename'), info.get('season'),
+                info.get('episode'))):
         return True
-    if (info.get('tagline') or '').strip():
+    if ((info.get('tagline') or '').strip()
+            and not kodi_utils.release_conflicts_with_episode(
+                info.get('tagline'), info.get('season'),
+                info.get('episode'))):
         return True
     fp = (info.get('filepath') or '').strip()
     # A real local file path is itself the release name; a stream / debrid
@@ -311,7 +326,7 @@ def _parse_download_url(url):
     }
 
 
-def search(info, modal_progress=True):
+def search(info, modal_progress=True, cache_only=False):
     """Return MoranSubs candidate dicts for the subtitles the engine
     found. Empty list when the gate is off or anything fails.
 
@@ -345,14 +360,27 @@ def search(info, modal_progress=True):
         # waiting 24h for it to expire.
         if cached:
             return cached
+    # Kodi's own subtitle dialog (modal_progress) is an explicit request and
+    # always searches.
+    if not modal_progress:
+        recent = _recent_get(info)
+        if recent is not None:
+            return recent
+    if cache_only:
+        return None           # nothing cached: the caller searches later
     try:
+        started = time.monotonic()
         out = _search_inner(info, modal_progress=modal_progress)
         # NEVER cache an empty / failed search. A transient timeout, rate-limit
         # (429) or network hiccup returns [] -- caching that would hide every
         # source for 24h (the user sees only the community pool). DarkSubs's
         # cache does the same: it returns an empty result without storing it.
+        # Any finished search, empty or not, is reused for two minutes from
+        # memory (_RECENT_TTL).
         if cacheable and out:
             _cache_put(info, out)
+        if _search_finished(time.monotonic() - started):
+            _recent_put(info, out)
         return out
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
@@ -390,6 +418,97 @@ def _cache_key(info):
         sig = ''
     return '{0}_s{1}_e{2}_{3}'.format(
         mid, info.get('season') or '0', info.get('episode') or '0', sig)
+
+
+# Every search that FINISHED is kept for two minutes in Kodi's memory, found
+# subtitles or not. Measured in two user logs from an Android box: pressing
+# "בחירת כתוביות" re-ran every provider each time (6.4 s, then 4.5 s per
+# press), although the automatic search had just run -- the 24 h disk cache
+# needs a release name and never stores an empty result. The same media,
+# sources and release name give the same list, so two minutes of reuse
+# changes nothing but the wait. A search cut short (max_search_time hit while
+# the link buffers the video, or refused while a timed-out provider is still
+# running) is not kept, and Kodi's own subtitle dialog always searches.
+_RECENT_TTL = 120
+
+
+_SEARCH_STATE = threading.local()
+
+
+def _search_finished(took=None):
+    """True when this thread's last engine search ran every provider to the
+    end (not stopped at max_search_time, not refused while a timed-out
+    provider still ran)."""
+    return bool(getattr(_SEARCH_STATE, 'finished', False))
+
+
+_RECENT_PROP = 'moransubs.engine_recent'
+_RECENT_KEEP = 3
+
+
+def _release_key(info):
+    """The release name the match % is computed from, hashed."""
+    try:
+        rel = _detect_release_name(info) or ''
+    except Exception:
+        rel = ''
+    return hashlib.sha1(rel.encode('utf-8', 'replace')).hexdigest()[:16]
+
+
+def _recent_entries():
+    try:
+        import xbmcgui
+        raw = xbmcgui.Window(10000).getProperty(_RECENT_PROP)
+        rows = json.loads(raw) if raw else []
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        return []
+
+
+def _recent_put(info, out):
+    key = _cache_key(info)
+    if not key:
+        return
+    now = time.time()
+    rows = []
+    for r in _recent_entries():
+        try:
+            if (isinstance(r, dict) and r.get('key') != key
+                    and 0 <= now - float(r.get('t') or 0) < _RECENT_TTL):
+                rows.append(r)
+        except Exception:
+            continue          # a malformed entry is simply dropped
+    rows.append({'key': key, 't': now, 'rel': _release_key(info),
+                 'out': out or []})
+    try:
+        import xbmcgui
+        xbmcgui.Window(10000).setProperty(_RECENT_PROP, json.dumps(
+            rows[-_RECENT_KEEP:], ensure_ascii=False))
+    except Exception:
+        pass
+
+
+def _recent_get(info):
+    """The finished search of the last two minutes for this media, or None."""
+    key = _cache_key(info)
+    if not key:
+        return None
+    rec = None
+    for r in _recent_entries():
+        if isinstance(r, dict) and r.get('key') == key:
+            rec = r
+    try:
+        age = time.time() - float(rec['t']) if rec else None
+    except Exception:
+        return None
+    if (age is None or not 0 <= age < _RECENT_TTL
+            or rec.get('rel', '') != _release_key(info)):
+        return None
+    out = rec.get('out') or []
+    kodi_utils.log('subs_engine_bridge: reusing the search from {0:.0f}s ago '
+                   '({1} result(s)) -- not searching every source again'.format(
+                       age, len(out)), level='INFO')
+    return out
 
 
 def _cache_dir():
@@ -516,11 +635,17 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
             # visible result set cannot provide an independent timing family.
             # Do not mutate the setting or visible list; use the engine's
             # explicit override and keep these results in a separate cache.
+            engine.last_search_cut_short = False
+            _SEARCH_STATE.finished = False
             f_result = (engine.c_get_subtitles(
                             video_data, all_lang_override=True,
                             timing_only=True)
                         if all_lang_override
                         else engine.get_subtitles(video_data))
+            # Read under the lock: another thread's search resets the flag.
+            _SEARCH_STATE.finished = not (
+                getattr(engine, 'last_search_cut_short', True)
+                or getattr(engine, '_lingering_provider_threads', None))
             sorted_subs = engine.sort_subtitles(
                 f_result, video_data, silent=all_lang_override) \
                 if f_result else []
