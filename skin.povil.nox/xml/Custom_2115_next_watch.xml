@@ -7,11 +7,11 @@
 		<control type="group">
 			<centerleft>50%</centerleft>
 			<width>600</width>
-			<centertop>77%</centertop>
+			<centertop>50%</centertop>
 			<height>980</height>
 			<include content="DialogBackgroundCommons">
 				<param name="width" value="600" />
-				<param name="height" value="530" />
+				<param name="height" value="980" />
 				<param name="header_label" value="תפריט המשך צפייה" />
 				<param name="header_id" value="2" />
 				<param name="diffusetexture" value="masks/dialog-bg-squareish.png" />
@@ -71,6 +71,12 @@
 						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_my_movies&amp;mode=build_movie_list&amp;name=Movie+Favorites&quot;,return)</onclick>
 					</item>
 					<item>
+						<label>הסרטים שלי (MDBList)</label>
+						<icon>special://skin/extras/icons/kodi.png</icon>
+						<onclick>Close</onclick>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=mdblist_my_movies&amp;mode=build_movie_list&amp;name=MDBList&quot;,return)</onclick>
+					</item>
+					<item>
 						<label>הסרטים שלי (POV)</label>
 						<icon>special://skin/extras/icons/kodi.png</icon>
 						<onclick>Close</onclick>
@@ -87,6 +93,12 @@
 						<icon>special://skin/extras/icons/download.png</icon>
 						<onclick>Close</onclick>
 						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_my_tvshows&amp;mode=build_tvshow_list&amp;name=TV+Show+Favorites&quot;,return)</onclick>
+					</item>
+					<item>
+						<label>הסדרות שלי (MDBList)</label>
+						<icon>special://skin/extras/icons/download.png</icon>
+						<onclick>Close</onclick>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=mdblist_my_tvshows&amp;mode=build_tvshow_list&amp;name=MDBList&quot;,return)</onclick>
 					</item>
 					<item>
 						<label>הסדרות שלי (POV)</label>
