@@ -24,7 +24,10 @@ import xbmcvfs
 import glob
 import os
 import re
-import zipfile
+try:  # Python 3
+    import zipfile
+except ImportError:  # Python 2
+    from resources.libs import zipfile
 
 from sqlite3 import dbapi2 as database
 

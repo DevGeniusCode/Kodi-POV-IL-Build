@@ -15,18 +15,10 @@ import glob
 from resources.libs.common import tools
 from resources.libs import whitelist
 
-# Loading this module is part of Wizard startup. Do not enumerate the host's
-# certificate store until one of the explicit remote-config actions is used.
-context = None
-
-
-def _remote_context():
-    global context
-    if context is None:
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-    return context
+# Create an SSL context that allows SSL verification to be skipped
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE
 ######################################################################
 
 # GitHub links for custom_save_data_config.json and build_addons_whitelist.txt + build_addons_blacklist files
@@ -37,7 +29,7 @@ build_addons_blacklist_github_url = "https://raw.githubusercontent.com/MoranTheK
 
 def _read_url_text(url, default=''):
     try:
-        with urllib.request.urlopen(url, context=_remote_context(), timeout=15) as response:
+        with urllib.request.urlopen(url, context=context, timeout=15) as response:
             return response.read().decode('utf-8')
     except Exception as e:
         logging.log(

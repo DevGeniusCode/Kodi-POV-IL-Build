@@ -69,40 +69,57 @@ def check_paths():
 
 
 def check_build(name, ret, release_id=None):
-    # KODI-POV-IL - build.txt is RETIRED. The build is no longer described by a
-    # remote OpenWizard-style text file and there is NO monolithic build / gui
-    # ("quickfix") zip any more: the full install and all updates go through
-    # ModularUpdater (manifest.json). This shim keeps the remaining legacy
-    # callers working by returning safe, static per-field values:
-    #   - 'version' -> the canonical build version (BUILDVERSION_DEFAULT)
-    #   - 'kodi'    -> the RUNNING Kodi major, so the build() version-mismatch
-    #                  warning can never fire
-    #   - 'url'/'gui'/'theme'/'minor'/'info' -> '' (nothing to download)
-    #   - 'icon'/'fanart' -> the build splash, for the menus
-    version = getattr(CONFIG, 'BUILDVERSION_DEFAULT', None) or getattr(CONFIG, 'BUILDVERSION', '') or '0.0.0'
-    try:
-        kodi = str(int(float(CONFIG.KODIV)))
-    except Exception:
-        kodi = '21'
-    splash = getattr(CONFIG, 'BUILD_SKIN_SWITCH_IMAGE_URL', '') or ''
-    fields = {
-        'version': version,
-        'url': '',          # no monolithic build zip
-        'minor': '',
-        'gui': '',          # no monolithic quickfix zip
-        'kodi': kodi,       # == running Kodi -> no warning dialog
-        'theme': '',        # themes retired with build.txt
-        'icon': splash,
-        'fanart': splash,
-        'adult': 'no',
-        'info': '',
-        'description': getattr(CONFIG, 'ADDONTITLE', name),
-    }
-    if ret == 'all':
-        return (name, fields['version'], fields['url'], fields['minor'], fields['gui'],
-                fields['kodi'], fields['theme'], fields['icon'], fields['fanart'],
-                fields['adult'], fields['info'], fields['description'])
-    return fields.get(ret, '')
+    from resources.libs.common import tools
+
+    buildfile = CONFIG.BUILDFILE
+    if release_id is not None:
+        token = str(release_id).strip()
+        if not re.match(r'^[0-9]{1,20}$', token):
+            return False
+        # raw.githubusercontent ignores query strings in its cache key. Use a
+        # genuinely distinct, release-specific path instead; publication puts
+        # this immutable manifest online before the matching notification.
+        base = buildfile.rsplit('/', 1)[0]
+        buildfile = '{0}/build_versions/{1}.txt'.format(base, token)
+
+    response = tools.open_url(buildfile)
+
+    if not response:
+        return False
+
+    link = response.text.replace('\n', '').replace('\r', '').replace('\t', '')\
+        .replace('gui=""', 'gui="http://"').replace('theme=""', 'theme="http://"')
+    match = re.compile('name="%s".+?ersion="(.+?)".+?rl="(.+?)".+?inor="(.+?)".+?ui="(.+?)".+?odi="(.+?)".+?heme="(.+?)".+?con="(.+?)".+?anart="(.+?)".+?review="(.+?)".+?dult="(.+?)".+?nfo="(.+?)".+?escription="(.+?)"' % name.replace('[', '\[').replace(']', '\]')).findall(link)
+    if len(match) > 0:
+        for version, url, minor, gui, kodi, theme, icon, fanart, preview, adult, info, description in match:
+            if ret == 'version':
+                return version
+            elif ret == 'url':
+                return url
+            elif ret == 'minor':
+                return minor
+            elif ret == 'gui':
+                return gui
+            elif ret == 'kodi':
+                return kodi
+            elif ret == 'theme':
+                return theme
+            elif ret == 'icon':
+                return icon
+            elif ret == 'fanart':
+                return fanart
+            elif ret == 'preview':
+                return preview
+            elif ret == 'adult':
+                return adult
+            elif ret == 'description':
+                return description
+            elif ret == 'info':
+                return info
+            elif ret == 'all':
+                return name, version, url, minor, gui, kodi, theme, icon, fanart, preview, adult, info, description
+    else:
+        return False
 
 
 def check_info(name):
@@ -118,23 +135,84 @@ def check_info(name):
 
 
 def check_theme(name, theme, ret):
-    # KODI-POV-IL - build themes were a build.txt feature and are retired.
-    return False
+    from resources.libs.common import tools
+
+    themeurl = check_build(name, 'theme')
+    response = tools.open_url(themeurl)
+
+    if not response:
+        return False
+
+    link = response.text.replace('\n', '').replace('\r', '').replace('\t', '')
+    match = re.compile('name="{0}".+?rl="(.+?)".+?con="(.+?)".+?anart="(.+?)".+?dult=(.+?).+?escription="(.+?)"'.format(theme.replace('[', '\[').replace(']', '\]'))).findall(link)
+    if len(match) > 0:
+        for url, icon, fanart, adult, description in match:
+            if ret == 'url':
+                return url
+            elif ret == 'icon':
+                return icon
+            elif ret == 'fanart':
+                return fanart
+            elif ret == 'adult':
+                return adult
+            elif ret == 'description':
+                return description
+            elif ret == 'all':
+                return name, theme, url, icon, fanart, adult, description
 
 
 def check_wizard(ret):
-    # KODI-POV-IL - the wizard no longer self-updates from build.txt; it is
-    # updated like any other addon through ModularUpdater (manifest.json).
-    # Returning False keeps the legacy AUTOUPDATE menu / update.wizard_update()
-    # callers as safe no-ops.
-    return False
+    from resources.libs.common import tools
+
+    response = tools.open_url(CONFIG.BUILDFILE)
+
+    if not response:
+        return False
+
+    link = response.text.replace('\n', '').replace('\r', '').replace('\t', '')
+    match = re.compile('id="{0}".+?ersion="(.+?)".+?ip="(.+?)"'.format(CONFIG.ADDON_ID)).findall(link)
+    if len(match) > 0:
+        for version, zip in match:
+            if ret == 'version':
+                return version
+            elif ret == 'zip':
+                return zip
+            elif ret == 'all':
+                return CONFIG.ADDON_ID, version, zip
+    else:
+        return False
 
 
 def check_build_update():
-    # KODI-POV-IL - RETIRED. The legacy build.txt full-build update check is
-    # gone; addon + config updates are handled by ModularUpdater (manifest.json)
-    # on every startup. Kept as a no-op so any stray caller is harmless.
-    return
+    from resources.libs.common import logging
+    from resources.libs.common import tools
+    from resources.libs.gui import window
+
+    response = tools.open_url(CONFIG.BUILDFILE)
+
+    if not response:
+        return
+
+    link = response.text.replace('\n', '').replace('\r', '').replace('\t', '')
+    match = re.compile('name="%s".+?ersion="(.+?)".+?con="(.+?)".+?anart="(.+?)"' % CONFIG.BUILDNAME.replace('[', '\[').replace(']', '\]')).findall(link)
+    if len(match) > 0:
+        version = match[0][0]
+        icon = match[0][1]
+        fanart = match[0][2]
+        CONFIG.set_setting('latestversion', version)
+        if _is_newer_version(version, CONFIG.BUILDVERSION):
+            # Kodi POV IL updates the live build through quick_update only.
+            # Do not open the Fresh/Normal build-update window here: that path
+            # can overwrite user custom tiles, connected services and userdata.
+            CONFIG.set_setting('buildversion', version)
+            CONFIG.set_setting('latestversion', version)
+            CONFIG.BUILDVERSION = version
+            CONFIG.BUILDLATEST = version
+            logging.log("[Check Updates] [Installed Version: {0}] [Current Version: {1}] Full-build update prompt suppressed; synced version and relying on quick_update.".format(CONFIG.BUILDVERSION, version))
+        else:
+            logging.log("[Check Updates] [Installed Version: {0}] [Current Version: {1}]".format(CONFIG.BUILDVERSION, version))
+    else:
+        logging.log("[Check Updates] ERROR: Unable to find build version in build text file", level=xbmc.LOGERROR)
 
 
 def check_skin():
@@ -330,9 +408,38 @@ def check_repos():
 
 
 def build_count():
-    # KODI-POV-IL - exactly one build now (no build.txt listing). Reported as a
-    # single build on the running Kodi major so the legacy Builds menu still
-    # renders one entry. (total, count20, count21, adultcount, hidden)
-    return 1, 0, 0, 0, 0
+    from resources.libs import test
+    from resources.libs.common import tools
+
+    response = tools.open_url(CONFIG.BUILDFILE)
+
+    total = 0
+    count20 = 0
+    count21 = 0
+    hidden = 0
+    adultcount = 0
+
+    if not response:
+        return total, count20, count21, adultcount, hidden
+
+    link = response.text.replace('\n', '').replace('\r', '').replace('\t', '')
+    match = re.compile('name="(.+?)".+?odi="(.+?)".+?dult="(.+?)"').findall(link)
+
+    if len(match) > 0:
+        for name, kodi, adult in match:
+            if not CONFIG.SHOWADULT == 'true' and adult.lower() == 'yes':
+                hidden += 1
+                adultcount += 1
+                continue
+            if not CONFIG.DEVELOPER == 'true' and test.str_test(name):
+                hidden += 1
+                continue
+            kodi = int(float(kodi))
+            total += 1
+            if kodi == 20:
+                count20 += 1
+            if kodi == 21:
+                count21 += 1
+    return total, count20, count21, adultcount, hidden
 
 

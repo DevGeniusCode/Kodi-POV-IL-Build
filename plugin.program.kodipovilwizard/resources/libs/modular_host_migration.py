@@ -1,7 +1,12 @@
-"""Fail-closed POV code swap, leaving user settings outside the code tree."""
+"""Fail-closed, offline POV host swap for a future modular migration.
+
+This module is intentionally not wired into the running Wizard.  The caller
+must supply a known SHA-256 and version for an official clean POV ZIP, plus a
+health check for the staged files and one after activation.  Addon data lives
+outside the code directory and is never read or modified here.
+"""
 
 import hashlib
-import io
 import json
 import os
 import re
@@ -31,7 +36,7 @@ class MigrationError(Exception):
 
 def _host_path(path):
     host = Path(path).absolute()
-    if host.name != ADDON_ID or host.parent.name != 'addons' or not host.parent.is_dir():
+    if host.name != ADDON_ID or not host.parent.is_dir():
         raise MigrationError('host must be an existing addons/plugin.video.pov path')
     if host.is_symlink() or host.parent.is_symlink():
         raise MigrationError('symlinked host paths are not supported')
@@ -114,14 +119,9 @@ def stage_clean_host(archive, host_path, expected_sha256, expected_version,
     archive = Path(archive)
     if _digest(archive) != expected:
         raise MigrationError('POV ZIP SHA-256 mismatch')
-    # Windows x86's embedded Python can stall on repeated ZIP file seeks.
-    # Official POV bundles are small; one bounded read avoids that path.
-    if archive.stat().st_size > 25 * 1024 * 1024:
-        raise MigrationError('compressed POV ZIP exceeds migration size limit')
-    payload = archive.read_bytes()
-    with zipfile.ZipFile(io.BytesIO(payload)) as bundle:
+    with zipfile.ZipFile(archive) as bundle:
         files = _validated_members(bundle, expected_version)
-        stage_root = Path(tempfile.mkdtemp(prefix=STAGE_PREFIX, dir=str(host.parent.parent)))
+        stage_root = Path(tempfile.mkdtemp(prefix=STAGE_PREFIX, dir=str(host.parent)))
         staged = stage_root / ADDON_ID
         try:
             staged.mkdir()
@@ -136,13 +136,13 @@ def stage_clean_host(archive, host_path, expected_sha256, expected_version,
         except Exception:
             # This directory was just created by mkdtemp under the validated
             # addons parent.  Refuse cleanup if that invariant changed.
-            if stage_root.parent == host.parent.parent and stage_root.name.startswith(STAGE_PREFIX):
+            if stage_root.parent == host.parent and stage_root.name.startswith(STAGE_PREFIX):
                 shutil.rmtree(stage_root)
             raise
 
 
 def _journal_path(host):
-    return host.parent.parent / JOURNAL_NAME
+    return host.parent / JOURNAL_NAME
 
 
 def _write_journal(path, state, suffix):
@@ -181,13 +181,13 @@ def activate_staged_host(staged_path, host_path):
     host = _host_path(host_path)
     staged = Path(staged_path).absolute()
     if (not host.is_dir() or staged.name != ADDON_ID or not staged.is_dir()
-            or staged.is_symlink() or staged.parent.parent != host.parent.parent
+            or staged.is_symlink() or staged.parent.parent != host.parent
             or not staged.parent.name.startswith(STAGE_PREFIX)):
         raise MigrationError('invalid staged or installed POV tree')
     journal = _journal_path(host)
     if journal.exists():
         previous = _read_journal(host)
-        previous_backup = host.parent.parent / (BACKUP_PREFIX + previous['suffix'])
+        previous_backup = host.parent / (BACKUP_PREFIX + previous['suffix'])
         if previous['state'] != 'rolled_back' or previous_backup.exists():
             raise MigrationError('a POV migration journal already exists')
         history = journal.with_name(journal.name + '.history-' + previous['suffix'])
@@ -195,7 +195,7 @@ def activate_staged_host(staged_path, host_path):
             raise MigrationError('POV migration history already exists')
         os.replace(journal, history)
     suffix = uuid.uuid4().hex
-    backup = host.parent.parent / (BACKUP_PREFIX + suffix)
+    backup = host.parent / (BACKUP_PREFIX + suffix)
     _write_journal(journal, 'prepared', suffix)
     try:
         os.replace(host, backup)
@@ -229,10 +229,10 @@ def rollback_host(host_path, allow_confirmed=False):
     data = _read_journal(host)
     if data['state'] == 'confirmed' and not allow_confirmed:
         raise MigrationError('confirmed migration requires explicit rollback')
-    backup = host.parent.parent / (BACKUP_PREFIX + data['suffix'])
+    backup = host.parent / (BACKUP_PREFIX + data['suffix'])
     if not backup.is_dir() or backup.is_symlink():
         raise MigrationError('POV backup missing; refusing destructive rollback')
-    failed = host.parent.parent / (FAILED_PREFIX + data['suffix'])
+    failed = host.parent / (FAILED_PREFIX + data['suffix'])
     if host.exists() and failed.exists():
         raise MigrationError('failed-host quarantine already exists')
     _write_journal(_journal_path(host), 'rollback_in_progress', data['suffix'])
@@ -257,7 +257,7 @@ def confirm_host(host_path, health_check):
         rollback_host(host)
         raise MigrationError('post-switch POV health check failed; old host restored')
     _write_journal(_journal_path(host), 'confirmed', data['suffix'])
-    return host.parent.parent / (BACKUP_PREFIX + data['suffix'])
+    return host.parent / (BACKUP_PREFIX + data['suffix'])
 
 
 def recover_unconfirmed(host_path):
@@ -273,7 +273,7 @@ def recover_unconfirmed(host_path):
     data = _read_journal(host)
     if data['state'] in ('confirmed', 'rolled_back'):
         return data['state']
-    backup = host.parent.parent / (BACKUP_PREFIX + data['suffix'])
+    backup = host.parent / (BACKUP_PREFIX + data['suffix'])
     if data['state'] == 'prepared' and not backup.exists() and host.is_dir():
         _write_journal(journal, 'rolled_back', data['suffix'])
         return 'not_swapped'

@@ -51,19 +51,6 @@ class Router:
         kodi_version_update_check_manual = self.params['kodi_version_update_check_manual'] if 'kodi_version_update_check_manual' in self.params else None
         #####################################################
 
-        #####################################################
-        # KODI-POV-IL - In-wizard force close. Replaces the external
-        # plugin.close.kodi addon: the skins' power menu now calls
-        # RunPlugin(plugin://plugin.program.kodipovilwizard/?action=force_close).
-        # Handled here -- before the mode-less branch (which opens the main
-        # menu) -- so a no-mode force_close URL never pops the wizard UI.
-        if action == 'force_close':
-            logging.log("[ForceClose] Wizard-native force close requested", level=xbmc.LOGINFO)
-            from resources.libs.common import tools
-            tools.kill_kodi(over=True)
-            return
-        #####################################################
-
         # MAIN MENU
         if mode is None:
             from resources.libs.gui.main_menu import MainMenu
@@ -94,6 +81,9 @@ class Router:
         elif mode == 'buildinfo':  # Builds -> Build Info
             from resources.libs.gui.build_menu import BuildMenu
             BuildMenu().build_info(name)
+        elif mode == 'buildpreview':  # Builds -> Build Preview
+            from resources.libs.gui.build_menu import BuildMenu
+            BuildMenu().build_video(name)
         elif mode == 'install':  # Builds -> Fresh Install/Standard Install/Apply guifix
             from resources.libs.wizard import Wizard
 
@@ -183,71 +173,61 @@ class Router:
         elif mode == 'nettools':  # Maintenance -> Misc Maintenance -> Network Tools
             menu.net_tools()
             self._finish(handle)
-        elif mode == 'viewIP':
+        elif mode == 'runspeedtest':  # Maintenance -> Misc Maintenance -> Network Tools -> Speed Test -> Run Speed Test
+            menu.run_speed_test()
+            xbmc.executebuiltin('Container.Refresh()')
+        elif mode == 'clearspeedtest':  # Maintenance -> Misc Maintenance -> Network Tools -> Speed Test -> Clear Results
+            menu.clear_speed_test()
+            xbmc.executebuiltin('Container.Refresh()')
+        elif mode == 'viewspeedtest':  # Maintenance -> Misc Maintenance -> Network Tools -> Speed Test -> any previous test
+            menu.view_speed_test(name)
+            xbmc.executebuiltin('Container.Refresh()')
+        elif mode == 'viewIP':  # Maintenance -> Misc Maintenance -> Network Tools -> View IP Address & MAC Address
             menu.view_ip()
             self._finish(handle)
-        elif mode == 'rd_speedtest':
-            from resources.libs.wizard import real_debrid_speedtest
-            real_debrid_speedtest()
-        elif mode == 'standard_speedtest':
-            from resources.libs.wizard import standard_speedtest
-            standard_speedtest()
-        elif mode == 'build_speed_test':
-            from resources.libs.wizard import speedtest_dialog
-            speedtest_dialog()
+        elif mode == 'speedtest': 
+            xbmc.executebuiltin('InstallAddon("script.speedtester")')
+            xbmc.executebuiltin('RunAddon("script.speedtester")')
+        ############KODI-RD-IL##############
+        elif mode == 'build_speed_test': # KODI-RD-IL Real Debrid Speed Test
+            from resources.libs.wizard import build_speed_test
+            build_speed_test()
+        ####################################
+        elif mode == 'apk':  # APK Installer
+            menu.apk_menu(url)
+            self._finish(handle)
+        elif mode == 'kodiapk':  # APK Installer -> Official Kodi APK's
+            xbmc.executebuiltin('RunScript(script.kodi.android.update)')
+        elif mode == 'fmchoose':
+            from resources.libs import install
+            install.choose_file_manager()
+        elif mode == 'apkinstall':
+            from resources.libs import install
+            install.install_apk(name, url)
         elif mode == 'removeaddondata':  # Maintenance - > Addon Tools -> Remove Addon Data
             menu.remove_addon_data_menu()
             self._finish(handle)
-
-        elif mode == 'savedata':  # Save Data Menu
+        elif mode == 'savedata':  # Save Data + Builds -> Save Data Menu
             menu.save_menu()
             self._finish(handle)
-
-        # ACCOUNT MANAGER / AUTHORIZATIONS
-        elif mode == 'acctmgr':  # Account Manager Menu
-            menu.acctmgr_menu()
+        elif mode == 'youtube':  # "YouTube Section"
+            menu.youtube_menu(url)
             self._finish(handle)
-
-        elif mode == 'run_acctmgr':
-            if not xbmc.getCondVisibility('System.HasAddon(script.module.acctmgr)'):
-                from resources.libs.wizard import install_acctmgr_pilot
-                install_acctmgr_pilot()
-            if action:
-                xbmc.executebuiltin('RunScript(script.module.acctmgr, action={})'.format(action))
-            else:
-                xbmc.executebuiltin('RunAddon(script.module.acctmgr)')
-
+        elif mode == 'viewVideo':  # View  Video
+            from resources.libs import yt
+            yt.play_video(url)
+        elif mode == 'trakt':  # Save Data -> Keep Trakt Data
+            menu.trakt_menu()
+            self._finish(handle)
+        elif mode == 'realdebrid':  # Save Data -> Keep Debrid
+            menu.debrid_menu()
+            self._finish(handle)
+        elif mode == 'login':  # Save Data -> Keep Login Info
+            menu.login_menu()
+            self._finish(handle)
         elif mode == 'developer':  # Developer  Menu
             menu.developer()
             self._finish(handle)
-
-        # PATCH MANAGER
-        elif mode == 'patchmanager':
-            menu.patch_manager_menu()
-            self._finish(handle)
-
-        elif mode == 'togglepatch':
-            patch_id = name
-            addon_obj = xbmcaddon.Addon()
-            current = addon_obj.getSetting('patch_enabled_' + patch_id)
-
-            # Fall back to patches_config.py defaults if setting has never been manually toggled
-            if not current:
-                try:
-                    from resources.libs.patches.patches_config import PATCH_CONFIG
-                    default_state = next((p.get('enabled', True) for p in PATCH_CONFIG if p.get('id') == patch_id), True)
-                except Exception:
-                    default_state = True
-                current = 'true' if default_state else 'false'
-
-            new_state = 'false' if current == 'true' else 'true'
-            addon_obj.setSetting('patch_enabled_' + patch_id, new_state)
-
-            # Execute PatchEngine to immediately scrub/apply the toggled patch
-            from resources.libs.patch_engine import PatchEngine
-            PatchEngine().run()
-
-            xbmc.executebuiltin('Container.Refresh()')
 
         # MAINTENANCE FUNCTIONS
         elif mode == 'kodi17fix':  # Misc Maintenance -> Kodi 17 Fix
@@ -276,6 +256,12 @@ class Router:
         elif mode == 'forceskin':  # Misc Maintenance -> Reload Skin
             xbmc.executebuiltin("ReloadSkin()")
             xbmc.executebuiltin('Container.Refresh()')
+        # elif mode == 'hidepassword':  # Addon Tools -> Hide Passwords on Keyboard Entry
+        #     from resources.libs import db
+        #     db.hide_password()
+        # elif mode == 'unhidepassword':  # Addon Tools -> Unhide Passwords on Keyboard Entry
+        #     from resources.libs import db
+        #     db.unhide_password()
         elif mode == 'checksources':  # System Tweaks -> Scan source for broken links
             from resources.libs import check
             check.check_sources()
@@ -352,11 +338,6 @@ class Router:
         elif mode == 'wizardupdate':  # Wizard Update
             from resources.libs import update
             update.wizard_update()
-
-        # KODI-POV-IL - Manual modular (manifest-based) update trigger
-        elif mode == 'modular_update':
-            from resources.libs.modular_updater import ModularUpdater
-            ModularUpdater(background=False).run_update_check()
 
         # LOGGING
         elif mode == 'uploadlog':  # Upload Log File
@@ -443,7 +424,85 @@ class Router:
             elif name == 'export':
                 save.export_save_data()
 
+        # TRAKT
+        elif mode == 'savetrakt':  # Save Trakt Data
+            from resources.libs import traktit
+            traktit.trakt_it('update', name)
+        elif mode == 'restoretrakt':  # Recover All Saved Trakt Data
+            from resources.libs import traktit
+            traktit.trakt_it('restore', name)
+        elif mode == 'addontrakt':  # Clear All Addon Trakt Data
+            from resources.libs import traktit
+            traktit.trakt_it('clearaddon', name)
+        elif mode == 'cleartrakt':  # Clear All Saved Trakt Data
+            from resources.libs import traktit
+            traktit.clear_saved(name)
+        elif mode == 'authtrakt':  # Authorize Trakt
+            from resources.libs import traktit
+            traktit.activate_trakt(name)
+            xbmc.executebuiltin('Container.Refresh()')
+        elif mode == 'updatetrakt':  # Update Saved Trakt Data
+            from resources.libs import traktit
+            traktit.auto_update('all')
+        elif mode == 'importtrakt':  # Import Saved Trakt Data
+            from resources.libs import traktit
+            traktit.import_list(name)
+            xbmc.executebuiltin('Container.Refresh()')
+
+        # DEBRID
+        elif mode == 'savedebrid':  # Save Debrid Data
+            from resources.libs import debridit
+            debridit.debrid_it('update', name)
+        elif mode == 'restoredebrid':  # Recover All Saved Debrid Data
+            from resources.libs import debridit
+            debridit.debrid_it('restore', name)
+        elif mode == 'addondebrid':  # Clear All Addon Debrid Data
+            from resources.libs import debridit
+            debridit.debrid_it('clearaddon', name)
+        elif mode == 'cleardebrid':  # Clear All Saved Debrid Data
+            from resources.libs import debridit
+            debridit.clear_saved(name)
+        elif mode == 'authdebrid':  # Authorize Debrid
+            from resources.libs import debridit
+            debridit.activate_debrid(name)
+            xbmc.executebuiltin('Container.Refresh()')
+        elif mode == 'updatedebrid':  # Update Saved Debrid Data
+            from resources.libs import debridit
+            debridit.auto_update('all')
+        elif mode == 'importdebrid':  # Import Saved Debrid Data
+            from resources.libs import debridit
+            debridit.import_list(name)
+            xbmc.executebuiltin('Container.Refresh()')
+
+        # LOGIN
+        elif mode == 'savelogin':  # Save Login Data
+            from resources.libs import loginit
+            loginit.login_it('update', name)
+        elif mode == 'restorelogin':  # Recover All Saved Login Data
+            from resources.libs import loginit
+            loginit.login_it('restore', name)
+        elif mode == 'addonlogin':  # Clear All Addon Login Data
+            from resources.libs import loginit
+            loginit.login_it('clearaddon', name)
+        elif mode == 'clearlogin':  # Clear All Saved Login Data
+            from resources.libs import loginit
+            loginit.clear_saved(name)
+        elif mode == 'authlogin':  # "Authorize" Login
+            from resources.libs import loginit
+            loginit.activate_login(name)
+            xbmc.executebuiltin('Container.Refresh()')
+        elif mode == 'updatelogin':  # Update Saved Login Data
+            from resources.libs import loginit
+            loginit.auto_update('all')
+        elif mode == 'importlogin':  # Import Saved Login Data
+            from resources.libs import loginit
+            loginit.import_list(name)
+            xbmc.executebuiltin('Container.Refresh()')
+
         # DEVELOPER MENU
+        elif mode == 'createqr':  # Developer Menu -> Create QR Code
+            from resources.libs import qr
+            qr.create_code()
         elif mode == 'testnotify':  # Developer Menu -> Test Notify
             from resources.libs import test
             test.test_notify()
