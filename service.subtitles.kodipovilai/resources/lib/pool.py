@@ -44,7 +44,20 @@ import hashlib as _hashlib
 # Build-time pool credential (set during packaging). Fails closed if un-set.
 # __POOL_KEY_BEGIN__
 def _pool_key():
-    return ''
+    import base64 as _b, hashlib as _h
+    try:
+        import xbmcaddon
+        _a = xbmcaddon.Addon().getAddonInfo('id')
+    except Exception:
+        _a = ''
+    _s = bytes.fromhex('472891cf3cd26539c43c0eb601157b81') + _a.encode('utf-8')
+    _bl = _b.b64decode('M8C6Sok63q7ytb/Ku/7ccEj99mjlpVXR5uCZD7kn2iyKVcBzezlvkaGgwBRnhFZJwA+IACP3v9HbvA==')
+    _x = b''
+    _k = _s
+    while len(_x) < len(_bl):
+        _k = _h.sha256(_k + _s).digest()
+        _x += _k
+    return bytes(c ^ d for c, d in zip(_bl, _x)).decode('utf-8', 'replace')
 # __POOL_KEY_END__
 
 

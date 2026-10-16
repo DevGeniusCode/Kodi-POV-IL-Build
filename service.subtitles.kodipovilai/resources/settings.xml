@@ -520,6 +520,16 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
+        <!-- Hidden marker: one-time restore of the FENtastic/AF3 genre
+             shortcut-folder rows in navigator.db (movies/series by genre).
+             Read/written by pov_genre_folders_reseed_patcher.py. -->
+        <setting id="_pov_genre_folders_reseed" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <!-- Hidden marker: one-time tune of POV scraper settings
              (pre-release/3D on, piratebay off) has been applied. The value is
              a fingerprint of what the tune intends to write, so editing that
@@ -899,6 +909,11 @@
             <heading>32423</heading>
           </control>
         </setting>
+        <setting id="remember_source" type="boolean" label="32504"> <!-- Remember picked source -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
         <setting id="show_subtitle_match" type="boolean" label="32506"> <!-- Show Hebrew-subtitle match % on sources -->
           <level>0</level>
           <default>true</default>
@@ -1022,6 +1037,13 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
+        <setting id="_remember_source_force_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <setting id="_umbrella_api_language_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
@@ -1122,6 +1144,24 @@
           <constraints>
             <allowempty>true</allowempty>
           </constraints>
+        </setting>
+        <setting id="_remember_source_default_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="remember_source_status" type="action" label="32505"> <!-- Check remembered sources (diagnostic) -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32505</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=remember_source_status)</data>
         </setting>
       </group>
       <group id="debug">
