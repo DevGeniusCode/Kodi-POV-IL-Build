@@ -860,8 +860,8 @@
 	
 	<!-- Clear Art Logo for Poster View Type -->	
 	<variable name="ClearArtLogo">
-		<value condition="!String.IsEmpty(ListItem.Art(clearlogo)">$INFO[ListItem.Art(clearlogo)]</value>
-		<value condition="String.IsEmpty(ListItem.Art(clearlogo)">$INFO[ListItem.Art(clearart)]</value>
+		<value condition="!String.IsEmpty(ListItem.Art(clearlogo))">$INFO[ListItem.Art(clearlogo)]</value>
+		<value condition="String.IsEmpty(ListItem.Art(clearlogo))">$INFO[ListItem.Art(clearart)]</value>
 	</variable>
 	
 	<!-- Seasons Label -->	

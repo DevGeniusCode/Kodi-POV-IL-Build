@@ -78,7 +78,7 @@
 						<height>76</height>
 						<texturenofocus colordiffuse="grey_a">kodirdil/subtitles_window/choose_subs.png</texturenofocus>
 						<texturefocus colordiffuse="button_focus">kodirdil/subtitles_window/choose_subs.png</texturefocus>
-						<onclick condition="!Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">RunScript(service.subtitles.All_Subs,sub_window_unpause)</onclick>
+						<onclick condition="!Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
 						<onclick condition="Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">ActivateWindow(SubtitleSearch)</onclick>
 						<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
 						<!-- If current playing addon is NOT Idan Plus -->
@@ -314,6 +314,22 @@
 						<!-- Rescrape and select source for current playing episode -->
 						<!-- <onclick condition="VideoPlayer.Content(episodes)">RunPlugin(plugin://plugin.video.pov/?mode=play_media&media_type=episode&tmdb_id=$INFO[VideoPlayer.UniqueID(tmdb)]&season=$INFO[VideoPlayer.Season]&episode=$INFO[VideoPlayer.Episode]&autoplay=false)</onclick> -->
 					<!-- </control> -->
+					<control type="button" id="700458">
+						<description>POV IL change source</description>
+						<width>auto</width>
+						<height>76</height>
+						<align>center</align>
+						<texturenofocus>-</texturenofocus>
+						<texturefocus colordiffuse="button_focus">colors/white.png</texturefocus>
+						<label>[B]החלף מקור[/B]</label>
+						<visible>VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)</visible>
+						<visible>!VideoPlayer.Content(LiveTV)</visible>
+						<visible>!String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
+						<visible>!String.Contains(Player.Folderpath, plugin.video.supertv)</visible>
+						<visible>!String.Contains(Player.Folderpath, plugin.video.flashstream)</visible>
+						<onclick condition="VideoPlayer.Content(movies)">RunPlugin(plugin://plugin.video.pov/?mode=play_media&amp;mediatype=movie&amp;tmdb_id=$INFO[VideoPlayer.UniqueID(tmdb)]&amp;autoplay=false)</onclick>
+						<onclick condition="VideoPlayer.Content(episodes)">RunPlugin(plugin://plugin.video.pov/?mode=play_media&amp;mediatype=episode&amp;tmdb_id=$INFO[VideoPlayer.UniqueID(tmdb)]&amp;season=$INFO[VideoPlayer.Season]&amp;episode=$INFO[VideoPlayer.Episode]&amp;autoplay=false)</onclick>
+					</control>
 					<control type="button" id="700452">
 						<description>Switch to next Audio track</description>
 						<texturenofocus colordiffuse="grey_a">kodirdil/next_audio_track/next_audio_track.png</texturenofocus>
