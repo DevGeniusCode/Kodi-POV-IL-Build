@@ -22,13 +22,8 @@ import xbmcgui
 import xbmcvfs
 
 import os
+import zipfile
 
-import six
-
-if six.PY3:
-    import zipfile
-elif six.PY2:
-    from resources.libs import zipfile
 
 from resources.libs.common import logging
 from resources.libs.common import tools

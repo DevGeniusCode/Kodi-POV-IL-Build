@@ -162,7 +162,7 @@ class Config:
         self.DEPENDENCIES = [
             'script.module.bottle', 'script.module.certifi',
                              'script.module.chardet', 'script.module.idna',
-                             'script.module.requests', 'script.module.six',
+                             'script.module.requests',
             'script.module.urllib3'
         ]
 

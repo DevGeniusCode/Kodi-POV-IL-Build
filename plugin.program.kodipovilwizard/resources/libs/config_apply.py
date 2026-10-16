@@ -28,6 +28,17 @@ no patch chains, no full-file backup/restore dance.
 
 The XML merge helpers at the top are pure (stdlib only) so they can be unit
 tested off-device.
+
+PROGRESS REPORTING
+------------------
+apply_config_pack() accepts an optional shared ``ProvisionProgress`` tracker
+(resources/libs/provision_progress.py). When given, it reports EXACT progress for
+the tracker's 'config' phase via ``progress.set_fraction('config', current/total)``
+as real work completes (download bytes, zip members extracted, policy files
+applied, unlisted files seeded), replacing the tracker's time-based creep. The
+download uses the dialog-free ``headless_installer.download_zip`` so no extra
+Kodi progress dialog pops up over the install window. With ``progress=None`` the
+function behaves exactly as before.
 """
 
 import os
@@ -219,6 +230,88 @@ def _apply_file(spec, src_dir, fresh):
     return dest_path
 
 
+# Relative cost of each stage of apply_config_pack, used to turn "N of M done
+# inside this stage" into one overall 0..1 value for the tracker's 'config'
+# phase. Only the proportions matter.
+_STAGE_WEIGHTS = (
+    ('download', 20),   # fetching config zip (real byte progress)
+    ('verify', 3),      # sha256
+    ('extract', 12),    # zip members
+    ('apply', 50),      # policy files (merge/replace)
+    ('seed', 10),       # unlisted files auto-seeded
+    ('finish', 5),      # cleanup + version stamp
+)
+
+
+class _ConfigProgress(object):
+    """Maps apply_config_pack's real stages onto 0..1 and reports the result to
+    the shared tracker's 'config' phase. Every call is a no-op when no tracker
+    was given, and a tracker error can never break the config apply."""
+
+    PHASE = 'config'
+
+    def __init__(self, progress):
+        self._progress = progress
+        total = float(sum(w for _, w in _STAGE_WEIGHTS))
+        self._base, self._span = {}, {}
+        acc = 0.0
+        for name, weight in _STAGE_WEIGHTS:
+            self._base[name] = acc / total
+            self._span[name] = weight / total
+            acc += weight
+
+    def step(self, stage, done, total):
+        """`done` of `total` units finished inside `stage`."""
+        if self._progress is None:
+            return
+        try:
+            frac = (float(done) / float(total)) if total else 1.0
+            frac = min(1.0, max(0.0, frac))
+            self._progress.set_fraction(
+                self.PHASE, self._base[stage] + self._span[stage] * frac)
+        except Exception:
+            pass
+
+    def done(self, stage):
+        self.step(stage, 1, 1)
+
+
+def _download_config_zip(url, zip_path, background, report):
+    """Fetch the config zip. Primary path is the dialog-free downloader (real
+    byte progress, no popup over the install window). If that fails, fall back
+    once to the legacy Downloader so a quirk of the silent path can never block
+    the config apply. Returns True on a non-empty file."""
+    import xbmc
+    from resources.libs.common import logging
+    from resources.libs.common import tools
+
+    silent_ok = False
+    try:
+        from resources.libs.headless_installer import download_zip
+        silent_ok = bool(download_zip(
+            url, zip_path, on_progress=lambda pct: report.step('download', pct, 100)))
+    except Exception as e:
+        logging.log("[config_apply] silent config download unavailable: {0}".format(e),
+                    level=xbmc.LOGWARNING)
+
+    if not silent_ok:
+        logging.log("[config_apply] silent download failed; trying legacy Downloader",
+                    level=xbmc.LOGWARNING)
+        tools.remove_file(zip_path)
+        try:
+            from resources.libs.downloader import Downloader
+            Downloader(progress_dialog_bg=background).download(url, zip_path)
+        except Exception as e:
+            logging.log("[config_apply] config download failed: {0}".format(e), level=xbmc.LOGERROR)
+            return False
+        xbmc.sleep(300)
+
+    ok = os.path.exists(zip_path) and os.path.getsize(zip_path) > 0
+    if ok:
+        report.done('download')
+    return ok
+
+
 def _run_cleanup(policy):
     import xbmc
     from resources.libs.common.config import CONFIG
@@ -236,18 +329,25 @@ def _run_cleanup(policy):
             logging.log("[config_apply] cleanup failed for {0}: {1}".format(rel, e), level=xbmc.LOGWARNING)
 
 
-def apply_config_pack(manifest, fresh=False, background=True):
+def apply_config_pack(manifest, fresh=False, background=True, progress=None):
     """Download + verify + apply the config pack described by manifest['config'].
 
     Returns a dict: {'applied': bool, 'skin_touched': bool, 'version': str}.
     On an existing device the pack is applied only when its config_version
     moved past what we last applied (idempotent: once per config release).
+
+    ``progress`` is an optional shared ProvisionProgress. When given, exact step
+    progress is reported with ``progress.set_fraction('config', current/total)``
+    (download -> verify -> extract -> apply policy files -> seed unlisted files ->
+    finish). The caller is expected to call ``progress.complete('config')`` when
+    this returns, which also covers the early-return paths below.
     """
     import xbmc
     from resources.libs.common.config import CONFIG
     from resources.libs.common import logging
-    from resources.libs.downloader import Downloader
     from resources.libs.common import tools
+
+    report = _ConfigProgress(progress)
 
     result = {'applied': False, 'skin_touched': False, 'version': None}
     cfg = (manifest or {}).get('config') or {}
@@ -268,13 +368,7 @@ def apply_config_pack(manifest, fresh=False, background=True):
     tools.ensure_folders(CONFIG.PACKAGES)
     zip_path = os.path.join(CONFIG.PACKAGES, 'build_config.zip')
     tools.remove_file(zip_path)
-    try:
-        Downloader(progress_dialog_bg=background).download(url, zip_path)
-    except Exception as e:
-        logging.log("[config_apply] config download failed: {0}".format(e), level=xbmc.LOGERROR)
-        return result
-    xbmc.sleep(300)
-    if not os.path.exists(zip_path) or os.path.getsize(zip_path) == 0:
+    if not _download_config_zip(url, zip_path, background, report):
         logging.log("[config_apply] config zip missing/empty after download", level=xbmc.LOGERROR)
         return result
 
@@ -285,6 +379,7 @@ def apply_config_pack(manifest, fresh=False, background=True):
             logging.log("[config_apply] sha256 mismatch (want {0}, got {1}); aborting".format(want_sha, got), level=xbmc.LOGERROR)
             tools.remove_file(zip_path)
             return result
+    report.done('verify')
 
     work_dir = os.path.join(CONFIG.PACKAGES, 'build_config_extracted')
     shutil.rmtree(work_dir, ignore_errors=True)
@@ -292,7 +387,12 @@ def apply_config_pack(manifest, fresh=False, background=True):
     try:
         import zipfile
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(work_dir)
+            members = zf.namelist()
+            total_members = len(members)
+            for i, member in enumerate(members, 1):
+                zf.extract(member, work_dir)
+                report.step('extract', i, total_members)
+        report.done('extract')
     except Exception as e:
         logging.log("[config_apply] failed to extract config zip: {0}".format(e), level=xbmc.LOGERROR)
         tools.remove_file(zip_path)
@@ -307,12 +407,15 @@ def apply_config_pack(manifest, fresh=False, background=True):
         return result
 
     active_skin = xbmc.getSkinDir()
-    for spec in policy.get('files', []):
+    policy_files = policy.get('files', [])
+    total_policy = len(policy_files)
+    for i, spec in enumerate(policy_files, 1):
+        applied_path = None
         try:
             applied_path = _apply_file(spec, work_dir, fresh)
         except Exception as e:
             logging.log("[config_apply] failed applying {0}: {1}".format(spec.get('dest'), e), level=xbmc.LOGERROR)
-            continue
+        report.step('apply', i, total_policy)   # counted whether it applied, skipped or failed
         if applied_path:
             result['applied'] = True
             d = spec.get('dest', '')
@@ -320,37 +423,47 @@ def apply_config_pack(manifest, fresh=False, background=True):
             # (guisettings lookandfeel.skin) or the active skin's own settings.
             if d.endswith('guisettings.xml') or (active_skin and active_skin in d):
                 result['skin_touched'] = True
+    report.done('apply')
 
     # Automatically backup/copy files that were forgotten to be configured in config_policy.json
     # (provided they do not exist on the target)
-    handled_srcs = {spec.get('src', '').replace('/', os.sep) for spec in policy.get('files', [])}
-    for root, dirs, files in os.walk(work_dir):
-        for file in files:
+    handled_srcs = {spec.get('src', '').replace('/', os.sep) for spec in policy_files}
+
+    # Collect the unlisted files first so the seeding step has an exact total.
+    unlisted = []
+    for root, dirs, walk_files in os.walk(work_dir):
+        for file in walk_files:
             if file == POLICY_NAME:
                 continue
             full_src_path = os.path.join(root, file)
             rel_path = os.path.relpath(full_src_path, work_dir)
-
             if rel_path not in handled_srcs:
-                dest_rel = rel_path.replace(os.sep, '/')
-                dest_rel_userdata = 'userdata/' + dest_rel
-                dest_path = _home_path(dest_rel_userdata)
+                unlisted.append((full_src_path, rel_path))
 
-                if not os.path.exists(dest_path):
-                    try:
-                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                        shutil.copyfile(full_src_path, dest_path)
-                        result['applied'] = True
-                        if dest_rel.endswith('guisettings.xml') or (active_skin and active_skin in dest_rel):
-                            result['skin_touched'] = True
-                        logging.log("[config_apply] unlisted file auto-seeded: {0} -> {1}".format(dest_rel, dest_path))
-                    except Exception as e:
-                        logging.log("[config_apply] failed auto-seeding unlisted {0}: {1}".format(dest_rel, e), level=xbmc.LOGERROR)
+    total_unlisted = len(unlisted)
+    for i, (full_src_path, rel_path) in enumerate(unlisted, 1):
+        dest_rel = rel_path.replace(os.sep, '/')
+        dest_rel_userdata = 'userdata/' + dest_rel
+        dest_path = _home_path(dest_rel_userdata)
+
+        if not os.path.exists(dest_path):
+            try:
+                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                shutil.copyfile(full_src_path, dest_path)
+                result['applied'] = True
+                if dest_rel.endswith('guisettings.xml') or (active_skin and active_skin in dest_rel):
+                    result['skin_touched'] = True
+                logging.log("[config_apply] unlisted file auto-seeded: {0} -> {1}".format(dest_rel, dest_path))
+            except Exception as e:
+                logging.log("[config_apply] failed auto-seeding unlisted {0}: {1}".format(dest_rel, e), level=xbmc.LOGERROR)
+        report.step('seed', i, total_unlisted)
+    report.done('seed')
 
     _run_cleanup(policy)
 
     CONFIG.set_setting('config_applied_version', version)
     shutil.rmtree(work_dir, ignore_errors=True)
     tools.remove_file(zip_path)
+    report.done('finish')
     logging.log("[config_apply] applied config {0} (fresh={1})".format(version, fresh), level=xbmc.LOGINFO)
     return result

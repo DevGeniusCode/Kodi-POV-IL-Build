@@ -88,13 +88,15 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/menus/navigator.py",
-        "marker": "# WIZARD_POV_FANART_SHADOW_v3",
+        "marker": "# WIZARD_POV_FANART_SHADOW_v4",
         "anchor": "\t\t\t\t\tlistitem.setArt({'icon': icon, 'poster': icon, 'thumb': icon, 'fanart': fanart, 'banner': icon})",
         "action": "append_after",
         "hook": (
             "\t\t\t\t\t# WIZARD: Sequential property override to preserve fanart\n"
-            "\t\t\t\t\tif 'genres/' in str(item_get('iconImage') or ''):\n"
-            "\t\t\t\t\t\tlistitem.setArt({'fanart': icon})\n"
+            "\t\t\t\t\tif contents and isinstance(contents, list) and len(contents) > 0:\n"
+            "\t\t\t\t\t\tfirst_icon = contents[0].get('iconImage', '') if isinstance(contents[0], dict) else ''\n"
+            "\t\t\t\t\t\tif 'genres/' in str(first_icon):\n"
+            "\t\t\t\t\t\t\tlistitem.setArt({'fanart': icon})\n"
         )
     },
     {
@@ -140,44 +142,6 @@ PATCH_CONFIG = [
         "hook": (
             "\t\t\t# WIZARD: Variable shadowing for Hebrew breadcrumb\n"
             "\t\t\tlist_name = '%s: %s' % (('סרטי אנימה' if menu_type == 'movie' else 'סדרות אנימה'), genre)\n"
-        )
-    },
-    {
-        "id": "pov_genre_dict_main_loop_translation",
-        "name": "POV Genre Dict Main Loop Translation",
-        "description": "Translates genre dictionary keys in-memory before looping (covers both genres and anime_genres).",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/menus/navigator.py",
-        "marker": "# WIZARD_POV_GENRE_DICT_MAIN_LOOP_v2",
-        "anchor": "\t\tfor genre, value in sorted(genre_list.items()):",
-        "action": "prepend_before",
-        "hook": (
-            "\t\t# WIZARD: Translate genre dict keys to Hebrew in memory\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tsys.path.append(_p) if _p not in sys.path else None\n"
-            "\t\timport pov_translations\n"
-            "\t\tgenre_list = pov_translations.translate_genres(genre_list)\n"
-        )
-    },
-    {
-        "id": "pov_genre_dict_multiselect_translation",
-        "name": "POV Genre Dict Multiselect Translation",
-        "description": "Translates genre dictionary keys in-memory inside the multiselect dialog view.",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/menus/navigator.py",
-        "marker": "# WIZARD_POV_GENRE_DICT_MULTISELECT_v2",
-        "anchor": "\t\tgenre_list = dict(sorted(json.loads(genre_list).items()))",
-        "action": "append_after",
-        "hook": (
-            "\t\t# WIZARD: Translate genre dict keys to Hebrew in multiselect memory\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tsys.path.append(_p) if _p not in sys.path else None\n"
-            "\t\timport pov_translations\n"
-            "\t\tgenre_list = pov_translations.translate_genres(genre_list)\n"
         )
     },
     {

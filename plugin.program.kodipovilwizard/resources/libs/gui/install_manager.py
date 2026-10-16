@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Unified UI Install Manager.
+File: resources/libs/gui/install_manager.py
 
 A custom WindowXMLDialog that visualises the continuous installation flow for both
 Phase 1 (Manifest/internal addons) and Phase 2 (Headless/3rd-party content addons).
@@ -15,15 +16,22 @@ Key architectural features:
   * Thread Safety: Worker threads ONLY mutate a plain-Python state list (under a lock). The
     window's own thread is the only one touching Kodi controls via _refresh(), allowing
     infinite scrolling/sliding window views.
+  * Shared Progress: every state change made by the download/extract workers is folded into
+    a shared ProvisionProgress tracker, per PHASE (so injecting Phase 2 jobs later can never
+    dilute Phase 1's share). The window's overall bar READS the tracker; the startup banner is
+    written by the tracker's own ticker. Workers never touch the banner or any control.
+  * No native dialogs: download/extract use the dialog-free primitives from
+    headless_installer (download_zip / extract_zip). Nothing here ever calls InstallAddon.
 
 Skin: resources/skins/Default/1080i/DialogModularInstall.xml. Control ids per
 row i: base = 1000 + i*10 -> base(group) +1 anim icon, +2 glyph, +3 name,
 +4 status, +5 progress track, +6 progress fill.
+Overall progress: 502 = track (image), 500 = fill (image, width set from Python),
+501 = percent label. Header 200 / subheader 201 are static text.
 """
 
 import os
 import threading
-import zipfile
 
 try:
     import queue as _queue
@@ -37,63 +45,39 @@ from resources.libs.common.config import CONFIG
 from resources.libs.common import logging
 from resources.libs.common import tools
 from resources.libs import config_apply
+from resources.libs.headless_installer import download_zip as _download
+from resources.libs.headless_installer import extract_zip as _extract
+
+# A missing / broken progress helper must never knock the window out and push the
+# installer onto a fallback path: degrade to "no overall percentage" instead.
+try:
+    from resources.libs.provision_progress import ProvisionProgress
+except Exception:  # pragma: no cover
+    ProvisionProgress = None
 
 MAX_ROWS = 16                 # must match the generated DialogModularInstall.xml
 BAR_WIDTH = 620               # px, must match the XML progress track width
 MAX_PARALLEL_DOWNLOADS = 3
 
+# Overall progress controls in DialogModularInstall.xml (the ones that drive the
+# same 0..99 value as the top-right banner):
+#   502 = track  (image, static)
+#   500 = fill   (image; its WIDTH is set here, 0..OVERALL_BAR_WIDTH)
+#   501 = label  (text, "NN%")
+OVERALL_BAR_ID = 500
+OVERALL_LABEL_ID = 501
+OVERALL_BAR_WIDTH = 1160      # px, must match the XML track (id 502) width
+
 COLOR_DOWNLOAD = 'FF1E88E5'   # blue
 COLOR_INSTALL = 'FF43A047'    # green
 
 
-def _download(url, dest, on_progress, should_abort):
-    """Stream a url to dest, reporting integer percent via on_progress(pct).
-    Returns True on a non-empty file. Mirrors Downloader's loop but reports to
-    our UI instead of popping its own dialog."""
-    try:
-        folder = os.path.split(dest)[0]
-        if folder and not os.path.exists(folder):
-            os.makedirs(folder)
-        response = tools.open_url(url, stream=True)
-        if not response:
-            return False
-        total = response.headers.get('content-length')
-        with open(dest, 'wb') as f:
-            if total is None:
-                f.write(response.content)
-                on_progress(100)
-            else:
-                total = int(total)
-                downloaded = 0
-                for chunk in response.iter_content(chunk_size=256 * 1024):
-                    if should_abort():
-                        return False
-                    if not chunk:
-                        continue
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    on_progress(min(100, int(downloaded * 100 / total)) if total else 0)
-        return os.path.exists(dest) and os.path.getsize(dest) > 0
-    except Exception as e:
-        logging.log("[InstallManager] download error for {0}: {1}".format(url, e), level=xbmc.LOGERROR)
-        return False
-
-
-def _extract(zip_path, dest_dir, on_progress):
-    """Extract a single-addon zip into dest_dir reporting (current, total) files.
-    Single-addon zips are rooted at the addon id and contain no userdata, so a
-    plain extractall (no KEEP* build logic, no competing dialog) is correct."""
-    try:
-        with zipfile.ZipFile(zip_path, 'r') as zf:
-            members = zf.namelist()
-            total = len(members) or 1
-            for i, member in enumerate(members, 1):
-                zf.extract(member, dest_dir)
-                on_progress(i, total)
-        return True
-    except Exception as e:
-        logging.log("[InstallManager] extract error for {0}: {1}".format(zip_path, e), level=xbmc.LOGERROR)
-        return False
+class _NullProgress(object):
+    """Stand-in when provision_progress.py is unavailable."""
+    def set_fraction(self, *a, **k): pass
+    def tick(self): pass
+    def percent(self): return 0
+    def publish(self): return 0
 
 
 class ModularInstallDialog(xbmcgui.WindowXMLDialog):
@@ -105,6 +89,7 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
         self._installed = []
         self._abort = False
         self._done = False
+        self._queue_closed = False
         self._monitor = xbmc.Monitor()
 
         self._dl_queue = _queue.Queue()
@@ -113,7 +98,15 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
         self._dummy_pause_idx = None
         self._orchestrator_func = kwargs.get('orchestrator_func')
 
-    def append_to_queue(self, new_items):
+        tracker = kwargs.get('progress')
+        if tracker is None:
+            try:
+                tracker = ProvisionProgress() if ProvisionProgress is not None else _NullProgress()
+            except Exception:
+                tracker = _NullProgress()
+        self._progress = tracker
+
+    def append_to_queue(self, new_items, phase='manifest'):
         with self._lock:
             start_idx = len(self.jobs)
             for i, j in enumerate(new_items):
@@ -121,18 +114,30 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
                 j.setdefault('state', 'pending')
                 j.setdefault('status', 'ממתין...')
                 j.setdefault('progress', 0)
+                j.setdefault('phase', phase)
                 self.jobs.append(j)
                 self._dl_queue.put(start_idx + i)
+            self._sync_progress_locked()
 
     def mark_all_jobs_added(self):
-        # Poison pills to gracefully exit the workers once queue is empty
+        # Poison pills to gracefully exit the workers once queue is empty.
+        # Idempotent: the orchestrator calls it, and run() calls it again as a
+        # safety net if the orchestrator died before getting there.
+        with self._lock:
+            if self._queue_closed:
+                return
+            self._queue_closed = True
         for _ in range(MAX_PARALLEL_DOWNLOADS):
             self._dl_queue.put(-1)
 
     def wait_for_queue_empty(self):
         while not (self._abort or self._monitor.abortRequested()):
             with self._lock:
-                active = any(j.get('state') in ('pending', 'downloading', 'installing')
+                # 'downloaded' = downloaded, still waiting for the extractor. It
+                # must count as active, otherwise the orchestrator can move on to
+                # Phase 2 before the last Phase 1 addons (e.g. the repositories the
+                # resolver reads) have actually been extracted.
+                active = any(j.get('state') in ('pending', 'downloading', 'downloaded', 'installing')
                              for j in self.jobs if j.get('id') != 'resolver')
             if not active:
                 break
@@ -151,7 +156,8 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
                 'state': 'downloading',
                 'status': 'מנתח מאגרים...',
                 'progress': 100,
-                'type': 'system'
+                'type': 'system',
+                'phase': 'resolve',
             })
 
     def remove_resolution_pause(self):
@@ -163,10 +169,50 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
     def _set(self, idx, **kw):
         with self._lock:
             self.jobs[idx].update(kw)
+            self._sync_progress_locked()
 
     def _snapshot(self):
         with self._lock:
             return [dict(j) for j in self.jobs]
+
+    # ---- progress folding (called by workers; pure state, no GUI) -------- #
+    @staticmethod
+    def _job_weight(job):
+        """0..100 progress for one job: download = first half, extract = second half."""
+        state = job.get('state', 'pending')
+        if state in ('success', 'failed'):
+            return 100.0
+        try:
+            pct = max(0, min(100, int(job.get('progress', 0) or 0)))
+        except (TypeError, ValueError):
+            pct = 0
+        if state == 'downloading':
+            return pct / 2.0
+        if state == 'downloaded':
+            return 50.0
+        if state == 'installing':
+            return 50.0 + pct / 2.0
+        return 0.0
+
+    def _sync_progress_locked(self):
+        """Fold the job list into the shared tracker BY PHASE. The caller holds
+        self._lock. A phase's own job count is fixed once its jobs are injected,
+        so later phases can never dilute (or reverse) what an earlier one earned.
+        The 'resolver' pseudo-job is skipped: it is a UI placeholder, represented
+        by the 'resolve' phase's own indeterminate creep in the tracker."""
+        totals = {}
+        for j in self.jobs:
+            if j.get('id') == 'resolver':
+                continue
+            phase = j.get('phase', 'manifest')
+            weight, count = totals.get(phase, (0.0, 0))
+            totals[phase] = (weight + self._job_weight(j), count + 1)
+        for phase, (weight, count) in totals.items():
+            if count:
+                try:
+                    self._progress.set_fraction(phase, weight / (count * 100.0))
+                except Exception:
+                    pass
 
     # ---- rendering (GUI thread only) ------------------------------------ #
     def onInit(self):
@@ -191,47 +237,42 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
             return '[COLOR FFFFFFFF]⌛[/COLOR]'   # hourglass (static)
         return '[COLOR 88FFFFFF]⌛[/COLOR]'       # pending hourglass (dim)
 
+    @staticmethod
+    def _set_overall_bar(ctrl, pct):
+        """Draw pct (0..100) on the overall bar control. Works for either skin
+        style: a real ControlProgress (setPercent) or, as shipped in the XML, an
+        image whose width is the fill (same technique as the per-row bars)."""
+        if hasattr(ctrl, 'setPercent'):
+            ctrl.setPercent(float(pct))
+        else:
+            ctrl.setWidth(max(1, int(OVERALL_BAR_WIDTH * pct / 100.0)))
+
+    def _draw_overall(self):
+        """Overall bar + label: READ from the shared tracker (monotonic 0..99),
+        the same value the startup banner shows."""
+        try:
+            self._progress.tick()
+            pct = max(0, min(100, int(self._progress.percent())))
+        except Exception:
+            return
+        self.setProperty('OverallProgress', str(pct))   # $INFO[Window.Property(OverallProgress)]
+        bar_ctrl = self._ctrl(OVERALL_BAR_ID)
+        if bar_ctrl is not None:
+            try:
+                self._set_overall_bar(bar_ctrl, pct)
+            except Exception:
+                pass
+        label_ctrl = self._ctrl(OVERALL_LABEL_ID)
+        if label_ctrl is not None:
+            try:
+                label_ctrl.setLabel("{0}%".format(pct))
+            except Exception:
+                pass
+
     def _refresh(self):
         jobs = self._snapshot()
 
-        # --- Calculate and update overall progress percentage (Overall Progress) ---
-        if jobs:
-            total_weight = len(jobs) * 100.0
-            current_weight = 0.0
-
-            for j in jobs:
-                state = j.get('state', 'pending')
-                if state in ('success', 'failed'):
-                    current_weight += 100.0
-                elif state == 'downloading':
-                    # Half weight for the download stage (0-50%)
-                    current_weight += (j.get('progress', 0) / 2.0)
-                elif state == 'downloaded':
-                    current_weight += 50.0
-                elif state == 'installing':
-                    # Half weight for the installation/extraction stage (50-100%)
-                    current_weight += 50.0 + (j.get('progress', 0) / 2.0)
-
-            overall_pct = int((current_weight / total_weight) * 100)
-
-            # 1. Allows using the variable in XML formatting with $INFO[Window.Property(OverallProgress)]
-            self.setProperty('OverallProgress', str(overall_pct))
-
-            # 2. Direct update of GUI controls:
-            overall_bar_id = 500   # The ID of the overall progress bar (Progress Control)
-            overall_label_id = 501 # The ID of the text displaying the percentage (Label Control)
-
-            try:
-                bar_ctrl = self._ctrl(overall_bar_id)
-                if bar_ctrl:
-                    bar_ctrl.setPercent(overall_pct)
-
-                label_ctrl = self._ctrl(overall_label_id)
-                if label_ctrl:
-                    label_ctrl.setLabel("{0}%".format(overall_pct))
-            except Exception:
-                pass
-        # ---------------------------------------------------------------
+        self._draw_overall()
 
         # Sliding window: keep the active view locked to the first executing job
         first_active = 0
@@ -378,6 +419,16 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
             else:
                 self._set(idx, state='failed', status='ההתקנה נכשלה')
 
+    def _run_orchestrator(self):
+        """Run the caller's orchestrator; if it dies, still close the queue so
+        the workers can exit and the window can never hang forever."""
+        try:
+            self._orchestrator_func(self)
+        except Exception as e:
+            logging.log("[InstallManager] orchestrator error: {0}".format(e), level=xbmc.LOGERROR)
+        finally:
+            self.mark_all_jobs_added()
+
     def run(self):
         self._wait_for_gui()
         self.show()
@@ -393,7 +444,7 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
         inst_thread.start()
 
         if self._orchestrator_func:
-            orch_thread = threading.Thread(target=self._orchestrator_func, args=(self,))
+            orch_thread = threading.Thread(target=self._run_orchestrator)
             orch_thread.daemon = True
             orch_thread.start()
         else:
@@ -416,12 +467,16 @@ class ModularInstallDialog(xbmcgui.WindowXMLDialog):
         return list(self._installed)
 
 
-def run_install_manager(orchestrator_func=None):
-    """Entry point. jobs: list of {id,name,version,zip,sha256}. Returns the
-    list of addon ids that installed successfully. Falls back to raising on a
-    window/load failure so the caller can use the classic path."""
+def run_install_manager(orchestrator_func=None, progress=None):
+    """Entry point. Returns the list of addon ids that installed successfully.
+    Raises on a window/load failure so the caller can use its (dialog-free)
+    fallback.
+
+    `progress` is an optional shared ProvisionProgress; when given, the window's
+    overall bar reads it and the workers' job state is folded into it."""
     dialog = ModularInstallDialog(
-        'DialogModularInstall.xml', CONFIG.ADDON_PATH, 'Default', orchestrator_func=orchestrator_func)
+        'DialogModularInstall.xml', CONFIG.ADDON_PATH, 'Default',
+        orchestrator_func=orchestrator_func, progress=progress)
     try:
         return dialog.run()
     finally:

@@ -13,7 +13,7 @@ ICON_MAP = {
     'Shows_AppleTV.png': 'Animated_AppleTV.gif',
     'Shows_HBO_Max.png': 'Animated_HBO_Max.gif',
     'Shows_Hulu.png': 'Animated_Hulu.gif',
-    'Shows_CW.png': 'Animated_CW.gif'
+    'Shows_CW.png': 'Animated_CW.gif',
     'Shows_FOX.png': 'Animated_FOX.gif',
     'Shows_HBO.png': 'Animated_HBO.gif',
     }

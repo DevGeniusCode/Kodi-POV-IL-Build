@@ -43,6 +43,13 @@ from resources.libs.common import tools
 from resources.libs import skin
 from resources.libs import update
 
+# Optional: a missing/broken progress helper must never crash startup or abort the
+# install -- the banner then simply stays a static "please wait" message.
+try:
+    from resources.libs.provision_progress import ProvisionProgress
+except Exception:
+    ProvisionProgress = None
+
 
 def show_notification():
     note_id, msg = window.split_notify(CONFIG.NOTIFICATION)
@@ -80,12 +87,14 @@ def _make_provisioning_banner():
     is NO global watchdog and nothing to fight. Returns the dialog object, which
     the caller MUST keep a reference to (letting it be garbage-collected would
     close it), or ``None`` if it could not be created.
+
+    It starts at 0%. From then on the ONLY thing that updates it is the shared
+    ProvisionProgress tracker (see _make_provisioning_progress).
     """
     try:
         banner = xbmcgui.DialogProgressBG()
         banner.create(CONFIG.ADDONTITLE, PROVISION_WAIT_MSG_HE)
-        # Indeterminate-ish: keep it near 0 so it never auto-completes/closes.
-        banner.update(1, CONFIG.ADDONTITLE, PROVISION_WAIT_MSG_HE)
+        banner.update(0, CONFIG.ADDONTITLE, PROVISION_WAIT_MSG_HE)
         return banner
     except Exception:
         return None
@@ -97,6 +106,46 @@ def _close_provisioning_banner(banner):
             banner.close()
     except Exception:
         pass
+
+
+def _make_provisioning_progress():
+    """Create the banner and wrap it in the shared, monotonic ProvisionProgress
+    tracker (its ticker thread is the single banner writer and also drives the
+    indeterminate steps: dependency resolution, config apply, finalize).
+
+    Returns (progress_or_None, banner_or_None). Keep BOTH references alive for the
+    whole run. If the tracker is unavailable the plain banner is still shown."""
+    banner = _make_provisioning_banner()
+    if ProvisionProgress is None:
+        return None, banner
+    try:
+        progress = ProvisionProgress(banner, CONFIG.ADDONTITLE, PROVISION_WAIT_MSG_HE)
+        progress.start()
+        return progress, banner
+    except Exception as err:
+        logging.log("[Fresh Build Auto Install] progress tracker unavailable: {0}".format(err),
+                    level=xbmc.LOGWARNING)
+        return None, banner
+
+
+def _progress_call(progress, method, *args):
+    """Call a tracker method; a progress problem must never break the install."""
+    if progress is None:
+        return
+    try:
+        getattr(progress, method)(*args)
+    except Exception:
+        pass
+
+
+def _close_progress(progress, banner):
+    """Bail-out path: stop the tracker AND close the banner."""
+    if progress is not None:
+        try:
+            progress.close()
+        except Exception:
+            pass
+    _close_provisioning_banner(banner)
 
 
 # ---------------------------------------------------------------------------
@@ -288,17 +337,21 @@ def fresh_build_auto_install_if_needed():
     build_name = CONFIG.BUILDNAME_DEFAULT
     build_version = CONFIG.BUILDVERSION_DEFAULT
 
-    # Persistent "please wait" banner for the whole provisioning. Stays at the top
-    # of Kodi, surviving every install dialog/popup, until setup ends (Kodi
-    # closes) or we bail to resume next launch.
-    wait_banner = _make_provisioning_banner()
+    # Persistent "please wait" banner for the whole provisioning, driven by the
+    # shared ProvisionProgress tracker so it moves in lockstep with the
+    # install window's overall bar (same monotonic 0..99 value). It stays at the
+    # top of Kodi, surviving every dialog/popup, until setup ends (Kodi closes) or
+    # we bail to resume next launch. Keep BOTH references alive.
+    progress, wait_banner = _make_provisioning_progress()
     try:
         tools.ensure_folders(CONFIG.PACKAGES)
         logging.log(
             "[Fresh Build Auto Install] Modular fresh install / resume of {0} v{1}".format(
                 build_name, build_version), level=xbmc.LOGINFO)
 
-        ModularUpdater(background=False).run_fresh_install()
+        updater = ModularUpdater(background=False)
+        updater.provision_progress = progress
+        updater.run_fresh_install()
         xbmc.sleep(500)
 
         # Sanity gate: the build engine must be on disk AND run_fresh_install
@@ -309,14 +362,18 @@ def fresh_build_auto_install_if_needed():
             logging.log(
                 "[Fresh Build Auto Install] build engine missing after install; "
                 "will resume next launch.", level=xbmc.LOGERROR)
-            _close_provisioning_banner(wait_banner)
+            _close_progress(progress, wait_banner)
             return False
         if not ModularUpdater.is_provisioned():
             logging.log(
                 "[Fresh Build Auto Install] provisioning did not complete (marker "
                 "absent); will resume next launch.", level=xbmc.LOGWARNING)
-            _close_provisioning_banner(wait_banner)
+            _close_progress(progress, wait_banner)
             return False
+
+        # Everything from here is the 'finalize' slice of the progress bar
+        # (media assets + runtime patching).
+        _progress_call(progress, 'begin_indeterminate', 'finalize')
 
         db.fix_metas()
 
@@ -372,6 +429,11 @@ def fresh_build_auto_install_if_needed():
             logging.log("[Fresh Build Auto Install] PatchEngine run failed: {0}".format(_patch_err),
                         level=xbmc.LOGERROR)
 
+        _progress_call(progress, 'complete', 'finalize')
+        # Stop the ticker (the value settles at 99%). The banner itself STAYS UP
+        # through the force-close countdown below -- Kodi tears it down on exit.
+        _progress_call(progress, 'finish')
+
         # Arm the first-boot stabilizer: the NEXT boot (the first time the
         # FENtastic home renders against the freshly installed POV) is the race
         # window. The marker makes that boot warm POV up before loading widgets.
@@ -389,7 +451,7 @@ def fresh_build_auto_install_if_needed():
             "[Fresh Build Auto Install] Failed: {0}".format(err),
             level=xbmc.LOGERROR,
         )
-        _close_provisioning_banner(wait_banner)
+        _close_progress(progress, wait_banner)
         return False
 
 
@@ -503,7 +565,6 @@ def wait_for_gui_ready(timeout=90):
 check_for_video()
 # Ensure that any needed folders are created
 tools.ensure_folders()
-sync_pov_language_file()
 
 # Ensure that the wizard's name matches its folder
 check.check_paths()
@@ -727,3 +788,5 @@ def sync_pov_language_file():
             logging.log('[Language Sync] Source file not found: {0}'.format(src_file), level=xbmc.LOGWARNING)
     except Exception as err:
         logging.log('[Language Sync] Failed to copy language file: {0}'.format(err), level=xbmc.LOGERROR)
+
+sync_pov_language_file()

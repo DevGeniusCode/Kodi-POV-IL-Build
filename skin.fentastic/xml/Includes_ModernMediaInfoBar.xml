@@ -177,6 +177,14 @@
         <value>#$INFO[ListItem.Property(top250)] $VAR[ModernLblTop250]</value>
     </variable>
 
+    <!-- IL Release state colours -->
+    <variable name="ModernReleaseColorVar">
+        <value condition="String.IsEqual(ListItem.Property(IL_release_state),today)">FF6BD66B</value>
+        <value condition="String.IsEqual(ListItem.Property(IL_release_state),soon)">FFF0B84A</value>
+        <value condition="String.IsEqual(ListItem.Property(IL_release_state),later)">FFE5594F</value>
+        <value condition="String.IsEqual(ListItem.Property(IL_release_state),theaters)">FF00BFFF</value>
+        <value>FFCFCFCF</value>
+    </variable>
 
     <!-- ================================================================== -->
     <!-- 4. PARENTS GUIDE (POV addon, plugin.video.pov)                      -->
@@ -584,6 +592,19 @@
                         <param name="text_offset" value="$PARAM[chip_offset]"/>
                         <param name="textcolor" value="$PARAM[textcolor]"/>
                         <param name="max_width" value="$PARAM[chip_max]"/>
+                    </include>
+
+                    <!-- Release Status (movies only) -->
+                    <include content="ModernInfoChip">
+                        <param name="visible" value="$EXP[ModernIsMovie] + !String.IsEmpty(ListItem.Property(IL_release))"/>
+                        <param name="label" value="$INFO[ListItem.Property(IL_release)]"/>
+                        <param name="height" value="100%"/>
+                        <param name="font" value="$PARAM[font]"/>
+                        <param name="bg_color" value="$PARAM[chip_bg]"/>
+                        <param name="bg_texture" value="$PARAM[chip_texture]"/>
+                        <param name="bg_border" value="$PARAM[chip_border]"/>
+                        <param name="text_offset" value="$PARAM[chip_offset]"/>
+                        <param name="textcolor" value="$VAR[ModernReleaseColorVar]"/>
                     </include>
                 </control>
             </control>
