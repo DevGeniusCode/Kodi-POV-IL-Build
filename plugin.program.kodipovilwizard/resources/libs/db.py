@@ -24,10 +24,7 @@ import xbmcvfs
 import glob
 import os
 import re
-try:  # Python 3
-    import zipfile
-except ImportError:  # Python 2
-    from resources.libs import zipfile
+import zipfile
 
 from sqlite3 import dbapi2 as database
 
@@ -94,13 +91,17 @@ def latest_db(db):
         
         
 # KODI-RD-IL - Force addon updates FAST method
-def forceUpdate():
+def forceUpdate(startup=False):
     if CONFIG.FORCEUPDATEFAST_ONSTARTUP_NOTIFY == "true":
         xbmc.sleep(4000)
         logging.log_notify(CONFIG.ADDONTITLE,
                            '[COLOR {0}]מחפש עדכוני הרחבות...[/COLOR]'.format(CONFIG.COLOR2))
     xbmc.executebuiltin('UpdateAddonRepos()')
-    xbmc.executebuiltin('UpdateLocalAddons()')
+    # Kodi already discovers the local addon graph while starting. Scanning it
+    # again competes with the first widget wave. Install/update/repair paths
+    # still scan explicitly when they actually change files or enable addons.
+    if not startup:
+        xbmc.executebuiltin('UpdateLocalAddons()')
 ############################################################################
 
 def force_check_updates(auto=False, over=False):
