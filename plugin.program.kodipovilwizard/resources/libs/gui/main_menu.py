@@ -33,25 +33,10 @@ class MainMenu:
         errors = int(logging.error_checking(count=True))
         errorsfound = str(errors) + ' Error(s) Found' if errors > 0 else 'None Found'
 
-        if CONFIG.AUTOUPDATE == 'Yes':
-            response = tools.open_url(CONFIG.BUILDFILE, check=True)
-
-            if response:
-                ver = check.check_wizard('version')
-                if ver:
-                    if ver > CONFIG.ADDON_VERSION:
-                        directory.add_file(
-                            '{0} [v{1}] [COLOR red][B][UPDATE v{2}][/B][/COLOR]'.format(CONFIG.ADDONTITLE,
-                                                                                        CONFIG.ADDON_VERSION, ver),
-                            {'mode': 'wizardupdate'}, themeit=CONFIG.THEME2)
-                    else:
-                        directory.add_file('{0} [v{1}]'.format(CONFIG.ADDONTITLE, CONFIG.ADDON_VERSION),
-                                           themeit=CONFIG.THEME2)
-            else:
-                directory.add_file('{0} [v{1}]'.format(CONFIG.ADDONTITLE, CONFIG.ADDON_VERSION),
-                                   themeit=CONFIG.THEME2)
-        else:
-            directory.add_file('{0} [v{1}]'.format(CONFIG.ADDONTITLE, CONFIG.ADDON_VERSION), themeit=CONFIG.THEME2)
+        # KODI-POV-IL - the wizard self-updates through ModularUpdater
+        # (manifest.json) now, not the retired build.txt, so just show the
+        # current version (the startup OTA pass bumps it when a new one ships).
+        directory.add_file('{0} [v{1}]'.format(CONFIG.ADDONTITLE, CONFIG.ADDON_VERSION), themeit=CONFIG.THEME2)
         if len(CONFIG.BUILDNAME) > 0:
             version = check.check_build(CONFIG.BUILDNAME, 'version')
             build = '{0} (v{1})'.format(CONFIG.BUILDNAME, CONFIG.BUILDVERSION)
@@ -74,7 +59,7 @@ class MainMenu:
                 directory.add_dir('התקן Umbrella (ניסיוני)', {'mode': 'install', 'action': 'install_umbrella'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
                 ##############################################################################################
                 # KODI-POV-IL ACCOUNT MANAGER PILOT (opt-in; see wizard.install_acctmgr_pilot)
-                directory.add_dir('התקן מחדש Account Manager', {'mode': 'install', 'action': 'install_acctmgr'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
+                directory.add_dir('חיבור שירותים (Account Manager)', {'mode': 'run_acctmgr'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
                 ##############################################################################################
                 
             from resources.libs.gui.build_menu import BuildMenu
@@ -88,8 +73,6 @@ class MainMenu:
         directory.add_dir('התקן בילד', {'mode': 'builds'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
         #if tools.open_url(CONFIG.ADDONFILE, check=True) or os.path.exists(os.path.join(CONFIG.ADDON_PATH, 'resources', 'text', 'addons.json')):
         #    directory.add_dir('Addon Installer', {'mode': 'addons'}, icon=CONFIG.ICONADDONS, themeit=CONFIG.THEME1)
-        # if tools.open_url(CONFIG.YOUTUBEFILE, check=True) and not CONFIG.YOUTUBETITLE == '':
-            # directory.add_dir(CONFIG.YOUTUBETITLE, {'mode': 'youtube'}, icon=CONFIG.ICONYOUTUBE, themeit=CONFIG.THEME1)
         directory.add_dir('תפריט שמירת נתונים', {'mode': 'savedata'}, icon=CONFIG.ICONSAVE, themeit=CONFIG.THEME1)
         ##############################################################################################
         # KODI-RD-IL
@@ -99,8 +82,8 @@ class MainMenu:
         ##############################################################################################
         # if (tools.platform() == 'android' or CONFIG.DEVELOPER == 'true'):
             # directory.add_dir('APK Installer', {'mode': 'apk'}, icon=CONFIG.ICONAPK, themeit=CONFIG.THEME1)
-        # if CONFIG.HIDECONTACT == 'No':
-            # directory.add_file('Contact', {'mode': 'contact'}, icon=CONFIG.ICONCONTACT, themeit=CONFIG.THEME1)
+        if CONFIG.HIDECONTACT == 'No':
+            directory.add_file('Contact', {'mode': 'contact'}, icon=CONFIG.ICONCONTACT, themeit=CONFIG.THEME1)
         directory.add_separator()
         directory.add_dir('תחזוקה', {'mode': 'maint'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
         #directory.add_file('Upload Log File', {'mode': 'uploadlog'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)

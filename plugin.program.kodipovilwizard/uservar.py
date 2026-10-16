@@ -16,23 +16,22 @@ CUSTOM_ART = os.path.join(PATH, 'resources', 'kodi_rd_israel_art')
 #########################################################
 ADDONTITLE = '[COLOR yellow]Kodi POV IL Wizard[/COLOR]'
 BUILDERNAME = '[COLOR yellow]Kodi POV IL[/COLOR]'
-# KODI-RD-IL - Fallback build name. Used by startup.py to populate the
-# 'buildname' setting on APK installs where the user never went through
-# a wizard-driven Fresh Install (so the setting is empty and the whole
-# auto_quick_update path was getting silently no-op'd). Must match the
-# name="..." value in build.txt.
+# KODI-POV-IL - Canonical build NAME. Used by startup.py to populate the
+# 'buildname' setting on APK installs where the user never went through a
+# wizard-driven Fresh Install (so the setting is empty), and as the single build
+# label shown in the Builds menu. Must match the manifest's build name.
 BUILDNAME_DEFAULT = 'Kodi POV IL - FENtastic'
-# KODI-RD-IL - Fallback build VERSION. Used by startup.py to populate
-# the 'buildversion' setting at the same time we populate 'buildname'.
-# Without this, the wizard's build_update_check sees an empty
-# buildversion and thinks every published version is newer ->
-# triggers a destructive full-build-install dialog that wipes the
-# user's connected services. Should be kept aligned with the version
-# we ship in dist/Kodi-POV-IL-FENtastic-test-*.zip.
+# KODI-POV-IL - Canonical build VERSION. This is the single source of truth for
+# the build version under the modular architecture: it is what check.check_build
+# reports, what Fresh Install / the .provisioned marker pin into the
+# 'buildversion' setting, and what the Builds menu displays. (It no longer has
+# anything to do with a monolithic build zip -- those are gone.)
 BUILDVERSION_DEFAULT = '0.1.45'
 EXCLUDES = [ADDON_ID]
-# Text File with build info in it. Please read https://github.com/a4k-openproject/plugin.program.openwizard/wiki/Installing-Builds
-BUILDFILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/build.txt'
+# KODI-POV-IL - build.txt / BUILDFILE has been DELETED. The build is now
+# described entirely by manifest.json (MANIFEST_URL, below); the full install and
+# all updates go through ModularUpdater. There is no monolithic build / quickfix
+# zip and no remote build descriptor any more.
 # How often you would like it to check for build updates in days
 # 0 being every startup of kodi
 UPDATECHECK = 0
@@ -42,56 +41,14 @@ APKFILE = 'http://'
 #########################################################
 # KODI-RD-IL - BUILD SKIN SWITCH
 BUILD_SKIN_SWITCH_IMAGE_URL = 'https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/wizard/assets/build_menu_screenshots/pov_il_splash.jpg'
-# KODI-RD-IL - AUTO QUICK UPDATES
-QUICK_UPDATE_NOTIFICATION_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/notification_files/quick_update.txt'
-# The last ten notes, newest first, same format concatenated. Regenerated from
-# git at every release by tools/build_recent_updates.py -- so it is the text
-# people were actually shown, and it cannot drift from it.
-RECENT_UPDATES_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/notification_files/recent_updates.txt'
-# KODI-RD-IL - AUTO ANDROID/WINDOWS UPDATE
-# WINDOWS SOFTWARE
-LATEST_WINDOWS_VERSION_TEXT_FILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/windows/latest_windows_version.txt'
-WINDOWS_DOWNLOAD_URL = 'https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest/download/Kodi-POV-IL-Setup.exe'
-WINDOWS_INSTALLATION_PATH = "C:\\Program Files\\Kodi POV IL"
-# ANDROID APK
-LATEST_APK_VERSION_TEXT_FILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/apk/latest_apk_version.txt'
-APK_DOWNLOAD_URL = 'https://morantheking.github.io/Kodi-POV-IL/downloads/'
-# Primary package id our side-by-side APK ships under. Keep it the same
-# length as org.xbmc.kodi unless switching to a full from-source Kodi build.
-APK_PACKAGE_ID = 'org.xbmc.povi'
-# Every package id we have ever shipped. The update check treats all of these
-# as "our app" so people on an old org.xbmc.kodirdil build (or the short-lived
-# org.moran.kodi / org.mora.kodi rename attempts) still get the update prompt.
-APK_PACKAGE_IDS = ['org.xbmc.povi', 'org.xbmc.kodi', 'org.xbmc.kodirdil', 'org.moran.kodi', 'org.mora.kodi']
-# APK/Windows releases that must NOT raise the automatic "there is a new
-# version of our app" dialog on start. Everything else about them is normal:
-# the download page serves them, and the manual check in the menu finds and
-# offers them.
-#
-# WHY THIS EXISTS. That dialog fires from startup.py on EVERY start, and its
-# "later" button records nothing -- so a release nobody needs is a prompt at
-# every boot, forever, until the user reinstalls the whole application. A
-# package release is worth that only when the application itself changed. When
-# it carries nothing but a newer pre-loaded build zip -- which hydrates a clean
-# profile and nothing else, since an existing install gets the same content
-# through the ordinary quick update -- an existing user would sit through a
-# full reinstall to arrive at what they already have.
-#
-# NAMED BY TARGET, NOT BY WHO IS INSTALLED, and that is the whole point: this
-# says "nobody needs to be moved to .49", not "leave .48 users alone". So it
-# expires by itself. The day a package release matters -- a Kodi version bump,
-# a signing change, anything in the application -- it simply is not in this
-# list, and everyone including the .48 devices is prompted for it as usual,
-# with nothing to remember to undo.
-NO_AUTO_APP_PROMPT_TARGETS = ['21.3-povil.49']
-APK_DOWNLOADER_CODE = ''
-APK_DOWNLOADER_CODE_IMAGE_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/apk/apk_downloader_code.png'
+# KODI-POV-IL - MODULAR UPDATER (Phase 2/3, manifest-based; replaces the
+# legacy text-file quick_update). Raw manifest.json produced by the new
+# Monorepo CI pipeline. The wizard polls this on startup and updates only
+# the addons whose version moved.
+MANIFEST_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/manifest.json'
+
 #########################################################
 
-# Text File with Youtube Videos urls.  Leave as 'http://' to ignore
-YOUTUBETITLE = ''
-YOUTUBEFILE = 'http://'
-# Text File for addon installer.  Leave as 'http://' to ignore
 ADDONFILE = 'http://'
 # Text File for advanced settings.  Leave as 'http://' to ignore
 ADVANCEDFILE = 'http://'
@@ -111,7 +68,6 @@ ICONMAINT = os.path.join(CUSTOM_ART, 'wizard.jpg')
 ICONSPEED = os.path.join(CUSTOM_ART, 'wizard.jpg')
 ICONAPK = os.path.join(CUSTOM_ART, 'wizard.jpg')
 ICONADDONS = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONYOUTUBE = os.path.join(CUSTOM_ART, 'wizard.jpg')
 ICONSAVE = os.path.join(CUSTOM_ART, 'wizard.jpg')
 ICONTRAKT = os.path.join(CUSTOM_ART, 'wizard.jpg')
 ICONREAL = os.path.join(CUSTOM_ART, 'wizard.jpg')
@@ -149,9 +105,9 @@ THEME6 = u'[COLOR {COLOR_WHITE}]{{}}[/COLOR]'.format(COLOR_WHITE=COLOR_WHITE)
 
 # Message for Contact Page
 # Enable 'Contact' menu item 'Yes' hide or 'No' dont hide
-HIDECONTACT = 'Yes'
+HIDECONTACT = 'No'
 # You can add \n to do line breaks
-CONTACT = 'Thank you for choosing OpenWizard'
+CONTACT = 'ברוכים הבאים! תודה שבחרתם בבילד שלנו.\n\nכדי שתוכלו ליהנות מחוויית צפייה מושלמת,\nלהישאר תמיד מעודכנים בגרסאות האחרונות\nולקבל תמיכה טכנית מהירה לכל שאלה –\nהצטרפו לקהילה הרשמית שלנו!\n\nסרקו את קוד ה-QR באמצעות המכשיר הנייד שלכם והצטרפו אלינו לקהילה בטלגרם.'
 # Images used for the contact window.  http:// for default icon and fanart
 CONTACTICON = os.path.join(ART, 'qricon.jpg')
 CONTACTFANART = 'http://'

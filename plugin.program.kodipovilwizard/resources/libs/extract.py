@@ -23,10 +23,7 @@ import xbmcgui
 import os
 import sys
 import zlib
-try:  # Python 3
-    import zipfile
-except ImportError:  # Python 2
-    from resources.libs import zipfile
+import zipfile
 
 from resources.libs.common.config import CONFIG
 from resources.libs.common import logging

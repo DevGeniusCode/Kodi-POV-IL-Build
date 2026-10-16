@@ -27,68 +27,15 @@ from resources.libs.common.config import CONFIG
 
 
 def wizard_update():
-    from resources.libs import check
+    # KODI-POV-IL - the wizard is updated like any other addon through
+    # ModularUpdater (manifest.json); the legacy build.txt self-update is gone.
+    # The 'wizardupdate' menu mode now just runs a manifest update check.
     from resources.libs.common import logging
-    from resources.libs.common import tools
-    from resources.libs.gui import window
-
-    dialog = xbmcgui.Dialog()
-    progress_dialog = xbmcgui.DialogProgress()
-
-    response = tools.open_url(CONFIG.BUILDFILE, check=True)
-
-    if response:
-        try:
-            wid, ver, zip = check.check_wizard('all')
-        except:
-            return
-        if ver > CONFIG.ADDON_VERSION:
-            # yes = dialog.yesno(CONFIG.ADDONTITLE,
-                                   # '[COLOR {0}]קיימת גרסה עדכנית יותר ל{1}!'.format(CONFIG.COLOR2, CONFIG.ADDONTITLE)
-                                   # +'\n'+'האם ברצונך לעדכן לגרסה [COLOR {0}]v{1}[/COLOR]?[/COLOR]'.format(CONFIG.COLOR1, ver),
-                                   # nolabel='[B][COLOR red]הזכר לי מאוחר יותר[/COLOR][/B]',
-                                   # yeslabel="[B][COLOR springgreen]עדכן את הWizard[/COLOR][/B]")
-            if True:
-                from resources.libs import db
-                from resources.libs.common import tools
-
-                logging.log("[Auto Update Wizard] Installing wizard v{0}".format(ver))
-                # progress_dialog.create(CONFIG.ADDONTITLE, '[COLOR {0}]מוריד עדכון Wizard...'.format(CONFIG.COLOR2)
-                                        # +'\n'+''
-                                        # +'\n'+'אנא המתן[/COLOR]')
-                # logging.log_notify(CONFIG.ADDONTITLE,
-                                   # '[COLOR {0}]מוריד עדכון גרסה לWizard...[/COLOR]'.format(CONFIG.COLOR2))
-                lib = os.path.join(CONFIG.PACKAGES, '{0}-{1}.zip'.format(CONFIG.ADDON_ID, ver))
-                try:
-                    os.remove(lib)
-                except:
-                    pass
-                from resources.libs.downloader import Downloader
-                from resources.libs import extract
-                #####################################################
-                # KODI-RD-IL
-                # Downloader().download(zip, lib)
-                Downloader(progress_dialog_bg=True).download(zip, lib)
-                #####################################################
-                xbmc.sleep(2000)
-                # progress_dialog.update(0, '\n'+"Installing {0} update".format(CONFIG.ADDONTITLE))
-                # percent, errors, error = extract.all(lib, CONFIG.ADDONS, True)
-                percent, errors, error = extract.all(lib, CONFIG.ADDONS, True, progress_dialog_bg=True)
-                # progress_dialog.close()
-                xbmc.sleep(1000)
-                # db.force_check_updates(auto=True, over=True)
-                xbmc.sleep(1000)
-                logging.log_notify(CONFIG.ADDONTITLE,
-                                   '[COLOR {0}]הWizard עודכן בהצלחה![/COLOR]'.format(CONFIG.COLOR2))
-                logging.log("[Auto Update Wizard] Wizard updated to v{0}".format(ver))
-                # tools.remove_file(os.path.join(CONFIG.ADDON_DATA, 'settings.xml'))
-                #window.show_save_data_settings()
-            else:
-                logging.log("[Auto Update Wizard] Install New Wizard Ignored: {0}".format(ver))
-        else:
-            logging.log("[Auto Update Wizard] No New Version v{0}".format(ver))
-    else:
-        logging.log("[Auto Update Wizard] Url for wizard file not valid: {0}".format(CONFIG.BUILDFILE))
+    try:
+        from resources.libs.modular_updater import ModularUpdater
+        ModularUpdater(background=False).run_update_check()
+    except Exception as err:
+        logging.log("[Wizard Update] modular update failed: {0}".format(err), level=xbmc.LOGERROR)
 
 
 def addon_updates(do=None):

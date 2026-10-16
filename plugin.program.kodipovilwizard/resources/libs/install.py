@@ -23,12 +23,10 @@ import xbmcvfs
 
 import glob
 import os
-import re
 import shutil
 
 from resources.libs.common.config import CONFIG
 from resources.libs.common import logging
-
 
 
 ###########################
@@ -37,328 +35,301 @@ from resources.libs.common import logging
 
 def backup_fentasticdata():
     try:
-    
         # Verify that FENtastic + Helper addon is installed.
         isFENtasticExists = xbmc.getCondVisibility('System.HasAddon(skin.fentastic)') and xbmc.getCondVisibility('System.HasAddon(script.fentastic.helper)')
-        logging.log(f"Custom KODI_RD_ISRAEL LOG: BEFORE Wipe - Is CONFIG.KEEPFENTASTICDATA Enabled: {CONFIG.KEEPFENTASTICDATA} | isFENtasticExists: {isFENtasticExists}")
+        keep_enabled = getattr(CONFIG, 'KEEPFENTASTICDATA', 'false') == 'true'
+        logging.log(f"[Install/Wipe] BEFORE Wipe - Is KEEPFENTASTICDATA Enabled: {keep_enabled} | isFENtasticExists: {isFENtasticExists}")
 
-        if CONFIG.KEEPFENTASTICDATA == 'true' and isFENtasticExists:
+        if keep_enabled and isFENtasticExists:
 
             # Helper .db files directory Path
             fentastic_helper_db_files_dir = os.path.join(os.path.abspath(CONFIG.ADDON_DATA), 'script.fentastic.helper')
-            logging.log(f"Custom KODI_RD_ISRAEL LOG: FENtastic Helper .db files SRC: {fentastic_helper_db_files_dir}")
+            logging.log(f"[Install/Wipe] FENtastic Helper .db files SRC: {fentastic_helper_db_files_dir}")
             
             # My_Builds/fentastic_helper_db_files directory Path        
             kodi_my_builds_fentastic_helper_db_files_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', 'fentastic_helper_db_files')
-            logging.log(f"Custom KODI_RD_ISRAEL LOG: FENtastic Helper .db files DEST: {kodi_my_builds_fentastic_helper_db_files_dir}")
+            logging.log(f"[Install/Wipe] FENtastic Helper .db files DEST: {kodi_my_builds_fentastic_helper_db_files_dir}")
             
             # Create the destination directory if it does not exist
             os.makedirs(kodi_my_builds_fentastic_helper_db_files_dir, exist_ok=True)
             
             # Copy all FENtastic helper .db files to My_Builds/fentastic_helper_db_files dir for temp location - before wipe
-            for item in os.listdir(fentastic_helper_db_files_dir):
-                if item.endswith(".db"):
-                    src_path = os.path.join(fentastic_helper_db_files_dir, item)
-                    dst_path = os.path.join(kodi_my_builds_fentastic_helper_db_files_dir, item)
-                    shutil.copy2(src_path, dst_path)
-                    logging.log(f"Custom KODI_RD_ISRAEL LOG: Copying FENtastic helper .db file {item} to {dst_path}")
+            if os.path.exists(fentastic_helper_db_files_dir):
+                for item in os.listdir(fentastic_helper_db_files_dir):
+                    if item.endswith(".db"):
+                        src_path = os.path.join(fentastic_helper_db_files_dir, item)
+                        dst_path = os.path.join(kodi_my_builds_fentastic_helper_db_files_dir, item)
+                        shutil.copy2(src_path, dst_path)
+                        logging.log(f"[Install/Wipe] Copying FENtastic helper .db file {item} to {dst_path}")
 
             ######################################################################################################################
             
             # FENtastic skin XMLs files directory Path
             fentastic_skin_xmls_files_dir = os.path.join(os.path.abspath(CONFIG.ADDONS), 'skin.fentastic', 'xml')
-            logging.log(f"Custom KODI_RD_ISRAEL LOG: FENtastic skin XMLs files SRC: {fentastic_skin_xmls_files_dir}")
-            
-            # My_Builds/fentastic_skin_xmls_files directory Path        
+            logging.log(f"[Install/Wipe] FENtastic skin XMLs files SRC: {fentastic_skin_xmls_files_dir}")
+
+            # My_Builds/fentastic_skin_xmls_files directory Path
             kodi_my_builds_fentastic_skin_xmls_files_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', 'fentastic_skin_xmls_files')
-            logging.log(f"Custom KODI_RD_ISRAEL LOG: FENtastic skin XMLs files DEST: {kodi_my_builds_fentastic_skin_xmls_files_dir}")
-            
+            logging.log(f"[Install/Wipe] FENtastic skin XMLs files DEST: {kodi_my_builds_fentastic_skin_xmls_files_dir}")
+
             # Create the destination directory if it does not exist
             os.makedirs(kodi_my_builds_fentastic_skin_xmls_files_dir, exist_ok=True)
-            
+
             # Copy only .xml files starting with the name "script-fentastic-" to My_Builds/fentastic_skin_xmls_files dir for temp location - before wipe
-            for item in os.listdir(fentastic_skin_xmls_files_dir):
-                if item.startswith("script-fentastic-") and item.endswith(".xml"):
-                    src_path = os.path.join(fentastic_skin_xmls_files_dir, item)
-                    dst_path = os.path.join(kodi_my_builds_fentastic_skin_xmls_files_dir, item)
-                    shutil.copy2(src_path, dst_path)
-                    logging.log(f"Custom KODI_RD_ISRAEL LOG: Copying FENtastic skin XML file {item} to {dst_path}")
-                
+            if os.path.exists(fentastic_skin_xmls_files_dir):
+                for item in os.listdir(fentastic_skin_xmls_files_dir):
+                    if item.startswith("script-fentastic-") and item.endswith(".xml"):
+                        src_path = os.path.join(fentastic_skin_xmls_files_dir, item)
+                        dst_path = os.path.join(kodi_my_builds_fentastic_skin_xmls_files_dir, item)
+                        shutil.copy2(src_path, dst_path)
+                        logging.log(f"[Install/Wipe] Copying FENtastic skin XML file {item} to {dst_path}")
+
         else:
-            logging.log("Custom KODI_RD_ISRAEL LOG: BEFORE Wipe - Skipping Saving FENtastic Design data.")
-            
+            logging.log("[Install/Wipe] BEFORE Wipe - Skipping Saving FENtastic Design data.")
+
     except Exception as e:
-        logging.log(f"Custom KODI_RD_ISRAEL LOG: BEFORE Wipe - backup_fentasticdata ERROR: {e}")
-        
-        
-def restore_fentasticdata(): 
+        logging.log(f"[Install/Wipe] BEFORE Wipe - backup_fentasticdata ERROR: {e}")
+
+
+def restore_fentasticdata():
     try:
-    
         # Verify that FENtastic + Helper addon is installed.
         isFENtasticExists = xbmc.getCondVisibility('System.HasAddon(skin.fentastic)') and xbmc.getCondVisibility('System.HasAddon(script.fentastic.helper)')
-        logging.log(f"Custom KODI_RD_ISRAEL LOG: AFTER Wipe - Is CONFIG.KEEPFENTASTICDATA Enabled: {CONFIG.KEEPFENTASTICDATA} | isFENtasticExists: {isFENtasticExists}")
-        
-        # AFTER WIPE    
-        if CONFIG.KEEPFENTASTICDATA == 'true' and isFENtasticExists:
+        keep_enabled = getattr(CONFIG, 'KEEPFENTASTICDATA', 'false') == 'true'
+        logging.log(f"[Install/Wipe] AFTER Wipe - Is KEEPFENTASTICDATA Enabled: {keep_enabled} | isFENtasticExists: {isFENtasticExists}")
+
+        # AFTER WIPE
+        if keep_enabled and isFENtasticExists:
 
             # Helper .db files directory Path
             fentastic_helper_db_files_dir = os.path.join(os.path.abspath(CONFIG.ADDON_DATA), 'script.fentastic.helper')
-            
-            # My_Builds/fentastic_helper_db_files directory Path        
+
+            # My_Builds/fentastic_helper_db_files directory Path
             kodi_my_builds_fentastic_helper_db_files_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', 'fentastic_helper_db_files')
-            
-            # Create userdata/addons_data/script.fentastic.helper directory (doesn't exist after wipe)
-            os.makedirs(fentastic_helper_db_files_dir, exist_ok=True)
-             
-            # Move all FENtastic helper .db files from My_Builds/fentastic_helper_db_files to FENtastic helper databases dir              
-            for item in os.listdir(kodi_my_builds_fentastic_helper_db_files_dir):
-                src_path = os.path.join(kodi_my_builds_fentastic_helper_db_files_dir, item)
-                dst_path = os.path.join(fentastic_helper_db_files_dir, item)
-                shutil.move(src_path, dst_path)
-                logging.log(f"Custom KODI_RD_ISRAEL LOG: Moving FENtastic Helper {item} file to {dst_path}")
-        
-            # Remove empty My_Builds/fentastic_helper_db_files dir after .db files move.
-            if not os.listdir(kodi_my_builds_fentastic_helper_db_files_dir):
-                os.rmdir(kodi_my_builds_fentastic_helper_db_files_dir)
-                logging.log(f"Custom KODI_RD_ISRAEL LOG: Deleting unnecessary {kodi_my_builds_fentastic_helper_db_files_dir} directory.")
+
+            if os.path.exists(kodi_my_builds_fentastic_helper_db_files_dir):
+                # Create userdata/addons_data/script.fentastic.helper directory (doesn't exist after wipe)
+                os.makedirs(fentastic_helper_db_files_dir, exist_ok=True)
+
+                # Move all FENtastic helper .db files from My_Builds/fentastic_helper_db_files to FENtastic helper databases dir
+                for item in os.listdir(kodi_my_builds_fentastic_helper_db_files_dir):
+                    src_path = os.path.join(kodi_my_builds_fentastic_helper_db_files_dir, item)
+                    dst_path = os.path.join(fentastic_helper_db_files_dir, item)
+                    shutil.move(src_path, dst_path)
+                    logging.log(f"[Install/Wipe] Moving FENtastic Helper {item} file to {dst_path}")
+
+                # Remove empty My_Builds/fentastic_helper_db_files dir after .db files move.
+                if not os.listdir(kodi_my_builds_fentastic_helper_db_files_dir):
+                    os.rmdir(kodi_my_builds_fentastic_helper_db_files_dir)
+                    logging.log(f"[Install/Wipe] Deleting unnecessary {kodi_my_builds_fentastic_helper_db_files_dir} directory.")
 
             ######################################################################################################################
-            
+
             # FENtastic skin XMLs files directory Path
             fentastic_skin_xmls_files_dir = os.path.join(os.path.abspath(CONFIG.ADDONS), 'skin.fentastic', 'xml')
-            logging.log(f"Custom KODI_RD_ISRAEL LOG: FENtastic skin XMLs files SRC: {fentastic_skin_xmls_files_dir}")
-            
-            # My_Builds/fentastic_skin_xmls_files directory Path        
+            logging.log(f"[Install/Wipe] FENtastic skin XMLs files SRC: {fentastic_skin_xmls_files_dir}")
+
+            # My_Builds/fentastic_skin_xmls_files directory Path
             kodi_my_builds_fentastic_skin_xmls_files_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', 'fentastic_skin_xmls_files')
-            logging.log(f"Custom KODI_RD_ISRAEL LOG: FENtastic skin XMLs files DEST: {kodi_my_builds_fentastic_skin_xmls_files_dir}")
-            
-            # Create the destination directory if it does not exist
-            os.makedirs(fentastic_skin_xmls_files_dir, exist_ok=True)
-             
-            # Move all FENtastic Skin .xml files from My_Builds/fentastic_skin_xmls_files to FENtastic Skin XMLs dir              
-            for item in os.listdir(kodi_my_builds_fentastic_skin_xmls_files_dir):
-                src_path = os.path.join(kodi_my_builds_fentastic_skin_xmls_files_dir, item)
-                dst_path = os.path.join(fentastic_skin_xmls_files_dir, item)
-                shutil.move(src_path, dst_path)
-                logging.log(f"Custom KODI_RD_ISRAEL LOG: Moving FENtastic Skin XML file {item} to {dst_path}")
-        
-            # Remove empty My_Builds/fentastic_skin_xmls_files dir after .xml files move.
-            if not os.listdir(kodi_my_builds_fentastic_skin_xmls_files_dir):
-                os.rmdir(kodi_my_builds_fentastic_skin_xmls_files_dir)
-                logging.log(f"Custom KODI_RD_ISRAEL LOG: Deleting unnecessary {kodi_my_builds_fentastic_skin_xmls_files_dir} directory.")
-                
-        else:
-            logging.log("Custom KODI_RD_ISRAEL LOG: AFTER Wipe - Skipping Saving FENtastic Design data.")
-            
-    except Exception as e:
-        logging.log(f"Custom KODI_RD_ISRAEL LOG: AFTER Wipe - restore_fentasticdata ERROR: {e}")
+            logging.log(f"[Install/Wipe] FENtastic skin XMLs files DEST: {kodi_my_builds_fentastic_skin_xmls_files_dir}")
 
-def backup_twilightdata():
+            if os.path.exists(kodi_my_builds_fentastic_skin_xmls_files_dir):
+                # Create the destination directory if it does not exist
+                os.makedirs(fentastic_skin_xmls_files_dir, exist_ok=True)
+
+                # Move all FENtastic Skin .xml files from My_Builds/fentastic_skin_xmls_files to FENtastic Skin XMLs dir
+                for item in os.listdir(kodi_my_builds_fentastic_skin_xmls_files_dir):
+                    src_path = os.path.join(kodi_my_builds_fentastic_skin_xmls_files_dir, item)
+                    dst_path = os.path.join(fentastic_skin_xmls_files_dir, item)
+                    shutil.move(src_path, dst_path)
+                    logging.log(f"[Install/Wipe] Moving FENtastic Skin XML file {item} to {dst_path}")
+
+                # Remove empty My_Builds/fentastic_skin_xmls_files dir after .xml files move.
+                if not os.listdir(kodi_my_builds_fentastic_skin_xmls_files_dir):
+                    os.rmdir(kodi_my_builds_fentastic_skin_xmls_files_dir)
+                    logging.log(f"[Install/Wipe] Deleting unnecessary {kodi_my_builds_fentastic_skin_xmls_files_dir} directory.")
+
+        else:
+            logging.log("[Install/Wipe] AFTER Wipe - Skipping Saving FENtastic Design data.")
+
+    except Exception as e:
+        logging.log(f"[Install/Wipe] AFTER Wipe - restore_fentasticdata ERROR: {e}")
+
+
+def backup_db_files(addon_id, keep_setting, dest_folder_name):
+    """
+    Helper function to backup only the 'databases' folder of an addon.
+    Prevents backing up the entire addon_data folder to avoid settings.xml conflicts.
+    """
     try:
-    
-        # Verify that Twilight addon is installed.
-        isTwilightExists = xbmc.getCondVisibility('System.HasAddon(plugin.video.twilight)')
-        logging.log("Custom KODI_RD_ISRAEL LOG: BEFORE Wipe - Is CONFIG.KEEPTWILIGHTDATA Enabled: {0} | isTwilightExists: {1}".format(CONFIG.KEEPTWILIGHTDATA, isTwilightExists))
+        is_exists = xbmc.getCondVisibility(f'System.HasAddon({addon_id})')
+        keep_enabled = getattr(CONFIG, keep_setting, 'false') == 'true'
+        logging.log(f"[Install/Wipe] BEFORE Wipe - Is {keep_setting} Enabled: {keep_enabled} | {addon_id} Exists: {is_exists}")
 
-        if CONFIG.KEEPTWILIGHTDATA == 'true' and isTwilightExists:
+        if keep_enabled and is_exists:
+            db_files_dir = os.path.join(os.path.abspath(CONFIG.ADDON_DATA), addon_id, 'databases')
+            dest_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', dest_folder_name)
 
-            # Twilight .db files directory Path
-            twilight_db_files_dir = os.path.join(os.path.abspath(CONFIG.ADDON_DATA), 'plugin.video.twilight', 'databases')
-            logging.log("Custom KODI_RD_ISRAEL LOG: Twilight .db files SRC: {0}".format(twilight_db_files_dir))
-            
-            # My_Builds/twilight_db_files directory Path        
-            kodi_my_builds_twilight_db_files_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', 'twilight_db_files')
-            logging.log("Custom KODI_RD_ISRAEL LOG: Twilight .db files DEST: {0}".format(kodi_my_builds_twilight_db_files_dir))
-            
-            # Create the destination directory if it does not exist
-            os.makedirs(kodi_my_builds_twilight_db_files_dir, exist_ok=True)
-            
-            # Copy all .db files, except navigator.db, to My_Builds/twilight_db_files dir for temp location - before wipe
-            for item in os.listdir(twilight_db_files_dir):
-                if item == "navigator.db":
-                    logging.log("Custom KODI_RD_ISRAEL LOG: Skipping Twilight {0} file from copy.".format(item))
-                    continue
-                src_path = os.path.join(twilight_db_files_dir, item)
-                dst_path = os.path.join(kodi_my_builds_twilight_db_files_dir, item)
-                shutil.copy2(src_path, dst_path)
-                logging.log("Custom KODI_RD_ISRAEL LOG: Copying Twilight {0} file to {1}".format(item, dst_path))
+            os.makedirs(dest_dir, exist_ok=True)
+
+            if os.path.exists(db_files_dir):
+                for item in os.listdir(db_files_dir):
+                    if item.endswith('.db'):
+                        src_path = os.path.join(db_files_dir, item)
+                        dst_path = os.path.join(dest_dir, item)
+                        shutil.copy2(src_path, dst_path)
+                        logging.log(f"[Install/Wipe] Copying {addon_id} DB file {item} to {dst_path}")
         else:
-            logging.log("Custom KODI_RD_ISRAEL LOG: BEFORE Wipe - Skipping Saving Twilight Favorites & Data.")
-            
+            logging.log(f"[Install/Wipe] BEFORE Wipe - Skipping Saving {addon_id} Data.")
     except Exception as e:
-        logging.log(f"Custom KODI_RD_ISRAEL LOG: BEFORE Wipe - backup_twilightdata ERROR: {e}")
-        
-        
-def restore_twilightdata(): 
+        logging.log(f"[Install/Wipe] BEFORE Wipe - backup {addon_id} ERROR: {e}")
+
+
+def restore_db_files(addon_id, keep_setting, src_folder_name):
+    """
+    Helper function to restore only the 'databases' folder of an addon.
+    """
     try:
-       
-        # Verify that Twilight addon is installed.
-        isTwilightExists = xbmc.getCondVisibility('System.HasAddon(plugin.video.twilight)')
-        
-        # AFTER WIPE    
-        if CONFIG.KEEPTWILIGHTDATA == 'true' and isTwilightExists:
-        
-            # Twilight .db files directory Path
-            twilight_db_files_dir = os.path.join(os.path.abspath(CONFIG.ADDON_DATA), 'plugin.video.twilight', 'databases')
-            
-            # My_Builds/twilight_db_files directory Path
-            kodi_my_builds_twilight_db_files_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', 'twilight_db_files')
-            
-            # Create userdata/addons_data/plugin.video.twilight/databases directory (doesn't exist after wipe)
-            os.makedirs(twilight_db_files_dir, exist_ok=True)
-            
-            # Move all .db files, except navigator.db, from My_Builds/twilight_db_files to Twilight databases dir    
-            for item in os.listdir(kodi_my_builds_twilight_db_files_dir):
-                if item == "navigator.db":
-                    logging.log("Custom KODI_RD_ISRAEL LOG: Skipping Twilight {0} file from move.".format(item))
-                    continue
-                src_path = os.path.join(kodi_my_builds_twilight_db_files_dir, item)
-                dst_path = os.path.join(twilight_db_files_dir, item)
-                shutil.move(src_path, dst_path)
-                logging.log("Custom KODI_RD_ISRAEL LOG: Moving Twilight {0} file to {1}".format(item, dst_path))
-        
-            # Remove empty My_Builds/twilight_db_files dir after .db files move.
-            if not os.listdir(kodi_my_builds_twilight_db_files_dir):
-                os.rmdir(kodi_my_builds_twilight_db_files_dir)
-                logging.log("Custom KODI_RD_ISRAEL LOG: Deleting unnecessary {0} directory.".format(kodi_my_builds_twilight_db_files_dir))
-                
-        else:
-            logging.log("Custom KODI_RD_ISRAEL LOG: AFTER Wipe - Skipping Saving Twilight Favorites & Data.")
-            
-    except Exception as e:
-        logging.log(f"Custom KODI_RD_ISRAEL LOG: AFTER Wipe - restore_twilightdata ERROR: {e}")
-    
+        is_exists = xbmc.getCondVisibility(f'System.HasAddon({addon_id})')
+        keep_enabled = getattr(CONFIG, keep_setting, 'false') == 'true'
 
-def backup_fendata():
+        if keep_enabled and is_exists:
+            db_files_dir = os.path.join(os.path.abspath(CONFIG.ADDON_DATA), addon_id, 'databases')
+            src_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', src_folder_name)
+
+            if os.path.exists(src_dir):
+                os.makedirs(db_files_dir, exist_ok=True)
+                for item in os.listdir(src_dir):
+                    if item.endswith('.db'):
+                        src_path = os.path.join(src_dir, item)
+                        dst_path = os.path.join(db_files_dir, item)
+                        shutil.move(src_path, dst_path)
+                        logging.log(f"[Install/Wipe] Moving {addon_id} DB file {item} to {dst_path}")
+
+                if not os.listdir(src_dir):
+                    os.rmdir(src_dir)
+                    logging.log(f"[Install/Wipe] Deleting unnecessary {src_dir} directory.")
+        else:
+            logging.log(f"[Install/Wipe] AFTER Wipe - Skipping Saving {addon_id} Data.")
+    except Exception as e:
+        logging.log(f"[Install/Wipe] AFTER Wipe - restore {addon_id} ERROR: {e}")
+
+
+def backup_povdata():
+    backup_db_files('plugin.video.pov', 'KEEPPOVDATA', 'pov_db_files')
+
+def restore_povdata():
+    restore_db_files('plugin.video.pov', 'KEEPPOVDATA', 'pov_db_files')
+
+def backup_umbrelladata():
+    backup_db_files('plugin.video.umbrella', 'KEEPUMBRELLADATA', 'umbrella_db_files')
+
+def restore_umbrelladata():
+    restore_db_files('plugin.video.umbrella', 'KEEPUMBRELLADATA', 'umbrella_db_files')
+
+
+def backup_acctmgrdata():
+    """
+    Backs up the entire addon_data folder for Account Manager Lite.
+    """
     try:
-    
-        # Verify that Fen addon is installed.
-        isFenExists = xbmc.getCondVisibility('System.HasAddon(plugin.video.fen)')
-        logging.log("Custom KODI_RD_ISRAEL LOG: BEFORE Wipe - Is CONFIG.KEEPFENDATA Enabled: {0} | isFenExists: {1}".format(CONFIG.KEEPFENDATA, isFenExists))
+        addon_id = 'script.module.acctmgr'
+        is_exists = xbmc.getCondVisibility(f'System.HasAddon({addon_id})')
+        keep_enabled = getattr(CONFIG, 'KEEPACCTMGR', 'false') == 'true'
+        logging.log(f"[Install/Wipe] BEFORE Wipe - Is KEEPACCTMGR Enabled: {keep_enabled} | {addon_id} Exists: {is_exists}")
 
-        if CONFIG.KEEPFENDATA == 'true' and isFenExists:
+        if keep_enabled and is_exists:
+            addon_data_dir = os.path.join(os.path.abspath(CONFIG.ADDON_DATA), addon_id)
+            dest_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', 'acctmgr_data')
 
-            # Fen .db files directory Path
-            fen_db_files_dir = os.path.join(os.path.abspath(CONFIG.ADDON_DATA), 'plugin.video.fen', 'databases')
-            logging.log("Custom KODI_RD_ISRAEL LOG: Fen .db files SRC: {0}".format(fen_db_files_dir))
-            
-            # My_Builds/fen_db_files directory Path        
-            kodi_my_builds_fen_db_files_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', 'fen_db_files')
-            logging.log("Custom KODI_RD_ISRAEL LOG: Fen .db files DEST: {0}".format(kodi_my_builds_fen_db_files_dir))
-            
-            # Create the destination directory if it does not exist
-            os.makedirs(kodi_my_builds_fen_db_files_dir, exist_ok=True)
-            
-            # Copy all .db files, except navigator.db, to My_Builds/fen_db_files dir for temp location - before wipe
-            for item in os.listdir(fen_db_files_dir):
-                if item == "navigator.db":
-                    logging.log("Custom KODI_RD_ISRAEL LOG: Skipping Fen {0} file from copy.".format(item))
-                    continue
-                src_path = os.path.join(fen_db_files_dir, item)
-                dst_path = os.path.join(kodi_my_builds_fen_db_files_dir, item)
-                shutil.copy2(src_path, dst_path)
-                logging.log("Custom KODI_RD_ISRAEL LOG: Copying Fen {0} file to {1}".format(item, dst_path))
+            if os.path.exists(dest_dir):
+                shutil.rmtree(dest_dir, ignore_errors=True)
+
+            if os.path.exists(addon_data_dir):
+                shutil.copytree(addon_data_dir, dest_dir)
+                logging.log(f"[Install/Wipe] Copied entire {addon_id} directory to {dest_dir}")
         else:
-            logging.log("Custom KODI_RD_ISRAEL LOG: BEFORE Wipe - Skipping Saving Fen Favorites & Data.")
-            
+            logging.log(f"[Install/Wipe] BEFORE Wipe - Skipping Saving {addon_id} Data.")
     except Exception as e:
-        logging.log(f"Custom KODI_RD_ISRAEL LOG: BEFORE Wipe - backup_fendata ERROR: {e}")
-        
-        
-def restore_fendata(): 
+        logging.log(f"[Install/Wipe] BEFORE Wipe - backup_acctmgrdata ERROR: {e}")
+
+
+def restore_acctmgrdata():
+    """
+    Restores the entire addon_data folder for Account Manager Lite.
+    """
     try:
-       
-        # Verify that Fen addon is installed.
-        isFenExists = xbmc.getCondVisibility('System.HasAddon(plugin.video.fen)')
-        
-        # AFTER WIPE    
-        if CONFIG.KEEPFENDATA == 'true' and isFenExists:
-        
-            # Fen .db files directory Path
-            fen_db_files_dir = os.path.join(os.path.abspath(CONFIG.ADDON_DATA), 'plugin.video.fen', 'databases')
-            
-            # My_Builds/fen_db_files directory Path
-            kodi_my_builds_fen_db_files_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', 'fen_db_files')
-            
-            # Create userdata/addons_data/plugin.video.fen/databases directory (doesn't exist after wipe)
-            os.makedirs(fen_db_files_dir, exist_ok=True)
-            
-            # Move all .db files, except navigator.db, from My_Builds/fen_db_files to fen databases dir    
-            for item in os.listdir(kodi_my_builds_fen_db_files_dir):
-                if item == "navigator.db":
-                    logging.log("Custom KODI_RD_ISRAEL LOG: Skipping Fen {0} file from move.".format(item))
-                    continue
-                src_path = os.path.join(kodi_my_builds_fen_db_files_dir, item)
-                dst_path = os.path.join(fen_db_files_dir, item)
-                shutil.move(src_path, dst_path)
-                logging.log("Custom KODI_RD_ISRAEL LOG: Moving Fen {0} file to {1}".format(item, dst_path))
-        
-            # Remove empty My_Builds/fen_db_files dir after .db files move.
-            if not os.listdir(kodi_my_builds_fen_db_files_dir):
-                os.rmdir(kodi_my_builds_fen_db_files_dir)
-                logging.log("Custom KODI_RD_ISRAEL LOG: Deleting unnecessary {0} directory.".format(kodi_my_builds_fen_db_files_dir))
-                
+        addon_id = 'script.module.acctmgr'
+        is_exists = xbmc.getCondVisibility(f'System.HasAddon({addon_id})')
+        keep_enabled = getattr(CONFIG, 'KEEPACCTMGR', 'false') == 'true'
+
+        if keep_enabled and is_exists:
+            addon_data_dir = os.path.join(os.path.abspath(CONFIG.ADDON_DATA), addon_id)
+            src_dir = os.path.join(os.path.abspath(CONFIG.HOME), 'My_Builds', 'acctmgr_data')
+
+            if os.path.exists(src_dir):
+                if os.path.exists(addon_data_dir):
+                    shutil.rmtree(addon_data_dir, ignore_errors=True)
+                shutil.move(src_dir, addon_data_dir)
+                logging.log(f"[Install/Wipe] Moved entire {addon_id} directory back to {addon_data_dir}")
         else:
-            logging.log("Custom KODI_RD_ISRAEL LOG: AFTER Wipe - Skipping Saving Fen Favorites & Data.")
-            
+            logging.log(f"[Install/Wipe] AFTER Wipe - Skipping Saving {addon_id} Data.")
     except Exception as e:
-        logging.log(f"Custom KODI_RD_ISRAEL LOG: AFTER Wipe - restore_fendata ERROR: {e}")
-    
+        logging.log(f"[Install/Wipe] AFTER Wipe - restore_acctmgrdata ERROR: {e}")
+
+
 def wipe():
     from resources.libs import db
     from resources.libs.common import logging
     from resources.libs import skin
     from resources.libs.common import tools
     from resources.libs import update
-    
-    # KODI_RD_ISRAEL
-    backup_fendata()
-    backup_twilightdata()
+
+    # Modern Database Backups
+    backup_povdata()
+    backup_umbrelladata()
+    backup_acctmgrdata()
     backup_fentasticdata()
-    
-    if CONFIG.KEEPTRAKT == 'true':
-        from resources.libs import traktit
 
-        traktit.auto_update('all')
-        CONFIG.set_setting('traktnextsave', str(tools.get_date(days=3, formatted=True)))
-    if CONFIG.KEEPDEBRID == 'true':
-        from resources.libs import debridit
-
-        debridit.auto_update('all')
-        CONFIG.set_setting('debridnextsave', str(tools.get_date(days=3, formatted=True)))
-    if CONFIG.KEEPLOGIN == 'true':
-        from resources.libs import loginit
-
-        loginit.auto_update('all')
-        CONFIG.set_setting('loginnextsave', str(tools.get_date(days=3, formatted=True)))
-
-    exclude_dirs = CONFIG.EXCLUDES
+    exclude_dirs = getattr(CONFIG, 'EXCLUDES', [])
     exclude_dirs.append('My_Builds')
-    
+
+    # Protect ADDONS themselves from being wiped so we don't have to re-download them.
+    # Note: this also saves addon_data folder in-place which we explicitly manage for db backups.
+    if getattr(CONFIG, 'KEEPACCTMGR', 'false') == 'true':
+        exclude_dirs.append('script.module.acctmgr')
+    if getattr(CONFIG, 'KEEPPOVDATA', 'false') == 'true':
+        exclude_dirs.append('plugin.video.pov')
+    if getattr(CONFIG, 'KEEPUMBRELLADATA', 'false') == 'true':
+        exclude_dirs.append('plugin.video.umbrella')
+
     progress_dialog = xbmcgui.DialogProgress()
-      
+
     skin.skin_to_default('Fresh Install')
-    
+
     update.addon_updates('set')
     xbmcPath = os.path.abspath(CONFIG.HOME)
     progress_dialog.create(CONFIG.ADDONTITLE, "[COLOR {0}]Calculating files and folders".format(CONFIG.COLOR2) + '\n' + '\n' + 'Please Wait![/COLOR]')
     total_files = sum([len(files) for r, d, files in os.walk(xbmcPath)])
     del_file = 0
     progress_dialog.update(0, "[COLOR {0}]Gathering Excludes list.[/COLOR]".format(CONFIG.COLOR2))
-    if CONFIG.KEEPREPOS == 'true':
+
+    if getattr(CONFIG, 'KEEPREPOS', 'false') == 'true':
         repos = glob.glob(os.path.join(CONFIG.ADDONS, 'repo*/'))
         for item in repos:
             repofolder = os.path.split(item[:-1])[1]
             if not repofolder == exclude_dirs:
                 exclude_dirs.append(repofolder)
-    if CONFIG.KEEPSUPER == 'true':
+
+    if getattr(CONFIG, 'KEEPSUPER', 'false') == 'true':
         exclude_dirs.append('plugin.program.super.favourites')
-    if CONFIG.KEEPWHITELIST == 'true':
+
+    if getattr(CONFIG, 'KEEPWHITELIST', 'false') == 'true':
         from resources.libs import whitelist
-        
-        whitelist = whitelist.whitelist('read')
-        if len(whitelist) > 0:
-            for item in whitelist:
+
+        whitelist_list = whitelist.whitelist('read')
+        if len(whitelist_list) > 0:
+            for item in whitelist_list:
                 try:
                     name, id, fold = item
                 except:
@@ -375,7 +346,7 @@ def wipe():
                 if fold not in exclude_dirs:
                     exclude_dirs.append(fold)
 
-    for item in CONFIG.DEPENDENCIES:
+    for item in getattr(CONFIG, 'DEPENDENCIES', []):
         exclude_dirs.append(item)
 
     progress_dialog.update(0, "[COLOR {0}]Clearing out files and folders:".format(CONFIG.COLOR2))
@@ -386,21 +357,21 @@ def wipe():
             del_file += 1
             fold = root.replace('/', '\\').split('\\')
             x = len(fold)-1
-            if name == 'sources.xml' and fold[-1] == 'userdata' and CONFIG.KEEPSOURCES == 'true':
+            if name == 'sources.xml' and fold[-1] == 'userdata' and getattr(CONFIG, 'KEEPSOURCES', 'false') == 'true':
                 logging.log("Keep sources.xml: {0}".format(os.path.join(root, name)))
-            elif name == 'favourites.xml' and fold[-1] == 'userdata' and CONFIG.KEEPFAVS == 'true':
+            elif name == 'favourites.xml' and fold[-1] == 'userdata' and getattr(CONFIG, 'KEEPFAVS', 'false') == 'true':
                 logging.log("Keep favourites.xml: {0}".format(os.path.join(root, name)))
-            elif name == 'profiles.xml' and fold[-1] == 'userdata' and CONFIG.KEEPPROFILES == 'true':
+            elif name == 'profiles.xml' and fold[-1] == 'userdata' and getattr(CONFIG, 'KEEPPROFILES', 'false') == 'true':
                 logging.log("Keep profiles.xml: {0}".format(os.path.join(root, name)))
-            elif name == 'playercorefactory.xml' and fold[-1] == 'userdata' and CONFIG.KEEPPLAYERCORE == 'true':
+            elif name == 'playercorefactory.xml' and fold[-1] == 'userdata' and getattr(CONFIG, 'KEEPPLAYERCORE', 'false') == 'true':
                 logging.log("Keep playercorefactory.xml: {0}".format(os.path.join(root, name)))
-            elif name == 'guisettings.xml' and fold[-1] == 'userdata' and CONFIG.KEEPGUISETTINGS == 'true':
+            elif name == 'guisettings.xml' and fold[-1] == 'userdata' and getattr(CONFIG, 'KEEPGUISETTINGS', 'false') == 'true':
                 logging.log("Keep guisettings.xml: {0}".format(os.path.join(root, name)))
-            elif name == 'advancedsettings.xml' and fold[-1] == 'userdata' and CONFIG.KEEPADVANCED == 'true':
+            elif name == 'advancedsettings.xml' and fold[-1] == 'userdata' and getattr(CONFIG, 'KEEPADVANCED', 'false') == 'true':
                 logging.log("Keep advancedsettings.xml: {0}".format(os.path.join(root, name)))
-            elif name == 'Addons33.db' and fold[-1] == 'Database'  and fold[-2] == 'userdata' and CONFIG.KEEPADDONS33DB == 'true':
-                logging.log("Keep Addons33.db: {0} - CONFIG.KEEPADDONS33DB is: {1}".format(os.path.join(root, name), CONFIG.KEEPADDONS33DB))
-            elif name in CONFIG.LOGFILES:
+            elif name == 'Addons33.db' and fold[-1] == 'Database' and fold[-2] == 'userdata' and getattr(CONFIG, 'KEEPADDONS33DB', 'false') == 'true':
+                logging.log("Keep Addons33.db: {0} - CONFIG.KEEPADDONS33DB is: {1}".format(os.path.join(root, name), getattr(CONFIG, 'KEEPADDONS33DB', 'false')))
+            elif name in getattr(CONFIG, 'LOGFILES', []):
                 logging.log("Keep Log File: {0}".format(name))
             elif name.endswith('.db'):
                 try:
@@ -425,6 +396,7 @@ def wipe():
             logging.log_notify(CONFIG.ADDONTITLE,
                                "[COLOR {0}]Fresh Start Cancelled[/COLOR]".format(CONFIG.COLOR2))
             return False
+
     for root, dirs, files in os.walk(xbmcPath, topdown=True):
         dirs[:] = [d for d in dirs if d not in exclude_dirs]
         for name in dirs:
@@ -436,37 +408,22 @@ def wipe():
             logging.log_notify(CONFIG.ADDONTITLE,
                                "[COLOR {0}]Fresh Start Cancelled[/COLOR]".format(CONFIG.COLOR2))
             return False
-            
+
     progress_dialog.close()
     CONFIG.clear_setting('build')
-    
-    # KODI_RD_ISRAEL
-    restore_fendata()
-    restore_twilightdata()
-    # restore_fentasticdata() - Runs in extract.py
-    
-    
+
+    # Restore Modern Backups
+    restore_povdata()
+    restore_umbrelladata()
+    restore_acctmgrdata()
+    # restore_fentasticdata() - Runs in extract.py instead to overlay on top of new skin extraction
+
+
 def fresh_start(install=None, over=False):
     from resources.libs.common import logging
     from resources.libs.common import tools
 
     dialog = xbmcgui.Dialog()
-    
-    if CONFIG.KEEPTRAKT == 'true':
-        from resources.libs import traktit
-
-        traktit.auto_update('all')
-        CONFIG.set_setting('traktnextsave', str(tools.get_date(days=3, formatted=True)))
-    if CONFIG.KEEPDEBRID == 'true':
-        from resources.libs import debridit
-
-        debridit.auto_update('all')
-        CONFIG.set_setting('debridnextsave', str(tools.get_date(days=3, formatted=True)))
-    if CONFIG.KEEPLOGIN == 'true':
-        from resources.libs import loginit
-
-        loginit.auto_update('all')
-        CONFIG.set_setting('loginnextsave', str(tools.get_date(days=3, formatted=True)))
 
     if over:
         yes_pressed = 1
@@ -486,16 +443,16 @@ def fresh_start(install=None, over=False):
                                        yeslabel='[B][COLOR springgreen]Continue[/COLOR][/B]')
     else:
         yes_pressed = dialog.yesno(CONFIG.ADDONTITLE, "[COLOR {0}]Do you wish to restore your".format(CONFIG.COLOR2) +' \n' + "Kodi configuration to default settings?[/COLOR]", nolabel='[B][COLOR red]No, Cancel[/COLOR][/B]', yeslabel='[B][COLOR springgreen]Continue[/COLOR][/B]')
+
     if yes_pressed:
         wipe()
-        
+
         if over:
             return True
         elif install == 'restore':
             return True
         elif install:
             from resources.libs.wizard import Wizard
-
             Wizard().build('normal', install, over=True)
         else:
             dialog.ok(CONFIG.ADDONTITLE, "[COLOR {0}]To save changes you now need to force close Kodi, Press OK to force close Kodi[/COLOR]".format(CONFIG.COLOR2))
@@ -507,95 +464,3 @@ def fresh_start(install=None, over=False):
             logging.log_notify(CONFIG.ADDONTITLE,
                                '[COLOR {0}]Fresh Install: Cancelled![/COLOR]'.format(CONFIG.COLOR2))
             xbmc.executebuiltin('Container.Refresh()')
-
-
-def choose_file_manager():
-    if not xbmc.getCondVisibility('System.HasAddon(script.kodi.android.update)'):
-        from resources.libs.gui import addon_menu
-        addon_menu.install_from_kodi('script.kodi.android.update')
-    
-    try:
-        updater = xbmcaddon.Addon('script.kodi.android.update')
-    except RuntimeError as e:
-        return False
-        
-    updater.setSetting('File_Manager', '1')
-    
-    CONFIG.open_settings('script.kodi.android.update', 0, 4, True)
-    
-
-def install_apk(name, url):
-    from resources.libs.downloader import Downloader
-    from resources.libs.common import logging
-    from resources.libs.common import tools
-    from resources.libs.gui import window
-
-    dialog = xbmcgui.Dialog()
-    progress_dialog = xbmcgui.DialogProgress()
-    
-    addon = xbmcaddon.Addon()
-    path = addon.getSetting('apk_path')
-    apk = os.path.basename(url).replace('\\', '').replace('/', '').replace(':', '').replace('*', '').replace('?', '').replace('"', '').replace('<', '').replace('>', '').replace('|', '')
-    apk = apk if apk.endswith('.apk') else '{}.apk'.format(apk)
-    lib = os.path.join(path, apk)
-    
-    if not xbmc.getCondVisibility('System.HasAddon(script.kodi.android.update)'):
-        from resources.libs.gui import addon_menu
-        addon_menu.install_from_kodi('script.kodi.android.update')
-        
-    try:
-        updater = xbmcaddon.Addon('script.kodi.android.update')
-    except RuntimeError as e:
-        return False
-        
-    file_manager = int(updater.getSetting('File_Manager'))
-    custom_manager = updater.getSetting('Custom_Manager')
-    use_manager = {0: 'com.android.documentsui', 1: custom_manager}[file_manager]
-    
-    if tools.platform() == 'android':
-        redownload = True
-        yes = True
-        if os.path.exists(lib):
-            redownload = dialog.yesno(CONFIG.ADDONTITLE, '[COLOR {}]{}[/COLOR] already exists. Would you like to redownload it?'.format(CONFIG.COLOR1, apk),
-                               yeslabel="[B]Redownload[/B]",
-                               nolabel="[B]Install[/B]")
-            yes = False
-        else:
-            yes = dialog.yesno(CONFIG.ADDONTITLE,
-                                   "[COLOR {0}]Would you like to download and install: ".format(CONFIG.COLOR2)
-                                   +'\n'+"[COLOR {0}]{1}[/COLOR]".format(CONFIG.COLOR1, name),
-                                   yeslabel="[B][COLOR springgreen]Download[/COLOR][/B]",
-                                   nolabel="[B][COLOR red]Cancel[/COLOR][/B]")
-                                   
-            if not yes:
-                logging.log_notify(CONFIG.ADDONTITLE,
-                               '[COLOR {0}]ERROR: Install Cancelled[/COLOR]'.format(CONFIG.COLOR2))
-                return
-        
-        if yes or redownload:
-            response = tools.open_url(url, check=True)
-            if not response:
-                logging.log_notify(CONFIG.ADDONTITLE,
-                                   '[COLOR {0}]APK Installer: Invalid Apk Url![/COLOR]'.format(CONFIG.COLOR2))
-                return
-                
-            progress_dialog.create(CONFIG.ADDONTITLE,
-                          '[COLOR {0}][B]Downloading:[/B][/COLOR] [COLOR {1}]{2}[/COLOR]'.format(CONFIG.COLOR2, CONFIG.COLOR1, apk)
-                          +'\n'+''
-                          +'\n'+'Please Wait')
-            
-            try:
-                os.remove(lib)
-            except:
-                pass
-            Downloader().download(url, lib)
-            xbmc.sleep(100)
-            progress_dialog.close()
-                
-        dialog.ok(CONFIG.ADDONTITLE, '[COLOR {}]{}[/COLOR] downloaded to [COLOR {}]{}[/COLOR]. If installation doesn\'t start by itself, navigate to that location to install the APK.'.format(CONFIG.COLOR1, apk, CONFIG.COLOR1, path))
-        
-        logging.log('Opening {} with {}'.format(lib, use_manager), level=xbmc.LOGINFO)
-        xbmc.executebuiltin('StartAndroidActivity({},,,"content://{}")'.format(use_manager, lib))
-    else:
-        logging.log_notify(CONFIG.ADDONTITLE,
-                           '[COLOR {0}]ERROR: None Android Device[/COLOR]'.format(CONFIG.COLOR2))

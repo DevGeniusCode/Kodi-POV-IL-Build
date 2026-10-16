@@ -776,7 +776,8 @@ def _check_url(url, cred):
 
     if _is_url(url):
         try:
-            response = requests.head(url, headers={'user-agent': CONFIG.USER_AGENT}, allow_redirects=True, auth=cred)
+            response = requests.head(url, headers={'user-agent': CONFIG.USER_AGENT},
+                                     allow_redirects=True, auth=cred, timeout=(4, 8))
             
             if response.status_code < 300:
                 logging.log("URL check passed for {0}: Status code [{1}]".format(url, response.status_code), level=xbmc.LOGDEBUG)
