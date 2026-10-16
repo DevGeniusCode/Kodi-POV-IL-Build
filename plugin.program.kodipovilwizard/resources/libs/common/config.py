@@ -46,101 +46,97 @@ class Config:
 
     def init_uservars(self):
         # User Edit Variables
-        self.ADDONTITLE = uservar.ADDONTITLE
-        self.BUILDERNAME = uservar.BUILDERNAME
-        # KODI-RD-IL - Fallback build name + version for APK installs (see uservar.py)
-        self.BUILDNAME_DEFAULT = uservar.BUILDNAME_DEFAULT
-        self.BUILDVERSION_DEFAULT = uservar.BUILDVERSION_DEFAULT
-        self.EXCLUDES = uservar.EXCLUDES
-        self.BUILDFILE = uservar.BUILDFILE
-        self.UPDATECHECK = uservar.UPDATECHECK
-        self.APKFILE = uservar.APKFILE
-        ###################################
-        # KODI-RD-IL - WINDOWS
-        self.LATEST_WINDOWS_VERSION_TEXT_FILE = uservar.LATEST_WINDOWS_VERSION_TEXT_FILE
-        self.WINDOWS_DOWNLOAD_URL = uservar.WINDOWS_DOWNLOAD_URL
-        self.WINDOWS_INSTALLATION_PATH = uservar.WINDOWS_INSTALLATION_PATH
-        # KODI-RD-IL - ANDROID
-        self.LATEST_APK_VERSION_TEXT_FILE = uservar.LATEST_APK_VERSION_TEXT_FILE
-        self.APK_DOWNLOAD_URL = uservar.APK_DOWNLOAD_URL
-        self.APK_PACKAGE_ID = uservar.APK_PACKAGE_ID
-        self.APK_PACKAGE_IDS = getattr(uservar, 'APK_PACKAGE_IDS', [uservar.APK_PACKAGE_ID])
-        # getattr with a default: an older uservar.py that predates this
-        # constant must not stop the wizard loading.
-        self.NO_AUTO_APP_PROMPT_TARGETS = getattr(
-            uservar, 'NO_AUTO_APP_PROMPT_TARGETS', [])
-        self.APK_DOWNLOADER_CODE = uservar.APK_DOWNLOADER_CODE
-        self.APK_DOWNLOADER_CODE_IMAGE_URL = uservar.APK_DOWNLOADER_CODE_IMAGE_URL
-        ###################################
-        self.YOUTUBETITLE = uservar.YOUTUBETITLE
-        self.YOUTUBEFILE = uservar.YOUTUBEFILE
-        self.ADDONFILE = uservar.ADDONFILE
-        self.ADVANCEDFILE = uservar.ADVANCEDFILE
+        self.ADDONTITLE = getattr(uservar, 'ADDONTITLE', 'Kodi-POV-IL Wizard')
+        self.BUILDERNAME = getattr(uservar, 'BUILDERNAME', 'Kodi-POV-IL')
+        self.BUILDNAME_DEFAULT = getattr(uservar, 'BUILDNAME_DEFAULT', 'Kodi-POV-IL')
+        self.BUILDVERSION_DEFAULT = getattr(uservar, 'BUILDVERSION_DEFAULT', '1.0.0')
+        self.EXCLUDES = getattr(uservar, 'EXCLUDES', [])
+        self.UPDATECHECK = getattr(uservar, 'UPDATECHECK', 0)
 
-        # Themeing Menu Items
-        self.ICONBUILDS = uservar.ICONBUILDS if not uservar.ICONBUILDS.endswith('://') else self.ADDON_ICON
-        self.ICONMAINT = uservar.ICONMAINT if not uservar.ICONMAINT.endswith('://') else self.ADDON_ICON
-        self.ICONSPEED = uservar.ICONSPEED if not uservar.ICONSPEED.endswith('://') else self.ADDON_ICON
-        self.ICONAPK = uservar.ICONAPK if not uservar.ICONAPK.endswith('://') else self.ADDON_ICON
-        self.ICONADDONS = uservar.ICONADDONS if not uservar.ICONADDONS.endswith('://') else self.ADDON_ICON
-        self.ICONYOUTUBE = uservar.ICONYOUTUBE if not uservar.ICONYOUTUBE.endswith('://') else self.ADDON_ICON
-        self.ICONSAVE = uservar.ICONSAVE if not uservar.ICONSAVE.endswith('://') else self.ADDON_ICON
-        self.ICONTRAKT = uservar.ICONTRAKT if not uservar.ICONTRAKT.endswith('://') else self.ADDON_ICON
-        self.ICONDEBRID = uservar.ICONREAL if not uservar.ICONREAL.endswith('://') else self.ADDON_ICON
-        self.ICONLOGIN = uservar.ICONLOGIN if not uservar.ICONLOGIN.endswith('://') else self.ADDON_ICON
-        self.ICONCONTACT = uservar.ICONCONTACT if not uservar.ICONCONTACT.endswith('://') else self.ADDON_ICON
-        self.ICONSETTINGS = uservar.ICONSETTINGS if not uservar.ICONSETTINGS.endswith('://') else self.ADDON_ICON
-        self.HIDESPACERS = uservar.HIDESPACERS
-        self.SPACER = uservar.SPACER
-        self.COLOR1 = uservar.COLOR1
-        self.COLOR2 = uservar.COLOR2
-        self.THEME1 = uservar.THEME1
-        self.THEME2 = uservar.THEME2
-        self.THEME3 = uservar.THEME3
-        self.THEME_LIMEGREEN = uservar.THEME_LIMEGREEN
-        self.THEME_YELLOW = uservar.THEME_YELLOW
-        self.THEME4 = uservar.THEME4
-        self.THEME5 = uservar.THEME5
-        self.THEME6 = uservar.THEME6
-        self.HIDECONTACT = uservar.HIDECONTACT
-        self.CONTACT = uservar.CONTACT
-        self.CONTACTICON = uservar.CONTACTICON if not uservar.CONTACTICON.endswith('://') else self.ADDON_ICON
-        self.CONTACTFANART = uservar.CONTACTFANART if not uservar.CONTACTFANART.endswith('://') else self.ADDON_FANART
+        self.ADDONFILE = getattr(uservar, 'ADDONFILE', '')
+        self.ADVANCEDFILE = getattr(uservar, 'ADVANCEDFILE', '')
+
+        # Theming Menu Items
+        icon_builds = getattr(uservar, 'ICONBUILDS', self.ADDON_ICON)
+        self.ICONBUILDS = icon_builds if not icon_builds.endswith('://') else self.ADDON_ICON
+
+        icon_maint = getattr(uservar, 'ICONMAINT', self.ADDON_ICON)
+        self.ICONMAINT = icon_maint if not icon_maint.endswith('://') else self.ADDON_ICON
+
+        icon_speed = getattr(uservar, 'ICONSPEED', self.ADDON_ICON)
+        self.ICONSPEED = icon_speed if not icon_speed.endswith('://') else self.ADDON_ICON
+
+        icon_addons = getattr(uservar, 'ICONADDONS', self.ADDON_ICON)
+        self.ICONADDONS = icon_addons if not icon_addons.endswith('://') else self.ADDON_ICON
+
+        icon_save = getattr(uservar, 'ICONSAVE', self.ADDON_ICON)
+        self.ICONSAVE = icon_save if not icon_save.endswith('://') else self.ADDON_ICON
+
+        icon_acctmgr = getattr(uservar, 'ICONACCTMGR', getattr(uservar, 'ICONREAL', self.ADDON_ICON))
+        self.ICONACCTMGR = icon_acctmgr if not icon_acctmgr.endswith('://') else self.ADDON_ICON
+
+        icon_contact = getattr(uservar, 'ICONCONTACT', self.ADDON_ICON)
+        self.ICONCONTACT = icon_contact if not icon_contact.endswith('://') else self.ADDON_ICON
+
+        icon_settings = getattr(uservar, 'ICONSETTINGS', self.ADDON_ICON)
+        self.ICONSETTINGS = icon_settings if not icon_settings.endswith('://') else self.ADDON_ICON
+
+        self.HIDESPACERS = getattr(uservar, 'HIDESPACERS', 'No')
+        self.SPACER = getattr(uservar, 'SPACER', 'None')
+        self.COLOR1 = getattr(uservar, 'COLOR1', 'gold')
+        self.COLOR2 = getattr(uservar, 'COLOR2', 'white')
+        self.THEME1 = getattr(uservar, 'THEME1', '')
+        self.THEME2 = getattr(uservar, 'THEME2', '')
+        self.THEME3 = getattr(uservar, 'THEME3', '')
+        self.THEME_LIMEGREEN = getattr(uservar, 'THEME_LIMEGREEN', '')
+        self.THEME_YELLOW = getattr(uservar, 'THEME_YELLOW', '')
+        self.THEME4 = getattr(uservar, 'THEME4', '')
+        self.THEME5 = getattr(uservar, 'THEME5', '')
+        self.THEME6 = getattr(uservar, 'THEME6', '')
+        self.HIDECONTACT = getattr(uservar, 'HIDECONTACT', 'No')
+        self.CONTACT = getattr(uservar, 'CONTACT', '')
+
+        contact_icon = getattr(uservar, 'CONTACTICON', self.ADDON_ICON)
+        self.CONTACTICON = contact_icon if not contact_icon.endswith('://') else self.ADDON_ICON
+
+        contact_fanart = getattr(uservar, 'CONTACTFANART', self.ADDON_FANART)
+        self.CONTACTFANART = contact_fanart if not contact_fanart.endswith('://') else self.ADDON_FANART
 
         # Auto Update For Those With No Repo
-        self.AUTOUPDATE = uservar.AUTOUPDATE
+        self.AUTOUPDATE = getattr(uservar, 'AUTOUPDATE', 'No')
 
         # Auto Install Repo If Not Installed
-        self.AUTOINSTALL = uservar.AUTOINSTALL
-        self.REPOID = uservar.REPOID
-        self.REPOADDONXML = uservar.REPOADDONXML
-        self.REPOZIPURL = uservar.REPOZIPURL
+        self.AUTOINSTALL = getattr(uservar, 'AUTOINSTALL', 'No')
+        self.REPOID = getattr(uservar, 'REPOID', '')
+        self.REPOADDONXML = getattr(uservar, 'REPOADDONXML', '')
+        self.REPOZIPURL = getattr(uservar, 'REPOZIPURL', '')
 
         # Notification Window
-        self.ENABLE_NOTIFICATION = uservar.ENABLE
-        self.NOTIFICATION = uservar.NOTIFICATION
+        self.ENABLE_NOTIFICATION = getattr(uservar, 'ENABLE', 'No')
+        self.NOTIFICATION = getattr(uservar, 'NOTIFICATION', '')
+        self.RECENT_UPDATES_URL = getattr(uservar, 'RECENT_UPDATES_URL', '')
         
         #########################################################################################################
         # KODI-RD-IL - BUILD SKIN SWITCH
-        self.BUILD_SKIN_SWITCH_IMAGE_URL = uservar.BUILD_SKIN_SWITCH_IMAGE_URL
-        # KODI-RD-IL - AUTO QUICK UPDATES
-        self.QUICK_UPDATE_NOTIFICATION_URL = uservar.QUICK_UPDATE_NOTIFICATION_URL
-        self.RECENT_UPDATES_URL = uservar.RECENT_UPDATES_URL
+        self.BUILD_SKIN_SWITCH_IMAGE_URL = getattr(uservar, 'BUILD_SKIN_SWITCH_IMAGE_URL', '')
+        # KODI-POV-IL - MODULAR UPDATER (manifest-based). getattr keeps an old
+        # uservar.py (without MANIFEST_URL) from crashing config init.
+        self.MANIFEST_URL = getattr(uservar, 'MANIFEST_URL', 'http://')
         #########################################################################################################
         
-        self.HEADERTYPE = uservar.HEADERTYPE
-        self.FONTHEADER = uservar.FONTHEADER
-        self.HEADERMESSAGE = uservar.HEADERMESSAGE
-        self.HEADERIMAGE = uservar.HEADERIMAGE
-        self.FONTSETTINGS = uservar.FONTSETTINGS
-        self.BACKGROUND = uservar.BACKGROUND
+        self.HEADERTYPE = getattr(uservar, 'HEADERTYPE', 'Text')
+        self.FONTHEADER = getattr(uservar, 'FONTHEADER', 'Font14')
+        self.HEADERMESSAGE = getattr(uservar, 'HEADERMESSAGE', '')
+        self.HEADERIMAGE = getattr(uservar, 'HEADERIMAGE', '')
+        self.FONTSETTINGS = getattr(uservar, 'FONTSETTINGS', 'Font13')
+        self.BACKGROUND = getattr(uservar, 'BACKGROUND', '')
         self.BACKGROUND = self.BACKGROUND if not self.BACKGROUND == '' else self.ADDON_FANART
 
     def init_paths(self):
         # Static variables
         self.CLEANFREQ = ['Every Startup', 'Every Day', 'Every Three Days',
                           'Weekly', 'Monthly']
-        self.LOGFILES = ['log', 'xbmc.old.log', 'kodi.log']
+        self.LOGFILES = ['log', 'xbmc.old.log', 'kodi.log', 'kodi.old.log']
         self.DEFAULTPLUGINS = ['metadata.album.universal',
                                'metadata.artists.universal',
                                'metadata.common.fanart.tv',
@@ -163,12 +159,13 @@ class Config:
                               'Textures13.db', 'Thumbs.db']
         self.XMLS = ['advancedsettings.xml', 'sources.xml', 'favourites.xml',
                      'profiles.xml', 'playercorefactory.xml', 'guisettings.xml']
-        self.MODURL = 'http://mirrors.kodi.tv/addons/matrix/'
-        self.MODURL2 = 'http://mirrors.kodi.tv/addons/jarvis/'
-        self.DEPENDENCIES = ['script.module.bottle', 'script.module.certifi',
+
+        self.DEPENDENCIES = [
+            'script.module.bottle', 'script.module.certifi',
                              'script.module.chardet', 'script.module.idna',
                              'script.module.requests', 'script.module.six',
-                             'script.module.urllib3', 'script.module.web-pdb']
+            'script.module.urllib3'
+        ]
 
         # Default special paths
         self.XBMC = xbmcvfs.translatePath('special://xbmc/')
@@ -177,7 +174,10 @@ class Config:
         self.MASTERPROFILE = xbmcvfs.translatePath('special://masterprofile/')
         self.PROFILE = xbmcvfs.translatePath('special://profile/')
         self.SUBTITLES = xbmcvfs.translatePath('special://subtitles/')
-        self.USERDATA = xbmcvfs.translatePath('special://userdata/')
+        # Kodi's userdata alias always points to the master profile. Build
+        # configuration, favourites and update receipts belong to the active
+        # profile; only profiles.xml is shared by Kodi itself.
+        self.USERDATA = self.PROFILE
         self.DATABASE = xbmcvfs.translatePath('special://database/')
         self.THUMBNAILS = xbmcvfs.translatePath('special://thumbnails/')
         self.RECORDINGS = xbmcvfs.translatePath('special://recordings/')
@@ -195,21 +195,22 @@ class Config:
         self.PACKAGES = os.path.join(self.ADDONS, 'packages')
         self.ADDON_DATA = os.path.join(self.USERDATA, 'addon_data')
         self.PLUGIN_DATA = os.path.join(self.ADDON_DATA, self.ADDON_ID)
-        self.QRCODES = os.path.join(self.PLUGIN_DATA, 'QRCodes')
-        self.SPEEDTEST = os.path.join(self.PLUGIN_DATA, 'SpeedTest')
         self.ARCHIVE_CACHE = os.path.join(self.TEMP, 'archive_cache')
         self.ART = os.path.join(self.PLUGIN, 'resources', 'art')
         self.CUSTOM_ART = os.path.join(self.PLUGIN, 'resources', 'kodi_rd_israel_art')
-        self.DEBRIDFOLD = os.path.join(self.PLUGIN_DATA, 'debrid')
-        self.TRAKTFOLD = os.path.join(self.PLUGIN_DATA, 'trakt')
-        self.LOGINFOLD = os.path.join(self.PLUGIN_DATA, 'login')
+
+        # Target addon_data paths for selective preservation
+        self.ACCTMGR_DATA = os.path.join(self.ADDON_DATA, 'script.module.acctmgr')
+        self.POV_DATA = os.path.join(self.ADDON_DATA, 'plugin.video.pov')
+        self.UMBRELLA_DATA = os.path.join(self.ADDON_DATA, 'plugin.video.umbrella')
+        self.FENTASTIC_HELPER_DATA = os.path.join(self.ADDON_DATA, 'script.fentastic.helper')
 
         # File paths
         self.ADVANCED = os.path.join(self.USERDATA, 'advancedsettings.xml')
         self.SOURCES = os.path.join(self.USERDATA, 'sources.xml')
         self.GUISETTINGS = os.path.join(self.USERDATA, 'guisettings.xml')
         self.FAVOURITES = os.path.join(self.USERDATA, 'favourites.xml')
-        self.PROFILES = os.path.join(self.USERDATA, 'profiles.xml')
+        self.PROFILES = os.path.join(self.MASTERPROFILE, 'profiles.xml')
         self.WIZLOG = os.path.join(self.PLUGIN_DATA, 'wizard.log')
         self.WHITELIST = os.path.join(self.PLUGIN_DATA, 'whitelist.txt')
         
@@ -238,7 +239,6 @@ class Config:
         self.BUILDVERSION = self.get_setting('buildversion')
         self.BUILDTHEME = self.get_setting('buildtheme')
         self.BUILDLATEST = self.get_setting('latestversion')
-        # self.DISABLEUPDATE = self.get_setting('disableupdate')
         self.INSTALLED = self.get_setting('installed')
         self.EXTRACT = self.get_setting('extract')
         self.EXTERROR = self.get_setting('errors')
@@ -256,45 +256,30 @@ class Config:
         self.AUTOPACKAGES = self.get_setting('clearpackages')
         self.AUTOTHUMBS = self.get_setting('clearthumbs')
         self.AUTOFREQ = self.get_setting('autocleanfreq')
-        self.AUTOFREQ = int(float(self.AUTOFREQ)) if self.AUTOFREQ.isdigit() else 0
+        self.AUTOFREQ = int(float(self.AUTOFREQ)) if str(self.AUTOFREQ).isdigit() else 0
         self.AUTONEXTRUN = self.get_setting('nextautocleanup')
         
-        # KODI-RD-IL - Auto force addon updates on Kodi startup
+        # Startup force addon updates
         self.FORCEUPDATEFAST_ONSTARTUP = self.get_setting('forceupdateFAST_on_startup')
         self.FORCEUPDATEFAST_ONSTARTUP_NOTIFY = self.get_setting('forceupdateFAST_on_startup_notify')
         
         # Video Cache variables
         self.INCLUDEVIDEO = self.get_setting('includevideo')
         self.INCLUDEALL = self.get_setting('includeall')
-        self.INCLUDEEXODUSREDUX = self.get_setting('includeexodusredux')
-        self.INCLUDEGAIA = self.get_setting('includegaia')
-        self.INCLUDESEREN = self.get_setting('includeseren')
-        self.INCLUDETHECREW = self.get_setting('includethecrew')
-        self.INCLUDEYODA = self.get_setting('includeyoda')
-        self.INCLUDEVENOM = self.get_setting('includevenom')
-        self.INCLUDENUMBERS = self.get_setting('includenumbers')
-        self.INCLUDESCRUBS = self.get_setting('includescrubs')
         
         # Notification variables
         self.NOTIFY = self.get_setting('notify')
         self.NOTEID = self.get_setting('noteid')
         self.NOTEDISMISS = self.get_setting('notedismiss')
-        
-        #########################################################################################################
-        # KODI-RD-IL - AUTO QUICK UPDATES
-        self.QUICK_UPDATE_NOTEID = self.get_setting('quick_update_noteid')
-        self.QUICK_UPDATE_NOTEDISMISS = self.get_setting('quick_update_notedismiss')
-        #########################################################################################################
-        
-        # Save Data variables
-        # self.USE_GITHUB_CUSTOM_SAVE_DATA_CONFIG = self.get_setting('use_github_custom_save_data_config')
-        self.TRAKTSAVE = self.get_setting('traktnextsave')
-        self.DEBRIDSAVE = self.get_setting('debridnextsave')
-        self.LOGINSAVE = self.get_setting('loginnextsave')
-        self.KEEPFAVS = self.get_setting('keepfavourites')
-        self.KEEPFENDATA = self.get_setting('keepfendata')
-        self.KEEPTWILIGHTDATA = self.get_setting('keeptwilightdata')
+
+        # Modern Data Preservation Toggles
+        self.KEEPACCTMGR = self.get_setting('keepacctmgr')
+        self.KEEPPOVDATA = self.get_setting('keeppovdata')
+        self.KEEPUMBRELLADATA = self.get_setting('keepumbrelladata')
         self.KEEPFENTASTICDATA = self.get_setting('keepfentasticdata')
+
+        # Core User Data Toggles
+        self.KEEPFAVS = self.get_setting('keepfavourites')
         self.KEEPSOURCES = self.get_setting('keepsources')
         self.KEEPPROFILES = self.get_setting('keepprofiles')
         self.KEEPPLAYERCORE = self.get_setting('keepplayercore')
@@ -304,13 +289,12 @@ class Config:
         self.KEEPSUPER = self.get_setting('keepsuper')
         self.KEEPWHITELIST = self.get_setting('keepwhitelist')
         self.KEEPADDONS33DB = self.get_setting('keepaddons33db')
-        self.KEEPTRAKT = self.get_setting('keeptrakt')
-        self.KEEPDEBRID = self.get_setting('keepdebrid')
-        self.KEEPLOGIN = self.get_setting('keeplogin')
 
         # Backup variables
-        self.BACKUPLOCATION = xbmcvfs.translatePath(self.get_setting('path') if not self.get_setting('path') == '' else self.HOME)
+        backup_path = self.get_setting('path')
+        self.BACKUPLOCATION = xbmcvfs.translatePath(backup_path if backup_path else self.HOME)
         self.MYBUILDS = os.path.join(self.BACKUPLOCATION, 'My_Builds')
+        self.ACCTMGR_BACKUP = os.path.join(self.MYBUILDS, 'acctmgr_data')
 
         # Logging variables
         self.DEBUGLEVEL = self.get_setting('debuglevel')
@@ -352,21 +336,17 @@ class Config:
             import logging
             logging.log('Cannot open settings for {}'.format(id), level=xbmc.LOGERROR)
         
-        if int(self.KODIV) < 18:
-            use = 0
-        else:
-            use = 1
+        use = 0 if int(self.KODIV) < 18 else 1
 
         if cat is not None:
             category_id = cat + offset[use][0]
-            xbmc.executebuiltin('SetFocus({})'.format(category_id))
+            xbmc.executebuiltin(f'SetFocus({category_id})')
             if set is not None:
                 setting_id = set + offset[use][1]
-                xbmc.executebuiltin('SetFocus({})'.format(setting_id))
+                xbmc.executebuiltin(f'SetFocus({setting_id})')
                 
                 if activate:
-                    xbmc.executebuiltin('SendClick({})'.format(setting_id))
-            
+                    xbmc.executebuiltin(f'SendClick({setting_id})')
 
     def clear_setting(self, type):
         build = {'buildname': '', 'buildversion': '', 'buildtheme': '',
