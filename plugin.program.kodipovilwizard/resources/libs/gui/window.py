@@ -134,6 +134,7 @@ def show_contact(msg=""):
             self.imagecontrol = 103
             self.textbox = 104
             self.scrollcontrol = 105
+            self.closebutton = 106
             self.show_dialog()
 
         def show_dialog(self):
@@ -148,42 +149,35 @@ def show_contact(msg=""):
             if action.getId() in BACK_ACTIONS:
                 self.close()
 
+        def onClick(self, controlId):
+            if controlId == self.closebutton:
+                self.close()
+
     cw = ContactWindow("Contact.xml", CONFIG.ADDON_PATH, 'Default', title=CONFIG.ADDONTITLE, fanart=CONFIG.CONTACTFANART,
                   image=CONFIG.CONTACTICON, msg=msg)
     cw.doModal()
     del cw
 
-
 def show_qr_code(layout, imagefile, message):
+    """Use the bundled uploader layout; QR generation requires no network."""
     class QRCode(xbmcgui.WindowXMLDialog):
-        def __init__(self, *args, **kwargs):
-            self.image = kwargs["image"]
-            self.text = kwargs["text"]
-
         def onInit(self):
-            self.imagecontrol = 501
-            self.textbox = 502
-            self.okbutton = 503
-            self.title = 504
-            self.show_dialog()
-
-        def show_dialog(self):
-            self.getControl(self.imagecontrol).setImage(self.image)
-            self.getControl(self.textbox).setText(self.text)
-            self.getControl(self.title).setLabel(CONFIG.ADDONTITLE)
-            self.setFocus(self.getControl(self.okbutton))
+            self.getControl(501).setImage(imagefile)
+            self.getControl(502).setText(message)
+            self.getControl(504).setLabel(CONFIG.ADDONTITLE)
+            self.setFocusId(503)
 
         def onClick(self, controlid):
-            if controlid == self.okbutton:
+            if controlid == 503:
                 self.close()
 
         def onAction(self, action):
             if action.getId() in BACK_ACTIONS:
                 self.close()
 
-    qr = QRCode(layout, CONFIG.ADDON_PATH, 'Default', image=imagefile, text=message)
-    qr.doModal()
-    del qr
+    dialog = QRCode(layout, CONFIG.ADDON_PATH, 'Default')
+    dialog.doModal()
+    del dialog
 
 
 def show_apk_warning(apk):
@@ -208,33 +202,6 @@ def show_apk_warning(apk):
 
     xbmc.executebuiltin('Skin.SetString(apkinstaller, Now that {0} has been downloaded[CR]Click install on the next window!)'.format(apk))
     popup = APKInstaller('APK.xml', CONFIG.ADDON_PATH, 'Default', close_time=34)
-    popup.doModal()
-    del popup
-
-
-def show_speed_test(img):
-    class SpeedTest(xbmcgui.WindowXMLDialog):
-
-        def __init__(self, *args, **kwargs):
-            self.imgfile = kwargs['img']
-
-        def onInit(self):
-            self.imagespeed = 101
-            self.button = 201
-            self.show_dialog()
-
-        def show_dialog(self):
-            self.setFocus(self.getControl(self.button))
-            self.getControl(self.imagespeed).setImage(self.imgfile)
-
-        def onClick(self, controlid):
-            self.close()
-
-        def onAction(self, action):
-            if action.getId() in BACK_ACTIONS:
-                self.close()
-
-    popup = SpeedTest('SpeedTest.xml', CONFIG.ADDON_PATH, 'Default', img=img)
     popup.doModal()
     del popup
 
@@ -453,7 +420,11 @@ def show_update_window(name='Testing Window', current='1.0', new='1.1', icon=CON
 
 
 def split_notify(notify):
-    response = tools.open_url(notify)
+    try:
+        response = tools.open_url(notify)
+    except Exception as exc:
+        logging.log('[Notifications] Could not load {0}: {1}'.format(notify, exc))
+        return False, False
 
     if response:
         link = response.text
@@ -467,7 +438,7 @@ def split_notify(notify):
         if link.find('|||') == -1:
             return False, False
 
-        _id, msg = link.split('|||')
+        _id, msg = link.split('|||', 1)
         _id = _id.replace('[CR]', '')
         if msg.startswith('[CR]'):
             msg = msg[4:]
@@ -477,69 +448,53 @@ def split_notify(notify):
         return False, False
 
 
-def recent_updates_text(url=None):
-    """The last ten notes as one readable block, newest first.
-
-    Parsed with the same `<id>|||<title>` shape a single note uses, because it
-    IS a run of single notes concatenated -- the archive is generated from the
-    published file's own git history, so nothing here has to agree with a
-    separate hand-kept list.
-
-    Split on a HEADER AT THE START OF A LINE, not on any '|||' anywhere.
-    split_notify() above may split on the first occurrence because it is
-    reading one note; here a body that mentioned '|||' mid-sentence would
-    otherwise tear a record in half and shift every later one.
-    """
-    response = tools.open_url(url or CONFIG.RECENT_UPDATES_URL)
+def recent_updates_text():
+    """Format the published ten-note archive for Kodi's text dialog."""
+    try:
+        response = tools.open_url(CONFIG.RECENT_UPDATES_URL)
+    except Exception as exc:
+        logging.log('[RecentUpdates] Could not load archive: {0}'.format(exc))
+        return ''
     if not response:
         return ''
     raw = response.text
-    try:
-        raw = response.text.decode('utf-8')
-    except Exception:
-        pass
-    raw = raw.replace('\r\n', '\n').replace('\r', '').replace('\t', '    ')
-    import re as _re
-    parts = _re.split(r'(?m)^(\d+)\|\|\|', raw)
-    # re.split with one group yields [before, id, rest, id, rest, ...]
-    blocks = []
+    if isinstance(raw, bytes):
+        raw = raw.decode('utf-8', 'replace')
+    raw = raw.replace('\r\n', '\n').replace('\r', '\n').replace('\t', '    ')
+    if len(raw) > 100000:
+        return ''
+    parts = re.split(r'(?m)^(\d+)\|\|\|', raw)
+    out = []
+    count = 0
     for index in range(1, len(parts) - 1, 2):
         chunk = parts[index + 1].strip('\n')
         if not chunk:
             continue
-        head, _, body = chunk.partition('\n')
-        blocks.append((head.strip(), body.strip()))
-    if not blocks:
-        return ''
-    out = []
-    for title, body in blocks[:10]:
-        out.append(CONFIG.THEME3.format(title))
-        if body:
-            out.append(body)
+        title, _, body = chunk.partition('\n')
+        out.append(CONFIG.THEME3.format(title.strip()))
+        if body.strip():
+            out.append(body.strip())
         out.append('')
-    # NOT rstrip('[CR]') -- that strips any of the CHARACTERS '[', 'C', 'R',
-    # ']', so a note body ending in '[/COLOR]' lost its last two characters.
-    # The separator is a token; remove it as one.
-    text = '[CR]'.join(out)
-    while text.endswith('[CR]'):
-        text = text[:-4]
-    return text
+        count += 1
+        if count >= 10:
+            break
+    if not out:
+        return ''
+    return '[CR]'.join(out[:-1])
 
 
 def show_recent_updates():
-    """Menu/tile entry point: show the archive, or say plainly that it is
-    unreachable rather than opening an empty box."""
     text = recent_updates_text()
     if not text:
-        log_notify(CONFIG.ADDONTITLE,
-                   '[COLOR {0}]לא הצלחנו לטעון את העדכונים האחרונים[/COLOR]'
-                   .format(CONFIG.COLOR2))
+        logging.log_notify(CONFIG.ADDONTITLE,
+                           '[COLOR {0}]לא הצלחנו לטעון את העדכונים האחרונים[/COLOR]'
+                           .format(CONFIG.COLOR2))
         return False
     show_text_box('10 העדכונים האחרונים', text)
     return True
 
 
-def show_notification(msg, test=False, source="notification"):
+def show_notification(msg, test=False):
     class Notification(xbmcgui.WindowXMLDialog):
 
         def __init__(self, *args, **kwargs):
@@ -575,15 +530,9 @@ def show_notification(msg, test=False, source="notification"):
             # self.close()
 
         def do_dismiss(self):
-            # KODI-RD-IL
-            noteid_setting = 'quick_update_noteid' if source == "quick_update_notification" else 'noteid'
-            notedismiss_setting = 'quick_update_notedismiss' if source == "quick_update_notification" else 'notedismiss'
-            ###################
             if not test:
-                # CONFIG.set_setting('notedismiss', 'true')
-                CONFIG.set_setting(notedismiss_setting, 'true')
-            # logging.log('[Notifications] Notification {0} Dismissed'.format(CONFIG.get_setting('noteid')))
-            logging.log('[Notifications] Notification {0} Dismissed'.format(CONFIG.get_setting(noteid_setting)))
+                CONFIG.set_setting('notedismiss', 'true')
+            logging.log('[Notifications] Notification {0} Dismissed'.format(CONFIG.get_setting('noteid')))
             self.close()
 
         def onAction(self, action):

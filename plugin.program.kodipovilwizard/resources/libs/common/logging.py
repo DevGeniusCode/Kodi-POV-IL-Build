@@ -50,42 +50,58 @@ REPLACES = (('//.+?:.+?@', '//USER:PASSWORD@'), ('<user>.+?</user>', '<user>USER
                                                                                             '<pass>PASSWORD</pass>'),)
 
 
-def log(msg, level=xbmc.LOGDEBUG):
-    if CONFIG.DEBUGLEVEL == '0':  # No Logging
-        return False
-    if CONFIG.DEBUGLEVEL == '1':  # Normal Logging
-        pass
-    if CONFIG.DEBUGLEVEL == '2':  # Full Logging
-        level = xbmc.LOGINFO
-    
-    xbmc.log('{0}: {1}'.format(CONFIG.ADDONTITLE, msg), level)
-    # WRITING THE LOG MUST NEVER KILL THE CALLER. On a FRESH install
-    # addon_data/plugin.program.kodipovilwizard does not exist yet, and
-    # open(CONFIG.WIZLOG, 'w+') then raises FileNotFoundError straight out of
-    # log() -- into whatever was logging, which at import time is a module
-    # nobody can catch from. That is exactly how a wizard that logs one line
-    # too early turns into "nobody can install the build". The Kodi log line
-    # above has already gone out by this point, so nothing here is worth an
-    # exception: create the folder, and swallow whatever is left.
-    if CONFIG.ENABLEWIZLOG == 'true':
+def log(msg, level=xbmc.LOGINFO):
+    # Always route to Kodi's native log (kodi.log) so the wizard is observable,
+    # regardless of its own DEBUGLEVEL setting. The previous version did an
+    # early `return False` when DEBUGLEVEL == '0', which swallowed EVERYTHING --
+    # even LOGINFO/LOGWARNING/LOGERROR -- and was the "logging black hole".
+    try:
+        title = getattr(CONFIG, 'ADDONTITLE', 'Kodi POV IL Wizard')
+        xbmc.log('{0}: {1}'.format(title, msg), level)
+    except Exception:
         try:
-            folder = os.path.dirname(CONFIG.WIZLOG)
-            if folder and not os.path.isdir(folder):
-                os.makedirs(folder)
-            if not os.path.exists(CONFIG.WIZLOG):
-                with open(CONFIG.WIZLOG, 'w+') as f:
-                    f.close()
+            xbmc.log('Kodi POV IL Wizard: {0}'.format(msg), xbmc.LOGINFO)
+        except Exception:
+            pass
 
-            lastcheck = CONFIG.NEXTCLEANDATE if not CONFIG.NEXTCLEANDATE == 0 else tools.get_date()
-            if CONFIG.CLEANWIZLOG == 'true' and time.mktime(time.strptime(lastcheck, "%Y-%m-%d %H:%M:%S")) <= tools.get_date():
-                check_log()
+    # Optional wizard-owned logfile -- fully guarded so a logging failure can
+    # never break a caller (e.g. the provisioning watchdog thread).
+    try:
+        # PatchEngine can report dozens of patches during startup. Kodi's native
+        # log above already contains every one, so avoid repeating synchronous
+        # appends to the Wizard logfile for this high-volume source. On some
+        # Android profiles those appends stall the entire startup path.
+        if str(msg).startswith('[PatchEngine]'):
+            return
+        if getattr(CONFIG, 'DEBUGLEVEL', '0') == '0' or getattr(CONFIG, 'ENABLEWIZLOG', 'false') != 'true':
+            return
 
-            line = "[{0}] {1}".format(tools.get_date(formatted=True), msg)
-            line = line.rstrip('\r\n') + '\n'
-            tools.write_to_file(CONFIG.WIZLOG, line, mode='a')
-        except Exception as log_err:
-            xbmc.log('{0}: could not write the wizard log: {1}'.format(
-                CONFIG.ADDONTITLE, log_err), xbmc.LOGWARNING)
+        # CRITICAL FIX (from older branch): On a FRESH install, the addon_data folder
+        # might not exist yet. Ensure the directory exists before touching the log file.
+        folder = os.path.dirname(CONFIG.WIZLOG)
+        if folder and not os.path.isdir(folder):
+            os.makedirs(folder)
+
+        if not os.path.exists(CONFIG.WIZLOG):
+            with open(CONFIG.WIZLOG, 'w+') as f:
+                pass  # Context manager automatically handles closing
+
+        lastcheck = getattr(CONFIG, 'NEXTCLEANDATE', 0)
+        if lastcheck == 0:
+            lastcheck = tools.get_date()
+
+        if getattr(CONFIG, 'CLEANWIZLOG', 'false') == 'true' and time.mktime(time.strptime(lastcheck, "%Y-%m-%d %H:%M:%S")) <= tools.get_date():
+            check_log()
+
+        line = "[{0}] {1}".format(tools.get_date(formatted=True), msg)
+        line = line.rstrip('\r\n') + '\n'
+        tools.write_to_file(CONFIG.WIZLOG, line, mode='a')
+
+    except Exception as log_err:
+        try:
+            xbmc.log('Kodi POV IL Wizard: could not write the wizard log: {0}'.format(log_err), xbmc.LOGWARNING)
+        except Exception:
+            pass
 
 
 def check_log():
@@ -130,6 +146,8 @@ def grab_log(file=False, old=False, wizard=False):
                 
     logsfound = []
 
+    if not os.path.isdir(CONFIG.LOGPATH):
+        return False
     for item in [file for file in os.listdir(CONFIG.LOGPATH) if os.path.basename(file).startswith('kodi')]:
         if item.endswith('.log'):
             if (old and 'old' in item) or (not old and 'old' not in item):
@@ -150,12 +168,10 @@ def upload_log():
     for item in files:
         filetype = item[0]
         if filetype == 'log':
-            log = os.path.basename(grab_log(file=True))
-            name = log if log else "kodi.log"
+            name = os.path.basename(item[1]) or "kodi.log"
             error = "Error posting the {0} file".format(name)
         elif filetype == 'oldlog':
-            log = os.path.basename(grab_log(file=True, old=True))
-            name = log if log else "kodi.old.log"
+            name = os.path.basename(item[1]) or "kodi.old.log"
             error = "Error posting the {0} file".format(name)
         elif filetype == 'wizlog':
             name = "wizard.log"
@@ -183,7 +199,7 @@ def upload_log():
             else:
                 show_result('{0}[CR]{1}'.format(error, result))
         else:
-            show_result('{0}[CR]{1}'.format(error, result))
+            show_result('{0}[CR]{1}'.format(error, data))
 
 
 def get_files():
@@ -242,6 +258,7 @@ def get_files():
 
 
 def read_log(path):
+    lf = None
     try:
         lf = xbmcvfs.File(path)
         content = lf.read()
@@ -253,12 +270,45 @@ def read_log(path):
     except Exception as e:
         log('unable to read file: {0}'.format(e))
         return False, "Unable to Read File"
+    finally:
+        if lf is not None:
+            try:
+                lf.close()
+            except Exception:
+                pass
 
 
 def clean_log(content):
     for pattern, repl in REPLACES:
         content = re.sub(pattern, repl, content)
-        return content
+    return content
+
+
+def show_result(message, url=None):
+    """Display an uploaded link locally, with a text fallback for QR failures."""
+    imagefile = None
+    if url:
+        try:
+            import tempfile
+            import segno
+            from resources.libs.gui import window
+
+            folder = os.path.join(CONFIG.PLUGIN_DATA, 'qrcodes')
+            os.makedirs(folder, exist_ok=True)
+            fd, imagefile = tempfile.mkstemp(prefix='log-', suffix='.png', dir=folder)
+            os.close(fd)
+            segno.make_qr(url).save(imagefile, scale=8)
+            window.show_qr_code('loguploader.xml', imagefile, message)
+            return
+        except Exception as e:
+            log('Could not display log QR: {0}'.format(e), level=xbmc.LOGWARNING)
+        finally:
+            if imagefile:
+                try:
+                    os.remove(imagefile)
+                except OSError:
+                    pass
+    xbmcgui.Dialog().ok(CONFIG.ADDONTITLE, message)
 
 
 def post_log(data, name):
@@ -392,29 +442,6 @@ def copy_to_clipboard(txt):
 # LogURLopener class removed -- post_log() now uses requests.post()
 # instead of the deprecated urllib.request.FancyURLopener (which
 # Python 3.14 removed entirely). The class had no other callers.
-
-
-def show_result(message, url=None):
-    from resources.libs.gui import window
-
-    dialog = xbmcgui.Dialog()
-
-    if url:
-        try:
-            from resources.libs import qr
-            
-            fn = url.split('/')[-2]
-            imagefile = qr.generate_code(url, fn)
-            window.show_qr_code("loguploader.xml", imagefile, message)
-            try:
-                os.remove(imagefile)
-            except:
-                pass
-        except Exception as e:
-            log(str(e), xbmc.LOGINFO)
-            confirm = dialog.ok(CONFIG.ADDONTITLE, "[COLOR %s]%s[/COLOR]" % (CONFIG.COLOR2, message))
-    else:
-        confirm = dialog.ok(CONFIG.ADDONTITLE, "[COLOR %s]%s[/COLOR]" % (CONFIG.COLOR2, message))
 
 
 def view_log_file():
