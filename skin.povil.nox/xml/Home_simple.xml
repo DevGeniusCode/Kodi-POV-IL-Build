@@ -160,7 +160,7 @@
 						</include>
 						<include content="IconButtonNox" condition="Skin.HasSetting(NoSearchResultsWindow)">
 							<param name="control_id" value="804" />
-							<param name="onclick" value="ActivateWindow(1107)" />
+							<param name="onclick" value="ActivateWindow(videos,plugin://plugin.video.pov/?mode=navigator.search,return)" />
 							<param name="icon" value="icons/search.png" />
 							<param name="label" value="$LOCALIZE[137]" />
 						</include>

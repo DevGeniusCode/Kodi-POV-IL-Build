@@ -21,7 +21,7 @@
 					<item>
 						<label>$LOCALIZE[13012]</label>
 						<onclick>Dialog.Close(all)</onclick>
-						<onclick>RunPlugin(plugin://plugin.close.kodi/?mode=4&amp;url=fclose)</onclick>
+						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?action=force_close)</onclick>
 					</item>
 					<item>
 						<label>$LOCALIZE[70001]</label>

@@ -22,7 +22,7 @@
 			<align>justify</align>
 			<include content="IconButtonNox" condition="!Skin.HasSetting(OneClickClose)">
 				<param name="control_id" value="802" />
-				<param name="onclick" value="RunPlugin(plugin://plugin.close.kodi/?mode=4&amp;url=fclose)" />
+				<param name="onclick" value="RunPlugin(plugin://plugin.program.kodipovilwizard/?action=force_close)" />
 				<param name="icon" value="icons/power.png" />
 				<param name="label" value="$LOCALIZE[33060]" />
 			</include>
