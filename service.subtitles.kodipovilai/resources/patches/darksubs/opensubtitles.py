@@ -45,7 +45,7 @@ sub_color='orange'
 ###### Requests Params ##############
 REQUEST_MAX_RETRIES_NUMBER = 8
 REQUEST_RETRY_DELAY_IN_MS = 500
-OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4
+OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 5
 #########################################
 
 def _base_search_query(lang_string):
@@ -184,7 +184,7 @@ def api_search_subtitles(video_data, all_lang_override):
 
     # New OpenSubtitles.com API Search docs:
     # https://opensubtitles.stoplight.io/docs/opensubtitles-api/a172317bd5ccc-search-for-subtitles
-    
+
 
     selected_lang=[]
 
@@ -204,13 +204,13 @@ def api_search_subtitles(video_data, all_lang_override):
     # If 'all_lang' is enabled OR all_lang_override=True (retry search) - override selected_lang to 'ALL' only (required 'ALL' only in new API)
     if Addon.getSetting("all_lang")=='true' or all_lang_override:
         selected_lang = ['ALL']
-    else:   
+    else:
         for index, lang_code in enumerate(selected_lang):
             selected_lang[index] = xbmc.convertLanguage(lang_code, xbmc.ISO_639_1) or lang_code
-       
+
     lang_string = ','.join(selected_lang)
     query_variants = _build_query_variants(video_data, lang_string)
-    
+
     # Determine which API keys to try for Search. Search used to use one
     # random shared key only; if that key was exhausted, all results were 0.
     if USE_OS_USER_API_KEY:
@@ -238,27 +238,27 @@ def api_search_subtitles(video_data, all_lang_override):
                 break
 
     return []
-       
-       
+
+
 def get_subs(video_data, all_lang_override=False):
 
     # For settings changes to take effect.
     Addon=xbmcaddon.Addon()
-    
+
     global global_var
     log.warning('DEBUG | [OpenSubtitles] | Searching Opensubtitles')
     subtitle_list = []
-    
+
     search_data = api_search_subtitles(video_data, all_lang_override)
-    
+
     if search_data is not None:
 
         for search_item in search_data:
-        
+
             attributes = search_item.get('attributes', {})
             SubRating = attributes.get("ratings", '0')
             hearing_impaired = "true" if attributes.get("hearing_impaired", False) else "false"
-            
+
             thumbnailImageLanguageName = attributes.get("language")
             if thumbnailImageLanguageName is None:
                 # Skip this iteration of the loop if thumbnailImageLanguageName is None
@@ -266,7 +266,7 @@ def get_subs(video_data, all_lang_override=False):
 
             # Attempt language conversion; if it fails, assign the original thumbnailImageLanguageName
             FullLanguageName = xbmc.convertLanguage(thumbnailImageLanguageName, xbmc.ENGLISH_NAME) or thumbnailImageLanguageName
-            
+
             try:
                 if attributes['files']:
                     # Attempt to access 'file_name' and 'file_id' if 'files' exist and have elements
@@ -275,7 +275,7 @@ def get_subs(video_data, all_lang_override=False):
                 else:
                     # If 'files' or its elements are missing or empty, proceed to the next search_item
                     continue
-            
+
             except:
                 # Handle cases where 'file_name' or 'file_id' are missing or incorrectly structured
                 # Go to the next search_item
@@ -285,17 +285,17 @@ def get_subs(video_data, all_lang_override=False):
             characters_to_remove = '\\/:*?"<>|\''
             # Remove characters that might cause issues in the filename
             SubFileName = ''.join(c for c in SubFileName if c not in characters_to_remove)
-        
+
             # Remove "תרגום אולפנים"
             SubFileName = SubFileName.replace("תרגום אולפנים", "").replace("אולפנים", "").strip()
-            
+
             download_data={}
             download_data['filename']=SubFileName
             download_data['id']=file_id
             download_data['format']="srt"
             # Send Hearing Impaired (HI) flag to determine if to clean HI tags or not.
             download_data['hearing_imp'] = hearing_impaired
-            
+
             url = "plugin://%s/?action=download&filename=%s&language=%s&download_data=%s&source=opensubtitles" % (MyScriptID,
                                                                                                 que(SubFileName),
                                                                                                 FullLanguageName,
@@ -313,10 +313,10 @@ def get_subs(video_data, all_lang_override=False):
                     'filename':SubFileName,
                     'sync': "false"}
 
-            
-               
+
+
             subtitle_list.append(json_data)
-            
+
         global_var=subtitle_list
 
 
@@ -324,7 +324,7 @@ def download(download_data,MySubFolder):
 
     # New OpenSubtitles.com API Download docs:
     # https://opensubtitles.stoplight.io/docs/opensubtitles-api/6be7f6ae2d918-download
-    
+
     try:
         shutil.rmtree(MyTmp)
     except: pass
@@ -332,27 +332,27 @@ def download(download_data,MySubFolder):
     file_id=download_data['id']
     format=download_data['format']
     filename=download_data['filename']
-    
+
     subFile = os.path.join(MyTmp, "%s.%s" %(str(filename), format))
     log.warning(f'DEBUG | [OpenSubtitles] | Desired sub file_id: {file_id} | subFile: {subFile}')
-    
+
     # Subtitle File ID
     payload = {"file_id": int(file_id), "sub_format": "srt"}
 
     response = None
     success = False
-    
+
     # Get subtitle download link
     for api_key_attempt_number in range(1, REQUEST_MAX_RETRIES_NUMBER + 1):
-    
+
         # Determine which API key to use for Download
         if USE_OS_USER_API_KEY:
             OS_API_KEY_NAME = "User_Setting_API_Key"
             OS_API_KEY_VALUE = OS_USER_API_KEY_VALUE  # Use OS_USER_API_KEY_VALUE from settings
         else:
             OS_API_KEY_NAME,OS_API_KEY_VALUE = get_random_key()
-            
-        log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles | api_key_attempt_number={api_key_attempt_number} | OS_API_KEY_NAME={OS_API_KEY_NAME} | OS_API_KEY_VALUE={OS_API_KEY_VALUE}")
+
+        log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles | api_key_attempt_number={api_key_attempt_number} | OS_API_KEY_NAME={OS_API_KEY_NAME}")
 
         headers = {
             "User-Agent": USER_AGENT,
@@ -361,7 +361,7 @@ def download(download_data,MySubFolder):
             "Api-Key": OS_API_KEY_VALUE
             # "Authorization": f"Bearer {osdb_token}" # Download works also only with API key, without username/password token authentication, although the API docs. Strange..
         }
-        
+
         retry_number = 1
         while retry_number <= REQUEST_MAX_RETRIES_NUMBER:
             try:
@@ -369,11 +369,11 @@ def download(download_data,MySubFolder):
                 log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles payload: {repr(payload)}")
                 response = requests.post(OPS_API_DOWNLOAD_URL, json=payload, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
                 log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles response.status_code: {repr(response.status_code)}")
-                
+
                 if response.status_code == 503 or response.status_code == 406:
                     break # 503 - Wrong API Key | 406 - max usage quota reached for the API key.
                 response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
-                
+
                 response_json = response.json()
                 log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles result: {repr(response_json)}")
                 subtitle_download_url = response_json['link']
@@ -392,14 +392,14 @@ def download(download_data,MySubFolder):
                 else:
                     log.warning('DEBUG | [OpenSubtitles] | OpenSubtitles DownloadSubtitles error: ' + repr(req_err))
                     raise RuntimeError("OpenSubtitles DownloadSubtitles error")
-                    
+
         if success:
             break  # Break the for loop if the flag is set
 
     if not success:
         log.warning("DEBUG | [OpenSubtitles] | OpenSubtitles DownloadSubtitles error | No success in getting sub URL download from any API key")
         raise RuntimeError(f"OpenSubtitles DownloadSubtitles error | Looped through {REQUEST_MAX_RETRIES_NUMBER} API keys unsucessfully.")
-            
+
     # Download subtitle file
     for attempt_number in range(1, REQUEST_MAX_RETRIES_NUMBER + 1):
         log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles | Download sub file | Starting attempt_number {attempt_number}.")
@@ -438,7 +438,7 @@ def get_api_keys(shuffle_keys=False):
     if shuffle_keys:
         random.shuffle(api_keys)
     return api_keys
-    
+
 def get_random_key():
     api_keys = get_api_keys(shuffle_keys=True)
     return api_keys[0]
@@ -461,10 +461,10 @@ def get_random_key():
 # The class is currently UNUSED - was able to Search+Download with API keys authentication ONLY, without username/password authentication.
 # class OSDBServer:
     # def __init__( self, *args, **kwargs ):
-    
+
         # self.osdb_token = None
         # self.login_to_osdb()
-        
+
 
     # def login_to_osdb(self):
         # try:
@@ -486,7 +486,7 @@ def get_random_key():
                 # OS_API_KEY_VALUE = OS_USER_API_KEY_VALUE  # Use OS_USER_API_KEY_VALUE from settings
             # else:
                 # OS_API_KEY_NAME,OS_API_KEY_VALUE = get_random_key()
-            
+
             # headers = {
                 # "Content-Type": "application/json",
                 # "Accept": "application/json",
@@ -512,6 +512,6 @@ def get_random_key():
         # except Exception as e:
             # log.warning('DEBUG | [OpenSubtitles] | OpenSubtitles Login error: ' + repr(e))
 
-        
+
     # def get_osdb_token(self):
         # return self.osdb_token
