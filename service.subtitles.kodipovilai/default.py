@@ -1,3 +1,5 @@
+# File: service.subtitles.kodipovilai/default.py
+
 # Kodi subtitle service entry point.
 #
 # Kodi launches this with action=search or action=download in the
@@ -222,7 +224,7 @@ def _handle_download(handle, params):
     # Remember this as the currently-applied subtitle so the picker marks it
     # '» נוכחית' next time it opens.
     try:
-        kodi_utils.set_current_subtitle(link, renew=True)
+        kodi_utils.set_current_subtitle(link)
     except Exception:
         pass
     try:
@@ -934,7 +936,14 @@ def _try_fast_download(handle, link, info, selection=None):
             cached = _cache.translated_path(
                 imdb_id, season, episode, source_lang,
                 source_id=source_id)
-            if os.path.isfile(cached):
+            # A Google Translate fallback that AI can now replace goes to
+            # resolve(), which translates it with a live preview -- when
+            # resolve() looks in this same plain slot, i.e. with the gender
+            # reference off. With it on, resolve() reads the 'ar' slot only,
+            # so this file stays the instant hit it was.
+            _upgrade = (translate._google_cache_upgradeable(cached)
+                        and not kodi_utils.get_bool('gender_ref_arabic', False))
+            if os.path.isfile(cached) and not _upgrade:
                 # A cached translation keeps its SOURCE subtitle's timing. Run
                 # the delivery through the same release-aware gate as resolve;
                 # any correction is a copy, never a rewrite of the AI cache.
@@ -1678,7 +1687,7 @@ def _show_gemini_usage():
 
 def _handle_show_gemini_usage(_params):
     """RunScript entry point so the dialog can be opened from
-    anywhere, e.g. a remote shortcut."""
+    anywhere, e.g. a Wizard button or a remote shortcut."""
     _show_gemini_usage()
 
 
@@ -1952,17 +1961,6 @@ def _gemini_type_flow(kodi_utils, gemini):
             return
 
 
-# --- MDBList API-key pairing (mirror of the Gemini flow) --------------------
-# MDBList's key lives in POV's OWN `mdblist.token` setting (POV is the consumer),
-# so we read/write it cross-addon. The phone form validates against MDBList
-# before submit; _test_save_mdblist re-checks Kodi-side and stores it.
-def _mdblist_pov_addon():
-    try:
-        import xbmcaddon as _mx
-        return _mx.Addon('plugin.video.pov')
-    except Exception:
-        return None
-
 
 def _handle_search_provider(_params):
     """RunScript action=search_provider -- pick which add-on the home search
@@ -2023,434 +2021,6 @@ def _handle_search_provider(_params):
         'החיפוש יעבוד מעכשיו דרך {0}.\n\n'
         'בסקין שאתם נמצאים בו כרגע השינוי ייכנס לתוקף לאחר הפעלה מחדש '
         'של Kodi.'.format(name))
-
-
-ACCTMGR_ADDON_ID = 'script.module.acctmgr'
-
-
-def _mdblist_push_to_acctmgr(key, username):
-    """Hand a freshly paired MDBList key to Account Manager so it lands in
-    every add-on AM supports (Umbrella, Coalition, TMDb Helper, POV...) rather
-    than in POV alone.
-
-    We keep our own QR pairing rather than AM's -- AM's MDBList authorisation
-    is a bare keyboard prompt for the API key, with no phone pairing at all --
-    and only hand it the finished, validated key afterwards.
-
-    Best-effort by design: a failure here costs the user nothing they had
-    before, so it must never turn a successful POV connect into a visible
-    error. Returns True only when AM was updated AND its sync was started.
-
-    Deliberately NOT mirrored on disconnect: AM's mdblist_auth() pushes
-    whatever key it holds and, for POV, also sets watched_indicators=2 with
-    mdbl_indicators_active=true. Running it with a BLANK key would point POV's
-    watched-status provider at MDBList with no key -- precisely the
-    inconsistent state _mdblist_apply_connect goes out of its way to prevent.
-    So disconnect clears AM's own two settings and stops there; the other
-    add-ons keep their key until an explicit revoke inside Account Manager."""
-    if not (key or '').strip():
-        return False
-    try:
-        import xbmcaddon as _mx
-        _mx.Addon(ACCTMGR_ADDON_ID)
-    except Exception:
-        return False                      # AM not installed -- nothing to do
-    try:
-        from resources.lib import addon_settings_safe
-        _changed, _restored, failed = addon_settings_safe.apply(
-            ACCTMGR_ADDON_ID,
-            (('mdblist.apikey', key.strip()),
-             ('mdblist.username', username or '')))
-    except Exception as e:
-        _safe_log('mdblist -> acctmgr write failed: {0}'.format(e),
-                  level='WARNING')
-        return False
-    if failed:
-        _safe_log('mdblist -> acctmgr did not stick: {0}'.format(failed),
-                  level='WARNING')
-        return False
-    return True
-
-
-def _mdblist_acctmgr_resync():
-    """Start Account Manager's own MDBList sync.
-
-    Fired LAST, after every dialog of ours has closed, and never before.
-    AM's mdblistReSync branch ends with `xbmc.sleep(3000)` then
-    `control.openSettings()` -- so roughly six seconds after it is spawned it
-    puts its own settings window on screen, over whatever is there. Spawning
-    it before our dialogs meant AM's settings jumped on top of the Umbrella
-    question while the user was still reading it, which is exactly what was
-    reported: the question appeared and was gone before it could be answered.
-    We cannot stop AM opening its settings -- that is its code -- but we can
-    make sure nothing of ours is still on screen when it does."""
-    try:
-        import xbmc as _mxbmc
-        _mxbmc.executebuiltin(
-            'RunScript({0},action=mdblistReSync)'.format(ACCTMGR_ADDON_ID))
-        return True
-    except Exception as e:
-        _safe_log('mdblist acctmgr resync failed to start: {0}'.format(e),
-                  level='WARNING')
-        return False
-
-
-def _mdblist_clear_acctmgr():
-    """Blank Account Manager's own MDBList settings on disconnect, so AM stops
-    reporting a connection it no longer has. See the note in
-    _mdblist_push_to_acctmgr for why no AM sync is run here."""
-    try:
-        import xbmcaddon as _mx
-        _mx.Addon(ACCTMGR_ADDON_ID)
-    except Exception:
-        return False
-    try:
-        from resources.lib import addon_settings_safe
-        _changed, _restored, failed = addon_settings_safe.apply(
-            ACCTMGR_ADDON_ID,
-            (('mdblist.apikey', ''), ('mdblist.username', '')))
-        return not failed
-    except Exception as e:
-        _safe_log('mdblist acctmgr clear failed: {0}'.format(e),
-                  level='WARNING')
-        return False
-
-
-def _mdblist_get_token():
-    a = _mdblist_pov_addon()
-    if not a:
-        return ''
-    try:
-        return (a.getSetting('mdblist.token') or '').strip()
-    except Exception:
-        return ''
-
-
-POV_ADDON_ID = 'plugin.video.pov'
-
-
-def _mdblist_pov_write(pairs):
-    """Write (key, value) pairs into POV's settings THROUGH addon_settings_safe.
-
-    These four writes are the last bare `xbmcaddon.Addon(other).setSetting()`
-    calls left in the add-on, and they predate the wrapper. Kodi's setSetting
-    is not a targeted write: it re-serialises the WHOLE of POV's settings.xml
-    around every call, and any stored value that no longer satisfies its
-    definition's constraints comes back as the DEFAULT. So connecting MDBList
-    could silently reset a POV setting nobody named -- which is the same class
-    of bug as the "the update reset my settings" report that produced the
-    wrapper in the first place. Rare (it only fires on connect/disconnect) and
-    silent, which is exactly why it is worth closing rather than leaving.
-
-    Returns the list of keys that did NOT land, so callers can gate on it the
-    way they gated on the old hard read-back."""
-    try:
-        from resources.lib import addon_settings_safe
-        _changed, _restored, failed = addon_settings_safe.apply(
-            POV_ADDON_ID, tuple(pairs))
-        return list(failed)
-    except Exception as e:
-        _safe_log('mdblist POV write failed: {0}'.format(e), level='WARNING')
-        return [k for k, _v in pairs]
-
-
-def _mdblist_apply_connect(key, username):
-    """Replicate POV's native MDBList.set() connect side-effects cross-addon:
-    store the account name + token, activate the MDBList watched-indicator, and
-    make MDBList the watched-status/progress provider -- exactly the four
-    settings POV writes itself. Returns True iff the token stuck.
-
-    ORDER MATTERS: we write + hard-verify the token FIRST and gate the other
-    three writes on that success. If the token write fails, writing the aux
-    flags anyway would leave POV's watched-status pointing at MDBList
-    (watched_indicators='2', mdbl_indicators_active='true') with an empty token
-    -- an inconsistent state a Kodi restart would NOT undo, and the exact
-    'provider set, no key' breakage this whole change set out to prevent.
-    (The disconnect path can write its aux flags unconditionally because those
-    fail toward *deactivating* MDBList -- the safe direction; connect's fail
-    toward the unsafe one, so they must be gated.)
-
-    NB: POV's native set() also calls clear_cache('mdblist'). We deliberately do
-    NOT import POV's cache module cross-addon -- doing so would pull POV internals
-    into this add-on's interpreter and risk sys.modules bleed in the shared Kodi
-    process. The stale MDBList cache is inert once the indicator flags change and
-    POV refreshes it on its own schedule / next restart, so skipping it is safe.
-    POV still renders settings from an in-memory cache, so a live POV session may
-    need a restart before it reflects these writes (documented POV trap).
-
-    TWO calls into addon_settings_safe rather than one, precisely to keep the
-    gating above: a single apply() would write all four keys before telling us
-    the token had failed, which is the inconsistent state this docstring is
-    about. The wrapper already reads each key back, so its `failed` list is the
-    same hard verification the old code did by hand."""
-    if _mdblist_pov_addon() is None:
-        return False
-    if _mdblist_pov_write((('mdblist.token', (key or '').strip()),)):
-        return False                       # leave every aux setting untouched
-    _mdblist_pov_write((('mdblist_user', username or ''),
-                        ('mdbl_indicators_active', 'true'),
-                        ('watched_indicators', '2')))
-    return True
-
-
-def _mdblist_apply_disconnect():
-    """Reverse of _mdblist_apply_connect -- mirror POV's native MDBList
-    disconnect: blank the account name + token, deactivate the MDBList
-    watched-indicator, and hand the watched-status provider back to POV (0).
-    Returns True iff the token was cleared (hard-verified); the rest best-effort.
-    This is the fix for the 'Remove leaves indicators pointing at MDBList with no
-    key' inconsistency.
-
-    ONE call here, unlike connect: every one of these four writes fails toward
-    DEACTIVATING MDBList, which is the safe direction, so there is nothing to
-    gate and no reason to pay for two settings round trips."""
-    if _mdblist_pov_addon() is None:
-        return False
-    failed = _mdblist_pov_write((('mdblist_user', ''),
-                                 ('mdblist.token', ''),
-                                 ('mdbl_indicators_active', 'false'),
-                                 ('watched_indicators', '0')))
-    return 'mdblist.token' not in failed
-
-
-def _handle_connect_mdblist(_params):
-    """MDBList API-key setup, from POV's My Services (injected forwarder) or
-    RunScript action=connect_mdblist. Pair from a phone (QR) or type the key;
-    validate against MDBList; store into POV's `mdblist.token`."""
-    try:
-        from resources.lib import kodi_utils, gemini_pair, mdblist_pair
-    except Exception as e:
-        try:
-            xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
-        except Exception:
-            pass
-        return
-    if _mdblist_get_token():
-        _mdblist_menu_existing(kodi_utils, gemini_pair, mdblist_pair)
-    else:
-        _mdblist_menu_new(kodi_utils, gemini_pair, mdblist_pair)
-
-
-def _mdblist_menu_existing(kodi_utils, gemini_pair, mdblist_pair):
-    options = [
-        '🔍 בדוק חיבור (Test connection)',
-        '🔄 החלף key (Replace)',
-        '❌ נתק (Remove)',
-    ]
-    try:
-        choice = xbmcgui.Dialog().select('MDBList - מה לעשות?', options)
-    except Exception:
-        choice = -1
-    if choice < 0:
-        return
-    if choice == 0:
-        _mdblist_test_show(mdblist_pair)
-        return
-    if choice == 1:
-        # Replace: like Gemini, don't clear the working key up front -- the new
-        # one only overwrites once it validates + saves in _test_save_mdblist.
-        _mdblist_menu_new(kodi_utils, gemini_pair, mdblist_pair)
-        return
-    if choice == 2:
-        if xbmcgui.Dialog().yesno('Kodi POV IL', 'לנתק את MDBList?'):
-            if _mdblist_apply_disconnect():
-                try:
-                    _mdblist_clear_acctmgr()
-                except Exception as e:
-                    _safe_log('mdblist acctmgr clear failed: {0}'.format(e),
-                              level='WARNING')
-                kodi_utils.notify('MDBList נותק', time_ms=3000)
-            else:
-                xbmcgui.Dialog().ok(
-                    'MDBList - ניתוק נכשל',
-                    'לא הצלחנו לעדכן את הגדרות POV.\n\n'
-                    'ודא שהתוסף POV (plugin.video.pov) מותקן, נסה לסגור את '
-                    'Kodi לחלוטין ולהפעיל מחדש, ואז לחזור לכאן.')
-
-
-def _mdblist_test_show(mdblist_pair):
-    ok = mdblist_pair.validate_key(_mdblist_get_token())
-    if ok is True:
-        body = '✓ החיבור תקין. MDBList מחובר.'
-    elif ok is False:
-        body = 'המפתח נדחה ע"י MDBList. כדאי להחליף אותו.'
-    else:
-        body = 'לא ניתן לאמת כרגע (בעיית רשת?). נסה שוב מאוחר יותר.'
-    try:
-        xbmcgui.Dialog().ok('MDBList - בדיקת חיבור', body)
-    except Exception:
-        pass
-
-
-def _mdblist_menu_new(kodi_utils, gemini_pair, mdblist_pair):
-    options = [
-        '📱 התאמה מטלפון / מכשיר אחר (QR + URL)',
-        '⌨️ הזנת ה-key ידנית כאן',
-    ]
-    try:
-        choice = xbmcgui.Dialog().select('MDBList - איך להתחבר?', options)
-    except Exception:
-        choice = -1
-    if choice < 0:
-        return
-    if choice == 0:
-        _mdblist_pair_flow(kodi_utils, gemini_pair, mdblist_pair)
-        return
-    if choice == 1:
-        _mdblist_type_flow(kodi_utils, mdblist_pair)
-
-
-def _mdblist_pair_flow(kodi_utils, gemini_pair, mdblist_pair):
-    """Shared pair server with the MDBList form: show the QR, poll, validate,
-    save."""
-    try:
-        ps = gemini_pair.PairServer(html_form=mdblist_pair.MDBLIST_FORM)
-    except Exception as e:
-        xbmcgui.Dialog().ok(
-            'Kodi POV IL',
-            'נכשלה הפעלת שרת התאמה: {0}\n\n'
-            'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'
-            .format(str(e)[:80]))
-        return
-    key = _run_pair_qr(ps, 'MDBList - התאמה מטלפון')
-    if not key:
-        return
-    _test_save_mdblist(kodi_utils, mdblist_pair, key)
-
-
-def _mdblist_type_flow(kodi_utils, mdblist_pair):
-    """Typed-input flow: like Gemini's, validate before save with a retry loop.
-    Manual entry has no phone-side pre-validation, so (unlike the QR flow) an
-    unverified key is never stored -- retry=True makes _test_save_mdblist offer
-    a retry instead of saving on a bad/ambiguous result."""
-    xbmcgui.Dialog().ok(
-        'MDBList - איך משיגים API key',
-        'פתח בדפדפן (במחשב/טלפון):\n'
-        '   https://mdblist.com/preferences\n\n'
-        'העתק את ה-API key והדבק במסך הבא.')
-    while True:
-        try:
-            key = (xbmcgui.Dialog().input('MDBList API Key:') or '').strip()
-        except Exception:
-            key = ''
-        if not key:
-            return
-        res = _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=True)
-        if res != 'retry':
-            return
-
-
-def _mdblist_reject(reason, retry):
-    """Bad/unverifiable key: don't save. When retry is True (manual entry) offer
-    a retry loop and return 'retry'/'cancel'; otherwise just report and 'cancel'."""
-    if retry:
-        again = xbmcgui.Dialog().yesno(
-            'MDBList - בדיקה נכשלה',
-            reason + '\n\nלנסות שוב?',
-            nolabel='ביטול', yeslabel='נסה שוב')
-        return 'retry' if again else 'cancel'
-    xbmcgui.Dialog().ok(
-        'MDBList - בדיקה נכשלה',
-        reason + '\n\nהעתק אותו שוב במלואו מ-mdblist.com/preferences ונסה שוב.')
-    return 'cancel'
-
-
-def _mdblist_surface_lists():
-    """Add the MDBList "My Movies / My Series" home tiles and POV personal-area
-    rows the moment MDBList is connected, instead of on some later boot.
-
-    Both patchers are gated on POV holding an mdblist.token, so until now the
-    earliest they could fire was the next Kodi start -- and because Kodi caches
-    favourites.xml in memory at profile load and never re-reads it, that start
-    only wrote the tiles; a SECOND one was needed to show them. Users reported
-    exactly that as "I connected MDBList, ran a quick update, and the lists
-    still aren't on the home screen". Running them here, with the key already
-    stored, collapses that to zero restarts: the tile patcher pushes the new
-    tiles into the running favourites list itself.
-
-    Entirely best-effort -- a failure just restores the old behaviour of the
-    tiles arriving on a later boot, so nothing here may raise into the connect
-    flow that has already succeeded."""
-    try:
-        from resources.lib import favourites_personal_tiles_patcher
-        favourites_personal_tiles_patcher.ensure_patched()
-    except Exception as e:
-        _safe_log('mdblist tiles after connect failed: {0}'.format(e),
-                  level='WARNING')
-    try:
-        from resources.lib import pov_navigator_patcher
-        pov_navigator_patcher.maybe_fix_personal_area_lists()
-    except Exception as e:
-        _safe_log('mdblist personal-area row after connect failed: '
-                  '{0}'.format(e), level='WARNING')
-
-
-def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
-    """Validate the key against MDBList, then store it with the SAME side-effects
-    POV's native MDBList connect applies (account name, token, watched-indicator
-    active, watched-status provider). Returns 'ok' / 'cancel' / 'retry'.
-
-      status True  -> save + success                                   -> 'ok'
-      status False -> reject (never saved)                             -> retry/'cancel'
-      status None  -> transient. From the QR flow (retry=False) the phone
-                      already validated the key, so save anyway with a soft
-                      note ('ok'); from manual entry (retry=True) there was no
-                      pre-validation, so don't save -- offer a retry.
-    """
-    kodi_utils.notify('MDBList: בודק...', time_ms=2000)
-    status, username = mdblist_pair.validate_key_full(key)
-
-    if status is False:
-        return _mdblist_reject('המפתח נדחה ע"י MDBList.', retry)
-    if status is None and retry:
-        return _mdblist_reject(
-            'לא הצלחנו לאמת את המפתח מול MDBList (בעיית רשת?).', retry)
-
-    # status is True, or (status is None from the already-phone-validated QR
-    # flow) -> commit POV's native connect settings.
-    if not _mdblist_apply_connect(key, username):
-        xbmcgui.Dialog().ok(
-            'MDBList - שמירה נכשלה',
-            'המפתח אומת, אבל לא הצלחנו לשמור אותו בהגדרות POV.\n\n'
-            'ודא שהתוסף POV (plugin.video.pov) מותקן, נסה לסגור את Kodi '
-            'לחלוטין ולהפעיל מחדש, ואז לחזור לכאן.')
-        return 'cancel'
-
-    # Belt and braces: the connect has already succeeded and been persisted at
-    # this point, so nothing cosmetic below it may be able to turn that into a
-    # failure the user sees.
-    try:
-        _mdblist_surface_lists()
-    except Exception as e:
-        _safe_log('mdblist surfacing after connect failed: {0}'.format(e),
-                  level='WARNING')
-    spread = False
-    try:
-        spread = _mdblist_push_to_acctmgr(key, username)
-    except Exception as e:
-        _safe_log('mdblist -> acctmgr push failed: {0}'.format(e),
-                  level='WARNING')
-
-    if status is None:
-        xbmcgui.Dialog().ok(
-            'MDBList',
-            'המפתח נשמר. לא הצלחנו לאמת אותו כרגע מול MDBList (רשת?), '
-            'אבל הוא ייבדק בשימוש.\n\n'
-            'סטטוס הצפייה וההמשך-צפייה יסופקו כעת ע"י MDBList '
-            '(ניתן לשנות ב-POV: Features / Watched Indicators).')
-    else:
-        xbmcgui.Dialog().ok(
-            'MDBList',
-            '✓ החיבור הצליח. MDBList מחובר.\n\n'
-            'סטטוס הצפייה וההמשך-צפייה יסופקו כעת ע"י MDBList '
-            '(ניתן לשנות ב-POV: Features / Watched Indicators).'
-            + ('\n\nהמפתח מסונכרן כעת גם לשאר התוספים.' if spread else '')
-            + '\n\nאם הרשימות לא מופיעות מיד, ייתכן שיהיה צורך להפעיל מחדש '
-              'את POV.')
-    # Last of all -- see _mdblist_acctmgr_resync for why the order matters.
-    if spread:
-        _mdblist_acctmgr_resync()
-    return 'ok'
 
 
 def _test_save_or_retry(kodi_utils, gemini, api_key, retry_cb):
@@ -2610,8 +2180,8 @@ def _handle_open_tmdb_notice(_params):
         'נקבה) ולבחור צורות עברית נכונות.\n\n'
         'אופציונלי: אם תרצה להשתמש ב-key משלך (למשל אם ה-key '
         'המשותף נחסם זמנית, או אם אתה משתמש ב-TMDB Helper '
-        'באופן כללי), פתח את הגדרות TMDB Helper וחבר key אישי. '
-        'הוא יוחל אוטומטית מאותו רגע, בלי '
+        'באופן כללי), פתח את ה-Wizard → "חיבור שירותים" → TMDB '
+        'וחבר key אישי. הוא יוחל אוטומטית מאותו רגע, בלי '
         'restart, וידרוס את ה-key המובנה.'
     )
     xbmcgui.Dialog().ok('Kodi POV IL — TMDB', body)
@@ -2748,52 +2318,6 @@ def _handle_pool_share_cache_run(_params):
             pass
 
 
-def _handle_remember_source_status(_params):
-    """Diagnostic for the experimental "remember picked source" capture: shows
-    whether the setting is on, whether POV's sources.py is patched (the capture
-    hook), how many sources were recorded, and the most recent one. Helps
-    confirm capture works before the auto-pick phase is built."""
-    try:
-        from resources.lib import (kodi_utils, source_memory,
-                                    pov_remember_source_patcher)
-    except Exception as e:
-        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
-        return
-    on = kodi_utils.get_bool('remember_source', False)
-    try:
-        patch_status = pov_remember_source_patcher.ensure_patched()
-    except Exception as e:
-        patch_status = 'error: ' + str(e)[:60]
-    pmap = {
-        'unchanged': 'מותקן ✓', 'patched': 'הותקן עכשיו ✓',
-        'no_file': 'POV לא נמצא', 'unmatched': 'לא תאם את גרסת POV ✗',
-        'compile_failed': 'נכשל קומפילציה ✗', 'read_failed': 'כשל קריאה',
-        'write_failed': 'כשל כתיבה',
-    }
-    recs = source_memory.list_all()
-    lines = [
-        'הגדרה "זכור מקור": ' + ('דלוקה ✓' if on else 'כבויה ✗'),
-        'פאצ׳ הלכידה ב-POV: ' + pmap.get(patch_status, str(patch_status)),
-        'מקורות שנשמרו: ' + str(len(recs)),
-        'תיקייה: ' + (source_memory.dir_path() or '?'),
-    ]
-    if recs:
-        k, r = recs[-1]
-        lines.append('')
-        lines.append('אחרון שנשמר:')
-        lines.append('  שם: ' + (r.get('name') or '?')[:60])
-        lines.append('  hash: ' + (r.get('hash') or '-')[:16])
-        lines.append('  איכות: ' + (r.get('quality') or '-') +
-                     ' | ספק: ' + (r.get('provider') or '-'))
-    elif on and patch_status in ('unchanged', 'patched'):
-        lines.append('')
-        lines.append('הכל מוכן — נגן סרט ובחר מקור, ואז בדוק שוב כאן.')
-    try:
-        xbmcgui.Dialog().textviewer('זכירת מקור — אבחון', '\n'.join(lines))
-    except Exception:
-        xbmcgui.Dialog().ok('זכירת מקור — אבחון', '\n'.join(lines))
-
-
 def _handle_translate_file(params):
     """Translate an SRT file to Hebrew on disk.
 
@@ -2880,7 +2404,7 @@ def _handle_translate_file(params):
     # DarkSubs invoked this delivery outside MoranSubs's own picker, so bind
     # the timing job here. Without this, a status from an earlier subtitle
     # could be mistaken for the translation being produced now.
-    kodi_utils.set_current_subtitle(link, renew=True)
+    kodi_utils.set_current_subtitle(link)
     _timing_selection = kodi_utils.current_subtitle_selection(
         expected_link=link)
 
@@ -3514,6 +3038,998 @@ def _handle_purge_temp(_params):
         'נמחקו {0} קבצי כתוביות מ-temp.'.format(n))
 
 
+def _handle_open_pov_settings(_params):
+    """Open POV's addon settings. Used by build home-screen buttons so
+    users can quickly change Premium Expires Notification thresholds."""
+    try:
+        xbmc.executebuiltin('Addon.OpenSettings(plugin.video.pov)')
+    except Exception as e:
+        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
+
+
+DEBRID_NOTICE_SERVICES = (
+    ('Real-Debrid', 'rd.expires'),
+    ('TorBox', 'tb.expires'),
+    ('Premiumize', 'pm.expires'),
+    ('AllDebrid', 'ad.expires'),
+)
+
+DEBRID_NOTICE_VALUES = (
+    ('בכל כניסה לקודי', '0'),
+    ('יום אחד לפני סיום', '1'),
+    ('3 ימים לפני סיום', '3'),
+    ('7 ימים לפני סיום', '7'),
+    ('14 ימים לפני סיום', '14'),
+    ('30 ימים לפני סיום', '30'),
+    ('60 ימים לפני סיום', '60'),
+    ('90 ימים לפני סיום', '90'),
+    ('180 ימים לפני סיום', '180'),
+    ('365 ימים לפני סיום', '365'),
+)
+
+
+def _pov_addon():
+    try:
+        return xbmcaddon.Addon('plugin.video.pov')
+    except Exception:
+        return None
+
+
+def _format_bytes(value):
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return str(value) if value not in (None, '') else ''
+    units = ('B', 'KB', 'MB', 'GB', 'TB')
+    index = 0
+    while amount >= 1024 and index < len(units) - 1:
+        amount /= 1024.0
+        index += 1
+    return ('{0:d}' if index == 0 else '{0:.1f}').format(
+        int(amount) if index == 0 else amount) + ' ' + units[index]
+
+
+def _torbox_api_get(token, path, params=None):
+    import requests
+    response = requests.get(
+        'https://api.torbox.app/v1/api/' + path,
+        headers={'Authorization': 'Bearer ' + token,
+                 'User-Agent': 'Kodi POV IL'},
+        params=params, timeout=20)
+    response.raise_for_status()
+    payload = response.json()
+    return payload.get('data') if isinstance(payload, dict) and 'data' in payload else payload
+
+
+def _torbox_usage_30(stats):
+    if not isinstance(stats, dict):
+        return None
+    bandwidth = stats.get('bandwidth') or stats.get('bandwidths')
+    if isinstance(bandwidth, list):
+        values = []
+        for item in bandwidth:
+            if isinstance(item, dict) and item.get('bytes_downloaded') is not None:
+                try:
+                    values.append(int(item['bytes_downloaded']))
+                except (TypeError, ValueError):
+                    pass
+        if values:
+            return sum(values)
+    general = stats.get('general')
+    if isinstance(general, dict):
+        for key in ('bytes_downloaded', 'total_downloaded',
+                    'total_data_downloaded'):
+            if key in general:
+                return general[key]
+    return None
+
+
+def _handle_torbox_status(_params):
+    """Preserve the TorBox account-status action used by home favourites."""
+    pov = _pov_addon()
+    if pov is None:
+        xbmcgui.Dialog().ok('TorBox', 'plugin.video.pov not found.')
+        return
+    try:
+        token = pov.getSetting('tb.token') or ''
+    except Exception:
+        token = ''
+    if not token:
+        xbmcgui.Dialog().ok('TorBox', 'TorBox is not connected in POV.')
+        return
+    try:
+        account = _torbox_api_get(token, 'user/me') or {}
+        stats = _torbox_api_get(token, 'user/stats', params={
+            'general': 'true', 'bandwidth': 'true',
+            'bandwidth_grouping': 'day'}) or {}
+        if not isinstance(account, dict):
+            raise ValueError('invalid account response')
+    except Exception as exc:
+        xbmcgui.Dialog().ok('TorBox', 'TorBox status failed: {0}'.format(exc))
+        return
+    from datetime import datetime
+    expires_raw = account.get('premium_expires_at') or ''
+    expires_label = expires_raw[:10] if isinstance(expires_raw, str) else ''
+    days = ''
+    if expires_raw:
+        try:
+            days = str((datetime.strptime(expires_raw, '%Y-%m-%dT%H:%M:%SZ')
+                        - datetime.today()).days)
+        except (TypeError, ValueError):
+            pass
+    plans = {0: 'Free', 1: 'Essential', 2: 'Pro', 3: 'Standard'}
+    plan = plans.get(account.get('plan'), account.get('plan', ''))
+    lines = [
+        'Days Remaining: {0}'.format(days or 'N/A'),
+        'Expires: {0}'.format(expires_label or 'N/A'),
+        'Account: {0}'.format(account.get('email') or 'N/A'),
+        'Username: {0}'.format(account.get('customer') or 'N/A'),
+        'Status: {0}'.format(plan or 'N/A'),
+        'Downloaded: {0}'.format(account.get('total_downloaded', 'N/A')),
+        'שימוש 30 יום: {0}'.format(_format_bytes(_torbox_usage_30(stats)) or 'N/A'),
+    ]
+    body = '\n\n'.join(lines)
+    dialog = xbmcgui.Dialog()
+    try:
+        dialog.textviewer('TORBOX', body)
+    except Exception:
+        dialog.ok('TORBOX', body)
+
+
+def _handle_remember_source_status(_params):
+    """Report the Wizard-owned POV capture hook and local remembered sources.
+
+    The modular Wizard stores new records under its own addon_data folder.
+    Older MoranSubs records remain visible during migration, read-only.
+    """
+    import glob
+    import json
+
+    def addon_setting(addon_id, key):
+        try:
+            return xbmcaddon.Addon(addon_id).getSetting(key) == 'true'
+        except Exception:
+            return False
+
+    enabled = (addon_setting('plugin.program.kodipovilwizard',
+                             'pov_remember_source') or
+               addon_setting(ADDON_ID, 'remember_source'))
+    try:
+        pov_path = xbmcvfs.translatePath(
+            xbmcaddon.Addon('plugin.video.pov').getAddonInfo('path'))
+        source_file = os.path.join(
+            pov_path, 'resources', 'lib', 'modules', 'sources.py')
+        with open(source_file, 'r', encoding='utf-8-sig') as fh:
+            source = fh.read()
+        hooked = ('pov_source_remember.run_capture' in source and
+                  'pov_source_remember.run_reorder' in source)
+        hook_status = 'מותקן ✓' if hooked else 'לא זוהה; עדכן את POV דרך ה-Wizard'
+    except (OSError, AttributeError):
+        hook_status = 'לא ניתן לאמת כרגע את קובץ POV'
+
+    records = []
+    for addon_id in ('plugin.program.kodipovilwizard', ADDON_ID):
+        try:
+            folder = xbmcvfs.translatePath(
+                'special://profile/addon_data/{0}/source_memory/'.format(addon_id))
+            for path in glob.glob(os.path.join(folder, '*.json')):
+                try:
+                    with open(path, 'r', encoding='utf-8') as fh:
+                        record = json.load(fh)
+                    if isinstance(record, dict):
+                        records.append((os.path.getmtime(path), record))
+                except (OSError, ValueError):
+                    pass
+        except (OSError, AttributeError):
+            pass
+    lines = [
+        'הגדרת "זכור מקור": ' + ('דלוקה ✓' if enabled else 'כבויה ✗'),
+        'פאצ׳ הלכידה ב-POV: ' + hook_status,
+        'רשומות מקומיות: ' + str(len(records)),
+    ]
+    if records:
+        recent = max(records, key=lambda item: item[0])[1]
+        lines.extend(('', 'אחרון שנשמר:',
+                      'שם: ' + str(recent.get('name') or '?')[:60],
+                      'איכות: ' + str(recent.get('quality') or '-'),
+                      'ספק: ' + str(recent.get('provider') or '-')))
+    elif enabled and hook_status == 'מותקן ✓':
+        lines.extend(('', 'הכול מוכן; בחר מקור לניגון ובדוק שוב.'))
+    body = '\n'.join(lines)
+    try:
+        xbmcgui.Dialog().textviewer('זכירת מקור — אבחון', body)
+    except Exception:
+        xbmcgui.Dialog().ok('זכירת מקור — אבחון', body)
+
+
+def _translate_path(path):
+    try:
+        if xbmcvfs is not None:
+            return xbmcvfs.translatePath(path)
+    except Exception:
+        pass
+    return ''
+
+
+def _notice_value_label(value):
+    for label, stored in DEBRID_NOTICE_VALUES:
+        if str(value) == stored:
+            return label
+    return '{0} ימים לפני סיום'.format(value)
+
+
+def _handle_debrid_notice_settings(_params):
+    """Build UI for debrid expiry notification thresholds.
+
+    POV stores the values as rd/tb/pm/ad.expires, but some POV builds do
+    not expose those settings in Addon.OpenSettings(). This dialog writes
+    the same POV settings directly so the startup notifier can read them.
+    """
+    pov = _pov_addon()
+    if pov is None:
+        xbmcgui.Dialog().ok(
+            'התראות מנוי',
+            'לא נמצא plugin.video.pov. התקן/עדכן את הבילד ונסה שוב.')
+        return
+
+    dialog = xbmcgui.Dialog()
+    service_rows = []
+    for label, key in DEBRID_NOTICE_SERVICES:
+        try:
+            current = pov.getSetting(key) or '0'
+        except Exception:
+            current = '0'
+        service_rows.append('{0}  -  {1}'.format(
+            label, _notice_value_label(current)))
+
+    idx = dialog.select('הגדרת התראות מנוי', service_rows)
+    if idx < 0:
+        return
+
+    service_label, key = DEBRID_NOTICE_SERVICES[idx]
+    options = [
+        '{0} ({1})'.format(label, stored)
+        for label, stored in DEBRID_NOTICE_VALUES
+    ]
+    value_idx = dialog.select(
+        'מתי להתריע עבור {0}?'.format(service_label), options)
+    if value_idx < 0:
+        return
+
+    value = DEBRID_NOTICE_VALUES[value_idx][1]
+    try:
+        pov.setSetting(key, value)
+        # Kodi's legacy slider silently rejects values outside its schema.
+        # setSetting returns None even on rejection, so verify the read-back.
+        if pov.getSetting(key) != value:
+            dialog.ok(
+                'התראות מנוי',
+                'הבחירה לא נשמרה. יש להשלים את עדכון הבילד, לסגור ולפתוח את Kodi ולבחור שוב.')
+            return
+    except Exception as e:
+        xbmcgui.Dialog().ok(
+            'התראות מנוי',
+            'שמירת ההגדרה נכשלה: {0}'.format(e))
+        return
+
+    if value == '0':
+        msg = '{0}: התראה בכל כניסה לקודי'.format(service_label)
+    else:
+        msg = '{0}: התראה רק כשנותרו עד {1} ימים'.format(
+            service_label, value)
+    try:
+        from resources.lib import kodi_utils
+        kodi_utils.notify(msg, title='התראות מנוי', time_ms=5000)
+    except Exception:
+        dialog.notification('התראות מנוי', msg, time=5000)
+
+
+def _handle_connect_telegram(_params):
+    """Log in to Telegram (phone -> SMS code -> 2FA) so the engine's Telegram
+    channel source can search. Per-user, one-time; the session is saved."""
+    try:
+        from resources.lib import kodi_utils, subs_engine_bridge
+        if not kodi_utils.get_bool('use_builtin_engine', False):
+            xbmcgui.Dialog().ok(
+                'MoranSubs — Telegram',
+                'יש להפעיל קודם את "מנוע המקורות המובנה" בהגדרות.')
+            return
+        subs_engine_bridge.ensure_engine_settings()
+        from resources.lib.subs_engine.sources import telegram as _tg
+        _tg.login()
+    except Exception as e:
+        try:
+            xbmcgui.Dialog().ok('MoranSubs — Telegram',
+                                'שגיאה: {0}'.format(str(e)[:200]))
+        except Exception:
+            pass
+
+
+def _handle_telegram_test(_params):
+    """Diagnose the Telegram connection and show the exact result in a dialog
+    (so we can see WHY login/code-sending fails even with debug logging off).
+    Optionally sends a real login code to a phone you enter."""
+    try:
+        from resources.lib import kodi_utils, subs_engine_bridge
+        if not kodi_utils.get_bool('use_builtin_engine', False):
+            xbmcgui.Dialog().ok('MoranSubs — Telegram',
+                                'הפעל קודם את "מנוע המקורות המובנה".')
+            return
+        subs_engine_bridge.ensure_engine_settings()
+        from resources.lib.subs_engine.sources import telegram as _tg
+        phone = None
+        if xbmcgui.Dialog().yesno(
+                'בדיקת חיבור טלגרם',
+                'לבדוק גם שליחת קוד התחברות? (יישלח קוד אמיתי לאפליקציית '
+                'הטלגרם שלך). בחר "לא" כדי לבדוק רק חיבור.',
+                nolabel='רק חיבור', yeslabel='כן, שלח קוד'):
+            phone = (xbmcgui.Dialog().input(
+                'מספר טלפון (05XXXXXXXX):') or '').strip()
+            if phone.startswith('05') and len(phone) == 10:
+                phone = '972' + phone[1:]
+        result = _tg.diagnose(phone or None)
+        xbmcgui.Dialog().textviewer('בדיקת חיבור טלגרם', result)
+    except Exception as e:
+        try:
+            xbmcgui.Dialog().ok('MoranSubs — Telegram',
+                                'שגיאה: {0}'.format(str(e)[:200]))
+        except Exception:
+            pass
+
+
+def _handle_logout_telegram(_params):
+    """Clear the saved Telegram session."""
+    try:
+        from resources.lib.subs_engine.sources import telegram as _tg
+        _tg.logout()
+        xbmcgui.Dialog().notification('MoranSubs', 'התנתקת מטלגרם',
+                                      time=3000)
+    except Exception:
+        pass
+
+
+# _he_avail_store AND ITS HE_AVAIL_CACHE PATH USED TO LIVE HERE. Both were
+# dead -- nothing called the function, nothing read the constant, and the only
+# thing that named either was a comment in he_sub_match pointing here as the
+# other writer of that cache.
+#
+# NOT HARMLESS DEAD CODE. It wrote `names` and `embedded` with no bound, and
+# OVERWROTE the embedded list instead of unioning it: the two bugs the live
+# warm path had to be fixed for, the second of which wiped a built-in-Hebrew
+# flag the device had just detected itself. Anyone reviving it, or copying
+# from it because it looked like the shorter version of the same job, would
+# have brought both back. he_sub_match._store_avail is the one writer.
+
+
+def _handle_he_avail(params):
+    """Background warm of the source-screen "HEB NN%" badge -- runs in
+    MoranSubs's own process (fire-and-forget), so NOTHING here blocks POV's
+    source window. It gathers every Hebrew-availability source and writes the
+    merged result to the shared cache the badge reads on the next open:
+      * community pool + Wizdom (networked here now, NOT synchronously in POV's
+        window -- that's what removed the multi-second source-list freeze);
+      * the pool's embedded-Hebrew flags (releases known to ship a built-in
+        Hebrew track) -> the "BUILT-IN 101%" badge;
+      * OpenSubtitles (rotating keys, no shared-account load);
+      * Ktuvit -- ONLY as a fallback when nothing else found Hebrew, and gated
+        by `he_match_ktuvit`. Ktuvit runs on ONE shared, rate-limited account,
+        so we must never hit it on every browse (that broke real downloads);
+        the fallback-only guard + the 7-day warm cache keep it to a rare,
+        bounded trickle for the exact case the user cares about (Hebrew that
+        exists only on Ktuvit, not yet in the pool)."""
+    try:
+        import base64
+        import json as _json
+        blob = params.get('data') or ''
+        if not blob:
+            return
+        info = _json.loads(base64.b64decode(blob).decode('utf-8'))
+        # Delegate to the shared, parallelized warm in he_sub_match so the
+        # RunScript fallback path and the in-service queue drainer run IDENTICAL
+        # logic (pool+Wizdom fetched concurrently with OpenSubtitles, Ktuvit as a
+        # gated shared-registry fallback, then written to the badge cache).
+        from resources.lib import he_sub_match as _hsm
+        _hsm.run_warm(info)
+    except Exception as e:
+        _safe_log('he_avail crashed: {0}'.format(e), level='WARNING')
+
+
+def _handle_engine_test(_params):
+    """Diagnostic for the built-in sources engine. Runs a real search for
+    the currently-playing video and reports, per provider, how many results
+    came back (or the exact exception), plus the final Hebrew candidates the
+    bridge would surface. This is the tool to find out WHY the engine shows
+    nothing -- import failure, a provider erroring, or genuinely no Hebrew
+    subs for this title."""
+    try:
+        from resources.lib import kodi_utils, subs_engine_bridge
+    except Exception as e:
+        try:
+            xbmcgui.Dialog().ok('MoranSubs', 'Internal error: {0}'.format(e))
+        except Exception:
+            pass
+        return
+
+    lines = []
+    on = kodi_utils.get_bool('use_builtin_engine', False)
+    lines.append('מתג מנוע מובנה: ' + ('דלוק ✓' if on else 'כבוי ✗'))
+    if not on:
+        lines.append('')
+        lines.append('הדלק את "השתמש במנוע המקורות המובנה" ונסה שוב.')
+        _engine_test_show(lines)
+        return
+
+    info = kodi_utils.current_video_info()
+    vd = subs_engine_bridge.build_video_data(info)
+    lines.append('imdb: ' + (vd.get('imdb') or '-')
+                 + ' | tmdb: ' + (vd.get('tmdb') or '-'))
+    lines.append('כותרת: ' + (vd.get('title') or '-')[:50])
+    lines.append('סוג: ' + vd.get('media_type', '-')
+                 + ' | עונה/פרק: ' + str(vd.get('season') or '-')
+                 + '/' + str(vd.get('episode') or '-'))
+    if not (vd.get('imdb') or vd.get('tmdb') or vd.get('title')):
+        lines.append('')
+        lines.append('אין מטא-דאטה מהנגן. הרץ בזמן שסרט/פרק מתנגן.')
+
+    # Populate the engine's internal settings before importing it (general.py
+    # reads max_search_time at module load -> would crash on '').
+    try:
+        subs_engine_bridge.ensure_engine_settings()
+    except Exception:
+        pass
+
+    # Try to import the engine -- the single most likely failure point.
+    engine = None
+    try:
+        from resources.lib.subs_engine import engine as _engine
+        engine = _engine
+        lines.append('')
+        lines.append('טעינת המנוע: ✓')
+    except Exception as e:
+        lines.append('')
+        lines.append('טעינת המנוע נכשלה ✗:')
+        lines.append('  ' + repr(e)[:200])
+        _engine_test_show(lines)
+        return
+
+    # Run each ENABLED provider directly (sequential, so we can attribute
+    # results/errors precisely) and report counts.
+    providers = [
+        ('ktuvit', 'ktuvit'), ('wizdom', 'wizdom'),
+        ('telegram', 'telegram'), ('opensubtitles', 'opensubtitles'),
+        ('yify', 'yify'), ('subsource', 'subsource'),
+        ('subscene', 'subscene'), ('bsplayer', 'bsplayer'),
+    ]
+    lines.append('')
+    lines.append('תוצאות לפי ספק:')
+    import time as _t
+    for setting_id, modname in providers:
+        if not kodi_utils.get_bool(setting_id, False):
+            lines.append('  {0}: (כבוי)'.format(modname))
+            continue
+        try:
+            mod = __import__(
+                'resources.lib.subs_engine.sources.' + modname,
+                fromlist=[modname])
+        except Exception as e:
+            lines.append('  {0}: יבוא נכשל - {1}'.format(
+                modname, repr(e)[:80]))
+            continue
+        try:
+            mod.global_var = []
+        except Exception:
+            pass
+        t0 = _t.time()
+        try:
+            try:
+                mod.get_subs(vd)
+            except TypeError:
+                mod.get_subs(vd, False)
+            n = len(getattr(mod, 'global_var', []) or [])
+            lines.append('  {0}: {1} תוצאות ({2:.1f}s)'.format(
+                modname, n, _t.time() - t0))
+        except Exception as e:
+            lines.append('  {0}: שגיאה - {1}'.format(
+                modname, repr(e)[:80]))
+
+    # Final: what the bridge would surface (Hebrew only, after filtering).
+    try:
+        cands = subs_engine_bridge.search(info)
+        lines.append('')
+        lines.append('כתוביות עברית שיוצגו: {0}'.format(len(cands)))
+        for c in cands[:6]:
+            lines.append('  • ' + (c.get('filename') or '')[:70])
+    except Exception as e:
+        lines.append('')
+        lines.append('bridge.search נכשל: ' + repr(e)[:150])
+
+    _engine_test_show(lines)
+
+
+def _engine_test_show(lines):
+    body = '\n'.join(lines)
+    try:
+        xbmcgui.Dialog().textviewer('בדיקת מנוע מקורות', body)
+    except Exception:
+        try:
+            xbmcgui.Dialog().ok('בדיקת מנוע מקורות', body)
+        except Exception:
+            pass
+
+
+def _handle_choose_subs(params):
+    """Open the subtitle chooser for the player's 'בחר כתוביות' button.
+
+    On FENtastic we open Kodi's NATIVE subtitle window -- that's Tal's own
+    redesigned DialogSubtitles, the real thing, so it stays exactly as he made
+    it. On every OTHER skin (NOX / Estuary / Arctic Fuse 3 / ...) the native
+    dialog is plain, so we open our self-contained WindowXMLDialog instead, which
+    brings the same gorgeous look everywhere. Both flows use the same candidate
+    list + background AI translation. Guarded fallbacks at each step."""
+    skin = ''
+    if xbmc is not None:
+        try:
+            skin = (xbmc.getSkinDir() or '').strip()
+        except Exception:
+            skin = ''
+    # FENtastic -> Tal's native window (unchanged).
+    if skin == 'skin.fentastic' and xbmc is not None:
+        try:
+            xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
+            return
+        except Exception as e:
+            _safe_log('open SubtitleSearch failed: {0}'.format(e),
+                      level='WARNING')
+    # Other skins -> our rich custom window.
+    opened = False
+    try:
+        from resources.lib import subs_chooser
+        opened = subs_chooser.show()
+    except Exception as e:
+        _safe_log('choose_subs failed: {0}'.format(e), level='WARNING')
+    if not opened and xbmc is not None:
+        try:
+            xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
+        except Exception:
+            pass
+
+
+
+
+# Release-666 MDBList connection contract; paired key is validated before POV writes.
+ACCTMGR_ADDON_ID = 'script.module.acctmgr'
+POV_ADDON_ID = 'plugin.video.pov'
+
+
+def _mdblist_pov_addon():
+    try:
+        import xbmcaddon as _mx
+        return _mx.Addon('plugin.video.pov')
+    except Exception:
+        return None
+
+
+def _mdblist_push_to_acctmgr(key, username):
+    """Hand a freshly paired MDBList key to Account Manager so it lands in
+    every add-on AM supports (Umbrella, Coalition, TMDb Helper, POV...) rather
+    than in POV alone.
+
+    We keep our own QR pairing rather than AM's -- AM's MDBList authorisation
+    is a bare keyboard prompt for the API key, with no phone pairing at all --
+    and only hand it the finished, validated key afterwards.
+
+    Best-effort by design: a failure here costs the user nothing they had
+    before, so it must never turn a successful POV connect into a visible
+    error. Returns True only when AM was updated AND its sync was started.
+
+    Deliberately NOT mirrored on disconnect: AM's mdblist_auth() pushes
+    whatever key it holds and, for POV, also sets watched_indicators=2 with
+    mdbl_indicators_active=true. Running it with a BLANK key would point POV's
+    watched-status provider at MDBList with no key -- precisely the
+    inconsistent state _mdblist_apply_connect goes out of its way to prevent.
+    So disconnect clears AM's own two settings and stops there; the other
+    add-ons keep their key until an explicit revoke inside Account Manager."""
+    if not (key or '').strip():
+        return False
+    try:
+        import xbmcaddon as _mx
+        _mx.Addon(ACCTMGR_ADDON_ID)
+    except Exception:
+        return False                      # AM not installed -- nothing to do
+    try:
+        from resources.lib import addon_settings_safe
+        _changed, _restored, failed = addon_settings_safe.apply(
+            ACCTMGR_ADDON_ID,
+            (('mdblist.apikey', key.strip()),
+             ('mdblist.username', username or '')))
+    except Exception as e:
+        _safe_log('mdblist -> acctmgr write failed: {0}'.format(e),
+                  level='WARNING')
+        return False
+    if failed:
+        _safe_log('mdblist -> acctmgr did not stick: {0}'.format(failed),
+                  level='WARNING')
+        return False
+    return True
+
+
+def _mdblist_acctmgr_resync():
+    """Start Account Manager's own MDBList sync.
+
+    Fired LAST, after every dialog of ours has closed, and never before.
+    AM's mdblistReSync branch ends with `xbmc.sleep(3000)` then
+    `control.openSettings()` -- so roughly six seconds after it is spawned it
+    puts its own settings window on screen, over whatever is there. Spawning
+    it before our dialogs meant AM's settings jumped on top of the Umbrella
+    question while the user was still reading it, which is exactly what was
+    reported: the question appeared and was gone before it could be answered.
+    We cannot stop AM opening its settings -- that is its code -- but we can
+    make sure nothing of ours is still on screen when it does."""
+    try:
+        import xbmc as _mxbmc
+        _mxbmc.executebuiltin(
+            'RunScript({0},action=mdblistReSync)'.format(ACCTMGR_ADDON_ID))
+        return True
+    except Exception as e:
+        _safe_log('mdblist acctmgr resync failed to start: {0}'.format(e),
+                  level='WARNING')
+        return False
+
+
+def _mdblist_clear_acctmgr():
+    """Blank Account Manager's own MDBList settings on disconnect, so AM stops
+    reporting a connection it no longer has. See the note in
+    _mdblist_push_to_acctmgr for why no AM sync is run here."""
+    try:
+        import xbmcaddon as _mx
+        _mx.Addon(ACCTMGR_ADDON_ID)
+    except Exception:
+        return False
+    try:
+        from resources.lib import addon_settings_safe
+        _changed, _restored, failed = addon_settings_safe.apply(
+            ACCTMGR_ADDON_ID,
+            (('mdblist.apikey', ''), ('mdblist.username', '')))
+        return not failed
+    except Exception as e:
+        _safe_log('mdblist acctmgr clear failed: {0}'.format(e),
+                  level='WARNING')
+        return False
+
+
+def _mdblist_get_token():
+    a = _mdblist_pov_addon()
+    if not a:
+        return ''
+    try:
+        return (a.getSetting('mdblist.token') or '').strip()
+    except Exception:
+        return ''
+
+
+def _mdblist_pov_write(pairs):
+    """Write (key, value) pairs into POV's settings THROUGH addon_settings_safe.
+
+    These four writes are the last bare `xbmcaddon.Addon(other).setSetting()`
+    calls left in the add-on, and they predate the wrapper. Kodi's setSetting
+    is not a targeted write: it re-serialises the WHOLE of POV's settings.xml
+    around every call, and any stored value that no longer satisfies its
+    definition's constraints comes back as the DEFAULT. So connecting MDBList
+    could silently reset a POV setting nobody named -- which is the same class
+    of bug as the "the update reset my settings" report that produced the
+    wrapper in the first place. Rare (it only fires on connect/disconnect) and
+    silent, which is exactly why it is worth closing rather than leaving.
+
+    Returns the list of keys that did NOT land, so callers can gate on it the
+    way they gated on the old hard read-back."""
+    try:
+        from resources.lib import addon_settings_safe
+        _changed, _restored, failed = addon_settings_safe.apply(
+            POV_ADDON_ID, tuple(pairs))
+        return list(failed)
+    except Exception as e:
+        _safe_log('mdblist POV write failed: {0}'.format(e), level='WARNING')
+        return [k for k, _v in pairs]
+
+
+def _mdblist_apply_connect(key, username):
+    """Persist a validated phone-pairing API key with the correct auth mode.
+
+    Verify the token before clearing obsolete OAuth refresh/expiry fields,
+    then verify the account and watched-provider settings. Roll back the six
+    affected fields if a later write fails; unrelated settings and the
+    profile's watched/progress databases are not changed. The caller refreshes
+    the personal rows only after the whole connection has been saved.
+    """
+    addon = _mdblist_pov_addon()
+    if addon is None:
+        return False
+    keys = ('mdblist.token', 'mdblist.refresh', 'mdblist.expires', 'mdblist_user',
+            'mdbl_indicators_active', 'watched_indicators')
+    try:
+        before = tuple((name, addon.getSetting(name) or '') for name in keys)
+    except Exception:
+        before = ()
+    if _mdblist_pov_write((('mdblist.token', (key or '').strip()),)):
+        return False                       # leave every aux setting untouched
+    # Phone pairing validates an API key, not an OAuth access token. POV uses
+    # the presence of the refresh field to choose Bearer versus apikey.
+    failed = _mdblist_pov_write((('mdblist.refresh', ''), ('mdblist.expires', '0')))
+    if not failed:
+        failed = _mdblist_pov_write((('mdblist_user', username or ''),
+                                    ('mdbl_indicators_active', 'true'),
+                                    ('watched_indicators', '2')))
+    if failed:
+        if before:
+            _mdblist_pov_write(before)
+        return False
+    return True
+
+
+def _mdblist_apply_disconnect():
+    """Clear both authentication modes and deactivate the watched provider.
+
+    Returns success only when both the token and OAuth refresh field are
+    verified empty. History and bookmarks remain in the profile.
+    """
+    if _mdblist_pov_addon() is None:
+        return False
+    failed = _mdblist_pov_write((('mdblist_user', ''),
+                                 ('mdblist.token', ''),
+                                 ('mdblist.refresh', ''),
+                                 ('mdblist.expires', '0'),
+                                 ('mdbl_indicators_active', 'false'),
+                                 ('watched_indicators', '0')))
+    return not any(name in failed for name in ('mdblist.token', 'mdblist.refresh'))
+
+
+def _handle_connect_mdblist(_params):
+    """MDBList API-key setup, from POV's My Services (injected forwarder) or
+    RunScript action=connect_mdblist. Pair from a phone (QR) or type the key;
+    validate against MDBList; store into POV's `mdblist.token`."""
+    try:
+        from resources.lib import kodi_utils, gemini_pair, mdblist_pair
+    except Exception as e:
+        try:
+            xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
+        except Exception:
+            pass
+        return
+    if _mdblist_get_token():
+        _mdblist_menu_existing(kodi_utils, gemini_pair, mdblist_pair)
+    else:
+        _mdblist_menu_new(kodi_utils, gemini_pair, mdblist_pair)
+
+
+def _mdblist_menu_existing(kodi_utils, gemini_pair, mdblist_pair):
+    options = [
+        '🔍 בדוק חיבור (Test connection)',
+        '🔄 החלף key (Replace)',
+        '❌ נתק (Remove)',
+    ]
+    try:
+        choice = xbmcgui.Dialog().select('MDBList - מה לעשות?', options)
+    except Exception:
+        choice = -1
+    if choice < 0:
+        return
+    if choice == 0:
+        _mdblist_test_show(mdblist_pair)
+        return
+    if choice == 1:
+        # Replace: like Gemini, don't clear the working key up front -- the new
+        # one only overwrites once it validates + saves in _test_save_mdblist.
+        _mdblist_menu_new(kodi_utils, gemini_pair, mdblist_pair)
+        return
+    if choice == 2:
+        if xbmcgui.Dialog().yesno('Kodi POV IL', 'לנתק את MDBList?'):
+            if _mdblist_apply_disconnect():
+                try:
+                    _mdblist_clear_acctmgr()
+                except Exception as e:
+                    _safe_log('mdblist acctmgr clear failed: {0}'.format(e),
+                              level='WARNING')
+                kodi_utils.notify('MDBList נותק', time_ms=3000)
+            else:
+                xbmcgui.Dialog().ok(
+                    'MDBList - ניתוק נכשל',
+                    'לא הצלחנו לעדכן את הגדרות POV.\n\n'
+                    'ודא שהתוסף POV (plugin.video.pov) מותקן, נסה לסגור את '
+                    'Kodi לחלוטין ולהפעיל מחדש, ואז לחזור לכאן.')
+
+
+def _mdblist_test_show(mdblist_pair):
+    ok = mdblist_pair.validate_key(_mdblist_get_token())
+    if ok is True:
+        body = '✓ החיבור תקין. MDBList מחובר.'
+    elif ok is False:
+        body = 'המפתח נדחה ע"י MDBList. כדאי להחליף אותו.'
+    else:
+        body = 'לא ניתן לאמת כרגע (בעיית רשת?). נסה שוב מאוחר יותר.'
+    try:
+        xbmcgui.Dialog().ok('MDBList - בדיקת חיבור', body)
+    except Exception:
+        pass
+
+
+def _mdblist_menu_new(kodi_utils, gemini_pair, mdblist_pair):
+    options = [
+        '📱 התאמה מטלפון / מכשיר אחר (QR + URL)',
+        '⌨️ הזנת ה-key ידנית כאן',
+    ]
+    try:
+        choice = xbmcgui.Dialog().select('MDBList - איך להתחבר?', options)
+    except Exception:
+        choice = -1
+    if choice < 0:
+        return
+    if choice == 0:
+        _mdblist_pair_flow(kodi_utils, gemini_pair, mdblist_pair)
+        return
+    if choice == 1:
+        _mdblist_type_flow(kodi_utils, mdblist_pair)
+
+
+def _mdblist_pair_flow(kodi_utils, gemini_pair, mdblist_pair):
+    """Shared pair server with the MDBList form: show the QR, poll, validate,
+    save."""
+    try:
+        ps = gemini_pair.PairServer(html_form=mdblist_pair.MDBLIST_FORM)
+    except Exception as e:
+        xbmcgui.Dialog().ok(
+            'Kodi POV IL',
+            'נכשלה הפעלת שרת התאמה: {0}\n\n'
+            'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'
+            .format(str(e)[:80]))
+        return
+    key = _run_pair_qr(ps, 'MDBList - התאמה מטלפון')
+    if not key:
+        return
+    _test_save_mdblist(kodi_utils, mdblist_pair, key)
+
+
+def _mdblist_type_flow(kodi_utils, mdblist_pair):
+    """Typed-input flow: like Gemini's, validate before save with a retry loop.
+    Manual entry has no phone-side pre-validation, so (unlike the QR flow) an
+    unverified key is never stored -- retry=True makes _test_save_mdblist offer
+    a retry instead of saving on a bad/ambiguous result."""
+    xbmcgui.Dialog().ok(
+        'MDBList - איך משיגים API key',
+        'פתח בדפדפן (במחשב/טלפון):\n'
+        '   https://mdblist.com/preferences\n\n'
+        'העתק את ה-API key והדבק במסך הבא.')
+    while True:
+        try:
+            key = (xbmcgui.Dialog().input('MDBList API Key:') or '').strip()
+        except Exception:
+            key = ''
+        if not key:
+            return
+        res = _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=True)
+        if res != 'retry':
+            return
+
+
+def _mdblist_reject(reason, retry):
+    """Bad/unverifiable key: don't save. When retry is True (manual entry) offer
+    a retry loop and return 'retry'/'cancel'; otherwise just report and 'cancel'."""
+    if retry:
+        again = xbmcgui.Dialog().yesno(
+            'MDBList - בדיקה נכשלה',
+            reason + '\n\nלנסות שוב?',
+            nolabel='ביטול', yeslabel='נסה שוב')
+        return 'retry' if again else 'cancel'
+    xbmcgui.Dialog().ok(
+        'MDBList - בדיקה נכשלה',
+        reason + '\n\nהעתק אותו שוב במלואו מ-mdblist.com/preferences ונסה שוב.')
+    return 'cancel'
+
+
+def _mdblist_surface_lists():
+    """Refresh the modular Wizard's service cache and dynamic home tiles.
+
+    The old MoranSubs patchers are not part of this architecture. The Wizard
+    already installed POV's list actions; its visibility manager owns the
+    connected-service filter and the favourites refresh for four skins.
+    """
+    try:
+        import sys as _sys
+        patch_dir = xbmcvfs.translatePath(
+            'special://home/addons/plugin.program.kodipovilwizard/'
+            'resources/libs/patches/')
+        if patch_dir not in _sys.path:
+            _sys.path.append(patch_dir)
+        import pov_visibility_mgr
+        pov_visibility_mgr.invalidate()
+        pov_visibility_mgr._trigger_favourites_refresh()
+    except Exception as exc:
+        _safe_log('MDBList home refresh delayed: {0}'.format(exc),
+                  level='WARNING')
+
+
+def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
+    """Validate the key against MDBList, then store it with the SAME side-effects
+    POV's native MDBList connect applies (account name, token, watched-indicator
+    active, watched-status provider). Returns 'ok' / 'cancel' / 'retry'.
+
+      status True  -> save + success                                   -> 'ok'
+      status False -> reject (never saved)                             -> retry/'cancel'
+      status None  -> transient. From the QR flow (retry=False) the phone
+                      already validated the key, so save anyway with a soft
+                      note ('ok'); from manual entry (retry=True) there was no
+                      pre-validation, so don't save -- offer a retry.
+    """
+    kodi_utils.notify('MDBList: בודק...', time_ms=2000)
+    status, username = mdblist_pair.validate_key_full(key)
+
+    if status is False:
+        return _mdblist_reject('המפתח נדחה ע"י MDBList.', retry)
+    if status is None and retry:
+        return _mdblist_reject(
+            'לא הצלחנו לאמת את המפתח מול MDBList (בעיית רשת?).', retry)
+
+    # status is True, or (status is None from the already-phone-validated QR
+    # flow) -> commit POV's native connect settings.
+    if not _mdblist_apply_connect(key, username):
+        xbmcgui.Dialog().ok(
+            'MDBList - שמירה נכשלה',
+            'המפתח אומת, אבל לא הצלחנו לשמור אותו בהגדרות POV.\n\n'
+            'ודא שהתוסף POV (plugin.video.pov) מותקן, נסה לסגור את Kodi '
+            'לחלוטין ולהפעיל מחדש, ואז לחזור לכאן.')
+        return 'cancel'
+
+    # Belt and braces: the connect has already succeeded and been persisted at
+    # this point, so nothing cosmetic below it may be able to turn that into a
+    # failure the user sees.
+    try:
+        _mdblist_surface_lists()
+    except Exception as e:
+        _safe_log('mdblist surfacing after connect failed: {0}'.format(e),
+                  level='WARNING')
+    spread = False
+    try:
+        spread = _mdblist_push_to_acctmgr(key, username)
+    except Exception as e:
+        _safe_log('mdblist -> acctmgr push failed: {0}'.format(e),
+                  level='WARNING')
+
+    if status is None:
+        xbmcgui.Dialog().ok(
+            'MDBList',
+            'המפתח נשמר. לא הצלחנו לאמת אותו כרגע מול MDBList (רשת?), '
+            'אבל הוא ייבדק בשימוש.\n\n'
+            'סטטוס הצפייה וההמשך-צפייה יסופקו כעת ע"י MDBList '
+            '(ניתן לשנות ב-POV: Features / Watched Indicators).')
+    else:
+        xbmcgui.Dialog().ok(
+            'MDBList',
+            '✓ החיבור הצליח. MDBList מחובר.\n\n'
+            'סטטוס הצפייה וההמשך-צפייה יסופקו כעת ע"י MDBList '
+            '(ניתן לשנות ב-POV: Features / Watched Indicators).'
+            + ('\n\nהמפתח מסונכרן כעת גם לשאר התוספים.' if spread else '')
+            + '\n\nאם הרשימות לא מופיעות מיד, ייתכן שיהיה צורך להפעיל מחדש '
+              'את POV.')
+    # Last of all -- see _mdblist_acctmgr_resync for why the order matters.
+    if spread:
+        _mdblist_acctmgr_resync()
+    return 'ok'
+
+
+def _handle_prepare_build_skin(params):
+    import re
+    key = params.get('request', '')
+    if not re.fullmatch(r'POVIL\.BuildSkin\.[0-9a-f]{32}', key):
+        return
+    state = 'failed'
+    try:
+        if xbmc.getSkinDir() == 'skin.arctic.fuse.3':
+            from resources.lib import af3_home_patcher
+            result = af3_home_patcher.ensure_patched()
+            if result in ('patched_rebuilt', 'already_patched'):
+                state = 'ready'
+    finally:
+        xbmcgui.Window(10000).setProperty(key, state)
+
 
 def main():
     if xbmc is None:
@@ -3530,7 +4046,12 @@ def main():
     action = (params.get('action') or 'search').lower()
 
     try:
-        if action == 'search':
+        if action == 'prepare_build_skin':
+            _handle_prepare_build_skin(params)
+        elif action == 'tonight':
+            from resources.lib.tonight.ui import run
+            run()
+        elif action == 'search':
             _handle_search(handle, params)
         elif action == 'manualsearch':
             _handle_manualsearch(handle, params)
@@ -3542,6 +4063,8 @@ def main():
             _handle_test_connection(params)
         elif action == 'connect_gemini':
             _handle_connect_gemini(params)
+        elif action == 'connect_mdblist':
+            _handle_connect_mdblist(params)
         elif action == 'mdblist_mirror_umbrella':
             # POV has just finished its own MDBList authorisation (or revoked
             # it). Hand the access token to Umbrella so one authorisation
@@ -3563,8 +4086,6 @@ def main():
             except Exception as e:
                 _safe_log('mdblist mirror failed: {0}'.format(e),
                           level='WARNING')
-        elif action == 'connect_mdblist':
-            _handle_connect_mdblist(params)
         elif action == 'search_provider':
             _handle_search_provider(params)
         elif action == 'show_gemini_usage':
@@ -3577,8 +4098,6 @@ def main():
             _handle_pool_share_cache(params)
         elif action == 'pool_share_cache_run':
             _handle_pool_share_cache_run(params)
-        elif action == 'remember_source_status':
-            _handle_remember_source_status(params)
         elif action == 'purge_temp':
             _handle_purge_temp(params)
         elif action == 'translate_file':
@@ -3587,6 +4106,14 @@ def main():
             _handle_bg_translate_picker(params)
         elif action == 'darksubs_status':
             _handle_darksubs_status(params)
+        elif action == 'open_pov_settings':
+            _handle_open_pov_settings(params)
+        elif action == 'debrid_notice_settings':
+            _handle_debrid_notice_settings(params)
+        elif action == 'torbox_status':
+            _handle_torbox_status(params)
+        elif action == 'remember_source_status':
+            _handle_remember_source_status(params)
         elif action == 'he_avail':
             _handle_he_avail(params)
         elif action == 'engine_test':
