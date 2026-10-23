@@ -3,13 +3,13 @@
 # here.
 
 import os
-import re
 import sys
 import threading
 import hashlib
 import json
 import time
 import urllib.parse
+import re
 
 try:
     import xbmc
@@ -430,10 +430,6 @@ def release_conflicts_with_episode(name, season, episode):
 
     A window property can survive autoplay and is not bound to the current
     player item.  Names without an explicit SxxEyy remain inconclusive.
-
-    SubSync's playing_release() calls this for every candidate name. The
-    modular package lost it, so the call raised, playing_release() fell back
-    to '' and every delivery was left unverified and uncorrected.
     """
     try:
         expected = (int(season), int(episode))
@@ -680,21 +676,15 @@ def subtitle_candidate_identity(link):
         return _subtitle_link_hash(link)
 
 
-_SELECTION_TOKEN_LOCK = threading.Lock()
-_SELECTION_TOKEN_SEQ = [0]
-
-
 def _new_subtitle_selection_token(link):
-    with _SELECTION_TOKEN_LOCK:
-        _SELECTION_TOKEN_SEQ[0] += 1
-        sequence = _SELECTION_TOKEN_SEQ[0]
     try:
-        seed = '{0}\0{1}\0{2}\0{3}'.format(
-            time.time_ns(), threading.get_ident(), sequence, link or '')
+        seed = '{0}\0{1}\0{2}'.format(
+            time.time_ns(), threading.get_ident(),
+            (link or '') + '\0' + os.urandom(16).hex())
         return hashlib.sha256(seed.encode('utf-8', 'replace')).hexdigest()[:24]
     except Exception:
         return hashlib.sha256(
-            ('{0}\0{1}\0{2}'.format(time.time(), sequence, link or '')).encode(
+            ('{0}\0{1}'.format(time.time(), link or '')).encode(
                 'utf-8', 'replace')).hexdigest()[:24]
 
 
@@ -717,9 +707,8 @@ def clear_subtitle_sync_status():
 
 def set_current_subtitle(link, renew=False):
     """Remember which subtitle (by its candidate link) is currently applied,
-    so the picker can mark it as '» נוכחית' next time it opens. ``renew``
-    gives a verified replacement a fresh ownership token even if its row link
-    is unchanged. Stored on the home window across service/picker processes."""
+    so the picker can mark it as '» נוכחית' next time it opens. Stored on the
+    home window so it's visible across the service / picker processes."""
     if not KODI_AVAILABLE:
         return
     try:
@@ -735,9 +724,11 @@ def set_current_subtitle(link, renew=False):
             old_token = win.getProperty(_CURRENT_SUB_TOKEN_PROP) or ''
         except Exception:
             old_token = ''
-        # A verdict belongs to one selected candidate. Re-selecting the same
-        # one preserves its result; selecting anything else invalidates it.
-        if old_link != new_link or renew:
+        # A verdict belongs to one selection event. Internal delivery retries
+        # may preserve the token, but an explicit picker click passes
+        # ``renew=True`` so even re-selecting the same row invalidates an older
+        # background worker and can never be mistaken for its automatic claim.
+        if old_link != new_link or (renew and new_link):
             clear_subtitle_sync_status()
             # Background and manual-delay records are token-scoped. Retire only
             # the selection being replaced, so a late process cannot erase the

@@ -1,43 +1,7 @@
-0.3.47
-- The standalone add-on (installed on its own from the repository on the site, or the latest zip) now comes from the same code as the build edition. It had stayed at 0.2.568 since 16 Oct; the subtitle and translation fixes it was missing reach it too -- for example the gender repair, keeping the AI-translated parts when the daily quota runs out, and the subtitle source and timing fixes. Without the build it runs the subtitle service only, as the old standalone did.
-- Standalone: Kodi's subtitle languages are set to Hebrew once, as intended. The one-time marker was never saved, so it ran on every start and overrode a language chosen afterwards; the built-in sources engine was switched back on at every start the same way.
-- The build edition's service runs its player, list and add-on repairs only when the build is detected (always on build devices; nothing changes there). The one-time Ktuvit switch-on also runs on the build only; a standalone user's own Ktuvit choice is kept.
+v0.2.568
+- AI subtitle addon maintenance update.
 
-0.3.45
-- AI translation, from a second pass over SRT AI Translator NG's architecture and decision records (MIT, Akila3): when the daily Gemini quota runs out or Gemini keeps rate-limiting in the middle of a title, the parts the AI already translated are kept and only the rest goes to Google Translate (before, the whole title went to Google). The next time that English subtitle is picked from the subtitle list with AI available, it is usually translated with AI again: the Google Hebrew stays on screen and the AI parts replace it as they arrive (before, the Google file was served from the cache for good). Not retried on a day the quota is known to be used up; if the AI run fails, the Google file stays.
-- Gender repair: a repair reply written as JSON instead of subtitle entries is now read (Flash-Lite sometimes answers that way, and every fix in it was lost). In a long repair request the "you" fixes go first, and an entry that does not fit is skipped instead of ending the list. No speaker fix when the reference line itself holds two speakers.
-- The live preview gets the stray-Latin-letter fix ("בואi" -> "בואי") the final pass already had, and so do cached AI translations when they are read.
-- OpenSubtitles downloads try a different key each time instead of a random one that could repeat a used-up key, tell a used-up key from a refused file, and no longer write the download link to the log.
-- Audio timing: the speech times the model returns are sorted (one out of order made the aligner refuse the whole reference, and the cache kept the refusal). Audio requests count toward the daily Gemini figure.
-- The log names the provider of the gender reference; a subtitle archive over 200 MB or 500 files is not unpacked.
-- Tried in Kodi and dropped: speaker gender and the extra gender question only with a Hebrew reference (without one, 45 gender conflicts against 39); resending a reply that failed the checks and then splitting it with the same reference (Prada 25-60 s slower, no gender gain; the old code already resends once before changing language); Low thinking (faster, but 13 gender conflicts against 9 on four titles).
-
-0.3.41
-- AI translation: model working notes no longer reach the subtitle. Flash-Lite sometimes wrote its drafts and reasoning into a cue ("-> ...", "Let's check Arabic: ...", "(Lorelai is female)"), mostly without a Hebrew reference; one QA episode had 50 such cues. Such a reply is now rejected and asked again like any other self-edit. No false hit on 20 human Hebrew subtitles or 134 cached subtitle files; caption markers (">>") and labels the source has stay. QA: 0 leaks in 8 Kodi translations.
-- AI translation: stronger gender repair, with ideas from SRT AI Translator NG (MIT, Akila3): a repair reply that flips a word nobody asked about is put back, and one that breaks the line (mixed "you" forms, stray letters, other shape changes) is refused; on a two-speaker cue only the person addressed is fixed. One extra request asks the gender of lines the readers cannot read and repairs those that contradict the reference. Blind grading of the lines that changed, with a Hebrew reference: 27 gender errors before, 14 after (6 episodes/films); conflicts with the human Hebrew 23 -> 15 (8). Without a Hebrew reference: no measured change.
-- AI translation: a Hebrew reference line that starts with an invisible direction mark is read correctly (it used to read no gender); Spanish and Portuguese references now give the addressee's gender.
-- AI translation: re-asked lines get the Hebrew of the lines just before them, the request states how many entries and which numbers to return, the foreign-letters repair asks once more when it changed nothing, and a model that refuses the safety setting is asked again with the accepted one.
-- Tried and dropped: sending the text without timecodes (shorter replies, 1.6-6x faster) made Google block chunks (13 blocks against 0 in Kodi runs).
-
-0.3.36
-- SubSync's long timing calculations (alignment, subtitle parsing, audio envelope, MKV/MP4 index reading) now take a 1 ms pause at most every 20 ms -- about 5% slower in the background, out of the viewer's way.
-- SubSync's file-probe cache is now one small file per video (subsync_probe/) instead of a single file that grew to ~11 MB and was read whole about six times per episode start; each lookup now reads ~1 ms instead of ~120 ms on a PC (seconds on a streamer). The old file is split once when Kodi starts.
-
-0.3.32
-- AI translation: read far more of an Arabic reference without vowel marks -- feminine and masculine verb endings, commands, questions and forms of address -- so the gender check finds far more errors when no Hebrew subtitle exists (19 instead of 1 in two measured episodes).
-- AI translation: when Gemini is briefly overloaded, retry the gender and leftover-English repairs instead of dropping them, ask again when a gender repair comes back empty, and never accept a repair that still contradicts the Hebrew reference.
-- AI translation: check who is speaking and who is spoken to against the human reference, not only the person addressed, and use the reference's own words to catch "את אוהבת" said to a man or "אני יודעת" said by one; rewrite only lines that then carry the right gender.
-- AI translation: read the speaker's gender from Polish, Czech, Slovak, Serbian, Croatian and Portuguese references too.
-- AI translation: keep the Hebrew reference working on Netflix subtitles that split each caption in two, and translate such captions as one line, without lost or doubled lines.
-- AI translation: include an episode's guest characters in the cast, so their gender is known.
-- AI translation: repair lines where the free model mixed in letters from another alphabet (Thai, Chinese, Korean...), drop translator notes and sound cues it left in English, fix single English letters inside Hebrew words and stuttered pronouns left in the old gender, and remove speaker names such as "Celeste:".
-- AI translation: entries a fallback reference left out are requested again instead of staying in English.
-- Show the Gemini daily quota by Google's reset time (midnight Pacific, about 10:00 in Israel) instead of UTC midnight.
-- Never write the OpenSubtitles or Bing keys to the Kodi log.
-- SubSync: read the image (PGS) subtitles of Blu-ray rips as the captions they are, so files with only PGS tracks can confirm an in-sync subtitle, and fix TV/web subtitles across the disc's act breaks when held-out parts of the disc track and a second PGS language of the same disc confirm the map.
-
-0.3.30
-- Restore automatic subtitle timing checks in the modular package; it had stopped identifying the playing release and left every subtitle unverified.
+0.2.567
 - Correct real multi-second offsets between differently segmented subtitles using speech-coverage corroboration, and stop weak sub-second nudges of subtitles that are already synchronized.
 - Stop trusting release names that only look alike (WEB-DL/DTS-HD groups, different streaming services, extended versus theatrical cuts) and check trusted subtitles against the playing file's own subtitle track.
 - Require a second independent reference before a provider subtitle can apply a large correction, and never apply one global shift that would mis-time a differently cut region.
@@ -48,13 +12,62 @@
 - Use the audio of MP4 files without a subtitle track to tell whether a subtitle fits the whole episode, and let it choose among timelines proposed by provider subtitles.
 - Never mark a subtitle as synchronized when the playing file shows that different parts of the episode are off by different amounts, and stop treating an episode title in a subtitle name as a release group.
 
-0.3.22
-- Verify subscription-notice settings were accepted by Kodi before confirming a saved choice.
+0.2.566
+- Keep verified subtitle corrections loadable on Windows when a long release filename would exceed the path limit.
+- Prefer a proven exact-file human subtitle, read additional embedded subtitle formats, and share bounded background timing checks without delaying the first subtitle.
+- Retry substantial untranslated AI chunks and prioritize translation near the current playback position after a seek.
 
-0.3.16
-- Keep automatic subtitle selection active when a previous film's AI translation is still running; cancel obsolete Gemini retries after playback or the selected subtitle changes.
-- Pass already-discovered Hebrew alternatives to the background timing verifier and restore verified fallback selection ownership.
-- Show when initial timing is still being checked, and log why verification is skipped.
+0.2.565
+- Keep local audio timing evidence tied to the exact media file, so another source with the same release name cannot inherit its sync result.
+
+0.2.564
+- Read bounded timed-text indexes from directly streamed MP4/MOV files when present, including opaque Debrid URLs; leave files without a usable track untouched.
+
+0.2.563
+- Avoid repeating the same expensive timing check for duplicate subtitle timelines during one playback; retain exact-file safety gates.
+- Ignore a previous episode's remembered source name when matching the current episode; preserve a fresh pick through Kodi URL redirects and lagging player labels.
+- Read embedded timed-text indexes from local MP4/MOV files when present; leave unsupported or text-free files untouched.
+
+0.2.562
+- Keep a longer overlapping human subtitle visible when matching gender hints to dialogue, and decline pathological reference timelines without slowing playback.
+
+0.2.561
+- Keep the immediate source-dialogue context when a long AI translation batch is split for retry, without coupling parallel workers to other batches.
+- Record background subtitle-probe and oracle durations in the Kodi log to pinpoint slow first-play synchronization.
+
+0.2.560
+- Check already-found Hebrew subtitle alternatives against the playing file before starting a slower foreign-subtitle oracle search, and switch only when the alternative is proven.
+
+0.2.559
+- Show the first automatic subtitle's actual timing state in the playback overlay, so an unverified candidate is not called ready while background verification may still replace it.
+
+0.2.558
+- Check an already aligned subtitle against the playing file with a cheaper identity-clock path, while retaining full drift/edit verification whenever it cannot be confirmed.
+- Sample alternate human subtitles from different release timing families before reusing similar rows, and ignore malformed provider metadata without losing all alternatives.
+
+0.2.557
+- Continue through a bounded set of human Hebrew alternatives when the first automatic subtitle cannot be verified, and switch only to a candidate proven against the exact playing file.
+- Rank the manual chooser by release evidence and cached exact-cut timing proof, while keeping the currently applied row visible and labelling verified recommendations.
+- Preserve complete multi-region validation certificates in the local verdict cache so a previously proven correction remains safely reusable.
+
+0.2.556
+- Complete a season-pack playing release with the active Kodi episode before automatic ranking, cache binding and timing proof.
+- Retry every prior timing refusal made against an incomplete Sxx identity, while preserving existing episode identities and refusing season mismatches.
+
+0.2.555
+- Re-run timing verification for every subtitle after the synchronization proof schema changes, instead of accepting stale UNKNOWN decisions from an older release.
+- Generalize strict multi-region correction to other movies and episodes when a matching exact/same-group oracle passes five independent holdouts and strong structural gates.
+- Bind generic timing proof to the same movie or exact episode and independently revalidate its release tier, boundaries, monotonic edits and quality metrics before applying it.
+
+0.2.554
+- Prefer the clearly closer human release on first automatic selection while preserving every AI/non-human result slot.
+- Apply the independently field-certified six-region correction for the exact reported Flash S01E06 BluRay cut when the live provider omits a previously validated oracle family.
+- Bind that correction to the exact playing release, exact DEMAND oracle, unit scale, complete region boundaries and the existing structural invariants.
+
+0.2.553
+- Synchronize repeated short edits on BluRay/DVD sources when three distinct release groups corroborate the same disc timeline under the full holdout and post-transform gates.
+- Keep automatic selection human-first; only after the chosen human subtitle definitively cannot be aligned, fall back to an already-listed community AI subtitle with a trusted release match for the playing file.
+- Treat an explicit repeat click on the same subtitle row as a new selection generation, so an older background fallback can never overwrite it.
 
 0.2.552
 - Expand background timing evidence beyond the picker languages only after the normal proof abstains, so a verified cross-cut correction can use an independent provider family without changing visible results or bypassing conflicts.
