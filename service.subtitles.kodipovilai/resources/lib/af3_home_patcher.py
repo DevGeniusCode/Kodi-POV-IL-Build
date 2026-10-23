@@ -22,6 +22,14 @@ except Exception:
     sqlite3 = None
 
 try:
+  import sys, xbmcvfs
+  p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')
+  sys.path.append(p) if p not in sys.path else None
+  import pov_visibility_mgr
+except ImportError:
+  pov_visibility_mgr = None
+
+try:
     import xbmc
     import xbmcaddon
     import xbmcvfs
@@ -32,7 +40,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-09-17-pov-home-v24'
+PATCH_VERSION = '2026-10-04-pov-home-v25'
 # Must track wizard.py's AF3_CE_SKIN_VERSION, which is the version actually
 # shipped in the pack. It did not: the wizard went to 6.3.2.14 and this stayed
 # at 6.3.2.9, so every AF3 user already ON the correct pack was told to
@@ -61,7 +69,6 @@ AF3_INFO_XML = AF3_XML_DIR + 'Includes_Info.xml'
 AF3_HEBREW_PO = (
     'special://home/addons/' + AF3_SKIN_ID +
     '/language/resource.language.he_il/strings.po')
-POV_NAVIGATOR_DB = 'special://profile/addon_data/plugin.video.pov/navigator.db'
 POV_MEDIA_BASE = 'special://home/addons/plugin.video.pov/resources/skins/Default/media/'
 BUNDLED_NOTO_FONT = os.path.join(
     os.path.dirname(__file__), 'media_assets', 'fonts', 'NotoSans-Regular.ttf')
@@ -149,20 +156,6 @@ def _pov(action='', mode='', name='', icon='', extra=''):
         '{0}={1}'.format(k, v) for k, v in params)
 
 
-def _mdblist_connected():
-    """True only when POV has an MDBList API key stored. The MDBList home
-    widgets route through POV's mdblist_watchlist action, which errors without a
-    key -- so we only surface them when MDBList is actually connected. Mirrors
-    favourites_personal_tiles_patcher._mdblist_connected()."""
-    try:
-        if xbmcaddon is None:
-            return False
-        tok = xbmcaddon.Addon('plugin.video.pov').getSetting('mdblist.token') or ''
-        return bool(tok.strip())
-    except Exception:
-        return False
-
-
 def _shortcut_folder(name, icon='folder.png'):
     return (
         'plugin://plugin.video.pov/?external_list_item=True'
@@ -191,7 +184,7 @@ _NETWORKS = (
 )
 
 def _net_widget(name, net_id, icon_file):
-    icon_path = ('special://home/media/build_icons/Twilight/Shows/Networks/'
+    icon_path = ('special://home/media/povil_icons/'
                  + icon_file)
     # _pov() does NOT url-encode its args (the existing tiles pass a
     # pre-encoded iconImage and %20-escaped name), so encode here: the
@@ -218,7 +211,7 @@ STREAMING_NETWORK_WIDGETS = [
 HOME_WIDGETS = [
     {
         'label': 'כלים וחיבורים',
-        'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
+        'icon': 'special://home/media/povil_icons/Connect_Services.png',
         'path': 'plugin://plugin.program.kodipovilwizard/?mode=install&action=af3_tools',
         'target': 'programs',
         'widget_style': 'Landscape',
@@ -226,7 +219,7 @@ HOME_WIDGETS = [
     },
     {
         'label': 'סרטים חדשים',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
+        'icon': 'special://home/media/povil_icons/Movies_Popular.png',
         'path': _pov('tmdb_movies_latest_releases', 'build_movie_list', '32461', 'dvd.png'),
         'target': 'videos',
         'widget_style': 'Poster',
@@ -234,7 +227,7 @@ HOME_WIDGETS = [
     },
     {
         'label': 'סדרות פופולריות',
-        'icon': 'special://home/media/build_icons/Twilight/Shows/Shows_Popular.png',
+        'icon': 'special://home/media/povil_icons/Shows_Popular.png',
         'path': _pov('trakt_tv_trending', 'build_tvshow_list', '32458', 'trending.png'),
         'target': 'videos',
         'widget_style': 'Poster',
@@ -242,7 +235,7 @@ HOME_WIDGETS = [
     },
     {
         'label': 'פרקים להמשך צפייה',
-        'icon': 'special://home/media/build_icons/Twilight/Shows/Episodes_In_Progress.png',
+        'icon': 'special://home/media/povil_icons/Episodes_In_Progress.png',
         'path': _pov('', 'build_next_episode', '32483', 'next_episodes.png'),
         'target': 'videos',
         'widget_style': 'Landscape',
@@ -250,7 +243,7 @@ HOME_WIDGETS = [
     },
     {
         'label': 'סרטים להמשך צפייה',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_In_Progress.png',
+        'icon': 'special://home/media/povil_icons/Movies_In_Progress.png',
         'path': _pov('in_progress_movies', 'build_movie_list', '32476', 'player.png'),
         'target': 'videos',
         'widget_style': 'Poster',
@@ -262,7 +255,7 @@ HOME_WIDGETS = [
         # what populates immediately when the user adds a movie, with no
         # dependency on the online TMDB.org account list.
         'label': 'הסרטים שלי',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies_TMDB.png',
+        'icon': 'special://home/media/povil_icons/My_Movies_TMDB.png',
         'path': _pov('favorites_movies', 'build_movie_list', 'Movie%20Favorites',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
@@ -273,7 +266,7 @@ HOME_WIDGETS = [
         # TMDB.org account favorites (the online list, synced across
         # devices). Kept alongside the local one so the user has both.
         'label': 'הסרטים שלי (TMDB)',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies_TMDB.png',
+        'icon': 'special://home/media/povil_icons/My_Movies_TMDB.png',
         'path': _pov('tmdb_my_movies', 'build_movie_list', 'Movie%20Favorites%20(TMDB)',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
@@ -284,7 +277,7 @@ HOME_WIDGETS = [
         # Trakt collection -- movies. Grouped with the other movie tiles:
         # right after 'הסרטים שלי (TMDB)' and above the shows.
         'label': 'הסרטים שלי (Trakt)',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies.png',
+        'icon': 'special://home/media/povil_icons/My_Movies.png',
         'path': _pov('trakt_my_movies', 'build_movie_list', 'Movies',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
         'target': 'videos',
@@ -292,13 +285,10 @@ HOME_WIDGETS = [
         'widget_limit': '7',
     },
     {
-        # MDBList watchlist -- movies. Routes to POV's mdblist_watchlist, which
-        # merges Watchlist + Collection and sorts newest-first (inherited here).
-        # Gated on MDBList being connected (see ensure_patched's loop): the row
-        # is filtered out of the canonical when no key is stored.
+        # Build personal list: merge Watchlist + Collection, including Recently Added.
         'label': 'הסרטים שלי (MDBList)',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies_MDBList.png',
-        'path': _pov('mdblist_watchlist', 'build_movie_list', 'MDBList%20Watchlist',
+        'icon': 'special://home/media/povil_icons/My_Movies_MDBList.png',
+        'path': _pov('mdblist_my_movies', 'build_movie_list', 'MDBList%20Watchlist',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fmdblist.png'),
         'target': 'videos',
         'widget_style': 'Poster',
@@ -307,7 +297,7 @@ HOME_WIDGETS = [
     {
         # POV-LOCAL show favorites (watched.db -> favorites).
         'label': 'הסדרות שלי',
-        'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows_TMDB.png',
+        'icon': 'special://home/media/povil_icons/My_Shows_TMDB.png',
         'path': _pov('favorites_tvshows', 'build_tvshow_list', 'TV%20Show%20Favorites',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
@@ -317,7 +307,7 @@ HOME_WIDGETS = [
     {
         # TMDB.org account show favorites (online list).
         'label': 'הסדרות שלי (TMDB)',
-        'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows_TMDB.png',
+        'icon': 'special://home/media/povil_icons/My_Shows_TMDB.png',
         'path': _pov('tmdb_my_tvshows', 'build_tvshow_list', 'TV%20Show%20Favorites%20(TMDB)',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
@@ -327,7 +317,7 @@ HOME_WIDGETS = [
     {
         # Trakt collection -- shows. Grouped after 'הסדרות שלי (TMDB)'.
         'label': 'הסדרות שלי (Trakt)',
-        'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows.png',
+        'icon': 'special://home/media/povil_icons/My_Shows.png',
         'path': _pov('trakt_my_tvshows', 'build_tvshow_list', 'TV%20Shows',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
         'target': 'videos',
@@ -335,10 +325,10 @@ HOME_WIDGETS = [
         'widget_limit': '7',
     },
     {
-        # MDBList watchlist -- shows. Same routing/sort as the movie row above.
+        # Same combined personal-list route as the movie row above.
         'label': 'הסדרות שלי (MDBList)',
-        'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows_MDBList.png',
-        'path': _pov('mdblist_watchlist', 'build_tvshow_list', 'MDBList%20Watchlist',
+        'icon': 'special://home/media/povil_icons/My_Shows_MDBList.png',
+        'path': _pov('mdblist_my_tvshows', 'build_tvshow_list', 'MDBList%20Watchlist',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fmdblist.png'),
         'target': 'videos',
         'widget_style': 'Poster',
@@ -346,18 +336,18 @@ HOME_WIDGETS = [
     },
     {
         'label': 'סרטים לפי ז׳אנר',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Genres.png',
+        'icon': 'special://home/media/povil_icons/Movies_Genres.png',
         'path': _shortcut_folder('FENtastic - סרטים - זאנרים',
-                                 'special://home/media/build_icons/Twilight/Movies/Movies_Genres.png'),
+                                 'special://home/media/povil_icons/Movies_Genres.png'),
         'target': 'videos',
         'widget_style': 'Landscape',
         'widget_limit': '7',
     },
     {
         'label': 'סדרות לפי ז׳אנר',
-        'icon': 'special://home/media/build_icons/Twilight/Shows/Shows_Genres.png',
+        'icon': 'special://home/media/povil_icons/Shows_Genres.png',
         'path': _shortcut_folder('FENtastic - סדרות - זאנרים',
-                                 'special://home/media/build_icons/Twilight/Shows/Shows_Genres.png'),
+                                 'special://home/media/povil_icons/Shows_Genres.png'),
         'target': 'videos',
         'widget_style': 'Landscape',
         'widget_limit': '7',
@@ -369,7 +359,7 @@ HOME_WIDGETS = [
         # plugin://plugin.video.idanplus/ lists idanplus's own category
         # menu, so the row shows its categories and clicking browses in.
         'label': 'עידן פלוס',
-        'icon': 'special://home/media/build_icons/Idan_Plus/idan_plus.png',
+        'icon': 'special://home/media/povil_icons/idan_plus.png',
         'path': 'plugin://plugin.video.idanplus/',
         'target': 'videos',
         'widget_style': 'Landscape',
@@ -472,32 +462,20 @@ HOME_SUBMENU = [
         'target': '',
     },
     {
-        # The other three skins carry this as a favourites tile. AF3 does not
-        # read favourites for its home at all -- which is the whole reason this
-        # module exists -- so the same entry has to arrive here, or "on all
-        # skins" quietly means three. _MERGE_FILES covers this list, so a user
-        # who removes it keeps it removed, same as any other row.
-        'label': '10 העדכונים האחרונים',
-        'icon': 'special://home/media/build_icons/Wizard/wizard_pov_il.png',
-        'path': ('RunPlugin("plugin://plugin.program.kodipovilwizard/'
-                 '?mode=recentupdates")'),
-        'target': '',
-    },
-    {
         'label': 'POV',
-        'icon': 'special://home/media/build_icons/POV/Logo_POV_IL.png',
+        'icon': 'special://home/media/povil_icons/Logo_POV_IL.png',
         'path': 'RunAddon("plugin.video.pov")',
         'target': '',
     },
     {
         'label': 'חיבור שירותים',
-        'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
+        'icon': 'special://home/media/povil_icons/Connect_Services.png',
         'path': 'RunPlugin("plugin://plugin.video.pov/?mode=myservices")',
         'target': '',
     },
     {
         'label': 'הגדרת התראות מנוי',
-        'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
+        'icon': 'special://home/media/povil_icons/Connect_Services.png',
         'path': 'RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)',
         'target': '',
     },
@@ -528,7 +506,7 @@ HOME_SUBMENU = [
     },
     {
         'label': 'החלף סקין',
-        'icon': 'special://home/media/build_icons/Wizard/switch_skin_pov_il.png',
+        'icon': 'special://home/media/povil_icons/switch_skin_pov_il.png',
         'path': 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin")',
         'target': '',
     },
@@ -538,19 +516,19 @@ HOME_SUBMENU = [
 POWER_MENU = [
     {
         'label': 'POV',
-        'icon': 'special://home/media/build_icons/POV/Logo_POV_IL.png',
+        'icon': 'special://home/media/povil_icons/Logo_POV_IL.png',
         'path': 'RunAddon("plugin.video.pov")',
         'target': '',
     },
     {
         'label': 'חיבור שירותים',
-        'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
+        'icon': 'special://home/media/povil_icons/Connect_Services.png',
         'path': 'RunPlugin("plugin://plugin.video.pov/?mode=myservices")',
         'target': '',
     },
     {
         'label': 'הגדרת התראות מנוי',
-        'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
+        'icon': 'special://home/media/povil_icons/Connect_Services.png',
         'path': 'RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)',
         'target': '',
     },
@@ -581,19 +559,19 @@ POWER_MENU = [
     },
     {
         'label': 'שליחת לוג',
-        'icon': 'special://home/media/build_icons/Twilight/Send_Log/twilight_send_log.png',
+        'icon': 'special://home/media/povil_icons/twilight_send_log.png',
         'path': 'ActivateWindow(10025,"plugin://plugin.video.pov/?mode=navigator.log_utils&name=Changelog%20%26%20Log%20Utils",return)',
         'target': '',
     },
     {
         'label': 'החלף סקין',
-        'icon': 'special://home/media/build_icons/Wizard/switch_skin_pov_il.png',
+        'icon': 'special://home/media/povil_icons/switch_skin_pov_il.png',
         'path': 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin")',
         'target': '',
     },
     {
         'label': 'עדכון מהיר',
-        'icon': 'special://home/media/build_icons/Wizard/fast_update_pov_il.png',
+        'icon': 'special://home/media/povil_icons/fast_update_pov_il.png',
         'path': 'PlayMedia("plugin://plugin.program.kodipovilwizard/?mode=install&action=quick_update&name=Kodi+POV+IL+-+FENtastic&auto_quick_update=false")',
         'target': '',
     },
@@ -641,7 +619,7 @@ SEARCH_WIDGETS = [
     {
         'guid': 'pov-search-movies',
         'label': 'סרטים',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
+        'icon': 'special://home/media/povil_icons/Movies_Popular.png',
         'path': 'DefaultSearch-POVMovies',
         'target': 'videos',
         'widget_style': 'Poster',
@@ -649,7 +627,7 @@ SEARCH_WIDGETS = [
     {
         'guid': 'pov-search-tv',
         'label': 'סדרות',
-        'icon': 'special://home/media/build_icons/Twilight/Shows/Shows_Popular.png',
+        'icon': 'special://home/media/povil_icons/Shows_Popular.png',
         'path': 'DefaultSearch-POVTv',
         'target': 'videos',
         'widget_style': 'Poster',
@@ -657,7 +635,7 @@ SEARCH_WIDGETS = [
     {
         'guid': 'pov-search-people',
         'label': 'שחקן / במאי',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
+        'icon': 'special://home/media/povil_icons/Movies_Popular.png',
         'path': 'DefaultSearch-POVPeople',
         'target': 'videos',
         'widget_style': 'Poster',
@@ -665,7 +643,7 @@ SEARCH_WIDGETS = [
     {
         'guid': 'pov-search-collections',
         'label': 'קולקציות',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
+        'icon': 'special://home/media/povil_icons/Movies_Popular.png',
         'path': 'DefaultSearch-POVCollections',
         'target': 'videos',
         'widget_style': 'Poster',
@@ -739,80 +717,21 @@ def _copy(src, dst):
         fh.write(data)
 
 
-def _version_tuple(ver):
-    parts = []
-    for chunk in str(ver).split('.'):
-        num = ''.join(ch for ch in chunk if ch.isdigit())
-        parts.append(int(num) if num else 0)
-    return tuple(parts)
-
-
-def _read_addon_version(addon_id):
-    addon_xml = 'special://home/addons/' + addon_id + '/addon.xml'
-    if not _exists(addon_xml):
-        return ''
-    try:
-        text = _read(addon_xml)[:600]
-    except Exception:
-        return ''
-    # jurialmunkey declares version= on the <addon> tag, but the file also
-    # opens with <?xml version="1.0"?>. Find the addon-tag version, not the
-    # XML-decl one, by searching after the addon id.
-    anchor = text.find(addon_id)
-    search_from = anchor if anchor >= 0 else 0
-    marker = 'version="'
-    pos = text.find(marker, search_from)
-    if pos < 0:
-        return ''
-    start = pos + len(marker)
-    end = text.find('"', start)
-    return text[start:end] if end > start else ''
-
-
-def _read_af3_version():
-    return _read_addon_version(AF3_SKIN_ID)
-
-
-def _jurialmunkey_too_old():
-    """True only when jurialmunkey is installed AND older than the minimum
-    TMDbHelper needs. Missing entirely -> not our problem to detect here
-    (the normal deps-pack install handles a fresh switch)."""
-    current = _read_addon_version('script.module.jurialmunkey')
-    if not current:
-        return False
-    try:
-        return _version_tuple(current) < _version_tuple(JURIALMUNKEY_MIN_VERSION)
-    except Exception:
-        return False
-
-
 def _request_ce_skin_upgrade():
-    if xbmc is None:
-        return False
-    # Re-run the AF3 deps/skin install when EITHER the skin is on an older
-    # version OR jurialmunkey is too old for the bundled TMDbHelper.
+    # KODI-POV-IL - NO-OP under the modular architecture.
     #
-    # OLDER, not DIFFERENT. This was an equality test, which reads as "is the
-    # skin the version we ship" and behaves as "is it any other version at
-    # all" -- so the moment the shipped pack moved ahead of this constant,
-    # every up-to-date user was asked to upgrade on every boot. The wizard's
-    # own gate (_af3_pack_current) has always compared with >=; this now does
-    # the same, and a constant left behind again costs nothing instead of
-    # costing a dialog a day.
-    try:
-        current_ok = (_version_tuple(_read_af3_version())
-                      >= _version_tuple(AF3_CE_VERSION))
-    except Exception:
-        current_ok = _read_af3_version() == AF3_CE_VERSION
-    if current_ok and not _jurialmunkey_too_old():
-        return False
-    try:
-        xbmc.executebuiltin(
-            'RunPlugin("plugin://plugin.program.kodipovilwizard/'
-            '?mode=install&action=install_af3_ce")')
-        return True
-    except Exception:
-        return False
+    # AF3 used to be installed from four static "pack" zips that bundled a
+    # specific skin version (6.3.2.9) and a specific script.module.jurialmunkey
+    # (>= 0.2.35). This function force-reinstalled those packs whenever the
+    # on-disk versions didn't match the bundled ones. AF3 is now installed
+    # NATIVELY from repository.jurialmunkey: the skin and all its dependencies
+    # are resolved at mutually-compatible upstream versions and keep updating
+    # from their own repos via Kodi's normal addon updater. There is no bundled
+    # version to pin to and nothing for the wizard to force, so this is a no-op.
+    # (ensure_patched() already returns 'no_af3' earlier when the skin is truly
+    # missing.) The manual re-install path -- action=install_af3_ce -> native
+    # InstallAddon -- is still available if ever needed.
+    return False
 
 
 def _json(data):
@@ -880,6 +799,20 @@ def _item_key(item):
             # user-facing tile. Ignore it while matching old/current rows.
             path = re.sub(r'([?&])widget_limit=\d+&?', r'\1', path)
             path = path.replace('?&', '?').rstrip('?&')
+            # The build's two old Watchlist-only defaults are the same tiles,
+            # now routed to the combined library. Match both baseline/current
+            # so migration preserves positions and deliberate removals.
+            for row in HOME_WIDGETS:
+                canonical = row.get('path', '')
+                canonical = re.sub(r'([?&])widget_limit=\d+&?', r'\1', canonical)
+                canonical = canonical.replace('?&', '?').rstrip('?&')
+                for action in ('mdblist_my_movies', 'mdblist_my_tvshows'):
+                    if ('action=' + action) not in canonical:
+                        continue
+                    legacy = canonical.replace('action=' + action,
+                                               'action=mdblist_watchlist', 1)
+                    if path == legacy:
+                        return canonical
             return path
         return item.get('label', '')
     except Exception:
@@ -1019,144 +952,6 @@ def _patch_hebrew_language():
         return True
     except Exception:
         return False
-
-
-# Stable genre-icon location we control + ship via build_icons_patcher
-# (resources/lib/media_assets/build_icons/Genres/genre_*.png). We point
-# every genre row's iconImage here instead of POV's own media/genres/
-# folder, which isn't shipped by us and vanishes on POV self-updates --
-# the reason genre icons were blank on BOTH skins.
-
-# Map of Hebrew genre label (stripped of [B]/[/B]) -> icon filename, so
-# we can re-icon a row even when POV rebuilt it WITHOUT the original
-# 'genres/...' iconImage prefix (the case the old prefix-only check
-# silently skipped). Covers both the movie and TV genre sets.
-GENRE_NAME_TO_ICON = {
-    'אקשן': 'genre_action.png',
-    'הרפתקאות': 'genre_adventure.png',
-    'אקשן והרפתקאות': 'genre_action_adventure.png',
-    'אנימציה': 'genre_animation.png',
-    'קומדיה': 'genre_comedy.png',
-    'פשע': 'genre_crime.png',
-    'דוקומנטרי': 'genre_documentary.png',
-    'דרמה': 'genre_drama.png',
-    'משפחה': 'genre_family.png',
-    'פנטזיה': 'genre_fantasy.png',
-    'היסטוריה': 'genre_history.png',
-    'אימה': 'genre_horror.png',
-    'מוזיקה': 'genre_music.png',
-    'מסתורין': 'genre_mystery.png',
-    'רומנטיקה': 'genre_romance.png',
-    'מדע בדיוני': 'genre_scifi.png',
-    'מדע בדיוני ופנטזיה': 'genre_scifi_fantasy.png',
-    'מתח': 'genre_thriller.png',
-    'מלחמה': 'genre_war.png',
-    'מלחמה ופוליטיקה': 'genre_war_politics.png',
-    'מערבון': 'genre_western.png',
-    'ילדים': 'genre_kids.png',
-    'חדשות': 'genre_news.png',
-    'ריאליטי': 'genre_reality.png',
-    'אופרת סבון': 'genre_soap.png',
-    'אירוח': 'genre_talk.png',
-}
-
-
-# NOTE: the old _genre_icon_for()/GENRE_ICON_BASE helpers (which returned
-# an ABSOLUTE special://home/media/build_icons/Genres/... path) were
-# REMOVED in v0.2.85. They were the bug: POV's build_shortcut_folder_list
-# prepends media_path() to a non-network iconImage, so an absolute value
-# got doubled into a broken '.../media/special://...' path -> POV-logo
-# fallback. The correct approach is _heal_genre_icon() below, which writes
-# the RELATIVE 'genres/<file>' POV already ships and resolves. Keeping the
-# dead absolute helpers risked a future re-corruption, so they're gone.
-
-
-def _heal_genre_icon(item):
-    """Return the CORRECT relative iconImage for a genre row item, or ''
-    to leave it. POV's build_shortcut_folder_list (navigator.py:446)
-    unconditionally prepends media_path() to a non-network item's
-    iconImage, so the value MUST be a bare relative path like
-    'genres/genre_action.png' -- POV ships those icons in its media dir.
-    An earlier version of this patcher wrongly stored an ABSOLUTE
-    'special://home/media/build_icons/Genres/...' path, which POV then
-    doubled into a broken '.../media/special://home/...' -> POV-logo
-    fallback. This heals that: any absolute special:// value (or a
-    bare filename without the 'genres/' dir) is mapped back to
-    'genres/<file>' by the Hebrew genre name."""
-    icon = item.get('iconImage', '') or ''
-    # Already the correct relative form -> leave it.
-    if icon.startswith('genres/'):
-        return ''
-    # Map by Hebrew name to the canonical relative path.
-    name = (item.get('name', '') or '')
-    name = name.replace('[B]', '').replace('[/B]', '').strip()
-    fn = GENRE_NAME_TO_ICON.get(name)
-    if fn:
-        return 'genres/' + fn
-    # If it's an absolute special:// path ending in a known genre file,
-    # salvage the filename.
-    if 'special://' in icon and icon.lower().endswith('.png'):
-        base = icon.rsplit('/', 1)[-1]
-        if base.startswith('genre_'):
-            return 'genres/' + base
-    return ''
-
-
-def _patch_pov_genre_icons():
-    if sqlite3 is None or ast is None:
-        return False
-    db_path = _translate(POV_NAVIGATOR_DB)
-    if not os.path.isfile(db_path):
-        return False
-
-    changed = False
-    conn = None
-    try:
-        conn = sqlite3.connect(db_path, timeout=2.0, isolation_level=None)
-        conn.execute('PRAGMA busy_timeout=2000')
-        cur = conn.cursor()
-        for row_name in (
-                'FENtastic - סרטים - זאנרים',
-                'FENtastic - סדרות - זאנרים'):
-            cur.execute(
-                'SELECT list_contents FROM navigator WHERE list_name=?',
-                (row_name,))
-            row = cur.fetchone()
-            if not row:
-                continue
-            try:
-                items = ast.literal_eval(row[0] or '[]')
-            except Exception:
-                continue
-            row_changed = False
-            for item in items:
-                new_icon = _heal_genre_icon(item)
-                if new_icon and item.get('iconImage', '') != new_icon:
-                    item['iconImage'] = new_icon
-                    row_changed = True
-            if not row_changed:
-                continue
-            cur.execute('BEGIN IMMEDIATE')
-            try:
-                cur.execute(
-                    'UPDATE navigator SET list_contents=? WHERE list_name=?',
-                    (repr(items), row_name))
-                cur.execute('COMMIT')
-                changed = True
-            except Exception:
-                try:
-                    cur.execute('ROLLBACK')
-                except Exception:
-                    pass
-    except Exception:
-        return changed
-    finally:
-        if conn is not None:
-            try:
-                conn.close()
-            except Exception:
-                pass
-    return changed
 
 
 def _patch_touch_cleanup_xml():
@@ -1462,40 +1257,13 @@ def _is_af3_active():
         return False
 
 
-def _quick_update_notice_pending():
-    """Avoid AF3 rebuild/reload while the wizard's quick-update
-    changelog is waiting to be read.
-
-    Other skins do not run our skinvariables rebuild path, so the issue
-    is AF3-specific: ReloadSkin()/script.skinvariables can close or cover
-    the wizard's notification immediately after an update. If the wizard
-    says the quick-update notice is still not dismissed, defer this AF3
-    rebuild. The marker is written only after a successful rebuild, so the
-    next startup retries normally after the user closes the notice.
-    """
-    if xbmcaddon is None:
-        return False
-    try:
-        wizard = xbmcaddon.Addon('plugin.program.kodipovilwizard')
-        return (wizard.getSetting('quick_update_notedismiss') == 'false'
-                and bool(wizard.getSetting('quick_update_noteid')))
-    except Exception:
-        return False
-
-
 def _wait_for_quick_update_notice(max_seconds=180):
-    if xbmc is None:
-        return False
-    if not _quick_update_notice_pending():
-        return False
-    monitor = xbmc.Monitor()
-    deadline = time.time() + max_seconds
-    while time.time() < deadline:
-        if monitor.waitForAbort(1):
-            return True
-        if not _quick_update_notice_pending():
-            return False
-    return _quick_update_notice_pending()
+    # KODI-POV-IL - NO-OP. This used to defer the AF3 skinvariables rebuild while
+    # the wizard's legacy "quick-update" changelog notification was on screen (so
+    # ReloadSkin() wouldn't close it). That whole text-file notification system
+    # has been removed with the modular migration, so there is nothing to wait
+    # for -- the rebuild proceeds immediately.
+    return False
 
 
 def _rebuild_af3_shortcuts():
@@ -1532,10 +1300,91 @@ def _rebuild_af3_shortcuts():
     xbmc.executebuiltin('RunScript(script.skinvariables,action=buildtemplate,force=True,background=true)')
     xbmc.sleep(1200)
     xbmc.executebuiltin('ReloadSkin()')
+    _mark_reloaded()
     xbmc.sleep(1800)
     xbmc.executebuiltin('SetFocus(310)')
     xbmc.executebuiltin('AlarmClock(POVAF3FocusSpotlight,SetFocus(310),00:02,silent)')
     return True
+
+
+# POV's own progress (full screen or background bar) or its results list, and
+# the play guard's mark (a time.time() stamp, live for a minute): what an
+# autoplay gap between episodes shows (pov_play_guard.POV_WINDOWS/PROPERTY).
+_POV_WINDOWS = ('Window.IsVisible(progress_media.xml) | Window.IsVisible(sources_results.xml)'
+                ' | Window.IsActive(extendedprogressdialog)')
+_PLAY_PROPERTY = 'povil.play.started'
+
+
+def restore_hebrew_font():
+    """Put back only the build's Hebrew font and strings.
+
+    Kodi's update of AF3 replaces the whole skin folder: from then on every
+    Hebrew letter is a box and AF3's labels are English until the full repair,
+    which waits for the start-up pass and 30 quiet seconds -- about a minute
+    on an Android box (field report, 23 Oct 2026). These files are what the
+    viewer sees, they are small, and every writer writes the same bytes, so
+    this runs at once and ensure_patched() still does the rest. True when a
+    file changed; the caller reloads the skin (skin_reload_idle)."""
+    if xbmcvfs is None or not _exists('special://home/addons/' + AF3_SKIN_ID + '/addon.xml'):
+        return False
+    try:
+        changed = _patch_font_xml()
+        return _patch_hebrew_language() or changed
+    except Exception:
+        return False
+
+
+def skin_reload_idle():
+    """Nothing playing, no play on its way and no dialog open: a skin reload
+    now closes nothing. An autoplay gap between episodes shows POV's progress
+    or carries the play guard's mark, so it never counts as idle. Nor do the
+    two moments every other reload here waits out: Kodi with AF3 unloaded for
+    an install (a reload then drops the profile to Estuary, 22 Oct 2026) and
+    POV off for its reload cycle (every POV widget then stays empty for the
+    session -- see pov_reload)."""
+    if xbmc is None:
+        return False
+    try:
+        if (xbmc.getCondVisibility('Player.HasMedia')
+                or xbmc.getCondVisibility('System.HasVisibleModalDialog')
+                or xbmc.getCondVisibility('System.HasActiveModalDialog')
+                or xbmc.getCondVisibility(_POV_WINDOWS)
+                or not xbmc.getCondVisibility('System.HasAddon(' + AF3_SKIN_ID + ')')):
+            return False
+        import xbmcgui
+        started = float(xbmcgui.Window(10000).getProperty(_PLAY_PROPERTY) or 0)
+        if 0 <= time.time() - started < 60.0:
+            return False
+    except Exception:
+        return False
+    try:
+        from resources.lib import pov_reload
+        return not pov_reload.is_cycling()
+    except Exception:
+        return True             # no pov_reload here means no POV cycle to wait out
+
+
+# time.monotonic() (one clock for every interpreter in Kodi) of the last skin
+# reload requested from here: the start-up font restore skips its own reload
+# when the rebuild's came after the font went back.
+RELOADED_PROPERTY = 'povil.af3_reloaded'
+
+
+def _mark_reloaded():
+    try:
+        import xbmcgui
+        xbmcgui.Window(10000).setProperty(RELOADED_PROPERTY, repr(time.monotonic()))
+    except Exception:
+        pass
+
+
+def reload_skin():
+    """ReloadSkin as the rebuild does (focus back on the spotlight); callers
+    wait for skin_reload_idle() first."""
+    xbmc.executebuiltin('ReloadSkin()')
+    _mark_reloaded()
+    xbmc.sleep(1800)
+    xbmc.executebuiltin('SetFocus(310)')
 
 
 def ensure_patched():
@@ -1550,7 +1399,6 @@ def ensure_patched():
 
     _mkdir(AF3_NODES)
     changed = False
-    mdblist_ok = _mdblist_connected()
     umbrella_ok = _umbrella_installed()
     for filename, data in FILES.items():
         retired_keys = ()
@@ -1571,14 +1419,8 @@ def ensure_patched():
         if not umbrella_ok and filename in _UMBRELLA_MENU_FILES:
             data = [w for w in data
                     if (w.get('path') or '') not in _UMBRELLA_MENU_PATHS]
-        # MDBList home widgets are opt-in: drop them from the canonical unless
-        # MDBList is connected, so the merge never seeds/appends an mdblist_
-        # watchlist row that would error without a key. A user who connects
-        # later gets it appended on the next boot (brand-new vs the baseline);
-        # the 3-way merge keeps it if they later disconnect (add-only), matching
-        # the favourites tiles.
-        if filename == 'skinvariables-shortcut-homewidgets.json' and not mdblist_ok:
-            data = [w for w in data if 'mdblist_watchlist' not in (w.get('path') or '')]
+        if filename == 'skinvariables-shortcut-homewidgets.json' and pov_visibility_mgr is not None:
+            data = [w for w in data if pov_visibility_mgr.is_item_visible(w.get('path'))]
         if filename in _MERGE_FILES:
             changed = _merge_widget_nodes(
                 filename, data, retired_keys=retired_keys,
@@ -1587,7 +1429,6 @@ def ensure_patched():
             changed = _write_if_changed(filename, data) or changed
     changed = _patch_font_xml() or changed
     changed = _patch_hebrew_language() or changed
-    changed = _patch_pov_genre_icons() or changed
     changed = _patch_touch_cleanup_xml() or changed
     changed = _patch_info_plot_autoscroll_xml() or changed
     # Inject POV search rules into search_path.xml BEFORE the rebuild, so
