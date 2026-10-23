@@ -18,17 +18,7 @@ _BIDI = re.compile(r'[\u200e\u200f\u202a-\u202e\u2066-\u2069]')
 _NEG_EN = re.compile(r"\b(?:not|never|no|without|cannot|\w+n['’]t)\b", re.I)
 _NEG_HE = re.compile(r'(?<![\u05d0-\u05ea])(?:ו?ש?לא|ו?ש?אין|ו?אל|ו?בלי|ו?ללא)(?![\u05d0-\u05ea])')
 _TIME = re.compile(r'^\d{1,2}:\d{2}:\d{2}[,.]\d{3}\s*-->\s*\d{1,2}:\d{2}:\d{2}[,.]\d{3}')
-# One request covers the whole file. Measured in Kodi: the free model echoed
-# about 40 lines of one tense scene in English; with room for 16 the repair
-# fixed 16 and left 25 on screen. Forty lines (~32 KB of evidence) is still
-# one ordinary request.
-_LIMIT = 40000
-_MAX_LINES = 40
-# Narration and interview lines carry a speaker name ("Perry: Do you want to
-# know a secret?"); the name is not a label to keep in English.
-_LEAD_TAG = re.compile(
-    r"^\s*(?:-\s*)?(?!(?:WARNING|NOTE|CAUTION|ATTENTION|CHAPTER|PART|BREAKING|UPDATE)\b)"
-    r"(?:[A-Z][a-z]+|[A-Z]{2,})(?: [A-Z][a-z]+)?:\s+(?=\S)")
+_LIMIT = 20000
 
 
 def _visible(text):
@@ -43,7 +33,7 @@ def _lines(block):
 
 
 def _candidate(text):
-    visible = _LEAD_TAG.sub('', _visible(text), count=1)
+    visible = _visible(text)
     if _HE.search(visible) or re.search(r'["“”«»`]', visible):
         return False
     if re.search(r'https?://|www\.|@|[/\\]|\b\w+:', visible, re.I):
@@ -102,9 +92,9 @@ def repair(source_blocks, current_blocks, source_lang, request, cancelled=None, 
                 continue
             chosen.append(item)
             positions[ident] = (index, offset, line)
-            if len(chosen) == _MAX_LINES:
+            if len(chosen) == 16:
                 break
-        if len(chosen) == _MAX_LINES:
+        if len(chosen) == 16:
             break
     counts['selected'] = len(chosen)
     if not chosen or cancelled():
