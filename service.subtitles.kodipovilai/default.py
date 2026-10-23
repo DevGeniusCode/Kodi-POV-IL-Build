@@ -1687,7 +1687,7 @@ def _show_gemini_usage():
 
 def _handle_show_gemini_usage(_params):
     """RunScript entry point so the dialog can be opened from
-    anywhere, e.g. a Wizard button or a remote shortcut."""
+    anywhere, e.g. a remote shortcut."""
     _show_gemini_usage()
 
 
@@ -2180,8 +2180,8 @@ def _handle_open_tmdb_notice(_params):
         'נקבה) ולבחור צורות עברית נכונות.\n\n'
         'אופציונלי: אם תרצה להשתמש ב-key משלך (למשל אם ה-key '
         'המשותף נחסם זמנית, או אם אתה משתמש ב-TMDB Helper '
-        'באופן כללי), פתח את ה-Wizard → "חיבור שירותים" → TMDB '
-        'וחבר key אישי. הוא יוחל אוטומטית מאותו רגע, בלי '
+        'באופן כללי), פתח את הגדרות TMDB Helper וחבר key אישי. '
+        'הוא יוחל אוטומטית מאותו רגע, בלי '
         'restart, וידרוס את ה-key המובנה.'
     )
     xbmcgui.Dialog().ok('Kodi POV IL — TMDB', body)
@@ -3038,13 +3038,6 @@ def _handle_purge_temp(_params):
         'נמחקו {0} קבצי כתוביות מ-temp.'.format(n))
 
 
-def _handle_open_pov_settings(_params):
-    """Open POV's addon settings. Used by build home-screen buttons so
-    users can quickly change Premium Expires Notification thresholds."""
-    try:
-        xbmc.executebuiltin('Addon.OpenSettings(plugin.video.pov)')
-    except Exception as e:
-        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
 
 
 DEBRID_NOTICE_SERVICES = (
@@ -3068,112 +3061,14 @@ DEBRID_NOTICE_VALUES = (
 )
 
 
-def _pov_addon():
-    try:
-        return xbmcaddon.Addon('plugin.video.pov')
-    except Exception:
-        return None
 
 
-def _format_bytes(value):
-    try:
-        amount = float(value)
-    except (TypeError, ValueError):
-        return str(value) if value not in (None, '') else ''
-    units = ('B', 'KB', 'MB', 'GB', 'TB')
-    index = 0
-    while amount >= 1024 and index < len(units) - 1:
-        amount /= 1024.0
-        index += 1
-    return ('{0:d}' if index == 0 else '{0:.1f}').format(
-        int(amount) if index == 0 else amount) + ' ' + units[index]
 
 
-def _torbox_api_get(token, path, params=None):
-    import requests
-    response = requests.get(
-        'https://api.torbox.app/v1/api/' + path,
-        headers={'Authorization': 'Bearer ' + token,
-                 'User-Agent': 'Kodi POV IL'},
-        params=params, timeout=20)
-    response.raise_for_status()
-    payload = response.json()
-    return payload.get('data') if isinstance(payload, dict) and 'data' in payload else payload
 
 
-def _torbox_usage_30(stats):
-    if not isinstance(stats, dict):
-        return None
-    bandwidth = stats.get('bandwidth') or stats.get('bandwidths')
-    if isinstance(bandwidth, list):
-        values = []
-        for item in bandwidth:
-            if isinstance(item, dict) and item.get('bytes_downloaded') is not None:
-                try:
-                    values.append(int(item['bytes_downloaded']))
-                except (TypeError, ValueError):
-                    pass
-        if values:
-            return sum(values)
-    general = stats.get('general')
-    if isinstance(general, dict):
-        for key in ('bytes_downloaded', 'total_downloaded',
-                    'total_data_downloaded'):
-            if key in general:
-                return general[key]
-    return None
 
 
-def _handle_torbox_status(_params):
-    """Preserve the TorBox account-status action used by home favourites."""
-    pov = _pov_addon()
-    if pov is None:
-        xbmcgui.Dialog().ok('TorBox', 'plugin.video.pov not found.')
-        return
-    try:
-        token = pov.getSetting('tb.token') or ''
-    except Exception:
-        token = ''
-    if not token:
-        xbmcgui.Dialog().ok('TorBox', 'TorBox is not connected in POV.')
-        return
-    try:
-        account = _torbox_api_get(token, 'user/me') or {}
-        stats = _torbox_api_get(token, 'user/stats', params={
-            'general': 'true', 'bandwidth': 'true',
-            'bandwidth_grouping': 'day'}) or {}
-        if not isinstance(account, dict):
-            raise ValueError('invalid account response')
-    except Exception as exc:
-        xbmcgui.Dialog().ok('TorBox', 'TorBox status failed: {0}'.format(exc))
-        return
-    from datetime import datetime
-    expires_raw = account.get('premium_expires_at') or ''
-    expires_label = expires_raw[:10] if isinstance(expires_raw, str) else ''
-    days = ''
-    if expires_raw:
-        try:
-            days = str((datetime.strptime(expires_raw, '%Y-%m-%dT%H:%M:%SZ')
-                        - datetime.today()).days)
-        except (TypeError, ValueError):
-            pass
-    plans = {0: 'Free', 1: 'Essential', 2: 'Pro', 3: 'Standard'}
-    plan = plans.get(account.get('plan'), account.get('plan', ''))
-    lines = [
-        'Days Remaining: {0}'.format(days or 'N/A'),
-        'Expires: {0}'.format(expires_label or 'N/A'),
-        'Account: {0}'.format(account.get('email') or 'N/A'),
-        'Username: {0}'.format(account.get('customer') or 'N/A'),
-        'Status: {0}'.format(plan or 'N/A'),
-        'Downloaded: {0}'.format(account.get('total_downloaded', 'N/A')),
-        'שימוש 30 יום: {0}'.format(_format_bytes(_torbox_usage_30(stats)) or 'N/A'),
-    ]
-    body = '\n\n'.join(lines)
-    dialog = xbmcgui.Dialog()
-    try:
-        dialog.textviewer('TORBOX', body)
-    except Exception:
-        dialog.ok('TORBOX', body)
 
 
 def _handle_remember_source_status(_params):
@@ -3251,77 +3146,8 @@ def _translate_path(path):
     return ''
 
 
-def _notice_value_label(value):
-    for label, stored in DEBRID_NOTICE_VALUES:
-        if str(value) == stored:
-            return label
-    return '{0} ימים לפני סיום'.format(value)
 
 
-def _handle_debrid_notice_settings(_params):
-    """Build UI for debrid expiry notification thresholds.
-
-    POV stores the values as rd/tb/pm/ad.expires, but some POV builds do
-    not expose those settings in Addon.OpenSettings(). This dialog writes
-    the same POV settings directly so the startup notifier can read them.
-    """
-    pov = _pov_addon()
-    if pov is None:
-        xbmcgui.Dialog().ok(
-            'התראות מנוי',
-            'לא נמצא plugin.video.pov. התקן/עדכן את הבילד ונסה שוב.')
-        return
-
-    dialog = xbmcgui.Dialog()
-    service_rows = []
-    for label, key in DEBRID_NOTICE_SERVICES:
-        try:
-            current = pov.getSetting(key) or '0'
-        except Exception:
-            current = '0'
-        service_rows.append('{0}  -  {1}'.format(
-            label, _notice_value_label(current)))
-
-    idx = dialog.select('הגדרת התראות מנוי', service_rows)
-    if idx < 0:
-        return
-
-    service_label, key = DEBRID_NOTICE_SERVICES[idx]
-    options = [
-        '{0} ({1})'.format(label, stored)
-        for label, stored in DEBRID_NOTICE_VALUES
-    ]
-    value_idx = dialog.select(
-        'מתי להתריע עבור {0}?'.format(service_label), options)
-    if value_idx < 0:
-        return
-
-    value = DEBRID_NOTICE_VALUES[value_idx][1]
-    try:
-        pov.setSetting(key, value)
-        # Kodi's legacy slider silently rejects values outside its schema.
-        # setSetting returns None even on rejection, so verify the read-back.
-        if pov.getSetting(key) != value:
-            dialog.ok(
-                'התראות מנוי',
-                'הבחירה לא נשמרה. יש להשלים את עדכון הבילד, לסגור ולפתוח את Kodi ולבחור שוב.')
-            return
-    except Exception as e:
-        xbmcgui.Dialog().ok(
-            'התראות מנוי',
-            'שמירת ההגדרה נכשלה: {0}'.format(e))
-        return
-
-    if value == '0':
-        msg = '{0}: התראה בכל כניסה לקודי'.format(service_label)
-    else:
-        msg = '{0}: התראה רק כשנותרו עד {1} ימים'.format(
-            service_label, value)
-    try:
-        from resources.lib import kodi_utils
-        kodi_utils.notify(msg, title='התראות מנוי', time_ms=5000)
-    except Exception:
-        dialog.notification('התראות מנוי', msg, time=5000)
 
 
 def _handle_connect_telegram(_params):
@@ -4015,20 +3841,6 @@ def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
     return 'ok'
 
 
-def _handle_prepare_build_skin(params):
-    import re
-    key = params.get('request', '')
-    if not re.fullmatch(r'POVIL\.BuildSkin\.[0-9a-f]{32}', key):
-        return
-    state = 'failed'
-    try:
-        if xbmc.getSkinDir() == 'skin.arctic.fuse.3':
-            from resources.lib import af3_home_patcher
-            result = af3_home_patcher.ensure_patched()
-            if result in ('patched_rebuilt', 'already_patched'):
-                state = 'ready'
-    finally:
-        xbmcgui.Window(10000).setProperty(key, state)
 
 
 def main():
@@ -4046,12 +3858,7 @@ def main():
     action = (params.get('action') or 'search').lower()
 
     try:
-        if action == 'prepare_build_skin':
-            _handle_prepare_build_skin(params)
-        elif action == 'tonight':
-            from resources.lib.tonight.ui import run
-            run()
-        elif action == 'search':
+        if action == 'search':
             _handle_search(handle, params)
         elif action == 'manualsearch':
             _handle_manualsearch(handle, params)
@@ -4106,12 +3913,6 @@ def main():
             _handle_bg_translate_picker(params)
         elif action == 'darksubs_status':
             _handle_darksubs_status(params)
-        elif action == 'open_pov_settings':
-            _handle_open_pov_settings(params)
-        elif action == 'debrid_notice_settings':
-            _handle_debrid_notice_settings(params)
-        elif action == 'torbox_status':
-            _handle_torbox_status(params)
         elif action == 'remember_source_status':
             _handle_remember_source_status(params)
         elif action == 'he_avail':

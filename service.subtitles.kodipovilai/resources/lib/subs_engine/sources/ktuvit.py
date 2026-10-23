@@ -468,8 +468,11 @@ def download(download_data,MySubFolder):
 
 ################ KTUVIT TITLE MISMATCH MAPPING ##############################
 def c_get_ktuvit_original_title_mapping():
-    ktuvit_original_title_mapping = requests.get('https://kodi7rd.github.io/repository/other/DarkSubs_Ktuvit_Title_Mapping/darksubs_ktuvit_title_mapping.json', timeout=DEFAULT_REQUEST_TIMEOUT).json()
-    return ktuvit_original_title_mapping
+    # KODI-POV-IL: kodi7rd.github.io no longer exists. The title-mapping feed it
+    # served is gone, so return an empty mapping (titles used as-is). This also
+    # avoids a dead network call on every Ktuvit search; get_matching_ktuvit_name
+    # already falls back to the original title for any unmapped name.
+    return {}
 
 def get_matching_ktuvit_name(video_data_original_title):
     try:

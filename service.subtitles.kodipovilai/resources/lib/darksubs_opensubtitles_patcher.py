@@ -22,7 +22,7 @@ TARGET_REL_DIR = os.path.join('resources', 'sources')
 PATCH_REL_DIR = os.path.join('resources', 'patches', 'darksubs')
 OPEN_SUBS_FILE = 'opensubtitles.py'
 KEYS_FILE = 'darksubs_opensubtitles_api.json'
-MARKER = 'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4'
+MARKER = 'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 5'
 
 
 def _log(msg, level='INFO'):
@@ -82,7 +82,7 @@ def _clear_darksubs_subtitle_cache():
         return
     try:
         profile_dir = xbmcvfs.translatePath(
-            'special://home/userdata/addon_data/{0}/'.format(DARKSUBS_ADDON_ID))
+            'special://profile/addon_data/{0}/'.format(DARKSUBS_ADDON_ID))
         cache_db = os.path.join(profile_dir, 'cache_f', 'sources.db')
         if os.path.isfile(cache_db):
             try:
