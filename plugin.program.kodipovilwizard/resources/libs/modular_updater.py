@@ -1,8 +1,5 @@
 import os
 import json
-import threading
-import time
-import urllib.request
 import xml.etree.ElementTree as ET
 
 import xbmc
@@ -17,16 +14,9 @@ from resources.libs.headless_installer import HeadlessInstaller, BINARY_PREFIXES
 
 
 class ModularUpdater:
+    # On-demand skins are installed by Fresh Install / Switch Skin only, never
+    # by the background updater.
     ON_DEMAND_SKINS = frozenset(('skin.povil.nox',))
-
-    @staticmethod
-    def _pending_addon_receipt(addon_id):
-        try:
-            from resources.libs import addon_install_receipt
-            return addon_install_receipt.needs_retry(
-                os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID), addon_id)
-        except Exception:
-            return False
 
     def __init__(self, background=False):
         self.background = background
@@ -199,19 +189,18 @@ class ModularUpdater:
             if not remote_ver:
                 continue
 
-            pending = False
-            if getattr(self, 'fresh', False) or addon_id != 'service.subtitles.kodipovilai':
-                pending = self._pending_addon_receipt(addon_id)
-
             if not local_ver:
-                if (addon_id in self.ON_DEMAND_SKINS and not pending
-                        and not getattr(self, 'fresh', False)):
+                # Only update what is ALREADY installed, unless install_missing
+                # is set (fresh install). On-demand skins are never force-installed.
+                if addon_id in self.ON_DEMAND_SKINS and not getattr(self, 'fresh', False):
                     continue
-                if install_missing or pending:
+                if install_missing:
                     update_queue.append(mod)
                 continue
 
-            if pending or self._version_tuple(local_ver) < self._version_tuple(remote_ver):
+            if self._version_tuple(local_ver) < self._version_tuple(remote_ver):
+                logging.log("[ModularUpdater] {0}: {1} -> {2}".format(addon_id, local_ver, remote_ver),
+                            level=xbmc.LOGINFO)
                 update_queue.append(mod)
 
         # 3. Execute Updates if needed
@@ -240,10 +229,10 @@ class ModularUpdater:
         """Hydrate a clean device ENTIRELY from the manifest.
 
         Installs every addon listed in manifest.json and seeds the
-        build-config pack in 'fresh' mode -- the modular replacement for the
-        legacy monolithic build zip. The caller (startup) pins the build
-        settings and performs the single force-close afterwards, so
-        execute_updates must NOT restart/reload here (self.fresh guards it).
+        build-config pack in 'fresh' mode. The caller finishes through
+        fresh_install.finalize() (media, patches, live defaults, home
+        verification), so execute_updates must NOT restart/reload here
+        (self.fresh guards it).
         """
         self.install_missing = True
         self.fresh = True
@@ -459,30 +448,36 @@ class ModularUpdater:
 
         return all(xbmc.getCondVisibility('System.HasAddon({0})'.format(a)) for a in provision_ids)
 
-    @staticmethod
-    def _confirm_native_install():
-        if xbmcgui.getCurrentWindowDialogId() != 10100:
-            return False
-        try:
-            if xbmc.getInfoLabel('Control.GetLabel(1)') != xbmc.getLocalizedString(24076):
-                return False
-            body = xbmc.getInfoLabel('Control.GetLabel(9)')
-            phrases = [xbmc.getLocalizedString(key) for key in (24100, 24101)]
-            if not all(phrase and phrase in body for phrase in phrases):
-                return False
-            xbmc.executebuiltin('SendClick(10100,11)')
-            return True
-        except Exception:
-            return False
-
     def _native_install_fallback(self, ids, per_addon_timeout=60, progress=None):
+        """Last-resort native install, RESERVED for binary/platform addons
+        (inputstream.*, pvr.* ...) that the headless engine must never extract.
+        Anything that is not a binary addon is refused here and left to the next
+        launch's headless self-heal.
+
+        Uses Kodi's own InstallAddon so Kodi picks the platform-correct build,
+        with a MINIMAL confirmer thread that auto-accepts ONLY the dependency
+        Yes/No dialog (window 10100, control 11 = Yes -- fixed by Kodi core
+        regardless of skin). It NEVER closes any other dialog.
+
+        progress(position, total, addon_id), when given, is called before each
+        install. The per-addon wait is extended (bounded) while Kodi's own
+        progress dialog is still visible.
+        """
         import threading
         import time
-        monitor = xbmc.Monitor()
+
+        refused = [a for a in ids if not a.startswith(BINARY_PREFIXES)]
         ids = [a for a in ids if a.startswith(BINARY_PREFIXES)]
+        if refused:
+            logging.log("[Provisioning] native install refused for non-binary addons "
+                        "(headless self-heal will retry): {0}".format(refused),
+                        level=xbmc.LOGWARNING)
         if not ids:
             return
 
+        monitor = xbmc.Monitor()
+
+        # Make sure repo indexes are fresh so InstallAddon can find the addons.
         try:
             xbmc.executebuiltin('UpdateAddonRepos', True)
         except Exception:
@@ -495,7 +490,8 @@ class ModularUpdater:
         def _confirmer():
             while not stop.is_set():
                 try:
-                    if self._confirm_native_install():
+                    if xbmcgui.getCurrentWindowDialogId() == 10100:
+                        xbmc.executebuiltin('SendClick(11)')  # Yes / OK
                         if monitor.waitForAbort(0.8):
                             return
                         continue
@@ -534,8 +530,9 @@ class ModularUpdater:
                             deadline - time.time() < 5 and deadline < hard_deadline):
                         deadline = min(deadline + 10, hard_deadline)
                 if not landed:
-                    logging.log("[Provisioning] native install did not confirm {0} within {1}s".format(
-                        addon_id, per_addon_timeout), level=xbmc.LOGWARNING)
+                    logging.log("[Provisioning] native install did not confirm {0} within {1}s "
+                                "(will self-heal next launch)".format(
+                                    addon_id, per_addon_timeout), level=xbmc.LOGWARNING)
                 else:
                     logging.log("[Provisioning] native install {0} landed after {1:.0f}s".format(
                         addon_id, time.time() - started), level=xbmc.LOGINFO)
@@ -557,8 +554,6 @@ class ModularUpdater:
         for addon_id, mod in (manifest.get('addons') or {}).items():
             expected = mod.get('version')
             actual = self.get_local_version(addon_id)
-            if self._pending_addon_receipt(addon_id):
-                missing.append('{0} (extraction not verified)'.format(addon_id))
             if (not expected or not actual or
                     self._version_tuple(actual) < self._version_tuple(expected)):
                 missing.append('{0} ({1}, expected {2})'.format(
@@ -714,7 +709,9 @@ class ModularUpdater:
                 ui_handled = True
                 self._track('complete', 'content')
             except Exception as _ui_err:
-                logging.log("[ModularUpdater] install-manager UI failed ({0}); falling back to headless".format(_ui_err), level=xbmc.LOGWARNING)
+                logging.log("[ModularUpdater] install-manager UI failed ({0}); "
+                            "continuing with the dialog-free headless pipeline".format(_ui_err),
+                            level=xbmc.LOGWARNING)
                 self._missing_native = []
 
         # Path B -- no window (background OTA / self-heal) or the window could not
@@ -767,20 +764,9 @@ class ModularUpdater:
             try:
                 manifest = getattr(self, '_manifest', None)
                 if manifest:
-                    kwargs = {}
-                    # Hand over the shared tracker so the config phase reports EXACT
-                    # progress. Only when the installed config_apply understands the
-                    # argument -- a mismatched pair of files must never make the
-                    # config silently fail to apply.
-                    if self.provision_progress is not None:
-                        try:
-                            import inspect
-                            if 'progress' in inspect.signature(config_apply.apply_config_pack).parameters:
-                                kwargs['progress'] = self.provision_progress
-                        except Exception:
-                            pass
                     res = config_apply.apply_config_pack(
-                        manifest, fresh=fresh, background=self.background, **kwargs)
+                        manifest, fresh=fresh, background=self.background,
+                        progress=self.provision_progress)
                     return bool(res.get('skin_touched'))
             except Exception as e:
                 logging.log("[ModularUpdater] config apply failed: {0}".format(e), level=xbmc.LOGERROR)

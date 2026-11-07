@@ -181,17 +181,6 @@ def _first_boot_marker_path():
     return os.path.join(CONFIG.USERDATA, FIRST_BOOT_MARKER)
 
 
-def arm_first_boot_stabilize():
-    """Drop the one-shot marker so the NEXT boot runs the stabilizer. Called at
-    the end of a successful install."""
-    try:
-        with open(_first_boot_marker_path(), 'w') as fh:
-            fh.write('1')
-        logging.log('[FirstBoot] armed stabilizer marker', level=xbmc.LOGINFO)
-    except Exception as e:
-        logging.log('[FirstBoot] could not arm marker: {0}'.format(e), level=xbmc.LOGWARNING)
-
-
 def _first_boot_warmup_seconds():
     """Warm-up budget, overridable by the optional wizard setting
     'first_boot_warmup_seconds' (clamped to a sane 5..120s). Falls back to the

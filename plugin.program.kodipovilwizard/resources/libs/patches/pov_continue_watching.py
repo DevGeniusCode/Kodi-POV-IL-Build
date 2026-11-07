@@ -172,15 +172,11 @@ def _retry_after(headers):
 def _read_remote(provider, identity):
     """Use native HTTP types/auth; no automatic 429 retries or Retry-After sleep.
 
-The small dropped-list read has its own client. Other API requests, mutations,
-provider adapters, cookies and retry policies remain untouched.
-"""
+    The small dropped-list read has its own client. Other API requests, mutations,
+    provider adapters, cookies and retry policies remain untouched.
+    """
     from modules import kodi_utils
-    try:
-        # POV 6.10.16 moved session.py into modules/.
-        from modules.session import TimeoutSession, HTTPAdapter
-    except ImportError:
-        from session import TimeoutSession, HTTPAdapter
+    from modules.session import TimeoutSession, HTTPAdapter
     from indexers import trakt_api, mdblist_api
     api = trakt_api if provider == 'trakt' else mdblist_api
     client = TimeoutSession()

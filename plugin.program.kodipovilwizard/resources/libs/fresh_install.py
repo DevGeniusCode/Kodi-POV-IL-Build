@@ -3,14 +3,11 @@ import importlib.util
 import json
 import os
 import re
-import threading
 import xml.etree.ElementTree as ET
 
 import xbmc
 import xbmcgui
-import xbmcvfs
 from resources.libs.common.config import CONFIG
-from resources.libs import youtube_platform
 from resources.libs.common import logging, tools
 
 PENDING = 'kodipovil.modular_install_started'
@@ -22,7 +19,7 @@ def begin():
         fh.write('1\n')
 
 
-def provision(attempts=3):
+def provision(attempts=3, progress=None):
     """Resume only missing work on both manual and automatic installation.
 
     Keep a small local diagnostic with addon IDs, never request URLs/accounts.
@@ -35,6 +32,8 @@ def provision(attempts=3):
         if monitor.abortRequested():
             break
         updater = ModularUpdater(background=False)
+        updater.provision_progress = progress
+
         try:
             if updater.run_fresh_install() and updater.is_provisioned():
                 try:
@@ -113,7 +112,7 @@ def apply_live_defaults(defaults_path=None):
             continue
         if monitor.abortRequested():
             return False
-        # Unknown/deprecated Kodi settings must not prevent a supported build.
+        # A setting this Kodi build does not expose is skipped, not fatal.
         try:
             current = _rpc('Settings.GetSettingValue', {'setting': key})['value']
         except (RuntimeError, KeyError):
@@ -155,15 +154,9 @@ def live_favourites_ready():
     actual = {item.get('title') for item in (_rpc('Favourites.GetFavourites', {}).get('favourites') or [])}
     if expected and expected.issubset(actual):
         return True
-    # Loading the already active secondary profile stops Kodi services without
-    # restarting them (native LoadProfile returns early for this index).
-    # The master prepares its complete favourites before the real switch.
-    master = xbmcvfs.translatePath('special://masterprofile/')
-    if os.path.normcase(os.path.realpath(CONFIG.USERDATA)) != os.path.normcase(os.path.realpath(master)):
-        return False
-    # First-time subtitle-service migrations can add home tiles after the
-    # first profile refresh. Permit one further refresh, then retain the
-    # pending marker on failure. This never closes Kodi or loops indefinitely.
+    # The subtitle service can add home tiles after the first refresh.
+    # Allow at most two reloads of the active profile, then leave the pending
+    # marker in place. This never closes Kodi or loops indefinitely.
     marker = os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_profile_reload')
     try:
         with open(marker, encoding='utf-8') as fh:
@@ -190,7 +183,6 @@ def seed_fresh_home_shortcuts():
                         'resources', 'lib')
     for name, relative, entry in (
             ('tonight', os.path.join('tonight', 'entrypoints.py'), 'ensure'),
-            ('recent_updates', 'recent_updates_tile_patcher.py', 'ensure_patched')):
         spec = importlib.util.spec_from_file_location(
             'povil_fresh_' + name, os.path.join(base, relative))
         module = importlib.util.module_from_spec(spec)
@@ -205,15 +197,15 @@ def finalize():
     from resources.libs import db
     if not ModularUpdater.is_provisioned():
         return False
-    required = tuple(youtube_platform.eligible(ModularUpdater.CORE_PROVISION_IDS)) + (
+    required = tuple(ModularUpdater.CORE_PROVISION_IDS) + (
         'skin.povil.nox', 'script.fentastic.helper',
         'plugin.program.orderfavourites-hebrew', 'service.subtitles.kodipovilai')
-    from resources.libs.build_profiles import addon_enabled
     db.addon_database(list(required), 1, True)
     xbmc.executebuiltin('UpdateLocalAddons')
     monitor = xbmc.Monitor()
     for _ in range(20):
-        missing = [aid for aid in required if not addon_enabled(aid)]
+        missing = [aid for aid in required
+                   if not xbmc.getCondVisibility('System.HasAddon({0})'.format(aid))]
         if not missing:
             break
         for aid in missing:
@@ -231,7 +223,7 @@ def finalize():
         raise RuntimeError('Fresh media or favourites are incomplete')
     stats = PatchEngine().run()
     if any(stats.get(key, 0) for key in ('failed', 'missing', 'anchor_missing',
-                                       'malformed', 'legacy_host_deferred')):
+                                       'malformed')):
         raise RuntimeError('Fresh source patches are incomplete')
     db.fix_metas()
     if not apply_live_defaults():
@@ -249,7 +241,11 @@ def finalize():
               'buildversion': version, 'latestversion': version,
               'nextbuildcheck': tools.get_date(days=CONFIG.UPDATECHECK, formatted=True),
               'extract': '100', 'errors': '0',
-              'fresh_build_auto_install_done': version}
+              'fresh_build_auto_install_done': version,
+              # HEAD behaviour kept: first-launch notification windows.
+              'buildtheme': '',
+              'notedismiss': 'false',
+              'build_skin_switch_notifcation_dismiss': 'false'}
     for key, value in values.items():
         CONFIG.set_setting(key, value)
     CONFIG.BUILDNAME = CONFIG.BUILDNAME_DEFAULT
