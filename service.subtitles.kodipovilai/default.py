@@ -224,7 +224,7 @@ def _handle_download(handle, params):
     # Remember this as the currently-applied subtitle so the picker marks it
     # '» נוכחית' next time it opens.
     try:
-        kodi_utils.set_current_subtitle(link, renew=True)
+        kodi_utils.set_current_subtitle(link)
     except Exception:
         pass
     try:
@@ -936,7 +936,14 @@ def _try_fast_download(handle, link, info, selection=None):
             cached = _cache.translated_path(
                 imdb_id, season, episode, source_lang,
                 source_id=source_id)
-            if os.path.isfile(cached):
+            # A Google Translate fallback that AI can now replace goes to
+            # resolve(), which translates it with a live preview -- when
+            # resolve() looks in this same plain slot, i.e. with the gender
+            # reference off. With it on, resolve() reads the 'ar' slot only,
+            # so this file stays the instant hit it was.
+            _upgrade = (translate._google_cache_upgradeable(cached)
+                        and not kodi_utils.get_bool('gender_ref_arabic', False))
+            if os.path.isfile(cached) and not _upgrade:
                 # A cached translation keeps its SOURCE subtitle's timing. Run
                 # the delivery through the same release-aware gate as resolve;
                 # any correction is a copy, never a rewrite of the AI cache.
@@ -1954,6 +1961,17 @@ def _gemini_type_flow(kodi_utils, gemini):
             return
 
 
+# --- MDBList API-key pairing (mirror of the Gemini flow) --------------------
+# MDBList's key lives in POV's OWN `mdblist.token` setting (POV is the consumer),
+# so we read/write it cross-addon. The phone form validates against MDBList
+# before submit; _test_save_mdblist re-checks Kodi-side and stores it.
+def _mdblist_pov_addon():
+    try:
+        import xbmcaddon as _mx
+        return _mx.Addon('plugin.video.pov')
+    except Exception:
+        return None
+
 
 def _handle_search_provider(_params):
     """RunScript action=search_provider -- pick which add-on the home search
@@ -2397,7 +2415,7 @@ def _handle_translate_file(params):
     # DarkSubs invoked this delivery outside MoranSubs's own picker, so bind
     # the timing job here. Without this, a status from an earlier subtitle
     # could be mistaken for the translation being produced now.
-    kodi_utils.set_current_subtitle(link, renew=True)
+    kodi_utils.set_current_subtitle(link)
     _timing_selection = kodi_utils.current_subtitle_selection(
         expected_link=link)
 
@@ -3000,21 +3018,6 @@ def _handle_translate_file(params):
             pass
 
 
-def _handle_darksubs_status(_params):
-    """User-triggered self-test of the DarkSubs hook integration.
-    Pops a dialog with a checklist explaining exactly what's
-    working and what isn't. Triggered by the settings-menu entry
-    that calls RunPlugin/RunScript with action=darksubs_status.
-    """
-    try:
-        from resources.lib import darksubs_hook_diagnostics
-    except Exception as e:
-        xbmcgui.Dialog().ok(
-            'Kodi POV IL', 'Internal error: {0}'.format(e))
-        return
-    darksubs_hook_diagnostics.run_full_check()
-
-
 def _handle_purge_temp(_params):
     """Wipe ALL .srt files in special://temp/. Used to clear out
     stale subtitle leftovers from previous movies that Kodi keeps
@@ -3031,13 +3034,6 @@ def _handle_purge_temp(_params):
         'נמחקו {0} קבצי כתוביות מ-temp.'.format(n))
 
 
-def _handle_open_pov_settings(_params):
-    """Open POV's addon settings. Used by build home-screen buttons so
-    users can quickly change Premium Expires Notification thresholds."""
-    try:
-        xbmc.executebuiltin('Addon.OpenSettings(plugin.video.pov)')
-    except Exception as e:
-        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
 
 
 DEBRID_NOTICE_SERVICES = (
@@ -3077,70 +3073,8 @@ def _translate_path(path):
     return ''
 
 
-def _notice_value_label(value):
-    for label, stored in DEBRID_NOTICE_VALUES:
-        if str(value) == stored:
-            return label
-    return '{0} ימים לפני סיום'.format(value)
 
 
-def _handle_debrid_notice_settings(_params):
-    """Build UI for debrid expiry notification thresholds.
-
-    POV stores the values as rd/tb/pm/ad.expires, but some POV builds do
-    not expose those settings in Addon.OpenSettings(). This dialog writes
-    the same POV settings directly so the startup notifier can read them.
-    """
-    pov = _pov_addon()
-    if pov is None:
-        xbmcgui.Dialog().ok(
-            'התראות מנוי',
-            'לא נמצא plugin.video.pov. התקן/עדכן את הבילד ונסה שוב.')
-        return
-
-    dialog = xbmcgui.Dialog()
-    service_rows = []
-    for label, key in DEBRID_NOTICE_SERVICES:
-        try:
-            current = pov.getSetting(key) or '0'
-        except Exception:
-            current = '0'
-        service_rows.append('{0}  -  {1}'.format(
-            label, _notice_value_label(current)))
-
-    idx = dialog.select('הגדרת התראות מנוי', service_rows)
-    if idx < 0:
-        return
-
-    service_label, key = DEBRID_NOTICE_SERVICES[idx]
-    options = [
-        '{0} ({1})'.format(label, stored)
-        for label, stored in DEBRID_NOTICE_VALUES
-    ]
-    value_idx = dialog.select(
-        'מתי להתריע עבור {0}?'.format(service_label), options)
-    if value_idx < 0:
-        return
-
-    value = DEBRID_NOTICE_VALUES[value_idx][1]
-    try:
-        pov.setSetting(key, value)
-    except Exception as e:
-        xbmcgui.Dialog().ok(
-            'התראות מנוי',
-            'שמירת ההגדרה נכשלה: {0}'.format(e))
-        return
-
-    if value == '0':
-        msg = '{0}: התראה בכל כניסה לקודי'.format(service_label)
-    else:
-        msg = '{0}: התראה רק כשנותרו עד {1} ימים'.format(
-            service_label, value)
-    try:
-        from resources.lib import kodi_utils
-        kodi_utils.notify(msg, title='התראות מנוי', time_ms=5000)
-    except Exception:
-        dialog.notification('התראות מנוי', msg, time=5000)
 
 
 def _handle_connect_telegram(_params):
@@ -3482,8 +3416,6 @@ def main():
             _handle_translate_file(params)
         elif action == 'bg_translate_picker':
             _handle_bg_translate_picker(params)
-        elif action == 'darksubs_status':
-            _handle_darksubs_status(params)
         elif action == 'open_pov_settings':
             _handle_open_pov_settings(params)
         elif action == 'debrid_notice_settings':

@@ -1,3 +1,153 @@
+0.4.75
+- The host watch confirms an Arctic Fuse 3 change 3 s after it first sees it instead of on its next 10 s poll, and waits while Kodi still has AF3 unloaded for its install (up to 10 minutes). With MoranSubs 0.3.49, which now puts the Hebrew font back first, AF3 shows Hebrew again much sooner after an update by Kodi (field report, 23 Oct 2026: boxes and English labels for about a minute).
+- QA (Windows Kodi, AF3 3.4.6 -> 3.4.8 by Kodi's own updater during a session): boxes for 44 s before, 10-21 s now in three runs; the full AF3 repair still ran afterwards and was acknowledged.
+
+0.4.74
+- Arctic Fuse 3's child-profile Home and profile bootstrap come back in the same session when Kodi updates AF3 during start-up. Seen in QA on the 3.4.6 -> 3.4.8 update: the Wizard put its hooks into the old AF3 at start-up, Kodi replaced the skin seconds later, MoranSubs restored the Hebrew font before the host watch began, and the watch -- which looked only at the font -- left the new AF3 without the hooks until the next restart. It now also checks AF3's Home for them.
+- QA (Windows Kodi): AF3 3.4.7 and 3.4.8 checked against every Wizard and MoranSubs AF3 patch (identical result to 3.4.6). The start-up race reproduced twice; in the second run Kodi's update also removed the font, and the watch restored hooks and font in the session once the start-up notice closed. The hooks-only case is covered by tests. AF3 3.4.8's Hebrew shows in the right order on screen.
+
+0.4.73
+- A profile Kodi dropped to Estuary while installing an Arctic Fuse 3 update is put back on Arctic Fuse 3. Kodi unloads the active skin during the install; a skin reload in that moment (AF3's own skinvariables, after updating itself, did it in QA) finds AF3 half-installed, so Kodi loads Estuary and saves it as the user's skin. The host watch now remembers each profile's skin -- a skin seen for 20-30 s with nothing updating and AF3 not unloaded for an install, refreshed every 30 minutes and after an AF3 update, and at once when picked in the Wizard's Switch Skin -- and when AF3 changed while a profile last seen on AF3 sits on Estuary, it switches back once per update through the Wizard's Switch Skin (which refuses during playback and for a blocked child profile, and re-applies the child-profile hooks), after MoranSubs' start-up pass and 30 s with nothing playing. An update Kodi made during start-up is caught at the watch's start. An Estuary picked in the Wizard, or kept for 30 s outside an update, is left alone; one picked in Kodi's own settings in the last seconds before Kodi closes can still be read as the fallback.
+- The subtitle service can no longer be left disabled by an interrupted update. Its update disables the old service, swaps the files and enables it again; in QA Kodi closed two seconds into that and MoranSubs stayed disabled for good (no subtitles, no host patchers) -- a user closing Kodi right after an update hits the same window. The Wizard now marks the disable it makes and enables the service again at the next start (after finishing a handoff left pending), and a failed swap re-enables it at once; a service a user disabled is left alone.
+- QA (Windows Kodi): MoranSubs left disabled by an interrupted handoff came back enabled at the next start; Estuary at start-up after an AF3 update -> back on AF3 once MoranSubs' start-up pass was done and nothing had played for 30 s; Estuary during an AF3 update in session (simulated: Estuary set without the Wizard's menu, then AF3's files replaced) -> back on AF3; a deliberate Estuary kept through a later AF3 update; a genuine AF3 3.4.4 -> 3.4.6 update by Kodi's own installer showed AF3 unloaded for its whole install (no fallback that run) and was repaired right after.
+
+0.4.72
+- Arctic Fuse 3 keeps the build's Hebrew and child-profile gating after it updates itself. Kodi replaces the whole skin folder on an update, so MoranSubs' Hebrew font went with it -- Kodi's Hebrew (dates, "last login", menus) showed as boxes for the rest of the session and on the next login screen, and came back only after one or more restarts (field report, 22 Oct 2026, AF3 3.4.4 -> 3.4.6) -- and so did the Wizard's child-profile home gating, profile bootstrap and branded login screen, until the next start. The host watch now also watches AF3: once an update settles it writes the Wizard's profile hooks again and has MoranSubs (0.3.44) re-apply its AF3 edits, which rebuild and reload the skin -- no restart. An update Kodi made during start-up, before the watch began, is caught by the missing font. Best effort: a failure is logged and left to the next start, never retried in a loop; an AF3 update alone no longer re-runs the POV patch pass.
+
+0.4.71
+- POV's faster start (shared HTTP clients created only when first used) no longer waits for a Wizard update after each new POV. It ran only on POV versions listed by hand on top of a byte-for-byte check of POV's session file, so each POV release with the same file (6.10.17, 6.10.18, 6.10.19) needed a Wizard update to be listed. The byte-for-byte check now decides on the device, and a POV whose session file changed still runs exactly as its developer shipped it. What the file does not cover -- how POV's other files use it -- is now checked automatically on every official POV before its pin moves: they must use it only in the shapes the deferral imitates (as POV 6.10.18 and 6.10.19 do), or the pin stays and an issue is opened. Devices on the pinned 6.10.19 see no change. The deferral also stopped asking Kodi for POV's version twice on every POV start.
+
+0.4.70
+- POV 6.10.19 keeps the faster start (shared HTTP clients created only when first used). The release automation moved POV's verified pin to 6.10.19 by itself (every Wizard hook applies, idempotently), but the deferral runs only on POV versions whose session file was checked, and 6.10.19 was not listed yet; its modules/session.py is byte-identical to 6.10.18's. 6.10.19 itself fixes a debrid sign-in request and adds empty __init__.py files to POV's folders; nothing in the build relied on them being namespace packages. QA (Windows Kodi): the Wizard installed 6.10.19 from the build's mirror by itself (117 hooks applied, none missing), and after a restart the series, season and episode lists and the main menu opened in Hebrew with no errors. The same evening the automation moved Umbrella's pin to 6.7.94 (its developer's playback fix in player.py); QA: the Wizard installed it from the mirror by itself, all 4 hooks applied, MoranSubs' Umbrella patchers were on the new files a second later, and the Hebrew menu and a movie list opened without errors.
+
+0.4.69
+- Umbrella now moves only to a version the build's patches were verified on, like POV since 0.4.67. Umbrella carries the kids-profile hooks and follows its developer's repository, so a restructured Umbrella would have reached devices the night it was published. The Wizard sets Kodi's own "auto-update off" rule for Umbrella and installs the pinned, SHA-256-checked copy from the build's own release (6.7.93), then applies the Wizard hooks and runs MoranSubs' Umbrella patchers on the new files at once (subtitle match, sources; the Hebrew menus show from the next Kodi start). An Umbrella the user switched off is left alone. The release automation moves the Umbrella pin only after every Wizard hook applies to the new official zip, idempotently, and never onto a package beyond the Wizard installer's size limits. An Umbrella that needs a newer version of a dependency already installed on the device waits until that dependency updates (checked without downloading again while nothing changed). QA (Windows Kodi): a broken partial 6.7.85 became 6.7.93 in 2.5-3.5 s, all 4 Umbrella hooks applied, every MoranSubs Umbrella patcher reported patched, a second check only held, and after one restart the menus were Hebrew and the add-on opened without errors.
+
+0.4.68
+- CocoScrapers (Umbrella's scrapers) updates from its developer again. The Umbrella pack installs it together with repository.cocoscrapers, but the long-dead repository.KodiRealDebridIsrael also lists it, so the "only one repository" rule left its origin empty and Kodi never offered an update: devices stayed on the pack's 1.0.39 while its developer published 1.0.43, which carries the scraper changes POV's developer moved out of Magneto (Oct 2026). Add-ons the build ships with their developer's repository (CocoScrapers, Umbrella) are now registered to that repository when it is enabled and lists them. QA (Windows Kodi): old code left the origin empty; new code registered it and the next start updated CocoScrapers to 1.0.43 (POV stayed held on its verified 6.10.18).
+
+0.4.67
+- POV now moves only to a version the build's patches were verified on. Kodi installed POV 6.10.16 from its developer's repository the night it came out, before anyone had checked it, and series lists failed for every user. The Wizard now sets Kodi's own "auto-update off" rule for POV (active from the next Kodi start; MoranSubs' pin repair leaves it alone) and installs the version the release automation verified -- the pinned, SHA-256-checked copy from the build's own release -- applying the hooks at once. A device never moves back, except when the installation itself put POV on disk (a new device gets the verified version instead of whatever the repository serves that day); a Wizard update in the same run defers the POV install to the next start, so the new hooks are the ones applied. QA (Windows Kodi): with the rule loaded, a forced repository refresh left POV 6.10.16 in place for 4+ minutes (without it Kodi updated within 6 s); the gate then installed 6.10.17 in 1 s, all 117 hooks applied, and the lists opened without errors. With the real manifest (pin moved to 6.10.18 by the release automation) it installed 6.10.18 from the build's mirror by itself. The shared-HTTP deferral also covers 6.10.18 (its session.py is byte-identical).
+- Release: the first build of 0.4.67 stopped in CI because a test still expected the old POV pin (6.10.06) after the automation moved it to 6.10.18; the test now reads the pin file.
+
+0.4.66
+- POV 6.10.16/6.10.17 (which devices install from POV's own repository): TV next-episode and in-progress lists failed with a POV error. 6.10.16 re-sorted watched_cache.py's imports, so of the two hooks that defer its imports only the first still applied, and the dummy modules it installs stayed for the whole run (local_droplist() returned None). The first hook now installs its dummies only when its cleanup hook is in the same file -- this also fixes files a device already patched. Reproduced in Kodi on 6.10.17 (3 errors with the old code, 0 with the new).
+- POV 6.10.16 moved entry.py and session.py into resources/lib/modules and changed router.py/service.py: the patch engine now follows a moved file (target_alternatives), and the router, service, watched-cache and shared-HTTP hooks gained the new anchors. The child-profile integrity check, the debrid-toast neutralizer and the continue-watching dropped-list reader (Trakt/MDBList users: without it the next-episode list came back empty) find the moved modules; the HTTP deferral covers 6.10.16 and 6.10.17, whose session.py is byte-identical. All 117 POV hooks apply, idempotently, on 6.10.06, the republished 6.10.06, 6.10.16 and 6.10.17; in Kodi on 6.10.17 the series, season, episode and movie lists open without errors.
+
+0.4.65
+- A fresh install no longer stops at the end with "Fresh source patches are incomplete" (the build then showed "None" as the installed build). POV 6.10.06 was republished under the same version with dialogs.py importing kodi_utils as "ku", and the favourites-refresh hook did not find its line there (field log, Oct 2026). The hook now fits both shapes. Audit: all 117 POV hooks apply, and are idempotent, on both the original and the republished 6.10.06; a fresh install that had stopped there completed in Kodi.
+
+0.4.64
+- Windows fresh install: two field reports (Oct 2026) failed on MoranSubs with "extraction not verified" on every attempt of the first run and succeeded on the next start; the failing run's log was not available. The likely cause: the installer waited at most 20 s for Kodi's own ZIP extraction (Kodi busy installing the build, or an antivirus scanning each new file), and each retry then failed on the folder the late extraction still held. After 20 s the installer now extracts the package itself (the same verified reader Android uses), and a folder still held by a late extraction is left for later instead of failing the install. QA (Windows Kodi x64): forced timeout -> 240/240 files in 0.4 s, and again with the held folder.
+
+0.4.63
+- The "searching for sources..." notice shows as soon as a tap on an episode or movie reaches POV, instead of 1.5 s later (on a Shield that was still a visible gap, field video Oct 2026), and it is taken down the moment POV's sources window, results list or background bar is up or a video plays (a request that ends without a window within the first second takes it down too; later, POV's own "no results" toast is left alone). No notice for POV's own next episode during playback. QA: notice 0.2 s after the tap, sources window at 0.48 s, notice closed 30 ms later.
+
+0.4.62
+- A show's seasons and a season's episodes are saved too: returning to them from the player (or opening them again) showed a spinner for 3-4.5 s on a Shield while POV rebuilt them from scratch (field log and video, Oct 2026 -- reached through search). They follow the show's rows in POV's metadata cache (a new episode or season, an expired refresh) and the watch state (a watched episode or resume point: shown at once, rebuilt and refreshed in place), and the date. QA (NOX, real debrid episode): back from the player to the episode list in 0.43 s from the saved copy, focus on the same episode; POV's own refresh after saving the resume point served from the copy in 47 ms.
+
+0.4.61
+- A tap on an episode or movie while Kodi is busy gets an answer at once: if POV's sources window is not up 1.5 s after the tap, a short "searching for sources..." notice shows (none once POV's sources window, results list or background progress bar is up, once playing, or once POV's route has returned -- no results, cancelled; router.py now reports that, as atexit runs only after the timer). Field log (Shield, right after start): ~6 s between the tap and the sources window with nothing on screen, and people tapped again. QA: a tap right after start reached the sources window in 1.3 s on a PC (no notice); with the threshold lowered for the test the notice showed before the window.
+
+0.4.60
+- An episode or movie picked right after Kodi starts gets the CPU first: while it is looking for sources (the mark set by 0.4.58's tap guard), a saved list's background rebuild is skipped -- the copy on screen stays until the next visit -- and the Wizard's start-up work (update check, notices) waits for it, up to 30 s. Field log (Shield, start-up): a "next episodes" rebuild took 5.7 s right beside the first tap, which reached the sources window only ~10 s later.
+
+0.4.59
+- Back from the player: the list you return to ("Continue watching", a home row) used to be rebuilt from scratch before it showed -- the episode just watched changed the watch history (field log, Shield: 5.7 s). When only the watch state changed, the saved copy is shown at once and rebuilt right after; the open list or the home rows refresh themselves when the new one is ready. Any other change (settings, a list refetched, a cleared cache) still rebuilds before showing.
+
+0.4.58
+- Taps on episodes while Kodi is still busy starting up no longer start several episodes one after another once it frees up: while one episode is finding its sources (less than a minute, nothing playing yet), further play requests are dropped. Playback in progress (POV's next episode) and any tap after the first one finished or was cancelled work as before. (Field video: four episodes started back to back after the add-on services finished loading.)
+- A dropped tap shows a short notice; the mark clears as soon as a video plays (a tap right after stopping a bad source starts a new search), and with POV's fast navigation a new request ends the previous one's mark.
+- The hooks in POV's and Idan Plus's entry files can no longer break them if a Wizard file is missing (an update half-way): they fall back to the normal path.
+
+0.4.57
+- Fresh installs: the "completing system installs (Native)" step showed 0% for minutes. It now shows which add-on it installs (n of N), gives the repository lookup 60 s instead of 15 s on a slow connection (a timeout sent every add-on to Kodi's one-by-one installer), and keeps waiting while Kodi is still downloading an add-on (up to 4 minutes) instead of moving on after 60 s and leaving it without its modules (field report: YouTube without urllib3, the account manager without requests).
+- Kodi closes about 10 seconds faster: the Wizard's two watch loops ran as RunScript scripts, which Kodi never tells it is closing -- each was killed after 5 seconds. They now run inside the Wizard's service and stop at once.
+- First home rows after a start: a saved list checks only what the files that changed feed (often just POV's list cache) instead of everything; on Kodi's way out, and while idle, recent lists record the current file times. QA: the first rows checked by file times in 0.04-0.07 s (field log: 0.5 s each).
+- Building lists ahead also covers the skin's own home rows and tiles and personal lists ("My movies", watchlists), starts after 30 s and waits for 15 s without input.
+
+0.4.56
+- Building lists ahead reads only POV's saved menus (a small index) instead of every saved list on each idle check -- light on a phone.
+- The screen a list is built ahead for applies to that one request only, so a real click on the same entry at that moment reads its own screen.
+
+0.4.55
+- Fixed: Idan Plus home rows from a saved copy could show the wrong title or picture on entries (0.4.54). Idan Plus drops each item once it is added, Python reused the freed item's identity and the recorder took it for the earlier item -- a 49-channel row was saved as 2 items. Each recorded item now carries its own number; old Idan Plus copies are rebuilt.
+- Lists one click away from a saved menu (each genre, year, network) are built ahead while Kodi is idle (no video, no key press for 20 s), one at a time, for the menu they will be opened from -- so the first visit is instant too (QA: a never-opened year list 0.3 s instead of 0.8-2.5 s).
+- One genre/year/network list no longer throws away the others: they follow POV's cache rows of that list only (each was invalidated whenever another one was fetched).
+- Idan Plus rows replay much faster: items are created offscreen (a 662-entry row took 0.4-0.8 s on a phone waiting for Kodi's GUI lock) and added in one call; their programme lists refresh every 6 hours (live TV/radio: 2 minutes) instead of every 10 minutes.
+- An old copy's background rebuild waits until the other home rows have loaded, and is skipped while a video plays.
+- Saved lists are compressed (~5x smaller) to leave room for lists built ahead.
+
+0.4.54
+- POV's menus open from saved copies too: genres, years, networks, "My content", the movie/TV main menus and shortcut folders -- what NOX and FENtastic open as categories (each click used to load all of POV, 1-1.5 s on a phone). They follow POV's menu database, its settings and the account manager (rows of disconnected services stay hidden); the years menu follows the date.
+- The Wizard's start-up work (update check, notices, profile checks) now waits until the home rows stop loading (at most 15 s), so the rows do not share the CPU with it.
+- Idan Plus home rows (NOX: Reshet 13, mako, live TV) are saved too: shown at once from the copy saved last time, then rebuilt behind the scenes when older than 10 minutes or after an Idan Plus settings change; the rows refresh themselves when the content changed. Browsing inside Idan Plus, searches and playback are untouched. QA NOX cold start: last home row 5.2 -> 3.7-4.0 s after the home screen, each Idan Plus row 0.04-0.13 s.
+- Several home rows that changed together refresh the home screen once instead of once each, and a damaged saved list is simply rebuilt (it used to leave its row empty until the next visit).
+- Saved lists are shown at once up to a week old (was a day) and refreshed right after: people often come back to Kodi after a day.
+
+0.4.53
+- Saved lists start much faster: each home row is a fresh Python interpreter, and while Kodi starts a dozen add-on services, importing json alone took 0.3-1.2 s (QA, NOX). Serving a saved list now imports none of json, hashlib, sqlite3, re or urllib: the record is read with marshal and "nothing changed" is proven by file sizes and times, falling back to a light content check (C sqlite module, crc32) when a file was rewritten. QA NOX cold start: check 0.7 s -> 0.1 s per row, first rows on screen 0.25-0.4 s after the home screen instead of 1.0-1.2 s.
+- Home rows no longer import POV just to replay its view-mode call (a no-op for rows): 0.6 s less per row at start-up.
+- Trakt charts (trending, most watched) count as public lists: a Trakt sync no longer throws them away at every start (field log: 3.3 s rebuild of "Trakt trending" on each launch).
+
+0.4.52
+- Saved lists: every POV list -- home rows, tiles, categories, "Continue watching" -- opens from the finished list saved on the previous visit, without rebuilding it (QA: 21 titles in 4-60 ms instead of 0.3-3 s; on an Android box "Continue watching" took 10-12 s right after Kodi started). Fresh lists are served before POV even loads.
+- Saved lists are never out of date: watching or marking something, progress, a setting, a sync, POV fetching the list again or a cleared cache rebuilds the list at once. A list that is merely old or from yesterday (e.g. the first click right after Kodi starts) is shown at once -- before POV loads -- and rebuilt in the background; when the new one differs, the open list or the home rows refresh themselves within seconds. Home rows and full-screen lists are saved apart, as POV builds them differently. Search and child profiles are not saved.
+- Estuary 4.0.8: the loading background shows the POV IL build artwork instead of the old RealDebrid KODI logo.
+
+0.4.51
+- Faster lists and home rows on every skin: Kodi never saves compiled Python, so each list, row and category recompiled its add-on code from scratch on every visit. The build now writes that compiled code once in the background (about 40 s on a PC, never while a video plays) and refreshes it after updates. QA, home screen fully loaded after a cold start: FENtastic 10.2 -> 7.0 s, NOX 8.0 -> 5.2 s; single rows such as "Continue watching" 1.56 -> 0.46 s.
+- Each POV list asked Kodi's screen twice whether a child profile is active; it now asks once.
+- The compiled code is hash-checked: Python verifies it against the file's current content on every load, so a file that an update rewrites can never run its old version.
+
+0.4.50
+- An update note pops up only after the update it describes is installed on the device: after the start-up update check, once every add-on and the build config are current (a MoranSubs swap that waits for the next restart counts as not yet installed). A device that cannot finish still sees the note on its third start.
+
+0.4.49
+- POV 6.10.06: "Connect services" (חיבור שירותים), marking a season watched from a show and MDBList AI search open again instead of failing with a POV error.
+- Keep POV's background service running when Kodi updates POV during start-up; the update used to end it with a POV error on screen.
+- Keep the shorter POV network retries on POV 6.10.06, whose network module is unchanged.
+- Register POV, Otaku and Account Manager to the repositories they are installed from, so Kodi installs their updates; until now a wizard install kept them on the version it started with. The build's own add-ons, FENtastic included, are never registered to an outside repository.
+- Stop re-enabling repository.Fishenzon on every start; the needless call could hang Kodi on the start that completes a MoranSubs update.
+
+0.4.48
+- Deliver MoranSubs updates to devices that already run the modular MoranSubs instead of holding them until the POV migration completes; a legacy MoranSubs keeps waiting for that migration.
+- Keep every entry in POV Shortcut Folders: the fanart fix now lands in the folder contents and removes the copy that hid the folders on POV 6.10.
+
+0.4.41
+- Reduce content-diagnostic overhead and restore saved views without repeated one-second GUI updates. Cancel view changes when the user leaves the directory, skin or profile.
+
+0.4.32
+- Verify all modular hooks against official POV 6.10.04 and move the legacy host handoff forward without downgrading existing installations. Refresh the legacy bridge to recover interrupted Wizard migration and FENtastic personal folders.
+
+0.4.23
+- Include parent shows of collected seasons/episodes in MDBList personal lists, retain season pages and refresh legacy collection snapshots once. Log counts without account or title details.
+
+0.4.22
+- Route existing FENtastic personal MDBList rows to both library and Watchlist without changing navigator.db or restoring removed rows.
+
+0.4.21
+- Restore MDBList collection (Recently Added) alongside the Watchlist in personal movie/show lists; accept documented cursor and header pagination without caching failed or incomplete reads.
+
+0.4.19
+- Seed existing local home shortcuts before verifying the first-install favourites cache; prevent late service startup from hiding Tonight and recent updates until a restart.
+
+0.4.18
+- Copy rollback content without unsupported filesystem metadata operations on Android emulated storage; unblock fresh config, Nox activation and Hebrew subtitle defaults while retaining transactional rollback on real I/O failures.
+
+0.4.17
+- Expand native POV expiry sliders to accept all subscription-notice thresholds up to 365 days; preserve saved choices and repair the range again after host updates.
+
+0.4.14
+- Restore FENtastic generated rows from saved widget paths after updates without resetting layouts.
+- Fix helper regeneration dropping rows containing XML entities; preserve limits and custom paths.
+- Record the canonical build identity after verified OTA completion and clarify the update menu.
+
+0.4.13
+- Show the restart notice once per prepared subtitle package, using its existing receipt.
+- Start the replacement subtitle service after the acknowledged handoff in the same boot; remove the unconditional second restart request.
+- Preserve playback and unacknowledged live services; report activation failures rather than claiming success.
+
 v0.1.48
 - A quick update no longer discards the settings you changed that evening.
   Kodi was being killed rather than closed, which skips the save it does on a

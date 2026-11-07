@@ -3,6 +3,391 @@
 # Registry schema for Engine v2 patches
 PATCH_CONFIG = [
     {
+        "id": "pov_directory_clock",
+        "name": "Directory entry latency clock",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/entry.py",
+        "marker": "# WIZARD_POV_DIRECTORY_CLOCK_v1",
+        "anchor": "from threading import Thread",
+        "action": "prepend_before",
+        "hook": (
+            "import time as _povil_clock\n"
+            "_povil_entry_started = _povil_clock.perf_counter()\n"
+        )
+    },
+    {
+        "id": "pov_directory_latency",
+        "name": "Slow catalogue route measurements",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/entry.py",
+        "marker": "# WIZARD_POV_DIRECTORY_LATENCY_v1",
+        "anchor": "class Router:",
+        "action": "prepend_before",
+        "hook": (
+            "import pov_directory_latency\n"
+            "pov_directory_latency.install(globals())\n"
+        )
+    },
+    {
+        "id": "pov_list_snapshot_early",
+        "name": "Saved lists served before POV is imported",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/router.py",
+        "marker": "# WIZARD_POV_SNAPSHOT_EARLY_v2",
+        "anchor": "__import__('entry').Router()()",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "if _povil_p not in sys.path: sys.path.append(_povil_p)\n"
+            "try:\n"
+            "\timport pov_list_snapshot\n"
+            "\t_povil_served = pov_list_snapshot.serve_early(sys.argv)\n"
+            "except Exception:\n"
+            "\t_povil_served = False\n"
+            "if _povil_served: raise SystemExit\n"
+        )
+    },
+    {
+        "id": "pov_play_guard",
+        "name": "Queued taps do not start several episodes",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/router.py",
+        "marker": "# WIZARD_POV_PLAY_GUARD_v2",
+        "anchor": "__import__('entry').Router()()",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "if _povil_p not in sys.path: sys.path.append(_povil_p)\n"
+            "try:\n"
+            "\timport pov_play_guard\n"
+            "\t_povil_drop = pov_play_guard.duplicate(sys.argv)\n"
+            "except Exception:\n"
+            "\t_povil_drop = False\n"
+            "if _povil_drop: raise SystemExit\n"
+        )
+    },
+    {
+        "id": "pov_play_guard_end",
+        "name": "A finished play request ends its notice timer",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/router.py",
+        "marker": "# WIZARD_POV_PLAY_GUARD_END_v1",
+        "anchor": "__import__('entry').Router()()",
+        "action": "append_after",
+        "hook": (
+            "try:\n"
+            "\timport pov_play_guard\n"
+            "\tpov_play_guard.request_over()\n"
+            "except Exception:\n"
+            "\tpass\n"
+        )
+    },
+    {
+        "id": "pov_linear_tv_history",
+        "name": "Linear native TV history grouping",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/caches/watched_cache.py",
+        "marker": "# WIZARD_POV_LINEAR_TV_HISTORY_v1",
+        "anchor": "\t\tcommand = GET_MOVIE_SHOW % ('media_id, title, last_played, season, episode')",
+        "action": "prepend_before",
+        "hook": (
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tif p not in sys.path: sys.path.append(p)\n"
+            "\timport pov_watch_history\n"
+            "\treturn pov_watch_history.tv_history(globals(), watched_indicators)\n"
+        )
+    },
+    {
+        "id": "idanplus_child_source",
+        "name": "Child profile unclassified live source guard",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "target_file": "default.py",
+        "marker": "# WIZARD_IDANPLUS_CHILD_SOURCE_v1",
+        "anchor": "from resources.main import route",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "_povil_guards = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "if _povil_guards not in sys.path: sys.path.append(_povil_guards)\n"
+            "import profile_age_guard\n"
+            "if not profile_age_guard.unclassified_source_allowed(): raise SystemExit()\n"
+        )
+    },
+    {
+        "id": "idanplus_list_snapshot",
+        "name": "Saved Idan Plus home rows",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "target_file": "default.py",
+        "marker": "# WIZARD_IDANPLUS_SNAPSHOT_v2",
+        "anchor": "from resources.main import route",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "if _povil_p not in sys.path: sys.path.append(_povil_p)\n"
+            "try:\n"
+            "\timport pov_list_snapshot\n"
+            "\t_povil_served = pov_list_snapshot.idanplus(sys.argv)\n"
+            "except Exception:\n"
+            "\t_povil_served = False\n"
+            "if _povil_served: raise SystemExit\n"
+        )
+    },
+    {
+        "id": "pov_profile_movie_metadata",
+        "name": "Child movie classification",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/movies.py",
+        "marker": "# WIZARD_POV_PROFILE_MOVIE_META_v1",
+        "anchor": "\t\t\tself.append((url_params, listitem, False))",
+        "action": "prepend_before",
+        "hook": (
+            "\t\t\timport profile_age_guard\n"
+            "\t\t\tprofile_age_guard.stamp_item(listitem, meta)\n"
+        )
+    },
+    {
+        "id": "pov_profile_tv_metadata",
+        "name": "Child series classification",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/tvshows.py",
+        "marker": "# WIZARD_POV_PROFILE_TV_META_v1",
+        "anchor": "\t\t\tself.append((url_params, listitem, self.is_folder))",
+        "action": "prepend_before",
+        "hook": (
+            "\t\t\timport profile_age_guard\n"
+            "\t\t\tprofile_age_guard.stamp_item(listitem, meta)\n"
+        )
+    },
+    {
+        "id": "pov_profile_episode_metadata",
+        "name": "Child episode and season classification",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/metadata.py",
+        "marker": "# WIZARD_POV_PROFILE_EPISODE_META_v1",
+        "anchor": "\tinfotag = listitem.getVideoInfoTag(offscreen=True)",
+        "action": "prepend_before",
+        "hook": (
+            "\timport profile_age_guard\n"
+            "\tprofile_age_guard.stamp_item(listitem, meta or {})\n"
+        )
+    },
+    {
+        "id": "umbrella_profile_metadata",
+        "name": "Child content classification",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "target_file": "resources/lib/modules/control.py",
+        "marker": "# WIZARD_UMBRELLA_PROFILE_META_v1",
+        "anchor": "\t\t\tinfo_tag.setMpaa(meta_get('mpaa'))",
+        "action": "append_after",
+        "hook": (
+            "\t\t\tprofile_age_guard.stamp_item(item, meta)\n"
+        )
+    },
+    {
+        "id": "pov_profile_directory_guard",
+        "name": "Child profile directory guard",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/entry.py",
+        "marker": "# WIZARD_POV_PROFILE_DIRECTORY_v1",
+        "anchor": "from modules import kodi_utils, settings",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "_povil_guards = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "if _povil_guards not in sys.path: sys.path.append(_povil_guards)\n"
+            "import profile_age_guard\n"
+            "profile_age_guard.install_directory_guard()\n"
+        )
+    },
+    {
+        "id": "pov_profile_route_guard",
+        "name": "Child profile account route guard",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/entry.py",
+        "marker": "# WIZARD_POV_PROFILE_ROUTE_v1",
+        "anchor": "\tparams = kodi_utils.parsed_query(sys_obj.argv[2])",
+        "action": "append_after",
+        "hook": (
+            "\tif not profile_age_guard.route_allowed(params, 'pov'): return\n"
+        )
+    },
+    {
+        "id": "pov_profile_play_guard",
+        "name": "Child profile playback guard",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/modules/player.py",
+        "marker": "# WIZARD_POV_PROFILE_PLAY_v1",
+        "anchor": "\t\tif not url: return",
+        "action": "prepend_before",
+        "hook": (
+            "\t\timport sys, xbmcvfs\n"
+            "\t\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\t\tif _p not in sys.path: sys.path.append(_p)\n"
+            "\t\timport profile_age_guard\n"
+            "\t\tif not profile_age_guard.permit_play(meta or {}, 'pov', url): return\n"
+        )
+    },
+    {
+        "id": "umbrella_profile_directory_guard",
+        "name": "Child profile directory guard",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "target_file": "resources/lib/modules/control.py",
+        "marker": "# WIZARD_UMBRELLA_PROFILE_DIRECTORY_v1",
+        "anchor": "import xbmcvfs",
+        "action": "append_after",
+        "hook": (
+            "import sys\n"
+            "_povil_guards = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "if _povil_guards not in sys.path: sys.path.append(_povil_guards)\n"
+            "import profile_age_guard\n"
+            "profile_age_guard.install_directory_guard()\n"
+        )
+    },
+    {
+        "id": "umbrella_profile_route_guard",
+        "name": "Child profile account route guard",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "target_file": "resources/lib/modules/router.py",
+        "marker": "# WIZARD_UMBRELLA_PROFILE_ROUTE_v1",
+        "anchor": "\taction = params.get('action')",
+        "action": "prepend_before",
+        "hook": (
+            "\timport sys, xbmcvfs\n"
+            "\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tif _p not in sys.path: sys.path.append(_p)\n"
+            "\timport profile_age_guard\n"
+            "\tif not profile_age_guard.route_allowed(params, 'umbrella'): return\n"
+        )
+    },
+    {
+        "id": "umbrella_profile_play_guard",
+        "name": "Child profile playback guard",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "target_file": "resources/lib/modules/player.py",
+        "marker": "# WIZARD_UMBRELLA_PROFILE_PLAY_v1",
+        "anchor": "\t\t\tposter, thumb, season_poster, fanart, banner, clearart, clearlogo, discart, meta = self.getMeta(meta)",
+        "action": "append_after",
+        "hook": (
+            "\t\t\timport sys, xbmcvfs\n"
+            "\t\t\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\t\t\tif _p not in sys.path: sys.path.append(_p)\n"
+            "\t\t\timport profile_age_guard\n"
+            "\t\t\t_age_meta = dict(meta or {}, mediatype=self.media_type, tmdb=self.tmdb)\n"
+            "\t\t\tif not profile_age_guard.permit_play(_age_meta, 'umbrella', url): return control.cancelPlayback()\n"
+        )
+    },
+    {
+        "id": "pov_merged_personal_pagination",
+        "name": "Merged personal lists paginate after ordering",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/modules/utils.py",
+        "marker": "# WIZARD_POV_MERGED_PERSONAL_PAGINATION_v1",
+        "anchor": "\tif not item_list: return item_list, page",
+        "action": "prepend_before",
+        "hook": (
+            "\tif page == 'povil_merge_all': return item_list, 1\n"
+        )
+    },
+    {
+        "id": "pov_trakt_personal_newest",
+        "name": "trakt personal lists newest first",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/trakt_api.py",
+        "marker": "# WIZARD_POV_TRAKT_PERSONAL_NEWEST_v1",
+        "anchor": "\treturn trakt_cache.cache_trakt_object(_get_trakt_paginated_list, string, url)",
+        "action": "prepend_before",
+        "hook": (
+            "\ttry:\n"
+            "\t\timport sys, xbmcvfs\n"
+            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\t\tif p not in sys.path: sys.path.append(p)\n"
+            "\t\timport pov_mdblist_patch_logic\n"
+            "\t\tif list_type == 'my_lists':\n"
+            "\t\t\treturn pov_mdblist_patch_logic.newest_personal_items(trakt_cache.cache_trakt_object(_get_trakt_paginated_list, string, url))\n"
+            "\texcept Exception: pass\n"
+        )
+    },
+    {
+        "id": "pov_mdblist_personal_newest",
+        "name": "mdblist personal lists newest first",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBLIST_PERSONAL_NEWEST_v1",
+        "anchor": "\treturn mdbl_cache.cache_mdbl_object(_get_mdbl_paginated_list, string, url)['items']",
+        "action": "prepend_before",
+        "hook": (
+            "\ttry:\n"
+            "\t\timport sys, xbmcvfs\n"
+            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\t\tif p not in sys.path: sys.path.append(p)\n"
+            "\t\timport pov_mdblist_patch_logic\n"
+            "\t\tif list_type == 'my_lists':\n"
+            "\t\t\turl = pov_mdblist_patch_logic.personal_mdbl_url(url + '&povil_personal=1')\n"
+            "\t\t\treturn mdbl_cache.cache_mdbl_object(_get_mdbl_paginated_list, string + '_newest_v1', url)['items']\n"
+            "\texcept Exception: pass\n"
+        )
+    },
+    {
+        "id": "pov_hebrew_interface",
+        "name": "Persistent Hebrew POV interface",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/modules/kodi_utils.py",
+        "marker": "# WIZARD_POV_HEBREW_INTERFACE_v1",
+        "anchor": "\ttry: _string = int(string)",
+        "action": "prepend_before",
+        "hook": (
+            "\ttry:\n"
+            "\t\timport sys, xbmcvfs\n"
+            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\t\tif p not in sys.path: sys.path.append(p)\n"
+            "\t\tfrom pov_ui_labels import hebrew_label\n"
+            "\t\t_hebrew_label = hebrew_label(string)\n"
+            "\t\tif _hebrew_label is not None: return _hebrew_label\n"
+            "\texcept Exception: pass\n"
+        )
+    },
+    {
+        "id": "pov_local_favorites_recent",
+        "name": "Newest local favorites first",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/local_api.py",
+        "marker": "# WIZARD_POV_LOCAL_FAVORITES_RECENT_v1",
+        "anchor": "\tpath = 'SELECT tmdb_id, title FROM favorites WHERE db_type = ?'",
+        "action": "prepend_before",
+        "hook": (
+            "\tdata = call_local('SELECT tmdb_id, title FROM favorites WHERE db_type = ? ORDER BY rowid DESC', (mediatype,))\n"
+            "\tif page_no == 'all': return data\n"
+            "\treturn [{'media_id': str(i['tmdb_id']), 'title': i['title']} for i in data], 1\n"
+        )
+    },
+    {
         "id": "pov_cache_empty_prevention",
         "name": "POV Empty Cache Prevention",
         "addon_id": "plugin.video.pov",
@@ -89,14 +474,12 @@ PATCH_CONFIG = [
         "enabled": True,
         "target_file": "resources/lib/menus/navigator.py",
         "marker": "# WIZARD_POV_FANART_SHADOW_v4",
-        "anchor": "\t\t\t\t\tlistitem.setArt({'icon': icon, 'poster': icon, 'thumb': icon, 'fanart': fanart, 'banner': icon})",
-        "action": "append_after",
+        "anchor": "\t\t\t\t\tyield (url, listitem, isFolder)",
+        "action": "prepend_before",
         "hook": (
             "\t\t\t\t\t# WIZARD: Sequential property override to preserve fanart\n"
-            "\t\t\t\t\tif contents and isinstance(contents, list) and len(contents) > 0:\n"
-            "\t\t\t\t\t\tfirst_icon = contents[0].get('iconImage', '') if isinstance(contents[0], dict) else ''\n"
-            "\t\t\t\t\t\tif 'genres/' in str(first_icon):\n"
-            "\t\t\t\t\t\t\tlistitem.setArt({'fanart': icon})\n"
+            "\t\t\t\t\tif 'genres/' in str(icon or ''):\n"
+            "\t\t\t\t\t\tlistitem.setArt({'fanart': icon})\n"
         )
     },
     {
@@ -145,6 +528,42 @@ PATCH_CONFIG = [
         )
     },
     {
+        "id": "pov_genre_dict_main_loop_translation",
+        "name": "POV Genre Dict Main Loop Translation",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/navigator.py",
+        "marker": "# WIZARD_POV_GENRE_DICT_MAIN_LOOP_v2",
+        "anchor": "\t\tfor genre, value in sorted(genre_list.items()):",
+        "action": "prepend_before",
+        "hook": (
+            "\t\t# WIZARD: Translate genre dict keys to Hebrew in memory\n"
+            "\t\timport sys, xbmcvfs\n"
+            "\t\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\t\tsys.path.append(_p) if _p not in sys.path else None\n"
+            "\t\timport pov_translations\n"
+            "\t\tgenre_list = pov_translations.translate_genres(genre_list)\n"
+        )
+    },
+    {
+        "id": "pov_genre_dict_multiselect_translation",
+        "name": "POV Genre Dict Multiselect Translation",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/navigator.py",
+        "marker": "# WIZARD_POV_GENRE_DICT_MULTISELECT_v2",
+        "anchor": "\t\tgenre_list = dict(sorted(json.loads(genre_list).items()))",
+        "action": "append_after",
+        "hook": (
+            "\t\t# WIZARD: Translate genre dict keys to Hebrew in multiselect memory\n"
+            "\t\timport sys, xbmcvfs\n"
+            "\t\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\t\tsys.path.append(_p) if _p not in sys.path else None\n"
+            "\t\timport pov_translations\n"
+            "\t\tgenre_list = pov_translations.translate_genres(genre_list)\n"
+        )
+    },
+    {
         "id": "pov_tmdb_timeout_widen",
         "name": "POV TMDB Timeout Widen",
         "addon_id": "plugin.video.pov",
@@ -163,13 +582,15 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/tmdb_api.py",
-        "marker": "# WIZARD_POV_MOVIE_NETWORKS_v4",
+        "marker": "# WIZARD_POV_MOVIE_NETWORKS_v5",
         "anchor": "\turl += '&sort_by=popularity.desc&certification_country=US&with_companies=%s' % network_id",
         "action": "append_after",
         "hook": (
-            "\t# Shadow variable to override 'with_companies' to 'watch_providers'\n"
-            "\turl = '%s/3/discover/movie?language=en-US&region=US&page=%s' % (base_url, page_no)\n"
-            "\turl += '&sort_by=popularity.desc&certification_country=US&with_watch_providers=%s&watch_region=US&with_watch_monetization_types=flatrate' % network_id\n"
+            "\tendpoint = '/discover/movie?language=en-US&region=US&page=%s' % page_no\n"
+            "\tendpoint += '&sort_by=popularity.desc&certification_country=US&with_watch_providers=%s&watch_region=US&with_watch_monetization_types=flatrate' % network_id\n"
+            "\turl = ((base_url if base_url.endswith('/3') else base_url + '/3') + endpoint\n"
+            "\t       if 'requests' in globals() else '/3' + endpoint)\n"
+            "\tstring = 'tmdb_movie_providers_v5_US_%s_%s' % (network_id, page_no)\n"
         )
     },
     {
@@ -224,7 +645,7 @@ PATCH_CONFIG = [
             "    self.function(*self.args, **self.kwargs)\n"
             "except Exception:\n"
             "    pass\n"
-            "continue"
+            "continue\n"
         )
     },
     {
@@ -252,13 +673,15 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/torbox_api.py",
-        "marker": "# WIZARD_POV_TORBOX_API_STATS_v2",
+        "marker": "# WIZARD_POV_TORBOX_API_STATS_v3",
         "anchor": "\tdef torrent_info(self, request_id, path='torrents'):",
         "action": "prepend_before",
         "hook": (
             "\tdef user_stats(self):\n"
+            "\t\tparams = {'general': 'true', 'bandwidth': 'true', 'bandwidth_grouping': 'day'}\n"
+            "\t\tif hasattr(self, 'api'): return self.api('get', '/v1/api/user/stats', params=params)\n"
             "\t\turl = 'user/stats'\n"
-            "\t\treturn self._get(url, params={'general': 'true', 'bandwidth': 'true', 'bandwidth_grouping': 'day'})\n\n"
+            "\t\treturn self._get(url, params=params)\n\n"
         )
     },
     {
@@ -286,15 +709,15 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/caches/trakt_cache.py",
-        "marker": "# WIZARD_POV_TRAKT_EMPTY_CACHE_v3",  # Bumped marker version due to anchor change
+        "marker": "# WIZARD_POV_TRAKT_EMPTY_CACHE_v3",
         "anchor": "dbcur.execute(TC_BASE_SET, (string, json.dumps(result)))",
         "action": "prepend_before",
         "hook": (
-        "\timport sys, xbmcvfs\n"
-        "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-        "\tsys.path.append(p) if p not in sys.path else None\n"
-        "\timport pov_trakt_cache\n"
-        "\tif pov_trakt_cache.is_empty_result(result, string): return result\n"
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_trakt_cache\n"
+            "\tif pov_trakt_cache.is_empty_result(result, string): return result\n"
         )
     },
     {
@@ -308,10 +731,10 @@ PATCH_CONFIG = [
         "anchor": "def clear_all_trakt_cache_data(refresh=True):",
         "action": "append_after",
         "hook": (
-        "# WIZARD: Ensure trakt_data table exists before clearing cache\n"
-        "\ttry:\n"
-        "\t\tTraktCache().dbcur.execute('CREATE TABLE IF NOT EXISTS trakt_data (id TEXT UNIQUE, data TEXT)')\n"
-        "\texcept Exception: pass\n"
+            "# WIZARD: Ensure trakt_data table exists before clearing cache\n"
+            "\ttry:\n"
+            "\t\tTraktCache().dbcur.execute('CREATE TABLE IF NOT EXISTS trakt_data (id TEXT UNIQUE, data TEXT)')\n"
+            "\texcept Exception: pass\n"
         )
     },
     {
@@ -340,7 +763,7 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/kodi_utils.py",
-        "marker": "# WIZARD_POV_ADDON_WINDOW_IMPORT_v2",
+        "marker": "# WIZARD_POV_ADDON_WINDOW_IMPORT_v3",
         "anchor": "from xbmcaddon import Addon",
         "action": "append_after",
         "hook": (
@@ -348,44 +771,8 @@ PATCH_CONFIG = [
             "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
             "sys.path.append(p) if p not in sys.path else None\n"
             "import pov_addon_window\n"
-            "pov_addon_window.wait_for_window()"
-        )
-    },
-    {
-        "id": "pov_addon_window_func",
-        "name": "POV Addon Window Patcher (Function Scope)",
-        "description": "Shadows addon() to retry fetching the addon object during the restart window.",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/modules/kodi_utils.py",
-        "marker": "# WIZARD_POV_ADDON_WINDOW_FUNC_v2",
-        "anchor": "def addon_installed(addon_id):",
-        "action": "prepend_before",
-        "hook": (
-            "def addon(addon_id='plugin.video.pov'):\n"
-            "\timport sys, xbmcvfs\n"
-            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tsys.path.append(p) if p not in sys.path else None\n"
-            "\timport pov_addon_window\n"
-            "\treturn pov_addon_window.safe_addon(addon_id)\n\n"
-        )
-    },
-    {
-        "id": "wizard_pov_widget_refresh",
-        "name": "Home Widget Refresh Ping",
-        "description": "Fires a targeted background ping so third-party skin widgets instantly reload after marking items as watched.",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/modules/kodi_utils.py",
-        "marker": "# WIZARD_POV_WIDGET_REFRESH_v2",
-        "anchor": "return execute_builtin('Container.Refresh')",
-        "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "sys.path.append(p) if p not in sys.path else None\n"
-            "import kodi_widget_refresh\n"
-            "kodi_widget_refresh.ping()\n"
+            "pov_addon_window.wait_for_window()\n"
+            "Addon = pov_addon_window.patient_addon(Addon)\n"
         )
     },
     {
@@ -408,60 +795,6 @@ PATCH_CONFIG = [
         )
     },
     {
-        "id": "wizard_il_release",
-        "name": "IL Release Countdown Hook (Movies)",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/menus/movies.py",
-        "marker": "# WIZARD_IL_RELEASE_v2",
-        "anchor": "\t\t\tlistitem.setProperties(props)",
-        "action": "append_after",
-        "hook": (
-            "try:\n"
-            "    import sys\n"
-            "    _il = sys.modules.get('il_release')\n"
-            "    if _il is None:\n"
-            "        import xbmcvfs\n"
-            "        p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "        sys.path.append(p) if p not in sys.path else None\n"
-            "        import il_release as _il\n"
-            "    _il.apply_release_property(imdb_id, listitem, meta_get('premiered'), meta_get('year'), meta_get('il_dates'))\n"
-            "except Exception:\n"
-            "    pass"
-        )
-    },
-    {
-        "id": "wizard_il_dates_extract",
-        "name": "IL Release Dates - extract TMDB release_dates (metadata)",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/indexers/metadata.py",
-        "marker": "# WIZARD_IL_DATES_EXTRACT_v1",
-        "anchor": "\t\tpremiered = parser.get_text('release_date')",
-        "action": "append_after",
-        "hook": (
-            "try:\n"
-            "    import sys, xbmcvfs\n"
-            "    p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "    sys.path.append(p) if p not in sys.path else None\n"
-            "    import il_release\n"
-            "    _il_dates = il_release.extract_dates(data)\n"
-            "except Exception:\n"
-            "    _il_dates = None"
-        )
-    },
-    {
-        "id": "wizard_il_dates_store",
-        "name": "IL Release Dates - store in movie meta (metadata)",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/indexers/metadata.py",
-        "marker": "# WIZARD_IL_DATES_STORE_v1",
-        "anchor": "\t\t\t'mpaa': parser.get_mpaa('release_dates', user_info['mpaa_region']),",
-        "action": "append_after",
-        "hook": "'il_dates': locals().get('_il_dates'),"
-    },
-    {
         "id": "pov_network_id_fix",
         "name": "POV Movie Streaming Tile Fix",
         "description": "Shadows tmdb_movies_networks mapping to prevent Kodi hanging on streaming tiles.",
@@ -472,128 +805,34 @@ PATCH_CONFIG = [
         "anchor": "\ttmdb_special_key_dict = {'tmdb_movies_networks': 'company', 'tmdb_movies_year': 'year', 'tmdb_moviesanime_year': 'year'}",
         "action": "append_after",
         "hook": (
-            "\ttmdb_special_key_dict['tmdb_movies_networks'] = 'network_id'"
+            "\ttmdb_special_key_dict['tmdb_movies_networks'] = 'network_id'\n"
         )
     },
     {
-      "id": "wizard_pov_logger_enable_movies",
-      "name": "Content Logger Enable (Movies)",
-      "description": "Installs the exception tracer before run() builds any items.",
-      "addon_id": "plugin.video.pov",
-      "enabled": False,
-      "target_file": "resources/lib/menus/movies.py",
-      "marker": "# WIZARD_POV_LOGGER_ENABLE_MOVIES_v2",
-      "anchor": "\t\t\tparams_get = self.params.get",
-      "action": "prepend_before",
-      "hook": (
-        "import sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); "
-        "sys.path.append(p) if p not in sys.path else None; import pov_content_logger; pov_content_logger.enable()"
-      )
+        "id": "wizard_pov_my_lists_movies",
+        "name": "My Lists Dispatch Hook (Movies)",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/movies.py",
+        "marker": "# WIZARD_POV_MY_LISTS_MOVIES_v3",
+        "anchor": "\t\t\texcept ValueError: page_no = params_get('new_page')",
+        "action": "append_after",
+        "hook": (
+            "import sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_my_lists; pov_my_lists.maybe_populate_movies(self, page_no)\n"
+        )
     },
     {
-      "id": "wizard_pov_logger_disable_movies",
-      "name": "Content Logger Disable (Movies)",
-      "description": "Tears down the exception tracer once run() finishes.",
-      "addon_id": "plugin.video.pov",
-      "enabled": False,
-      "target_file": "resources/lib/menus/movies.py",
-      "marker": "# WIZARD_POV_LOGGER_DISABLE_MOVIES_v2",
-      "anchor": "\t\tkodi_utils.set_view_mode(view_type, content_type, self.is_widget)",
-      "action": "append_after",
-      "hook": (
-        "import sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); "
-        "sys.path.append(p) if p not in sys.path else None; import pov_content_logger; pov_content_logger.disable()"
-      )
-    },
-    {
-      "id": "wizard_pov_logger_enable_tvshows",
-      "name": "Content Logger Enable (TV Shows)",
-      "description": "Installs the exception tracer before run() builds any items.",
-      "addon_id": "plugin.video.pov",
-      "enabled": False,
-      "target_file": "resources/lib/menus/tvshows.py",
-      "marker": "# WIZARD_POV_LOGGER_ENABLE_TVSHOWS_v2",
-      "anchor": "\t\t\tparams_get = self.params.get",
-      "action": "prepend_before",
-      "hook": (
-        "import sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); "
-        "sys.path.append(p) if p not in sys.path else None; import pov_content_logger; pov_content_logger.enable()"
-      )
-    },
-    {
-      "id": "wizard_pov_logger_disable_tvshows",
-      "name": "Content Logger Disable (TV Shows)",
-      "description": "Tears down the exception tracer once run() finishes.",
-      "addon_id": "plugin.video.pov",
-      "enabled": False,
-      "target_file": "resources/lib/menus/tvshows.py",
-      "marker": "# WIZARD_POV_LOGGER_DISABLE_TVSHOWS_v2",
-      "anchor": "\t\tkodi_utils.set_view_mode(view_type, content_type, self.is_widget)",
-      "action": "append_after",
-      "hook": (
-        "import sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); "
-        "sys.path.append(p) if p not in sys.path else None; import pov_content_logger; pov_content_logger.disable()"
-      )
-    },
-    {
-      "id": "wizard_pov_logger_enable_episodes",
-      "name": "Content Logger Enable (Episodes)",
-      "description": "Installs the exception tracer before run() builds any items.",
-      "addon_id": "plugin.video.pov",
-      "enabled": False,
-      "target_file": "resources/lib/menus/episodes.py",
-      "marker": "# WIZARD_POV_LOGGER_ENABLE_EPISODES_v3",
-      "anchor": "\tparams_get = self.params.get",
-      "action": "prepend_before",
-      "hook": (
-        "import sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); "
-        "sys.path.append(p) if p not in sys.path else None; import pov_content_logger; pov_content_logger.enable()"
-      )
-    },
-    {
-      "id": "wizard_pov_logger_disable_episodes",
-      "name": "Content Logger Disable (Episodes)",
-      "description": "Tears down the exception tracer once run() finishes (episodes.py's run() ends at the focus_index line, not set_view_mode).",
-      "addon_id": "plugin.video.pov",
-      "enabled": False,
-      "target_file": "resources/lib/menus/episodes.py",
-      "marker": "# WIZARD_POV_LOGGER_DISABLE_EPISODES_v3",
-      "anchor": "\tif index: kodi_utils.focus_index(index)",
-      "action": "append_after",
-      "hook": (
-        "import sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); "
-        "sys.path.append(p) if p not in sys.path else None; import pov_content_logger; pov_content_logger.disable()"
-      )
-    },
-    {
-      "id": "wizard_pov_my_lists_movies",
-      "name": "My Lists Dispatch Hook (Movies)",
-      "description": "Populates self.list for tmdb_my_movies / trakt_my_movies by merging TMDB favorites+watchlist or Trakt collection+watchlist+favorites, before POV's own dispatch chain runs (and no-ops for every other action).",
-      "addon_id": "plugin.video.pov",
-      "enabled": True,
-      "target_file": "resources/lib/menus/movies.py",
-      "marker": "# WIZARD_POV_MY_LISTS_MOVIES_v3",
-      "anchor": "\t\t\texcept ValueError: page_no = params_get('new_page')",
-      "action": "append_after",
-      "hook": (
-        "import sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); "
-        "sys.path.append(p) if p not in sys.path else None; import pov_my_lists; pov_my_lists.maybe_populate_movies(self, page_no)"
-      )
-    },
-    {
-      "id": "wizard_pov_my_lists_tvshows",
-      "name": "My Lists Dispatch Hook (TV Shows)",
-      "description": "Populates self.list for tmdb_my_tvshows / trakt_my_tvshows by merging TMDB favorites+watchlist or Trakt collection+watchlist+favorites, before POV's own dispatch chain runs (and no-ops for every other action).",
-      "addon_id": "plugin.video.pov",
-      "enabled": True,
-      "target_file": "resources/lib/menus/tvshows.py",
-      "marker": "# WIZARD_POV_MY_LISTS_TVSHOWS_v3",
-      "anchor": "\t\t\texcept ValueError: page_no = params_get('new_page')",
-      "action": "append_after",
-      "hook": (
-        "import sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); "
-        "sys.path.append(p) if p not in sys.path else None; import pov_my_lists; pov_my_lists.maybe_populate_tvshows(self, page_no)"
-      )
+        "id": "wizard_pov_my_lists_tvshows",
+        "name": "My Lists Dispatch Hook (TV Shows)",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/tvshows.py",
+        "marker": "# WIZARD_POV_MY_LISTS_TVSHOWS_v3",
+        "anchor": "\t\t\texcept ValueError: page_no = params_get('new_page')",
+        "action": "append_after",
+        "hook": (
+            "import sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_my_lists; pov_my_lists.maybe_populate_tvshows(self, page_no)\n"
+        )
     },
     {
         "id": "pov_debrid_status",
@@ -722,22 +961,22 @@ PATCH_CONFIG = [
         )
     },
     {
-       "id": "pov_torbox_url_fix_indexers",
-       "name": "POV TorBox Malformed URL Fix (Indexers)",
-       "description": "Fixes libcurl error 3 by percent-encoding raw TorBox download links (POV 6.08.14+).",
-       "addon_id": "plugin.video.pov",
-       "enabled": True,
-       "target_file": "resources/lib/indexers/torbox_api.py",
-       "marker": "# WIZARD_POV_TORBOX_URL_FIX_v2",
-       "anchor": "return self._get(path, params=params)",
-       "action": "prepend_before",
-       "hook": (
-           "\t\timport sys, xbmcvfs\n"
-           "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-           "\t\tsys.path.append(p) if p not in sys.path else None\n"
-           "\t\timport pov_torbox_url_fix\n"
-           "\t\treturn pov_torbox_url_fix.safe_url(self._get(path, params=params))\n"
-       )
+        "id": "pov_torbox_url_fix_indexers",
+        "name": "POV TorBox Malformed URL Fix (Indexers)",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/torbox_api.py",
+        "marker": "# WIZARD_POV_TORBOX_URL_FIX_v4",
+        "anchor": "if user_ip: params['user_ip'] = user_ip",
+        "action": "append_after",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "if p not in sys.path: sys.path.append(p)\n"
+            "import pov_torbox_url_fix\n"
+            "raw = self.api('get', path, params=params) if hasattr(self, 'api') else self._get(path, params=params)\n"
+            "return pov_torbox_url_fix.safe_url(raw)\n"
+        )
     },
     {
         "id": "pov_ad_error_log",
@@ -943,11 +1182,46 @@ PATCH_CONFIG = [
         "anchor": "def trakt_sync_activities(force_update=False, init_callback=None, monitor=None):",
         "action": "prepend_before",
         "hook": (
-            "import sys, xbmcvfs\n"
+            "# Preserve the native function body below.\n"
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_trakt_reauth\n"
+            "\tpov_trakt_reauth.run(sys.modules[__name__])\n"
+        )
+    },
+    {
+        "id": "pov_shared_http_tmdb",
+        "name": "Defer verified shared HTTP clients (TMDB)",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/tmdb_api.py",
+        "marker": "# WIZARD_POV_SHARED_HTTP_TMDB_v2",
+        "anchor": "from session import session, HTTPAdapter, Retry",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs, xbmcaddon\n"
             "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
             "sys.path.append(p) if p not in sys.path else None\n"
-            "import pov_trakt_reauth\n"
-            "pov_trakt_reauth.run(sys.modules[__name__])\n"
+            "import pov_http_session\n"
+            "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/session.py'), getattr(pov_http_session, 'pov_version', str)())\n"
+        )
+    },
+    {
+        "id": "pov_shared_http_trakt",
+        "name": "Defer verified shared HTTP clients (Trakt)",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/trakt_api.py",
+        "marker": "# WIZARD_POV_SHARED_HTTP_TRAKT_v2",
+        "anchor": "from session import session, HTTPAdapter, Retry",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs, xbmcaddon\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "sys.path.append(p) if p not in sys.path else None\n"
+            "import pov_http_session\n"
+            "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/session.py'), getattr(pov_http_session, 'pov_version', str)())\n"
         )
     },
     {
@@ -1023,9 +1297,25 @@ PATCH_CONFIG = [
         )
     },
     {
+        "id": "pov_subtitle_match_refresh",
+        "name": "POV Late Subtitle Badges",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/windows/sources.py",
+        "marker": "# WIZARD_POV_SUB_MATCH_REFRESH_v1",
+        "anchor": "self.win.addItems(self.item_list)",
+        "action": "append_after",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "if p not in sys.path: sys.path.append(p)\n"
+            "import pov_sub_match_v2\n"
+            "pov_sub_match_v2.refresh_when_ready(self)\n"
+        )
+    },
+    {
         "id": "pov_navigator_read_fix",
         "name": "POV Navigator DB Parse Interceptor",
-        "description": "Intercepts jsloads on navigator cache to fallback to AST literal evaluation for legacy repr-formatted DB rows.",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/caches/navigator_cache.py",
@@ -1037,25 +1327,7 @@ PATCH_CONFIG = [
             "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
             "sys.path.append(p) if p not in sys.path else None;\n"
             "import pov_nav_read_fix;\n"
-            "pov_nav_read_fix.run(navigator_cache)"
-        )
-    },
-    {
-        "id": "pov_animated_networks",
-        "name": "Animated Networks Icons Toggle",
-        "description": "Dynamically swaps static network shortcut icons to animated ones based on Fentastic's no_slide_animations setting.",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/caches/navigator_cache.py",
-        "marker": "# WIZARD_POV_ANIMATED_NETWORKS_v1",
-        "anchor": "navigator_cache = NavigatorCache()",
-        "action": "append_after",
-        "hook": (
-            "import sys, xbmcvfs;\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
-            "sys.path.append(p) if p not in sys.path else None;\n"
-            "import pov_animated_networks;\n"
-            "pov_animated_networks.run(navigator_cache)"
+            "pov_nav_read_fix.run(navigator_cache)\n"
         )
     },
     {
@@ -1065,15 +1337,17 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/settings.py",
-        "marker": "# WIZARD_POV_AIOSTREAMS_FIX_v2",
-        "anchor": "\telse: settings = ['provider.external', 'provider.easynews']",
-        "action": "append_after",
+        "marker": "# WIZARD_POV_AIOSTREAMS_FIX_v4",
+        "anchor": "\tsettings.extend(item[1] for item in (",
+        "action": "prepend_before",
         "hook": (
             "\timport sys, xbmcvfs\n"
             "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
             "\tif p not in sys.path: sys.path.append(p)\n"
             "\timport pov_aiostreams_fix\n"
-            "\tsettings = pov_aiostreams_fix.enforce_credentials(settings)"
+            "\tsettings = pov_aiostreams_fix.enforce_credentials(settings)\n"
+            "\timport pov_legacy_scrapers\n"
+            "\tsettings = pov_legacy_scrapers.enabled_settings(settings)\n"
         )
     },
     {
@@ -1097,13 +1371,103 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/mdblist_api.py",
-        "marker": "# WIZARD_POV_MDBL_REAUTH_RETRY_v2",
+        "marker": "# WIZARD_POV_MDBL_REAUTH_RETRY_v3",
         "anchor": "\t\tlogger('mdblist error', str(e))",
         "action": "append_after",
         "hook": (
             "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic;\n"
-            "\t\t_ai_retry = pov_mdblist_patch_logic.handle_401_reauth(_orig_e, path, params, json, method);\n"
+            "\t\t_ai_retry = pov_mdblist_patch_logic.handle_401_reauth(_orig_e, path, params, json, method, locals().get('response'));\n"
             "\t\tif _ai_retry is not None: return _ai_retry\n"
+        )
+    },
+    {
+        "id": "mdblist_expiry_auth_mode_guard",
+        "name": "MDBList expiry auth mode guard",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBL_EXPIRY_AUTH_v1",
+        "anchor": "\tif interval + current >= expires: mdbl_refresh()",
+        "action": "prepend_before",
+        "hook": (
+            "\tif interval + current >= expires:\n"
+            "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n"
+            "\t\tif pov_mdblist_patch_logic.repair_api_key_auth(): return\n"
+        )
+    },
+    {
+        "id": "mdblist_cache_verified_reads",
+        "name": "MDBList cache verified reads",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/caches/mdbl_cache.py",
+        "marker": "# WIZARD_POV_MDBL_CACHE_READS_v1",
+        "anchor": "\tdbcur = MDBLCache().dbcur",
+        "action": "prepend_before",
+        "hook": (
+            "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n"
+            "\treturn pov_mdblist_patch_logic.cache_list(function, string, url)\n"
+        )
+    },
+    {
+        "id": "mdblist_response_pagination",
+        "name": "MDBList bucketed response pagination",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBL_RESPONSE_PAGES_v1",
+        "anchor": "\t\tif isinstance(result, list):",
+        "action": "prepend_before",
+        "hook": (
+            "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n"
+            "\t\tresult = pov_mdblist_patch_logic.list_response_pagination(result, response)\n"
+        )
+    },
+    {
+        "id": "mdblist_collection_parent_projection",
+        "name": "MDBList collection parent shows",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBL_COLLECTION_PARENTS_v1",
+        "anchor": "\tresults = results['movies' if mediatype in ('movie', 'movies') else 'shows']",
+        "action": "prepend_before",
+        "hook": (
+            "\tif list_type == 'collection':\n"
+            "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n"
+            "\t\treturn pov_mdblist_patch_logic.collection_items(results, mediatype)\n"
+        )
+    },
+    {
+        "id": "mdblist_complete_pagination",
+        "name": "MDBList complete pagination",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBL_PAGES_v1",
+        "anchor": "\tparams = {'limit': 1000}",
+        "action": "prepend_before",
+        "hook": (
+            "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n"
+            "\treturn pov_mdblist_patch_logic.paginated_list(url, MAX_LIST_ITEMS)\n"
+        )
+    },
+    {
+        "id": "mdblist_manager_read_failure",
+        "name": "MDBList manager read failure",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/mdblist.py",
+        "marker": "# WIZARD_POV_MDBL_MANAGER_READ_v1",
+        "anchor": "class MdbListManager(list_helper.BaseListManager):",
+        "action": "append_after",
+        "hook": (
+            "# Guard only MDBList reads; keep native mutations.\n"
+            "\tdef manage(self):\n"
+            "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n"
+            "\t\ttry: return super().manage()\n"
+            "\t\texcept pov_mdblist_patch_logic.MDBListUnavailable:\n"
+            "\t\t\treturn pov_mdblist_patch_logic.notify_unavailable()\n\n"
         )
     },
     {
@@ -1119,6 +1483,19 @@ PATCH_CONFIG = [
         "hook": (
             "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic;\n"
             "\tpov_mdblist_patch_logic.scrobble_stop_if_watched(action, key, media, media_id, season, episode)\n"
+        )
+    },
+    {
+        "id": "mdblist_activity_failed_read",
+        "name": "MDBList failed activity read",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBL_ACTIVITY_READ_v1",
+        "anchor": "\t\tlogger('mdblist error', str(latest))",
+        "action": "append_after",
+        "hook": (
+            "\t\treturn 'failed'\n"
         )
     },
     {
@@ -1163,21 +1540,6 @@ PATCH_CONFIG = [
         )
     },
     {
-        "id": "mdblist_api_merge_collection",
-        "name": "MDBList Merge Collection to Watchlist",
-        "description": "Injects Trakt Collection items into the Watchlist view.",
-        "addon_id": "plugin.video.pov",
-        "enabled": False,
-        "target_file": "resources/lib/indexers/mdblist_api.py",
-        "marker": "# WIZARD_POV_MDBL_MERGE_COLLECTION_v2",
-        "anchor": "\tif not settings.show_unaired_watchlist():",
-        "action": "prepend_before",
-        "hook": (
-            "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic;\n"
-            "\tpov_mdblist_patch_logic.merge_collection_to_watchlist(original_list, mediatype)\n"
-        )
-    },
-    {
         "id": "mdblist_api_like_routes",
         "name": "MDBList Like API Routes",
         "description": "Injects missing MDBList like/unlike context menu logic routes.",
@@ -1188,10 +1550,11 @@ PATCH_CONFIG = [
         "anchor": "def delete_mdbl_list(params):",
         "action": "prepend_before",
         "hook": (
-            "def mdbl_like_a_list(params):\n"
-            "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic; pov_mdblist_patch_logic.like_a_list(params)\n\n"
-            "def mdbl_unlike_a_list(params):\n"
-            "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic; pov_mdblist_patch_logic.unlike_a_list(params)\n\n"
+            "# Preserve the native function body below.\n"
+            "\tdef mdbl_like_a_list(params):\n"
+            "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic; pov_mdblist_patch_logic.like_a_list(params)\n\n"
+            "\tdef mdbl_unlike_a_list(params):\n"
+            "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic; pov_mdblist_patch_logic.unlike_a_list(params)\n\n"
         )
     },
     {
@@ -1258,34 +1621,17 @@ PATCH_CONFIG = [
         "name": "MDBList Watchlist/Collection Sort Default",
         "description": "Intercepts list sorting to default to 'Date Added' (recency) if unconfigured.",
         "addon_id": "plugin.video.pov",
-        "enabled": False,
+        "enabled": True,
         "target_file": "resources/lib/modules/settings.py",
         "marker": "# WIZARD_POV_MDBL_SORT_DEFAULT_v2",
         "anchor": "def metadata_user_info():",
         "action": "prepend_before",
         "hook": (
-            "_orig_lists_sort_order = lists_sort_order\n"
-            "def lists_sort_order(setting, mediatype=None):\n"
-            "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic;\n"
-            "\treturn pov_mdblist_patch_logic.lists_sort_order_override(_orig_lists_sort_order, setting, mediatype)\n\n"
-        )
-    },
-    {
-        "id": "pov_cache_schema_repair",
-        "name": "POV Cache Schema DB Patcher",
-        "description": "Rebuilds transposed SQLite cache columns dynamically and migrates legacy databases.",
-        "addon_id": "plugin.video.pov",
-        "enabled": False,
-        "target_file": "resources/lib/modules/cache.py",
-        "marker": "# WIZARD_POV_CACHE_SCHEMA_v2",
-        "anchor": "\tif not kodi_utils.path_exists(databases_path): kodi_utils.make_directory(databases_path)",
-        "action": "prepend_before",
-        "hook": (
-            "\timport sys, xbmcvfs\n"
-            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tsys.path.append(p) if p not in sys.path else None\n"
-            "\timport pov_cache_schema\n"
-            "\tpov_cache_schema.run()\n"
+            "# Preserve the native function body below.\n"
+            "\t_orig_lists_sort_order = lists_sort_order\n"
+            "\tdef lists_sort_order(setting, mediatype=None):\n"
+            "\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic;\n"
+            "\t\treturn pov_mdblist_patch_logic.lists_sort_order_override(_orig_lists_sort_order, setting, mediatype)\n\n"
         )
     },
     {
@@ -1321,7 +1667,24 @@ PATCH_CONFIG = [
             "\t\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
             "\t\t\tsys.path.append(p) if p not in sys.path else None;\n"
             "\t\t\timport pov_widget_budget;\n"
-            "\t\t\tself.worker = pov_widget_budget.wrap_worker(self, self.worker)"
+            "\t\t\tself.worker = pov_widget_budget.wrap_worker(self, self.worker)\n"
+        )
+    },
+    {
+        "id": "pov_next_episode_widget_budget",
+        "name": "POV Next Episode Widget Budget",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/episodes.py",
+        "marker": "# WIZARD_POV_NEXT_EPISODE_BUDGET_v1",
+        "anchor": "if self.list: kodi_utils.add_items(__handle__, self.worker())",
+        "action": "prepend_before",
+        "hook": (
+            "\t\timport sys, xbmcvfs;\n"
+            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
+            "\t\tsys.path.append(p) if p not in sys.path else None;\n"
+            "\t\timport pov_widget_budget;\n"
+            "\t\tself.worker = pov_widget_budget.wrap_next_episode_worker(self, self.worker)\n"
         )
     },
     {
@@ -1374,6 +1737,321 @@ PATCH_CONFIG = [
         "hook": (
             "import pov_watched_lazy_imports;\n"
             "pov_watched_lazy_imports.apply_proxies(globals());\n"
+        )
+    },
+    {
+        "id": "pov_next_episode_constructor",
+        "name": "Scope the unused next-episode constructor history read",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/episodes.py",
+        "marker": "# WIZARD_POV_NEXT_CONSTRUCTOR_v1",
+        "anchor": "class Menu(Episodes):",
+        "action": "append_after",
+        "hook": (
+            "# Keep the inherited constructor unchanged outside this scoped read.\n"
+            "\tdef __init__(self, params):\n"
+            "\t\timport sys, xbmcvfs\n"
+            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\t\tif p not in sys.path: sys.path.append(p)\n"
+            "\t\timport pov_watch_history\n"
+            "\t\tpov_watch_history.next_constructor(self, super().__init__, params, ws.get_watched_info_tv)\n\n"
+        )
+    },
+    {
+        "id": "pov_indexed_next_history",
+        "name": "Seek the last watched episode through the existing native index",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/caches/watched_cache.py",
+        "marker": "# WIZARD_POV_INDEXED_NEXT_HISTORY_v1",
+        "anchor": "\tcommand = \"\"\"",
+        "action": "prepend_before",
+        "hook": (
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tif p not in sys.path: sys.path.append(p)\n"
+            "\timport pov_next_history\n"
+            "\treturn pov_next_history.next_episodes(globals(), watched_indicators)\n"
+        )
+    },
+    {
+        "id": "pov_tmdb_stable_list_actions",
+        "name": "Stable provider action IDs: tmdb",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/tmdb.py",
+        "marker": "# WIZARD_POV_TMDB_LIST_ACTIONS_v1",
+        "anchor": "\t\treturn [(i.lower(), i, '', self.icon) for i in (watchl_str, fav_str)]",
+        "action": "prepend_before",
+        "hook": (
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_list_actions\n"
+            "\treturn pov_list_actions.default_choices(self, globals(), 'tmdb')\n"
+        )
+    },
+    {
+        "id": "pov_trakt_stable_list_actions",
+        "name": "Stable provider action IDs: trakt",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/trakt.py",
+        "marker": "# WIZARD_POV_TRAKT_LIST_ACTIONS_v1",
+        "anchor": "\t\tchoices = [(i.lower(), i, '', self.icon) for i in (watchl_str, fav_str, coll_str)]",
+        "action": "prepend_before",
+        "hook": (
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_list_actions\n"
+            "\treturn pov_list_actions.default_choices(self, globals(), 'trakt')\n"
+        )
+    },
+    {
+        "id": "pov_persistent_continue_exclusions",
+        "name": "Honor local removals with every watched provider",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/caches/watched_cache.py",
+        "marker": "# WIZARD_POV_CONTINUE_EXCLUSIONS_v1",
+        "anchor": "def get_dropped_info_tv(watched_indicators):",
+        "action": "append_after",
+        "hook": (
+            "# Preserve the native function body below.\n"
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_continue_watching\n"
+            "\treturn pov_continue_watching.dropped_info(globals(), watched_indicators)\n"
+        )
+    },
+    {
+        "id": "pov_continuation_service_prefetch",
+        "name": "Prepare exclusion snapshots before opening continuation",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/entry.py",
+        "marker": "# WIZARD_POV_CONTINUE_PREFETCH_v1",
+        "anchor": "\t\tfor i in threads: i.start()",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "sys.path.append(p) if p not in sys.path else None\n"
+            "import pov_continue_watching\n"
+            "threads = (*threads, Thread(target=pov_continue_watching.service_prefetch, args=(self,)))\n"
+        )
+    },
+    {
+        "id": "pov_continuation_extra_sources",
+        "name": "Apply exclusions to bookmarks and optional watchlists",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/episodes.py",
+        "marker": "# WIZARD_POV_CONTINUE_SOURCES_v1",
+        "anchor": "\t\tif callable(func): func(params_get)",
+        "action": "append_after",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "sys.path.append(p) if p not in sys.path else None\n"
+            "import pov_continue_watching\n"
+            "pov_continue_watching.filter_episode_sources(self)\n"
+        )
+    },
+    {
+        "id": "pov_episode_focused_info",
+        "name": "Keep episode title and synopsis available on focused previews",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/episodes.py",
+        "marker": "# WIZARD_POV_EPISODE_FOCUSED_INFO_v1",
+        "anchor": "\t\t\tself.append((url_params, listitem, False))",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "sys.path.append(p) if p not in sys.path else None\n"
+            "import pov_continue_watching\n"
+            "import pov_episode_info\n"
+            "pov_episode_info.complete(listitem, meta, item, ep_name)\n"
+        )
+    },
+    {
+        "id": "pov_continuation_episode_actions",
+        "name": "Restore season marking and explicit continuation removal",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/episodes.py",
+        "marker": "# WIZARD_POV_CONTINUE_ACTIONS_v2",
+        "anchor": "\t\t\tcm.sort(key=lambda k: k[0])",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "sys.path.append(p) if p not in sys.path else None\n"
+            "import pov_continue_watching\n"
+            "pov_continue_watching.append_episode_actions(locals(), build_url, run_plugin)\n"
+        )
+    },
+    {
+        "id": "pov_continuation_show_actions",
+        "name": "Keep continuation removal available on show cards",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/tvshows.py",
+        "marker": "# WIZARD_POV_CONTINUE_SHOW_ACTIONS_v1",
+        "anchor": "\t\t\tcm.sort(key=lambda k: k[0])",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "sys.path.append(p) if p not in sys.path else None\n"
+            "import pov_continue_watching\n"
+            "pov_continue_watching.append_show_actions(locals(), build_url, run_plugin)\n"
+        )
+    },
+    {
+        "id": "pov_continuation_show_sources",
+        "name": "Apply explicit exclusions to in-progress show directories",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/tvshows.py",
+        "marker": "# WIZARD_POV_CONTINUE_SHOW_SOURCES_v1",
+        "anchor": "\t\t\tkodi_utils.add_items(__handle__, self.worker())",
+        "action": "prepend_before",
+        "hook": (
+            "import sys, xbmcvfs\n"
+            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "sys.path.append(p) if p not in sys.path else None\n"
+            "import pov_continue_watching\n"
+            "pov_continue_watching.filter_show_sources(self)\n"
+        )
+    },
+    {
+        "id": "pov_continuation_season_picker",
+        "name": "Choose a season from a show card before native marking",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/caches/watched_cache.py",
+        "marker": "# WIZARD_POV_CONTINUE_SEASON_PICKER_v1",
+        "anchor": "def mark_as_watched_unwatched_season(params):",
+        "action": "append_after",
+        "hook": (
+            "# Preserve the native function body below.\n"
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_continue_watching\n"
+            "\tif params.get('season') == 'choose':\n"
+            "\t\treturn pov_continue_watching.choose_season(params, globals())\n"
+        )
+    },
+    {
+        "id": "pov_continuation_local_toggle",
+        "name": "Persist local continuation removal and refresh widgets",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/modules/dialogs.py",
+        "marker": "# WIZARD_POV_CONTINUE_LOCAL_TOGGLE_v1",
+        "anchor": "def dropped_choice(params):",
+        "action": "append_after",
+        "hook": (
+            "# Preserve the native function body below.\n"
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_continue_watching\n"
+            "\treturn pov_continue_watching.dropped_choice(params, globals())\n"
+        )
+    },
+    {
+        "id": "pov_debrid_cache_upsert",
+        "name": "Update repeated debrid cache hashes without uniqueness errors",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/caches/debrid_cache.py",
+        "marker": "# WIZARD_POV_DEBRID_CACHE_UPSERT_v1",
+        "anchor": "SET_MANY = 'INSERT INTO debrid_data VALUES (?, ?, ?, ?)'",
+        "action": "append_after",
+        "hook": (
+            "SET_MANY = 'INSERT OR REPLACE INTO debrid_data VALUES (?, ?, ?, ?)'\n"
+        )
+    },
+    {
+        "id": "pov_trakt_continue_snapshot_invalidation",
+        "name": "Invalidate the continuation snapshot with native dropped activity",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/caches/trakt_cache.py",
+        "marker": "# WIZARD_POV_TRAKT_CONTINUE_INVALIDATE_v1",
+        "anchor": "def clear_trakt_hidden_data(list_type):",
+        "action": "append_after",
+        "hook": (
+            "# Preserve the native function body below.\n"
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_continue_watching\n"
+            "\tif list_type == 'dropped': pov_continue_watching.invalidate('trakt')\n"
+        )
+    },
+    {
+        "id": "pov_trakt_verified_continue_toggle",
+        "name": "Verify cloud dropped writes and preserve immediate local exclusions",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/trakt_api.py",
+        "marker": "# WIZARD_POV_TRAKT_CONTINUE_TOGGLE_v2",
+        "anchor": "def hide_unhide_trakt_items(action, mediatype, media_id, list_type):",
+        "action": "append_after",
+        "hook": (
+            "# Preserve the native function body below.\n"
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_continue_watching\n"
+            "\tif mediatype in ('show', 'shows', 'tvshow') and list_type == 'dropped':\n"
+            "\t\treturn pov_continue_watching.remote_toggle(globals(), 'trakt', action, mediatype, media_id, list_type)\n"
+        )
+    },
+    {
+        "id": "pov_mdbl_continue_snapshot_invalidation",
+        "name": "Invalidate the continuation snapshot with native dropped activity",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/caches/mdbl_cache.py",
+        "marker": "# WIZARD_POV_MDBL_CONTINUE_INVALIDATE_v1",
+        "anchor": "def clear_mdbl_hidden_data(list_type):",
+        "action": "append_after",
+        "hook": (
+            "# Preserve the native function body below.\n"
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_continue_watching\n"
+            "\tif list_type == 'dropped': pov_continue_watching.invalidate('mdblist')\n"
+        )
+    },
+    {
+        "id": "pov_mdbl_verified_continue_toggle",
+        "name": "Verify cloud dropped writes and preserve immediate local exclusions",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/mdblist_api.py",
+        "marker": "# WIZARD_POV_MDBL_CONTINUE_TOGGLE_v2",
+        "anchor": "def hide_unhide_mdbl_items(action, mediatype, media_id, list_type):",
+        "action": "append_after",
+        "hook": (
+            "# Preserve the native function body below.\n"
+            "\timport sys, xbmcvfs\n"
+            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
+            "\tsys.path.append(p) if p not in sys.path else None\n"
+            "\timport pov_continue_watching\n"
+            "\tif mediatype in ('show', 'shows', 'tvshow') and list_type == 'dropped':\n"
+            "\t\treturn pov_continue_watching.remote_toggle(globals(), 'mdblist', action, mediatype, media_id, list_type)\n"
         )
     }
 ]

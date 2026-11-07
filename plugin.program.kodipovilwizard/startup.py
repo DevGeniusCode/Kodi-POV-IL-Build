@@ -28,10 +28,7 @@ from datetime import timedelta
 import os
 import sys
 
-try:  # Python 3
-    from urllib.parse import quote_plus
-except ImportError:  # Python 2
-    from urllib import quote_plus
+from urllib.parse import quote_plus
 
 from resources.libs.common.config import CONFIG
 from resources.libs import clear
@@ -53,14 +50,20 @@ except Exception:
 
 def show_notification():
     note_id, msg = window.split_notify(CONFIG.NOTIFICATION)
-    
     if note_id:
-        if note_id == CONFIG.NOTEID:
+        try:
+            remote_id = int(note_id)
+            current_id = int(CONFIG.NOTEID or 0)
+        except (TypeError, ValueError):
+            logging.log('[Notifications] Invalid note ID: {0}'.format(note_id),
+                        level=xbmc.LOGINFO)
+            return
+        if remote_id == current_id:
             if CONFIG.NOTEDISMISS == 'false':
                 window.show_notification(msg)
             else:
                 logging.log('[Notifications] No new notifications.', level=xbmc.LOGINFO)
-        elif int(note_id) > int(CONFIG.NOTEID):
+        elif remote_id > current_id:
             logging.log('[Notifications] Showing notification {0}'
                         .format(note_id))
             CONFIG.set_setting('noteid', note_id)
@@ -73,7 +76,7 @@ def show_notification():
 
 
 # Polite Hebrew wait message shown for the whole provisioning run.
-PROVISION_WAIT_MSG_HE = 'אנא המתינו מספר דקות עד לסיום ההתקנה וסגירת קודי.'
+PROVISION_WAIT_MSG_HE = 'אנא המתינו עד להשלמת ההתקנה וטעינת מסך הבית.'
 
 
 def _make_provisioning_banner():
@@ -180,7 +183,7 @@ def _first_boot_marker_path():
 
 def arm_first_boot_stabilize():
     """Drop the one-shot marker so the NEXT boot runs the stabilizer. Called at
-    the end of a successful install, right before the force-close."""
+    the end of a successful install."""
     try:
         with open(_first_boot_marker_path(), 'w') as fh:
             fh.write('1')
@@ -209,8 +212,8 @@ def first_boot_stabilize_if_needed():
     countdown banner) then UpdateLocalAddons + ReloadSkin so FENtastic's home
     widgets load against a ready POV instead of a half-initialised one.
 
-    Returns True if the stabilizer ran. NEVER raises. The marker is cleared in a
-    finally so a failure can't re-arm itself."""
+    Returns True if the stabilizer ran. NEVER raises. Pending work survives
+    until the required add-ons are ready."""
     try:
         if not os.path.exists(_first_boot_marker_path()):
             return False
@@ -218,6 +221,7 @@ def first_boot_stabilize_if_needed():
         return False
 
     banner = None
+    completed = False
     try:
         total = _first_boot_warmup_seconds()
         header = CONFIG.ADDONTITLE
@@ -235,6 +239,7 @@ def first_boot_stabilize_if_needed():
         monitor = xbmc.Monitor()
         logging.log('[FirstBoot] stabilizing: warming POV for up to {0}s'.format(total),
                     level=xbmc.LOGINFO)
+        pov_present = False
         for elapsed in range(total):
             if monitor.abortRequested():
                 break
@@ -260,6 +265,10 @@ def first_boot_stabilize_if_needed():
             if monitor.waitForAbort(1):
                 break
 
+        if monitor.abortRequested() or not pov_present:
+            logging.log('[FirstBoot] core not ready; retaining retry marker', level=xbmc.LOGWARNING)
+            return False
+
         # POV is warm -> force a clean skin reload so home widgets re-query a
         # responsive POV. Guarded individually so one failing builtin can't abort
         # the rest.
@@ -274,17 +283,19 @@ def first_boot_stabilize_if_needed():
                 pass
             # Let the skin finish redrawing before any first-launch modal below.
             monitor.waitForAbort(3)
+        if monitor.abortRequested():
+            return False
+        completed = True
         logging.log('[FirstBoot] stabilizer completed', level=xbmc.LOGINFO)
         return True
     except Exception as e:
         logging.log('[FirstBoot] stabilizer error: {0}'.format(e), level=xbmc.LOGERROR)
         return False
     finally:
-        # ALWAYS clear the one-shot marker. A stabilizer failure must never
-        # re-arm itself -> no infinite loop, no permanent stabilize screen.
+        # Clear only after success; incomplete provisioning retries next startup.
         try:
             mp = _first_boot_marker_path()
-            if os.path.exists(mp):
+            if completed and os.path.exists(mp):
                 os.remove(mp)
         except Exception:
             pass
@@ -305,43 +316,44 @@ def fresh_build_auto_install_if_needed():
     skipped, the config pack self-applies once -- and it writes the marker only
     after the WHOLE sequence completes.
     """
+    from resources.libs import fresh_install
     from resources.libs.modular_updater import ModularUpdater
 
-    # 1. Already fully provisioned end-to-end -> nothing to do.
-    if ModularUpdater.is_provisioned():
+    # 1. The updater writes .provisioned before startup finishes the build flags,
+    # media assets and first-boot setup. If Kodi dies in that interval, finish
+    # this tail on the next boot instead of treating the install as complete.
+    provision_marker = os.path.join(CONFIG.USERDATA, 'kodipovil.provisioned')
+    in_progress_marker = os.path.join(CONFIG.USERDATA, fresh_install.PENDING)
+    resume_finalization = (os.path.isfile(provision_marker) and
+                           os.path.isfile(in_progress_marker))
+    if resume_finalization and not os.path.isfile(os.path.join(
+            CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')):
+        resume_finalization = False
+
+    # Already fully provisioned end-to-end -> nothing to do.
+    if os.path.isfile(provision_marker) and not os.path.isfile(in_progress_marker):
         return False
 
-    # 2. Migration / pre-marker HEALTHY install: a device fully set up BEFORE the
-    #    marker existed must NOT be reinstalled. If buildname/installed are set,
-    #    the build engine + every content addon are present and the config pack
-    #    was applied, just stamp the marker (no reinstall, no restart).
-    engine_present = os.path.exists(os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai'))
-    provision_present = all(
-        xbmc.getCondVisibility('System.HasAddon({0})'.format(a))
-        for a in ModularUpdater.PROVISION_IDS
-    )
-    if (CONFIG.get_setting('buildname') and CONFIG.get_setting('installed') == 'true'
-            and CONFIG.get_setting('config_applied_version')
-            and engine_present and provision_present):
-        logging.log(
-            "[Fresh Build Auto Install] Healthy pre-marker install detected; "
-            "stamping .provisioned marker (no reinstall).", level=xbmc.LOGINFO)
-        ModularUpdater.mark_provisioned(
-            CONFIG.get_setting('buildversion') or CONFIG.BUILDVERSION_DEFAULT)
-        return False
-
-    # 3. Marker absent AND setup incomplete -> (re)run the modular fresh install
+    # 2. Marker absent AND setup incomplete -> (re)run the modular fresh install
     #    to FINISH the job. Covers a brand-new device AND a force-closed setup
     #    (pov may already be on disk, but config and/or other addons never
     #    landed -- exactly the case that used to break the build permanently).
     build_name = CONFIG.BUILDNAME_DEFAULT
     build_version = CONFIG.BUILDVERSION_DEFAULT
 
+    if not resume_finalization:
+        try:
+            fresh_install.begin()
+        except OSError as exc:
+            logging.log('[Fresh Build Auto Install] cannot persist resume marker: '
+                        '{0}'.format(exc), level=xbmc.LOGERROR)
+            return False
+
     # Persistent "please wait" banner for the whole provisioning, driven by the
     # shared ProvisionProgress tracker so it moves in lockstep with the
     # install window's overall bar (same monotonic 0..99 value). It stays at the
-    # top of Kodi, surviving every dialog/popup, until setup ends (Kodi closes) or
-    # we bail to resume next launch. Keep BOTH references alive.
+    # top of Kodi, surviving every dialog/popup, until setup ends or we bail to
+    # resume next launch. Keep BOTH references alive.
     progress, wait_banner = _make_provisioning_progress()
     try:
         tools.ensure_folders(CONFIG.PACKAGES)
@@ -349,10 +361,17 @@ def fresh_build_auto_install_if_needed():
             "[Fresh Build Auto Install] Modular fresh install / resume of {0} v{1}".format(
                 build_name, build_version), level=xbmc.LOGINFO)
 
-        updater = ModularUpdater(background=False)
-        updater.provision_progress = progress
-        updater.run_fresh_install()
-        xbmc.sleep(500)
+        if resume_finalization:
+            logging.log('[Fresh Build Auto Install] resuming post-provision '
+                        'finalization.', level=xbmc.LOGINFO)
+        else:
+            # A transient repository/download failure can recover while the
+            # installer remains open; don't require several manual restarts.
+            ready, issues = fresh_install.provision(progress=progress)
+            if not ready:
+                _close_progress(progress, wait_banner)
+                xbmcgui.Dialog().ok(CONFIG.ADDONTITLE, fresh_install.failure_message(issues))
+                return False
 
         # Sanity gate: the build engine must be on disk AND run_fresh_install
         # must have written the .provisioned marker (i.e. it ran to completion
@@ -372,80 +391,13 @@ def fresh_build_auto_install_if_needed():
             return False
 
         # Everything from here is the 'finalize' slice of the progress bar
-        # (media assets + runtime patching).
+        # (media assets, runtime patching, live defaults, home verification).
         _progress_call(progress, 'begin_indeterminate', 'finalize')
-
-        db.fix_metas()
-
-        CONFIG.set_setting('buildname', build_name)
-        CONFIG.set_setting('installed', 'true')
-        CONFIG.set_setting('buildversion', build_version)
-        CONFIG.set_setting('latestversion', build_version)
-        CONFIG.set_setting('nextbuildcheck', tools.get_date(days=CONFIG.UPDATECHECK, formatted=True))
-        CONFIG.set_setting('extract', '100')
-        CONFIG.set_setting('errors', '0')
-        CONFIG.set_setting('fresh_build_auto_install_done', build_version)
-
-        CONFIG.BUILDNAME = build_name
-        CONFIG.BUILDVERSION = build_version
-        CONFIG.BUILDLATEST = build_version
-        CONFIG.INSTALLED = 'true'
-
-        try:
-            import importlib.util
-            import xbmcvfs
-
-            xbmc.executebuiltin('UpdateLocalAddons')
-            xbmc.sleep(2000)
-
-            addon_folder = 'special://home/addons/plugin.program.orderfavourites-hebrew'
-            of_addon_path = xbmcvfs.translatePath(addon_folder)
-            mi_file = os.path.join(of_addon_path, 'resources', 'lib', 'media_installer.py')
-
-            if os.path.isfile(mi_file):
-                logging.log("[Fresh Build Auto Install] Running media_installer.py...", level=xbmc.LOGINFO)
-                spec = importlib.util.spec_from_file_location('media_installer_wizard_run', mi_file)
-                mi_module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mi_module)
-
-                mi_module.install_global_media_assets()
-                logging.log("[Fresh Build Auto Install] Media assets installed successfully.", level=xbmc.LOGINFO)
-            else:
-                logging.log("[Fresh Build Auto Install] media_installer.py not found at: {0}".format(mi_file), level=xbmc.LOGERROR)
-
-        except Exception as err:
-            logging.log("[Fresh Build Auto Install] Failed to execute media_installer: {0}".format(err), level=xbmc.LOGERROR)
-
-        # KODI-POV-IL - Engine v2 Runtime Patching. Freshly extracted addons
-        # (plugin.video.pov and friends) have never been patched at this
-        # point -- run it now, before arm_first_boot_stabilize() and the
-        # forced restart, so the very first boot against the new install
-        # already has every source patch applied instead of racing to catch
-        # up on a later ModularUpdater pass.
-        try:
-            from resources.libs.patch_engine import PatchEngine
-            PatchEngine().run()
-        except Exception as _patch_err:
-            logging.log("[Fresh Build Auto Install] PatchEngine run failed: {0}".format(_patch_err),
-                        level=xbmc.LOGERROR)
-
-        _progress_call(progress, 'complete', 'finalize')
-        # Stop the ticker (the value settles at 99%). The banner itself STAYS UP
-        # through the force-close countdown below -- Kodi tears it down on exit.
-        _progress_call(progress, 'finish')
-
-        # Arm the first-boot stabilizer: the NEXT boot (the first time the
-        # FENtastic home renders against the freshly installed POV) is the race
-        # window. The marker makes that boot warm POV up before loading widgets.
-        arm_first_boot_stabilize()
-
-        # Keep the wait banner up THROUGH the force-close countdown -- it tells
-        # the user to wait until Kodi fully closes. Kodi tears it down on exit.
-        from resources.libs.wizard import Wizard
-        Wizard().force_close_kodi_in_5_seconds(
-            dialog_header="Kodi POV IL build installed"
-        )
-        return True
+        completed = fresh_install.finalize()
+        if completed:
+            _progress_call(progress, 'complete', 'finalize')
+        _close_progress(progress, wait_banner)
+        return completed
     except Exception as err:
         logging.log(
             "[Fresh Build Auto Install] Failed: {0}".format(err),
@@ -497,7 +449,7 @@ def installed_build_check():
             CONFIG.set_setting('config_applied_version', '')
     else:
         logging.log('[Build Installed Check] Install seems to be completed correctly', level=xbmc.LOGINFO)
-        
+
     if CONFIG.get_setting('installed') == 'true':
         CONFIG.clear_setting('install')
 
@@ -505,16 +457,16 @@ def installed_build_check():
 def stop_if_duplicate():
     NOW = time.time()
     temp = CONFIG.get_setting('time_started')
-    
+
     if temp:
         if temp > NOW - (60 * 2):
             logging.log('Killing Start Up Script')
             sys.exit()
-            
+
     logging.log("{0}".format(NOW))
     CONFIG.set_setting('time_started', NOW)
     xbmc.sleep(1000)
-    
+
     if not CONFIG.get_setting('time_started') == NOW:
         logging.log('Killing Start Up Script')
         sys.exit()
@@ -525,6 +477,56 @@ def stop_if_duplicate():
 def check_for_video():
     while xbmc.Player().isPlayingVideo():
         xbmc.sleep(1000)
+
+
+ROWS_PROPERTY = 'povil.rows.last'
+
+
+def wait_for_home_rows(monitor, settle=1.5, first=5.0, cap=15.0):
+    """Hold start-up work while the home rows load: every row is a Python
+    interpreter of its own, and the build's services starting beside them
+    stretched the last home row by ~0.8 s on a PC (QA, NOX) -- more on a
+    phone. POV's saved lists stamp ROWS_PROPERTY when they serve a row; go
+    on once none arrived for `settle` seconds (or none at all within `first`
+    seconds of Home), and never wait more than `cap` seconds."""
+    import time
+    start = time.time()
+    home_at = None
+    try:
+        import xbmc, xbmcgui
+        win = xbmcgui.Window(10000)
+    except Exception:
+        return
+    while time.time() - start < cap:
+        now = time.time()
+        if home_at is None and xbmc.getCondVisibility('Window.IsVisible(home)'):
+            home_at = now
+        if home_at is not None:
+            try:
+                last = float(win.getProperty(ROWS_PROPERTY) or 0)
+            except ValueError:
+                last = 0.0
+            if last >= home_at - 1.0:
+                if now - last >= settle:
+                    break
+            elif now - home_at >= first:
+                break
+        if monitor.waitForAbort(0.25):
+            return
+    # An episode picked meanwhile is looking for sources: it gets the CPU first.
+    end = time.time() + 30.0
+    while time.time() < end and _play_starting(win):
+        if monitor.waitForAbort(0.25):
+            return
+
+
+def _play_starting(win):
+    import time
+    try:
+        started = float(win.getProperty('povil.play.started') or 0)
+    except ValueError:
+        return False
+    return 0 <= time.time() - started < 60.0
 
 
 def wait_for_gui_ready(timeout=90):
@@ -538,14 +540,24 @@ def wait_for_gui_ready(timeout=90):
     first-launch dialog. Bounded by a timeout so we never wait forever
     (e.g. headless/odd boots); returns True only if Home actually came
     up."""
+    logging.log('[GUI Ready] entering Home wait', level=xbmc.LOGINFO)
     try:
         monitor = xbmc.Monitor()
         waited = 0
         while waited < timeout:
-            if xbmc.getCondVisibility('Window.IsVisible(home)'):
-                # Home is up; give the skin a moment to finish drawing
-                # before we layer a modal on top of it.
-                xbmc.sleep(750)
+            home_visible = xbmc.getCondVisibility('Window.IsVisible(home)')
+            if home_visible:
+                # Home is already visible. A timed Kodi sleep here can be
+                # starved for tens of seconds while AF3 renders widgets;
+                # advancing lets the background update run immediately.
+                logging.log('[GUI Ready] Home visible after {0}s'.format(waited),
+                            level=xbmc.LOGINFO)
+                rows_wait = time.time()
+                wait_for_home_rows(monitor)
+                if monitor.abortRequested():
+                    return False
+                logging.log('[GUI Ready] home rows settled after {0:.1f}s'.format(
+                    time.time() - rows_wait), level=xbmc.LOGINFO)
                 return True
             if monitor.waitForAbort(1):
                 return False
@@ -568,7 +580,7 @@ tools.ensure_folders()
 
 # Ensure that the wizard's name matches its folder
 check.check_paths()
-    
+
 # AUTO UPDATE WIZARD
 if CONFIG.AUTOUPDATE == 'Yes':
     logging.log("[Auto Update Wizard] Started", level=xbmc.LOGINFO)
@@ -578,12 +590,27 @@ else:
 
 # KODI-RD-IL - Auto force addon updates on Kodi startup
 if getattr(CONFIG, 'FORCEUPDATEFAST_ONSTARTUP', 'false') == "true":
-    db.forceUpdate()
+    db.forceUpdate(startup=True)
 
 # KODI-POV-IL - Clean APK/IPK/Windows/wizard first launch hydration.
 # This is intentionally before notifications and quick_update: a clean profile
 # first needs the full build (userdata + FENtastic + favourites) extracted.
-if fresh_build_auto_install_if_needed():
+# Apply installed POV fixes before the GUI-ready/modal-dialog wait. On slow
+# skins that wait can consume its full 90-second budget; source selection must
+# not spend that period using unpatched POV after an upstream self-update.
+# The later pass still repeats after a modular update replaces add-on files.
+if os.path.isfile(os.path.join(CONFIG.ADDONS, 'plugin.video.pov', 'addon.xml')):
+    try:
+        from resources.libs.patch_engine import PatchEngine
+        PatchEngine().run_if_changed()
+    except Exception as _early_patch_err:
+        logging.log('[PatchEngine] Early boot run failed: {0}'.format(
+            _early_patch_err), level=xbmc.LOGERROR)
+
+fresh_build_auto_install_if_needed()
+if os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.modular_install_started')):
+    # Incomplete setup must not proceed to normal notifications or claim ready.
+    logging.log('[FreshInstall] setup remains pending', level=xbmc.LOGWARNING)
     sys.exit()
 
 # Everything below can pop a modal dialog (build first-launch notification,
@@ -592,7 +619,9 @@ if fresh_build_auto_install_if_needed():
 # and deadlock the boot -- the "hangs once after install/quick update,
 # force-stop to recover" symptom. Block here until Home is actually live
 # (bounded) so every dialog below has a real parent window.
-wait_for_gui_ready()
+if not wait_for_gui_ready():
+    logging.log('[Startup] GUI unavailable; deferring dialogs', level=xbmc.LOGWARNING)
+    sys.exit()
 
 # FIRST-BOOT STABILIZER (race shield). Runs ONLY when the one-shot marker from a
 # just-completed install is present. Warms POV up (user-visible countdown) and
@@ -606,15 +635,21 @@ if CONFIG.ENABLE_NOTIFICATION == 'Yes' and CONFIG.get_setting('buildname'):
     show_notification()
 else:
     logging.log('[Notifications] Not Enabled', level=xbmc.LOGINFO)
-    
+
 ######################################
 # KODI-RD-IL - FIRST BUILD LAUNCH BUILD SKIN SWITCH NOTIFICATION
+logging.log('[Startup] first-launch notice gate: buildname={0}, dismissed={1}'.format(
+    bool(CONFIG.get_setting('buildname')),
+    CONFIG.get_setting('build_skin_switch_notifcation_dismiss')),
+    level=xbmc.LOGINFO)
 if CONFIG.get_setting('buildname') and CONFIG.get_setting('build_skin_switch_notifcation_dismiss') == 'false':
     window.show_contact(CONFIG.CONTACT)
     CONFIG.set_setting('build_skin_switch_notifcation_dismiss', 'true')
     msg = f"על מנת להחליף סקין יש ללחוץ: כפתור כיבוי --> החלף סקין.\nהסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX"
     window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 #####################################
+
+logging.log('[Startup] first-launch notice gate complete', level=xbmc.LOGINFO)
 
 ######################################
 # KODI-RD-IL - Auto-set buildname for APK installs where the user
@@ -625,7 +660,9 @@ if CONFIG.get_setting('buildname') and CONFIG.get_setting('build_skin_switch_not
 # installed, just not registered with the wizard) and populate the
 # settings the wizard's update gates check.
 try:
-    if not CONFIG.get_setting('buildname'):
+    if (not CONFIG.get_setting('buildname') and
+            not os.path.isfile(os.path.join(
+                CONFIG.USERDATA, 'kodipovil.modular_install_started'))):
         pov_addon_dir = os.path.join(CONFIG.ADDONS, 'plugin.video.pov')
         if os.path.exists(pov_addon_dir):
             CONFIG.set_setting('buildname', CONFIG.BUILDNAME_DEFAULT)
@@ -706,23 +743,22 @@ if CONFIG.get_setting('buildname'):
         _mu.run_update_check()        # version bumps for installed addons + config
         _mu.heal_missing_addons()     # strict HasAddon enforcement -> install missing
 
-        # KODI-POV-IL - Engine v2 Runtime Patching. Runs right after healing
-        # so any addon that was just (re)installed to fill a gap gets its
-        # source patches re-applied in the same boot pass, not on some
-        # later run. PatchEngine.run() never raises, so a bad patch entry
-        # or a missing target file can never turn into a startup crash.
-        try:
-            from resources.libs.patch_engine import PatchEngine
-            PatchEngine().run()
-        except Exception as _patch_err:
-            logging.log("[PatchEngine] Boot-cycle run failed: {0}".format(_patch_err),
-                        level=xbmc.LOGERROR)
     except Exception as _modular_err:
         logging.log("[ModularUpdater] Startup check failed: {0}".format(_modular_err),
                     level=xbmc.LOGERROR)
+    # Repair installed add-ons even when the manifest server is unavailable or
+    # the updater raises. An upstream POV update can erase these hooks while
+    # the network is down; patching must not depend on OTA success.
+    try:
+        from resources.libs.patch_engine import PatchEngine
+        PatchEngine().run_if_changed()
+    except Exception as _patch_err:
+        logging.log("[PatchEngine] Boot-cycle run failed: {0}".format(_patch_err),
+                    level=xbmc.LOGERROR)
 ######################################
-    
+
 # KOD-RD-IL - New Kodi ANDROID/WINDOWS version check on startup
+
 if tools.platform() in ['android', 'windows'] and CONFIG.get_setting('buildname'):
     from resources.libs.wizard import kodi_version_update_check
     kodi_version_update_check()

@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.program.kodipovilwizard" name="[COLOR yellow]Kodi POV IL Wizard[/COLOR]" version="0.4.9" provider-name="DevGeniusCode">
+<addon id="plugin.program.kodipovilwizard" name="[COLOR yellow]Kodi POV IL Wizard[/COLOR]" version="0.5.0" provider-name="DevGeniusCode">
     <requires>
         <import addon="xbmc.python" version="3.0.0" />
         <import addon="script.module.requests" />
         <import addon="script.module.qrcode"/>
     </requires>
-    
+
     <extension point="xbmc.python.pluginsource" library="default.py">
         <provides>executable</provides>
     </extension>
-    
+
     <extension point="xbmc.service" library="startup.py" start="startup" />
-    
+
     <extension point="xbmc.addon.metadata">
         <summary lang="en">[COLOR blue]Kodi POV IL Wizard[/COLOR]</summary>
-        <description lang="en">Installs the Kodi POV IL FENtastic test build.</description>
+        <description lang="en">Installs the Kodi POV IL FENtastic build.</description>
         <platform>all</platform>
         <reuselanguageinvoker>false</reuselanguageinvoker>
         <source>https://www.github.com/a4k-openproject/plugin.program.openwizard/</source>

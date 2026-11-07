@@ -756,19 +756,15 @@ def _audio_probe_reference(info, playing, second_pass=False):
             return None
         rel_key = 'audio2:' + transport_key
         cpath = _probe_cache_path()
-        data = {}
         prior = []
-        if cpath and os.path.isfile(cpath):
-            try:
-                with open(cpath, 'r', encoding='utf-8') as f:
-                    data = json.load(f) or {}
-            except Exception:
-                data = {}
-            ent = data.get(rel_key)
+        if cpath:
+            ent = _read_probe_entry(rel_key)
             if ent is not None and ent.get('pv') != _PROBE_CACHE_VERSION:
                 ent = None   # older engine (un-rebased origin) -- redo
             if ent is not None:
-                prior = ent.get('cues') or []
+                # Sorted on the way in too: entries cached before the sort
+                # below would otherwise keep failing the in-order preflight.
+                prior = sorted(ent.get('cues') or [], key=lambda c: c['start'])
                 if not second_pass:
                     _log('audio: cache %s for %r'
                          % ('hit (%d cues)' % len(prior) if prior
@@ -787,6 +783,7 @@ def _audio_probe_reference(info, playing, second_pass=False):
                        else (0.22, 0.50, 0.78)),
             log=lambda m: _log('audio: ' + m))
         cues = []
+        whole_seconds = [0, 0]
         api_failed = False
         if segs:
             model = (kodi_utils.get_setting('model', '') or
@@ -816,10 +813,22 @@ def _audio_probe_reference(info, playing, second_pass=False):
                         e = float(it.get('e')) * 1000.0 + seg['start_ms']
                         if e > s:
                             cues.append({'start': int(s), 'end': int(e)})
+                            whole_seconds[0] += float(it.get('s')).is_integer()
+                            whole_seconds[1] += 1
                     except Exception:
                         continue
-            _log('audio: %d speech cues from %d segment(s)'
-                 % (len(cues), len(segs)))
+            # The model lists speech in its own order; the aligner's preflight
+            # refuses a reference with one start out of order, and the cache
+            # would repeat that refusal for this file every time (NG
+            # subtitle-alignment 9.5: model-written references come with order
+            # defects). Sort, and drop exact duplicate starts.
+            _seen_starts = set()
+            cues = [c for c in sorted(cues, key=lambda c: c['start'])
+                    if not (c['start'] in _seen_starts or _seen_starts.add(c['start']))]
+            # NG measured whole-second times from general Flash models; a reply
+            # that is mostly whole seconds can rarely pass the tight check.
+            _log('audio: %d speech cues from %d segment(s), %d of %d starts on a '
+                 'whole second' % (len(cues), len(segs), whole_seconds[0], whole_seconds[1]))
         if api_failed and not cues:
             return None   # transient -- no negative cache, retry next time
         if second_pass:
@@ -832,58 +841,157 @@ def _audio_probe_reference(info, playing, second_pass=False):
                     merged.append(c)
             merged.sort(key=lambda c: c['start'])
             cues = merged
-        try:
-            if cpath:
-                data[rel_key] = {'ts': time.time(), 'cues': cues,
-                                 'pv': _PROBE_CACHE_VERSION}
-                if second_pass:
-                    data[rel_key]['pass2'] = True
-                if len(data) > _MAX_PROBE_ENTRIES:
-                    data = dict(sorted(data.items(),
-                                       key=lambda kv: kv[1].get('ts', 0),
-                                       reverse=True)[:_MAX_PROBE_ENTRIES])
-                os.makedirs(os.path.dirname(cpath), exist_ok=True)
-                tmp = cpath + '.tmp'
-                with open(tmp, 'w', encoding='utf-8') as f:
-                    json.dump(data, f)
-                os.replace(tmp, cpath)
-        except Exception:
-            pass
+        if cpath:
+            entry = {'ts': time.time(), 'cues': cues,
+                     'pv': _PROBE_CACHE_VERSION}
+            if second_pass:
+                entry['pass2'] = True
+            _write_probe_cache(rel_key, entry)
         return cues or None
     except Exception as e:
         _log('audio reference failed: %r' % e, level='WARNING')
         return None
 
 
-def _read_probe_cache():
+# One small file per media profile in subsync_probe/. The old single
+# subsync_probe_cache.json grew to 11 MB (60 multi-track profiles), and it was
+# read whole about six times at the start of every episode. json.load parses
+# in C without ever releasing the interpreter lock -- 0.1-0.15 s each on a PC,
+# seconds on an Android box -- and while it runs no other script can start
+# (the "בחירת כתוביות" button waited behind it). Now each lookup reads only
+# its own entry; the old file is split once and removed.
+_PROBE_DIR_NAME = 'subsync_probe'
+_PROBE_MIGRATE_LOCK = threading.Lock()
+_PROBE_MIGRATED = [False]
+
+
+def _probe_entries_dir():
+    path = _probe_cache_path()
+    return os.path.join(os.path.dirname(path), _PROBE_DIR_NAME) if path else ''
+
+
+def _probe_entry_path(cache_key):
+    folder = _probe_entries_dir()
+    if not folder or not cache_key:
+        return ''
+    name = hashlib.sha1(cache_key.encode('utf-8')).hexdigest()[:32]
+    return os.path.join(folder, name + '.json')
+
+
+def _store_probe_entry(cache_key, bundle):
+    fpath = _probe_entry_path(cache_key)
+    if not fpath:
+        return False
+    os.makedirs(os.path.dirname(fpath), exist_ok=True)
+    tmp = '%s.%d.tmp' % (fpath, threading.get_ident())
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump({'key': cache_key, 'entry': bundle}, f)
+        # Windows refuses while a reader has the file open; never leave the
+        # temporary copy behind (prune only looks at *.json).
+        os.replace(tmp, fpath)
+    except Exception:
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        raise
+    try:
+        # Pruning keeps the newest by file time; a migrated entry keeps its age.
+        stamp = float(bundle.get('ts') or 0)
+        if stamp > 0:
+            os.utime(fpath, (stamp, stamp))
+    except Exception:
+        pass
+    return True
+
+
+def _prune_probe_entries():
+    folder = _probe_entries_dir()
+    try:
+        paths = [os.path.join(folder, n) for n in os.listdir(folder)
+                 if n.endswith('.json')]
+    except Exception:
+        return
+    if len(paths) <= _MAX_PROBE_ENTRIES:
+        return
+
+    def age(p):
+        try:
+            return os.path.getmtime(p)
+        except Exception:
+            return 0.0
+
+    for old in sorted(paths, key=age, reverse=True)[_MAX_PROBE_ENTRIES:]:
+        try:
+            os.remove(old)
+        except Exception:
+            pass
+
+
+def _migrate_probe_cache():
+    """Split the legacy single-file cache into per-entry files, once."""
+    if _PROBE_MIGRATED[0]:
+        return
     path = _probe_cache_path()
     if not path or not os.path.isfile(path):
-        return path, {}
+        return
+    with _PROBE_MIGRATE_LOCK:
+        if _PROBE_MIGRATED[0] or not os.path.isfile(path):
+            return
+        # Once per interpreter, even if the old file cannot be removed: a
+        # failed remove must not turn every lookup into a full parse again.
+        _PROBE_MIGRATED[0] = True
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f) or {}
+        except Exception:
+            data = {}
+        moved = 0
+        for key, ent in (data.items() if isinstance(data, dict) else ()):
+            if (isinstance(ent, dict) and key
+                    and not os.path.isfile(_probe_entry_path(key))):
+                try:
+                    moved += bool(_store_probe_entry(key, ent))
+                except Exception:
+                    pass
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+        _prune_probe_entries()
+        _log('probe cache: split %d entr%s into %s/'
+             % (moved, 'y' if moved == 1 else 'ies', _PROBE_DIR_NAME))
+
+
+def _read_probe_entry(cache_key):
+    """One cached media profile (dict) or None."""
+    if not cache_key:
+        return None
+    _migrate_probe_cache()
+    fpath = _probe_entry_path(cache_key)
+    if not fpath or not os.path.isfile(fpath):
+        return None
     try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return path, (json.load(f) or {})
+        with open(fpath, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
     except Exception:
-        return path, {}
+        return None
+    if not isinstance(doc, dict) or doc.get('key') != cache_key:
+        return None
+    ent = doc.get('entry')
+    return ent if isinstance(ent, dict) else None
 
 
 def _write_probe_cache(cache_key, bundle):
-    """Atomically merge one media profile into the bounded probe cache."""
+    """Atomically store one media profile in the bounded probe cache."""
     if not cache_key or not isinstance(bundle, dict):
         return False
-    cpath, data = _read_probe_cache()
-    if not cpath:
-        return False
+    _migrate_probe_cache()
     try:
-        data[cache_key] = bundle
-        if len(data) > _MAX_PROBE_ENTRIES:
-            data = dict(sorted(data.items(),
-                               key=lambda kv: kv[1].get('ts', 0),
-                               reverse=True)[:_MAX_PROBE_ENTRIES])
-        os.makedirs(os.path.dirname(cpath), exist_ok=True)
-        tmp = cpath + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(data, f)
-        os.replace(tmp, cpath)
+        if not _store_probe_entry(cache_key, bundle):
+            return False
+        _prune_probe_entries()
         return True
     except Exception as e:
         _log('probe cache store failed: %r' % e, level='WARNING')
@@ -903,8 +1011,7 @@ def _known_cut_signature(info, playing=''):
     cache_key = _transport_cache_key(info)
     if not cache_key:
         return ''
-    _path, data = _read_probe_cache()
-    ent = data.get(cache_key)
+    ent = _read_probe_entry(cache_key)
     if not isinstance(ent, dict) or ent.get('pv') != _PROBE_CACHE_VERSION:
         return ''
     sig = (ent.get('cut_signature') or '').strip().lower()
@@ -951,8 +1058,7 @@ def _learn_cut_signature(info):
     if not re.fullmatch(r'cut1:[0-9a-f]{32}', sig):
         return ''
     cache_key = _transport_cache_key(info)
-    _path, data = _read_probe_cache()
-    old = data.get(cache_key) if cache_key else None
+    old = _read_probe_entry(cache_key) if cache_key else None
     if not isinstance(old, dict) or old.get('pv') != _PROBE_CACHE_VERSION:
         old = {}
     bundle = dict(old)
@@ -1028,8 +1134,8 @@ def _probe_reference_bundle_unlocked(info, playing):
     if not _probe_enabled():
         return {}
     cache_key = _transport_cache_key(info)
-    cpath, data = _read_probe_cache()
-    ent = data.get(cache_key) if cache_key else None
+    cpath = _probe_cache_path()
+    ent = _read_probe_entry(cache_key) if cache_key else None
     if ent is not None and ent.get('pv') != _PROBE_CACHE_VERSION:
         ent = None
     if ent:
@@ -1221,8 +1327,7 @@ def _cached_reference_bundle(info):
     cache_key = _transport_cache_key(info)
     if not cache_key:
         return {}
-    _path, data = _read_probe_cache()
-    ent = data.get(cache_key)
+    ent = _read_probe_entry(cache_key)
     if (not isinstance(ent, dict)
             or ent.get('pv') != _PROBE_CACHE_VERSION
             or not ent.get('cues')):
@@ -1344,8 +1449,13 @@ def diverse_human_alternatives(candidates, limit=6, info=None):
     return chosen
 
 
-def rank_ready_candidates(info, candidates, max_candidates=4):
+def rank_ready_candidates(info, candidates, max_candidates=4, cached_only=False):
     """Conservatively promote a stronger human Hebrew autosub candidate.
+
+    cached_only (the manual chooser): use only timing verdicts already stored
+    for the playing file and never run a new comparison -- one comparison
+    against a ~1500-cue profile took 7.7 s on a Shield, and the chooser waited
+    16 s for two of them before it opened (field log, Oct 2026).
 
     This is used only by autosub.  It never fetches candidates, never changes
     the manual picker and never moves an AI/non-human row.  On first play it may
@@ -1415,6 +1525,7 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
         human_indexes = []
         checked = []
         cut_signature = (bundle.get('cut_signature') or '').strip().lower()
+        stored = _load_verdicts() if cached_only else {}
         for index, candidate in enumerate(rows):
             text, payload = _ready_candidate_text(info, candidate)
             listed_lang = (candidate.get('language') or '').strip().lower()
@@ -1423,7 +1534,13 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
                 continue
             human_indexes.append(index)
             if text and len(checked) < max(1, int(max_candidates)):
-                verdict, label, count = _verify_file_bundle(bundle, text)
+                if cached_only:
+                    known = stored.get(_cache_key(text, playing, cut_signature))
+                    if not known or known.get('v') != _VERDICT_VERSION:
+                        continue
+                    verdict, label, count = dict(known), 'cached', 0
+                else:
+                    verdict, label, count = _verify_file_bundle(bundle, text)
                 verdict = verdict or {}
                 status = verdict.get('status')
                 # This comparison uses the cached cue profile of the exact
@@ -1433,8 +1550,9 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
                 if (status in (sync_align.STATUS_CONFIRMED,
                                sync_align.STATUS_FIXABLE)
                         and re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature)):
-                    exact_key = _cache_key(text, playing, cut_signature)
-                    _store_verdict(exact_key, verdict)
+                    if not cached_only:   # read from that key already
+                        exact_key = _cache_key(text, playing, cut_signature)
+                        _store_verdict(exact_key, verdict)
                     candidate['_subsync_state'] = (
                         'confirmed' if status == sync_align.STATUS_CONFIRMED
                         else 'fixable')
@@ -1498,7 +1616,7 @@ def rank_ready_candidates(info, candidates, max_candidates=4):
         return candidates
 
 
-def rank_picker_candidates(info, candidates, max_candidates=4):
+def rank_picker_candidates(info, candidates, max_candidates=4, cached_only=False):
     """Put the strongest ready Hebrew choices first in the manual picker.
 
     Provider search order is not timing evidence.  Reuse the exact same
@@ -1514,11 +1632,13 @@ def rank_picker_candidates(info, candidates, max_candidates=4):
                    (row.get('filename') or '').startswith('» נוכחית')]
         if not current:
             return rank_ready_candidates(
-                info, rows, max_candidates=max_candidates)
+                info, rows, max_candidates=max_candidates,
+                cached_only=cached_only)
         pinned = current[0]
         rest = [row for row in rows if row is not pinned]
         return [pinned] + rank_ready_candidates(
-            info, rest, max_candidates=max_candidates)
+            info, rest, max_candidates=max_candidates,
+            cached_only=cached_only)
     except Exception as e:
         _log('picker timing-rank skipped: %r' % e, level='DEBUG')
         return candidates
@@ -2230,8 +2350,108 @@ def _track_span(profile):
     return max(0.0, float(cues[-1]['end']) - float(cues[0]['start']))
 
 
+# Kodi runs every add-on's Python under one interpreter lock. Measured in QA
+# Kodi (21, Python 3.11): while one thread runs a CPU-bound loop that never
+# sleeps, a NEW script -- e.g. our own "בחירת כתוביות" button -- does not even
+# start until that loop ends (15.8 s behind a 20 s loop, 0.3 s idle); a 1 ms
+# sleep every ~20 ms brings it back to 0.3 s. Field logs from an Android box
+# showed the same 5-11 s waits behind SubSync's deep check at playback start.
+# The long loops here call _breathe(): about 5% slower in the background,
+# never in the way of the viewer.
+_BREATHE_SLICE = 0.02
+_breath = [0.0]
+
+
+def _breathe():
+    now = time.monotonic()
+    if now - _breath[0] >= _BREATHE_SLICE:
+        time.sleep(0.001)
+        _breath[0] = time.monotonic()
+        _yield_to_viewer()
+
+
+# On a Shield the 1 ms breaths were not enough: a new script got ~5% of the
+# interpreter, so "בחירת כתוביות" started 6-10 s late behind the deep job's
+# tournament, and the list the player returned to replayed in 1.5 s instead of
+# 0.1 s while the job ran on after playback stopped (field logs, Oct 2026).
+# The deep job (and only it -- never a request the viewer made) therefore
+# STOPS while the player's menu or the chooser is open, and ends once the
+# video it checks has stopped.
+_DEEP_THREAD = [None]
+_YIELD_CHECK_S = 0.25
+_YIELD_MAX_S = 30.0
+_YIELD_JOB_MAX_S = 120.0   # all waits of one job together
+_STOP_AFTER_S = 2.0
+_yield_state = {'checked': 0.0, 'seen_playing': False, 'gone': None, 'waited': 0.0}
+_VIEWER_BUSY = ('Window.IsActive(videoosd) | Window.IsVisible(script.moransubs.chooser.xml)'
+                ' | Window.IsActive(subtitlesearch)')
+
+
+class ViewerLeft(BaseException):
+    """The video the deep job checks is no longer playing (BaseException, so
+    the many best-effort ``except Exception`` blocks inside cannot hide it)."""
+
+
+def _yield_to_viewer():
+    if _DEEP_THREAD[0] is None or threading.get_ident() != _DEEP_THREAD[0]:
+        return
+    now = time.monotonic()
+    if now - _yield_state['checked'] < _YIELD_CHECK_S:
+        return
+    _yield_state['checked'] = now
+    try:
+        import xbmc
+        import xbmcgui
+    except Exception:
+        return
+    monitor = None
+    waited = 0.0
+    while True:
+        try:
+            playing = xbmc.Player().isPlayingVideo()
+            busy = (xbmc.getCondVisibility(_VIEWER_BUSY)
+                    or _chooser_opening(xbmcgui))
+        except Exception:
+            return
+        if playing:
+            _yield_state['seen_playing'] = True
+            _yield_state['gone'] = None
+            if (not busy or waited >= _YIELD_MAX_S
+                    or _yield_state['waited'] >= _YIELD_JOB_MAX_S):
+                return
+        elif _yield_state['seen_playing']:
+            gone = _yield_state['gone'] or time.monotonic()
+            _yield_state['gone'] = gone
+            if time.monotonic() - gone >= _STOP_AFTER_S:
+                raise ViewerLeft('playback ended')
+        else:
+            return          # not started yet: the remote reader waits for it
+        if monitor is None:
+            monitor = xbmc.Monitor()
+        if monitor.waitForAbort(0.1):
+            raise ViewerLeft('Kodi is closing')
+        waited += 0.1
+        _yield_state['waited'] += 0.1
+        _yield_state['checked'] = time.monotonic()
+
+
+def _chooser_opening(xbmcgui):
+    """The chooser's busy stamp, by the chooser's own rule (a stamp older
+    than a minute is a process that died)."""
+    try:
+        stamp = float(xbmcgui.Window(10000).getProperty('moransubs.chooser_busy') or 0)
+    except ValueError:
+        return False
+    return 0 <= time.time() - stamp < 60
+
+
+if sync_align is not None:
+    sync_align.YIELD = _yield_to_viewer
+
+
 def _onset_coverage(source, target, tolerance_ms=250.0):
     """Fraction of source onsets with a nearby target onset (linear scan)."""
+    _breathe()
     left = sorted(float(cue['start']) for cue in source or [])
     right = sorted(float(cue['start']) for cue in target or [])
     if not left or not right:
@@ -2315,6 +2535,7 @@ def _shift_invariant_shape_coverage(source, target, tolerance_ms=350.0,
 
     best = 0.0
     for offset in offsets:
+        _breathe()
         matched = 0
         cursor = 0
         for cue in left:
@@ -4769,6 +4990,8 @@ def run_deep_job(job):
     toast per pair, ever (see _announce). Never raises."""
     started = time.monotonic()
     started_wall = time.time()
+    _DEEP_THREAD[0] = threading.get_ident()
+    _yield_state.update(checked=0.0, seen_playing=False, gone=None, waited=0.0)
     try:
         key = job.get('key') or ''
         path = job.get('path') or ''
@@ -4916,7 +5139,10 @@ def run_deep_job(job):
         except Exception:
             pass
         _log('deep job failed: %r' % e, level='WARNING')
+    except ViewerLeft as e:
+        _log('deep job stopped: %s' % e)
     finally:
+        _DEEP_THREAD[0] = None
         try:
             queued = float(job.get('ts') or 0.0)
             wait_s = (max(0.0, started_wall - queued)

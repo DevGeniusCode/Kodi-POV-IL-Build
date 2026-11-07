@@ -13,8 +13,7 @@ def run(local_vars):
         choice = local_vars.get('choice')
         action_add = local_vars.get('action_add')
 
-        # Pull kodi_utils safely from the upstream locals
-        kodi_utils = local_vars.get('kodi_utils')
+        from modules import kodi_utils
 
         # 1. Execute the original upstream toggle logic safely
         toggle_result = self_obj.execute_toggle(choice, action_add)
@@ -24,11 +23,15 @@ def run(local_vars):
         folder_path = xbmc.getInfoLabel('Container.FolderPath') or ''
 
         if 'search' not in folder_path.lower():
-            if kodi_utils:
-                kodi_utils.container_refresh()
+            kodi_utils.container_refresh()
 
         return toggle_result
 
     except Exception as e:
         xbmc.log(f"[Wizard Addon] Error in pov_fav_refresh_manage: {e}", xbmc.LOGERROR)
+        try:
+            from modules import kodi_utils
+            kodi_utils.notify_failed()
+        except Exception:
+            pass
         return None

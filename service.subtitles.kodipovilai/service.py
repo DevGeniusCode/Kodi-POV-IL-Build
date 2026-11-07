@@ -374,20 +374,20 @@ def _maybe_repair_addon_settings_integrity():
 
 
 def _maybe_optimize_32bit_artwork():
-    """Undo only the build's original-size image policy on 32-bit boxes."""
+    """Undo only the build's original-size image policy on both architectures."""
     try:
         from resources.lib import kodi_32bit_artwork, kodi_utils
-        status = kodi_32bit_artwork.ensure_optimized()
+        status = kodi_32bit_artwork.ensure_build_default()
         if status in ('invalid_xml', 'wrong_root', 'unmatched',
                       'invalid_result', 'write_failed', 'failed'):
             kodi_utils.log(
-                '32-bit artwork optimisation needs attention: {0}'.format(
+                'Build artwork optimisation needs attention: {0}'.format(
                     status), level='WARNING')
     except Exception as exc:
         try:
             from resources.lib import kodi_utils
             kodi_utils.log(
-                '32-bit artwork optimisation unavailable: {0}'.format(exc),
+                'Build artwork optimisation unavailable: {0}'.format(exc),
                 level='WARNING')
         except Exception:
             pass
@@ -457,6 +457,9 @@ def _run_build_startup_repairs():
         # them, so POV never shows its mismatch dialog. Do not move it down on
         # the strength of the old sentence.
         _maybe_patch_pov_language_invoker,
+        # Persist the optional core-upgrade reminder preference early; build
+        # updates and application compatibility checks use separate paths.
+        _maybe_quiet_update_nags,
         # Cheap XML migration. It touches only the build's exact 9999 value,
         # keeps every cached thumbnail, and affects Kodi after its next start.
         _maybe_optimize_32bit_artwork,
@@ -468,11 +471,12 @@ def _run_build_startup_repairs():
         # race the skin and momentarily render an empty personal/network/genre
         # shelf. These are small local SQLite writes/checks, never web calls.
         _maybe_patch_af3_home,
-        _maybe_quiet_update_nags,
         _maybe_patch_pov_widget_crash_guard,
         _maybe_patch_umbrella_language,
         _maybe_add_tonight_entry,
+        _maybe_seed_recent_updates_tile,
         _maybe_fix_idanplus_youtube_id,
+        _maybe_fix_idanplus_vod,
         _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
         # LAST on purpose: it reports on the pass above, so it has
@@ -1003,6 +1007,35 @@ def _maybe_fix_idanplus_youtube_id():
             pass
 
 
+def _maybe_fix_idanplus_vod():
+    """Kan VOD, the Kan archive and i24NEWS English stopped working.
+
+    All on the providers' side: Kan's Cloudflare answers Kodi 403 on every
+    www.kan.org.il page while its mobile-API host serves the same pages, Kan
+    moved its player into a JSON config, its archive lobby was redesigned,
+    and i24NEWS retired the API host its English catalog used. The module
+    header has the evidence for each. Every injection is insert-only and
+    reverts byte-for-byte; a file whose shape changed is left alone and
+    reported here.
+
+    Not behind _skip_pov_patchers(), for the same reason as the YouTube-id
+    fix above: this writes to plugin.video.idanplus, not POV.
+    """
+    try:
+        from resources.lib import idanplus_vod_patcher, kodi_utils
+        st = idanplus_vod_patcher.ensure_patched()
+        if st in ('unmatched', 'compile_failed', 'write_failed',
+                  'revert_failed', 'read_failed'):
+            kodi_utils.log('idanplus_vod_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log('idanplus_vod_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_mdblist_reauth():
     """Let an expired MDBList token heal itself instead of being reconnected.
 
@@ -1080,7 +1113,7 @@ def _maybe_seed_pov_seasons_view():
             pass
 
 def _maybe_quiet_update_nags():
-    """Switch off the self-update check in Umbrella and Account Manager Lite.
+    """Quiet pinned add-on offers and the optional Kodi 21.2 reminder.
 
     Both nag at every start about a version the build pins deliberately, and
     neither offers a way to take it -- taking it would strip the patches that
@@ -1428,6 +1461,14 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
+    try:
+        from resources.lib import umbrella_setup_patcher
+        st = umbrella_setup_patcher.ensure_personal_list_order()
+        if st in ('patched', 'unmatched', 'write_failed'):
+            kodi_utils.log('umbrella personal list order: ' + st)
+    except Exception as e:
+        kodi_utils.log('umbrella personal list order failed: ' + str(e), level='WARNING')
+
     # Two source-flow repairs: fire the Hebrew-availability warm at the START
     # of the scrape so the badge is there on the FIRST entry rather than the
     # second, and stop Kodi announcing "playback failed" when the user simply
@@ -1720,6 +1761,13 @@ def _start_subsync_drainer(monitor):
             if monitor.waitForAbort(1.0):
                 return
             from resources.lib import subsync as _ss
+            try:
+                # Split the old one-file probe cache now, at startup, rather
+                # than at the first episode's first lookup (a one-time parse
+                # of up to ~11 MB that holds the interpreter lock).
+                _ss._migrate_probe_cache()
+            except Exception:
+                pass
             while not monitor.abortRequested():
                 try:
                     _ss.drain_queue_once()
@@ -1727,8 +1775,13 @@ def _start_subsync_drainer(monitor):
                     pass
                 if monitor.waitForAbort(1.0):
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            try:
+                from resources.lib import kodi_utils
+                kodi_utils.log('subsync drainer stopped: {0}'.format(exc),
+                               level='WARNING')
+            except Exception:
+                pass
 
     try:
         threading.Thread(target=_loop, daemon=True).start()
@@ -1740,8 +1793,8 @@ def _start_subsync_delay_watch(monitor):
     """The HUMAN sync anchor (SubSync S3): while a MoranSubs-delivered
     subtitle plays, sample the user's manual subtitle delay (JSON-RPC); when
     playback ends, a settled non-zero delay becomes a community FIXABLE
-    report, and a long zero-delay watch becomes a CONFIRMED vote -- both via
-    pool.report_sync (share-gated, fire-and-forget). One report per
+    report via pool.report_sync (share-gated, fire-and-forget); an untouched
+    delay is not timing evidence and is never reported. One report per
     (subtitle, release) pair per Kodi session. This is what resolves files no
     algorithm can anchor (dubbed re-encodes with no subs anywhere)."""
     def _delay_now():
@@ -1755,6 +1808,14 @@ def _start_subsync_delay_watch(monitor):
                          .get('subtitledelay') or 0.0)
         except Exception:
             return 0.0
+
+    def _watching_with_subtitles():
+        # Paused time or a hidden subtitle is not "watching this subtitle".
+        try:
+            return (not xbmc.getCondVisibility('Player.Paused')
+                    and xbmc.getCondVisibility('VideoPlayer.SubtitlesEnabled'))
+        except Exception:
+            return False
 
     def _loop():
         try:
@@ -1786,8 +1847,11 @@ def _start_subsync_delay_watch(monitor):
                             # watch time against the subtitle it replaced.
                             active, watched, last_delay = None, 0, 0.0
                         if active is not None:
-                            watched += 10
+                            # Sample even while paused: a delay set during a
+                            # pause and then stopped is still the viewer's fix.
                             last_delay = _delay_now()
+                            if _watching_with_subtitles():
+                                watched += 10
                     elif active is not None:
                         akey = active.get('key') or ''
                         if akey and akey not in reported:
@@ -2205,6 +2269,25 @@ def _maybe_patch_af3_dialog_subtitles():
                 '{0}'.format(e), level='WARNING')
         except Exception:
             pass
+def _maybe_patch_hub_search():
+    """Restore the search button on Estuary, FENtastic and NOX at boot.
+
+    The provider picker also calls this patcher after a choice; startup must
+    cover the default POV choice and skin updates before the first click.
+    """
+    try:
+        from resources.lib import fentastic_search_patcher, kodi_utils
+        status = fentastic_search_patcher.ensure_patched()
+        if status not in ('patched', 'unchanged', 'no_target'):
+            kodi_utils.log('hub search patcher: {0}'.format(status), level='WARNING')
+    except Exception as exc:
+        try:
+            kodi_utils.log('hub search patcher failed: {0}'.format(exc),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_af3_home():
     """Seed Arctic Fuse 3 with POV/FENtastic-style home widgets.
 
@@ -2236,6 +2319,79 @@ def _maybe_patch_af3_home():
                            level='WARNING')
         except Exception:
             pass
+
+
+def _maybe_restore_af3_font_early():
+    """Arctic Fuse 3 came up without the build's Hebrew font: Kodi replaced
+    the skin before or during the last session and nothing repaired it yet.
+    Every Hebrew letter is a box and AF3's labels are English until the
+    start-up pass reaches AF3 -- after the home rows, about a minute on an
+    Android box (field report, 23 Oct 2026). Put the font back now and reload
+    the skin after 5 s in which a reload interrupts nothing (skin_reload_idle);
+    the start-up pass still does the rest. The usual boot costs one read of a
+    1.4 KB file."""
+    try:
+        if xbmc.getSkinDir() != 'skin.arctic.fuse.3':
+            return
+        # Kodi unloads AF3 while it installs an update: its files are in flux.
+        if not xbmc.getCondVisibility('System.HasAddon(skin.arctic.fuse.3)'):
+            return
+        try:
+            with open(_translate_path(
+                    'special://home/addons/skin.arctic.fuse.3/1080i/Font.xml'), 'rb') as fh:
+                if b'NotoSans-Regular.ttf' in fh.read():
+                    return
+        except OSError:
+            pass
+        from resources.lib import af3_home_patcher, kodi_utils
+        # Monotonic: a box without a real-time clock jumps forward on its
+        # first time sync; and it is one clock for every interpreter in Kodi.
+        started = time.monotonic()
+        if not af3_home_patcher.restore_hebrew_font():
+            return
+    except Exception:
+        return
+
+    def _reload():
+        try:
+            monitor = xbmc.Monitor()
+            held = 0.0
+            import xbmcgui
+            home = xbmcgui.Window(10000)
+            while time.monotonic() - started < 120:
+                try:
+                    reloaded = float(home.getProperty(af3_home_patcher.RELOADED_PROPERTY) or 0)
+                except ValueError:
+                    reloaded = 0.0
+                if reloaded and reloaded >= started:
+                    # The start-up pass's AF3 rebuild got there first and
+                    # reloaded with the font in place (QA: a second reload,
+                    # 91 s in once a dialog closed, was pure cost).
+                    kodi_utils.log('af3: Hebrew font restored at start-up; the AF3 rebuild '
+                                   'reloaded', level='INFO')
+                    return
+                if af3_home_patcher.skin_reload_idle():
+                    held += 0.5
+                    if held >= 5:
+                        if af3_home_patcher._is_af3_active():
+                            af3_home_patcher.reload_skin()
+                            kodi_utils.log('af3: Hebrew font restored at start-up, skin reloaded '
+                                           'after {0:.1f}s'.format(time.monotonic() - started),
+                                           level='INFO')
+                        return
+                else:
+                    held = 0.0
+                if monitor.waitForAbort(0.5):
+                    return
+            kodi_utils.log('af3: Hebrew font restored at start-up; no idle moment for the '
+                           'reload, the start-up pass reloads', level='INFO')
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_reload, daemon=True).start()
+    except Exception:
+        pass
 
 
 def _maybe_show_af3_first_launch_dialog():
@@ -2832,13 +2988,24 @@ def _point_subtitle_button(engine_on):
     Only touches the ACTIVE skin; cheap; safe if the setting doesn't exist."""
     if xbmc is None:
         return
+    # Write only what differs. Every Skin.Set*/Reset makes Kodi re-evaluate
+    # the open windows, and the home screen then asks every widget again:
+    # QA (NOX and FENtastic) loaded each home row twice at every start-up,
+    # the second round right after this ran with nothing to change.
     try:
+        has_kodi_window = xbmc.getCondVisibility(
+            'Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)')
+        search = xbmc.getInfoLabel('Skin.String(subtitlesearch)')
         if engine_on:
-            xbmc.executebuiltin('Skin.SetBool(ChooseSubtitlesButtonOpensKodiWindow)')
-            xbmc.executebuiltin('Skin.SetString(subtitlesearch,kodisubtitle)')
+            if not has_kodi_window:
+                xbmc.executebuiltin('Skin.SetBool(ChooseSubtitlesButtonOpensKodiWindow)')
+            if search != 'kodisubtitle':
+                xbmc.executebuiltin('Skin.SetString(subtitlesearch,kodisubtitle)')
         else:
-            xbmc.executebuiltin('Skin.Reset(ChooseSubtitlesButtonOpensKodiWindow)')
-            xbmc.executebuiltin('Skin.SetString(subtitlesearch,darksubs)')
+            if has_kodi_window:
+                xbmc.executebuiltin('Skin.Reset(ChooseSubtitlesButtonOpensKodiWindow)')
+            if search != 'darksubs':
+                xbmc.executebuiltin('Skin.SetString(subtitlesearch,darksubs)')
     except Exception:
         pass
 
@@ -3115,10 +3282,106 @@ def _maybe_revert_pov_always_resume():
         except Exception:
             pass
 
+def _maybe_seed_hebrew_subtitle_prefs():
+    """One-shot: make Kodi's subtitle-language settings match the intent of
+    installing a HEBREW subtitles addon. On foreign builds / clean Kodi the
+    defaults point elsewhere, and the addon's language gate then disables
+    itself ("preferred subtitle language is not Hebrew") -- the user installed
+    a Hebrew subtitle addon and gets NOTHING (field log, Arctic Zephyr user).
+    Adds Hebrew to "languages to download subtitles for" (keeping the user's
+    other entries) and sets the preferred subtitle language to Hebrew when it
+    currently names a different concrete language. Marker-gated: runs once,
+    so a later manual change by the user STICKS."""
+    if xbmc is None:
+        return
+    try:
+        from resources.lib import kodi_utils
+        if kodi_utils.get_setting('_he_subs_prefs_v1', '') == '1':
+            return
+    except Exception:
+        return
+    import json as _json
+
+    def _get(sid):
+        try:
+            q = _json.dumps({'jsonrpc': '2.0', 'id': 1,
+                             'method': 'Settings.GetSettingValue',
+                             'params': {'setting': sid}})
+            return (_json.loads(xbmc.executeJSONRPC(q) or '{}')
+                    .get('result') or {}).get('value')
+        except Exception:
+            return None
+
+    def _set(sid, value):
+        try:
+            q = _json.dumps({'jsonrpc': '2.0', 'id': 1,
+                             'method': 'Settings.SetSettingValue',
+                             'params': {'setting': sid, 'value': value}})
+            xbmc.executeJSONRPC(q)
+        except Exception:
+            pass
+
+    try:
+        def _is_he(v):
+            return str(v).strip().lower() in (
+                'he', 'iw', 'heb', 'hebrew', 'עברית')
+        dl = _get('subtitles.languages')
+        pref = _get('locale.subtitlelanguage')
+        if dl is None and pref is None:
+            # JSON-RPC gave us nothing (transient failure at service start?).
+            # Do NOT write the marker -- retry on the next service start, so
+            # one bad boot can't leave the user unseeded forever.
+            return
+        if isinstance(dl, str):
+            # Some builds return the list as a CSV string; seed in kind.
+            parts = [p for p in dl.replace(';', ',').split(',') if p.strip()]
+            if not any(_is_he(x) for x in parts):
+                _set('subtitles.languages',
+                     ','.join(parts + ['Hebrew']) if parts else 'Hebrew')
+        elif isinstance(dl, list) and not any(_is_he(x) for x in dl):
+            _set('subtitles.languages', dl + ['Hebrew'])
+        elif dl in (None, []):
+            _set('subtitles.languages', ['Hebrew'])
+        specials = ('', 'none', 'forced_only', 'forcedonly', 'original',
+                    'default', 'mediadefault')
+        if (isinstance(pref, str)
+                and pref.strip().lower() not in specials
+                and not _is_he(pref)):
+            _set('locale.subtitlelanguage', 'Hebrew')
+        kodi_utils.set_setting('_he_subs_prefs_v1', '1')
+        kodi_utils.log('Hebrew subtitle preferences seeded (one-shot)',
+                       level='INFO')
+    except Exception:
+        pass
+
+
+def _start_shared_sdh_refresh(monitor):
+    """Standalone: warm the community-shared SDH set once per start. The build
+    does this inside its startup repairs; without the build nothing else would,
+    and the ranking path only reads the local cache. Off the main thread and
+    after the startup settle -- it is a network call."""
+    def _worker():
+        try:
+            if monitor.waitForAbort(_background_settle_seconds()):
+                return
+        except Exception:
+            pass
+        _maybe_refresh_shared_sdh()
+
+    try:
+        threading.Thread(target=_worker, daemon=True).start()
+    except Exception:
+        pass
+
+
 
 def main():
     if xbmc is None:
         return
+
+    # Register before startup repairs. A monitor created after Kodi starts
+    # stopping this service can miss the earlier abort notification.
+    monitor = xbmc.Monitor()
 
     # First-run handshake: if a quick_update patch dropped the
     # disable marker, opt the user back out so they can review
@@ -3127,15 +3390,24 @@ def main():
     if _check_first_run_marker():
         return
 
+    # The build edition and the standalone add-on (the repo channel) run this
+    # same service. Everything that touches POV, Umbrella, a skin's buttons
+    # and settings or the build's own state runs on a Kodi POV IL build only;
+    # without the build this is the subtitle service and nothing else.
+    build_mode = _is_kodi_pov_il_build()
+
     # Start the Hebrew-availability warm drainer FIRST -- before the seconds of
     # build startup repairs below. Otherwise the drainer thread isn't spawned yet
     # when the user plays something right after boot, so the first title's warm
     # sits queued for several seconds and misses the source window's first-entry
     # wait. It's a cheap idle poll until a job appears.
-    try:
-        _start_he_warm_drainer(xbmc.Monitor())
-    except Exception:
-        pass
+    if build_mode:
+        try:
+            _start_he_warm_drainer(xbmc.Monitor())
+        except Exception:
+            pass
+        # Before the home-rows wait: AF3 without its Hebrew font is boxes.
+        _maybe_restore_af3_font_early()
 
     # SubSync deep-verify worker: resolve() delivers the subtitle IMMEDIATELY
     # and queues the slow verification (oracle download / file probe / audio)
@@ -3157,14 +3429,14 @@ def main():
     _prune_once()
     _prune_source_memory_once()
 
-    build_mode = _is_kodi_pov_il_build()
     if build_mode:
         _ensure_build_marker()
 
     # Grow the shared Hebrew pool: force community-pool sharing ON for everyone
     # once (a later manual opt-out sticks). Must run before the harvest/drainer
     # below so it mirrors Ktuvit subs to the pool already this session.
-    _maybe_force_pool_share()
+    if build_mode:
+        _maybe_force_pool_share()
 
     # ROLLOUT: switch everyone to MoranSubs's built-in engine (one-shot, marker-
     # gated). Must run before _ensure_darksubs_enabled() so that when it flips
@@ -3173,23 +3445,29 @@ def main():
     _maybe_default_builtin_engine()
 
     # Ktuvit is back -> re-enable the source for everyone once (a later manual
-    # opt-out sticks).
-    _maybe_reenable_ktuvit()
+    # opt-out sticks). Build only: the build switched it off during the outage;
+    # the standalone never did, so a standalone user's choice is their own.
+    if build_mode:
+        _maybe_reenable_ktuvit()
 
     # When the engine is on, make MoranSubs the default subtitle service so it
     # opens/searches first in the dialog.
     _maybe_set_default_subtitle_service()
+    if not build_mode:
+        _maybe_seed_hebrew_subtitle_prefs()
 
-    # Same safety net for POV: our pov_reload cycle (for remember_source) could
-    # have left POV disabled on a slow box, which empties every home row + tile
-    # and breaks playback on ALL skins. Bring it back if it's installed and off.
-    _ensure_pov_enabled()
+
+    # Keep the default search target correct even before a user opens the
+    # POV/Umbrella picker, and heal skin XML after an upstream skin update.
+    if build_mode:
+        _maybe_patch_hub_search()
 
     # Heal the FENtastic player choice only if it's empty (prevents the
     # "player with nothing" bug) -- never overrides a value the user picked.
     # The quickfix no longer ships the skin settings file, so this is what
     # guarantees a valid default without reverting manual choices on update.
-    _maybe_default_fentastic_player()
+    if build_mode:
+        _maybe_default_fentastic_player()
 
     # When the built-in engine is ON, DarkSubs is intentionally DISABLED
     # (Phase C). In that case we must NOT touch DarkSubs at all: patching it
@@ -3211,7 +3489,8 @@ def main():
     # work"). Flip the skin settings so the button opens the NATIVE Kodi
     # subtitle dialog (which now runs MoranSubs). Reverts to DarkSubs when the
     # engine is off. Affects the active skin (Estuary / FENtastic).
-    _point_subtitle_button(_engine_on)
+    if build_mode:
+        _point_subtitle_button(_engine_on)
 
 
     # Pre-warm the built-in sources engine (only when the user enabled it) so
@@ -3242,38 +3521,45 @@ def main():
     # <param> rather than a <control type="label">. Dedicated AF3
     # patcher handles that file -- skin-gated, no-op when AF3 isn't
     # installed.
-    _maybe_patch_af3_dialog_subtitles()
+    if build_mode:
+        _maybe_patch_af3_dialog_subtitles()
 
     # Add a "change source" button to the NOX skin's player OSD -- NOX
     # shipped without one, so a bad source mid-playback was a dead end.
     # Skin-gated (no-op unless skin.povil.nox is installed), XML-checked.
-    _maybe_patch_nox_change_source()
+    if build_mode:
+        _maybe_patch_nox_change_source()
 
     # That change-source button widened NOX's right-aligned OSD group, pushing
     # "הפרק הבא" left into the play controls during playback. Re-size the right-
     # group buttons back to their original total width to clear it. Runs AFTER
     # the change-source patcher so the button exists. Skin-gated, XML-checked.
-    _maybe_patch_nox_osd_collision()
+    if build_mode:
+        _maybe_patch_nox_osd_collision()
 
     # Repoint NOX's OSD "next episode" button: it used POV's old
     # play_media&next=1 (dropped in POV 6.07, so it errored). Point it at POV's
     # working next-episode list instead. Skin-gated, idempotent.
-    _maybe_patch_nox_next_episode()
+    if build_mode:
+        _maybe_patch_nox_next_episode()
 
     # Turn NOX's rating/score circle ON for posters by default (one-shot, only
     # while NOX is the active skin; a later manual change sticks).
-    _maybe_default_nox_poster_rating()
+    if build_mode:
+        _maybe_default_nox_poster_rating()
 
     # Point the player's subtitle button at MoranSubs's own chooser window
     # (FENtastic + Estuary pointed at the now-disabled DarkSubs; NOX's existing
     # subtitles button is rewired in place, not duplicated, to avoid widening
     # its OSD group). Skin-gated, XML-parse-checked, self-healing.
-    _maybe_patch_choose_subs_buttons()
+    if build_mode:
+        _maybe_patch_choose_subs_buttons()
 
     # Make "החלף מקור" pause before opening the source screen (it regressed to
     # playing through in the background). Runs AFTER the change-source button
     # patchers above so Estuary's inserted button is present to patch.
-    _maybe_patch_change_source_pause()
+    if build_mode:
+        _maybe_patch_change_source_pause()
 
     # Same idea for POV: if we patched its sources.py and the user opted into
     # remember-source, cycle POV (deferred, idle-only) so it re-imports the
@@ -3330,20 +3616,22 @@ def main():
     # Arming last also closes a gap that was always there: note_patched() calls
     # made by anything running after this line were simply never seen, because
     # nothing asks again.
-    try:
-        from resources.lib import pov_reload
-        pov_reload.reload_if_patched()
-    except Exception:
-        pass
+    if build_mode:
+        try:
+            from resources.lib import pov_reload
+            pov_reload.reload_if_patched()
+        except Exception:
+            pass
 
     # If malformed Umbrella/Coco settings were repaired on disk, reconstruct
     # their CAddon objects this session after the POV cycle has settled. The
     # worker touches enabled add-ons only and records every disable first.
-    try:
-        from resources.lib import source_settings_reload
-        source_settings_reload.reload_if_repaired()
-    except Exception:
-        pass
+    if build_mode:
+        try:
+            from resources.lib import source_settings_reload
+            source_settings_reload.reload_if_repaired()
+        except Exception:
+            pass
 
     # One-shot RTL punctuation repair of any cached translations
     # that were written before the post-processor caught their
@@ -3361,7 +3649,8 @@ def main():
     # One-shot: turn the community pool ON (pull + share) for existing users
     # still on the old default-off. New installs get it via settings.xml
     # defaults. Marker-gated so a later manual opt-out sticks.
-    _maybe_default_pool_on()
+    if build_mode:
+        _maybe_default_pool_on()
 
     # One-shot: turn the Arabic-gender-reference setting ON for everyone (it
     # tested clean and lifts gender accuracy a lot). Forced once; a later manual
@@ -3387,19 +3676,23 @@ def main():
     # player bars hide after a few idle seconds. Detected from the skin's XML,
     # not from a list of skin names -- Nox ships the same feature FENtastic does
     # and was missed by the old name check.
-    _maybe_enable_osd_autoclose()
+    if build_mode:
+        _maybe_enable_osd_autoclose()
 
     # One-shot: enable POV Auto Play + Always-Resume so "Continue Watching" is
     # one click (no source dialog, resumes where you stopped). Marker-gated.
-    _maybe_default_pov_autoplay()
+    if build_mode:
+        _maybe_default_pov_autoplay()
 
     # One-shot fix: undo the 0.2.158 mistake that forced POV Auto Play on
     # (it skipped the source dialog even on first watch). Restores the dialog.
-    _maybe_revert_pov_autoplay()
+    if build_mode:
+        _maybe_revert_pov_autoplay()
 
     # One-shot: undo our forced always-resume so "Play from start" really starts
     # from 0 (it was resuming to the stop point). Marker-gated.
-    _maybe_revert_pov_always_resume()
+    if build_mode:
+        _maybe_revert_pov_always_resume()
 
     # One-shot first-launch dialog for Arctic Fuse 3. Skin-gated +
     # marker-gated so it only fires for users who have actually
@@ -3408,7 +3701,10 @@ def main():
     # Connect Services is opened on the user's behalf for the
     # service(s) they pick. Best-effort: this addon doesn't own AF3's
     # OAuth flows -- POV does.
-    # Build debrid-status popups are also handled by the startup repair pass.
+    # POV's modular debrid hook handles the build's startup status popups.
+
+    if monitor.abortRequested():
+        return
 
     # Spin up the SubsFilenamePublisher player monitor. It needs to
     # outlive this function's local scope -- xbmc.Player subclasses
@@ -3433,14 +3729,18 @@ def main():
     # built-in engine + autosub are on). The loop below keeps us alive.
     _maybe_start_autosub_player()
 
-    monitor = xbmc.Monitor()
+    if monitor.abortRequested():
+        return
 
     # Drain the persistent pool upload queue here, on the long-lived service.
     # Shared Ktuvit subtitles are queued to disk the moment they're downloaded
     # (so they survive the user leaving the video or restarting Kodi) and
     # uploaded from this thread one at a time with a throttle -- never bursting
     # past Telegram's bot rate limit. Best-effort; never blocks.
-    _start_service_mirror_keeper(monitor)
+    if build_mode:
+        _start_service_mirror_keeper(monitor)
+    else:
+        _start_shared_sdh_refresh(monitor)
     _start_pool_queue_drainer(monitor)
     # (the Hebrew warm drainer was already started at the top of main(), before
     # the build startup repairs, so it's alive for the first play of the session)

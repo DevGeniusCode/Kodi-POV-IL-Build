@@ -1,3 +1,4 @@
+# pov_visibility_mgr.py
 """
 pov_visibility_mgr.py
 Engine V2 decoupled patch module -- Dynamic Visibility Manager.
@@ -70,7 +71,7 @@ _SOURCES = (
 		'torbox': ('torbox.token',),
 	}),
 	('plugin.video.pov', {
-		'trakt': ('trakt_user',),
+		'trakt': ('trakt.token', 'trakt_user'),
 		'tmdb': ('tmdb.account_id',),
 		'mdblist': ('mdblist.token',),
 		'real_debrid': ('rd.auth',),
@@ -80,7 +81,7 @@ _SOURCES = (
 	}),
 )
 
-_WIN_PROP = 'WIZARD.VisibilityMgr.v2'
+_WIN_PROP = 'WIZARD.VisibilityMgr.v4'
 _L1_TTL = 10.0          # seconds a process trusts its own snapshot
 _L2_TTL_NOFP = 60.0     # seconds L2 is trusted when no settings.xml can be stat()ed
 _mem = {}
@@ -135,6 +136,9 @@ def _trigger_favourites_refresh():
 	try:
 		import os
 		import importlib.util
+		window = _home()
+		if window and window.getProperty('POVIL.FavouritesRefresh'):
+			return
 
 		current_skin = xbmc.getSkinDir()
 
@@ -151,7 +155,13 @@ def _trigger_favourites_refresh():
 		generator = importlib.util.module_from_spec(spec)
 		spec.loader.exec_module(generator)
 
-		generator.generate_favourites_xml(current_skin)
+		if generator.generate_favourites_xml(current_skin) is None:
+			_log('Auto-refresh skipped: installed favourites could not be merged safely')
+			return
+
+		if (os.path.isfile(xbmcvfs.translatePath('special://profile/kodipovil.profile_gui_defaults.xml')) or
+				xbmc.getCondVisibility('Window.IsVisible(yesnodialog)')):
+			return
 
 		xbmc.executebuiltin('ReloadSkin()')
 		_log('Auto-refresh: Favourites regenerated and skin reloaded for %s' % current_skin)
@@ -181,6 +191,11 @@ def _fingerprint():
 	parts = [_stat_token(addon_id) for addon_id, _ in _SOURCES]
 	return '' if all(p == '-' for p in parts) else '|'.join(parts)
 
+def _profile_key():
+	try:
+		return os.path.normcase(os.path.realpath(xbmcvfs.translatePath('special://profile/')))
+	except Exception:
+		return ''
 
 def _read_states():
 	"""One Addon() instantiation per source add-on. Never called per item."""
@@ -218,8 +233,9 @@ def _is_fresh(cached, fp, now):
 
 def _snapshot():
 	now = time.time()
+	profile = _profile_key()
 	mem = _mem.get('snap')
-	if mem and (now - mem['checked']) < _L1_TTL:
+	if mem and mem.get('profile') == profile and (now - mem['checked']) < _L1_TTL:
 		return mem
 	fp = _fingerprint()
 	win = _home()
@@ -230,7 +246,7 @@ def _snapshot():
 		try:
 			raw = win.getProperty(_WIN_PROP)
 			cached = json.loads(raw) if raw else None
-			if cached:
+			if cached and cached.get('profile') == profile:
 				old_svc = cached.get('svc')
 				if _is_fresh(cached, fp, now):
 					snap = cached
@@ -238,7 +254,7 @@ def _snapshot():
 			snap = None
 	if snap is None:
 		new_svc = _read_states()
-		snap = {'fp': fp, 'ts': now, 'svc': new_svc}
+		snap = {'fp': fp, 'ts': now, 'svc': new_svc, 'profile': profile}
 		_log('state rebuilt: %s' % (snap['svc'],), getattr(xbmc, 'LOGINFO', None))
 		if win is not None:
 			try:
@@ -309,11 +325,11 @@ def is_service_active(service):
 # ---------------------------------------------------------------------------
 def _loads(text):
 	try:
-		return ast.literal_eval(text)
+		return json.loads(text)
 	except Exception:
 		pass
 	try:
-		return json.loads(text)
+		return ast.literal_eval(text)
 	except Exception:
 		return None
 
@@ -366,25 +382,29 @@ def _coerce_list(value):
 # Hook entry point (POV navigator.build_shortcut_folder_list)
 # ---------------------------------------------------------------------------
 def filter_navigator_list(list_items, list_name=None):
-    """Return `list_items` without rows whose service is not connected, plus
-    the MDBList row when connected. Input is never mutated; on ANY failure the
-    original object is returned unchanged."""
-    try:
-        items = _coerce_list(list_items)
-        if items is None:
-            return list_items
-        states = _snapshot()['svc']
-        kept = []
-        for it in items:
-            svc = service_of(it)
-            if svc is None or is_service_active(svc):
-                kept.append(it)
-
-        removed = len(items) - len(kept)
-        if removed:
-            _log('%r: hid %d unauthorised row(s)' % (list_name, removed), getattr(xbmc, 'LOGDEBUG', None))
-
-        return kept
-    except Exception as e:
-        _log('filter_navigator_list failed, list left untouched: %r' % (e,))
-        return list_items
+  """Return `list_items` without rows whose service is not connected, plus
+  the MDBList row when connected. Input is never mutated; on ANY failure the
+  original object is returned unchanged."""
+	try:
+		items = _coerce_list(list_items)
+		if items is None:
+			return list_items
+		_snapshot()
+		kept = []
+		for it in items:
+			svc = service_of(it)
+			if svc is None or is_service_active(svc):
+				canonical = _MDBLIST_ROWS.get(list_name)
+				if (canonical and isinstance(it, dict)
+						and it.get('action') == 'mdblist_watchlist'
+						and it.get('mode') == canonical['mode']
+						and it.get('name') == canonical['name']):
+					it = dict(it, action=canonical['action'])
+				kept.append(it)
+		removed = len(items) - len(kept)
+		if removed:
+			_log('%r: hid %d unauthorised row(s)' % (list_name, removed), getattr(xbmc, 'LOGDEBUG', None))
+		return kept
+	except Exception as e:
+		_log('filter_navigator_list failed, list left untouched: %r' % (e,))
+		return list_items

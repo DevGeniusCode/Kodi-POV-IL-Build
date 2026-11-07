@@ -1,7 +1,12 @@
 import os
+import json
+import threading
+import time
+import urllib.request
+import xml.etree.ElementTree as ET
+
 import xbmc
 import xbmcgui
-import json
 
 from resources.libs.common.config import CONFIG
 from resources.libs.common import logging
@@ -12,6 +17,17 @@ from resources.libs.headless_installer import HeadlessInstaller, BINARY_PREFIXES
 
 
 class ModularUpdater:
+    ON_DEMAND_SKINS = frozenset(('skin.povil.nox',))
+
+    @staticmethod
+    def _pending_addon_receipt(addon_id):
+        try:
+            from resources.libs import addon_install_receipt
+            return addon_install_receipt.needs_retry(
+                os.path.join(CONFIG.ADDON_DATA, CONFIG.ADDON_ID), addon_id)
+        except Exception:
+            return False
+
     def __init__(self, background=False):
         self.background = background
         self.dialog = xbmcgui.Dialog()
@@ -78,10 +94,28 @@ class ModularUpdater:
             q = json.dumps({'jsonrpc': '2.0', 'id': 1,
                             'method': 'Addons.SetAddonEnabled',
                             'params': {'addonid': addon_id, 'enabled': True}})
-            xbmc.executeJSONRPC(q)
+            response = json.loads(xbmc.executeJSONRPC(q))
+            return ('error' not in response and response.get('result') in ('OK', True))
         except Exception as e:
             logging.log("[ModularUpdater] enable {0} failed: {1}".format(addon_id, e),
                         level=xbmc.LOGWARNING)
+            return False
+
+    @staticmethod
+    def _runtime_addon_enabled(addon_id):
+        """True / False as Kodi reports it via JSON-RPC."""
+        try:
+            request = json.dumps({
+                'jsonrpc': '2.0', 'id': 1, 'method': 'Addons.GetAddonDetails',
+                'params': {'addonid': addon_id, 'properties': ['enabled']}})
+            response = json.loads(xbmc.executeJSONRPC(request))
+            addon = response['result']['addon']
+            if addon.get('addonid') != addon_id:
+                return True
+            enabled = addon.get('enabled')
+            return enabled if isinstance(enabled, bool) else True
+        except Exception:
+            return True
 
     def _register_and_enable(self, ids, settle=1.5):
         """Register extracted addons in the Addons DB, make Kodi load them and
@@ -110,7 +144,6 @@ class ModularUpdater:
         if not os.path.exists(addon_xml):
             return None
         try:
-            import xml.etree.ElementTree as ET
             tree = ET.parse(addon_xml)
             return tree.getroot().get('version')
         except Exception as e:
@@ -125,42 +158,37 @@ class ModularUpdater:
             return False
         return self._version_tuple(local_ver) >= self._version_tuple(remote_ver)
 
+    def _load_manifest(self):
+        """Fetch the small manifest once with an explicit network timeout."""
+        try:
+            from urllib.request import Request, ProxyHandler, build_opener
+            request = Request(self.manifest_url, headers={'User-Agent': getattr(CONFIG, 'USER_AGENT', 'Kodi POV IL')})
+            opener = build_opener(ProxyHandler({}))
+            with opener.open(request, timeout=8) as response:
+                payload = response.read(2 * 1024 * 1024 + 1)
+            if len(payload) > 2 * 1024 * 1024:
+                raise ValueError('manifest exceeds 2 MiB')
+            manifest = json.loads(payload)
+            if not isinstance(manifest, dict) or not isinstance(manifest.get('addons'), dict):
+                raise ValueError('manifest has no addons object')
+            return manifest
+        except Exception as exc:
+            logging.log('[ModularUpdater] manifest fetch failed: {0}'.format(exc), level=xbmc.LOGERROR)
+            return None
+
     def run_update_check(self):
         """Fetch manifest, diff versions, and execute necessary updates."""
         logging.log("[ModularUpdater] Starting modular update check...", level=xbmc.LOGINFO)
 
-        # 1. Fetch Remote Manifest
-        response = tools.open_url(self.manifest_url)
-        if not response:
+        self._manifest_checked = True
+        manifest = self._load_manifest()
+        if not manifest:
             if not self.background:
                 self.dialog.ok(CONFIG.ADDONTITLE, "שגיאה בתקשורת מול שרת העדכונים.")
             return False
 
-        try:
-            manifest = json.loads(response.text)
-            addons = manifest.get('addons', {})
-        except Exception as e:
-            logging.log("[ModularUpdater] Manifest parsing failed: {0}".format(e), level=xbmc.LOGERROR)
-            return False
-
-        # Keep the parsed manifest so execute_updates can also apply the
-        # build-config pack (skin/locale/favourites/sources/...) in the same
-        # pass, at the value/id level -- without clobbering the user's keys.
         self._manifest = manifest
-
-        # 2. Compare Versions
-        #
-        # FIX #2 (safety): only update addons that are ALREADY installed.
-        # The manifest lists ALL build addons -- including the on-demand
-        # skin.povil.nox (31MB) and the other skins. The original
-        # "install if not local_ver" branch would silently force-install
-        # every missing skin onto every device on the first check, which
-        # fights the build's on-demand-skin design (startup.py only ever
-        # refreshes the *active* skin pack). New addons are installed by
-        # their own flows (Fresh Install / Switch Skin), never here.
-        #
-        # If you ever DO want this updater to also install missing addons,
-        # set self.install_missing = True before calling run_update_check().
+        addons = manifest.get('addons', {})
         install_missing = getattr(self, 'install_missing', False)
 
         update_queue = []
@@ -171,17 +199,19 @@ class ModularUpdater:
             if not remote_ver:
                 continue
 
+            pending = False
+            if getattr(self, 'fresh', False) or addon_id != 'service.subtitles.kodipovilai':
+                pending = self._pending_addon_receipt(addon_id)
+
             if not local_ver:
-                if install_missing:
+                if (addon_id in self.ON_DEMAND_SKINS and not pending
+                        and not getattr(self, 'fresh', False)):
+                    continue
+                if install_missing or pending:
                     update_queue.append(mod)
-                else:
-                    logging.log("[ModularUpdater] Skipping not-installed addon {0}".format(addon_id),
-                                level=xbmc.LOGINFO)
                 continue
 
-            if self._version_tuple(local_ver) < self._version_tuple(remote_ver):
-                logging.log("[ModularUpdater] {0}: {1} -> {2}".format(addon_id, local_ver, remote_ver),
-                            level=xbmc.LOGINFO)
+            if pending or self._version_tuple(local_ver) < self._version_tuple(remote_ver):
                 update_queue.append(mod)
 
         # 3. Execute Updates if needed
@@ -192,6 +222,7 @@ class ModularUpdater:
         # EITHER an addon moved OR the config moved.
         config_pending = self._config_pending(manifest)
         fresh = getattr(self, 'fresh', False)
+
         if not update_queue and not config_pending and not fresh:
             logging.log("[ModularUpdater] All modules and config are up to date.", level=xbmc.LOGINFO)
             if not self.background:
@@ -270,15 +301,13 @@ class ModularUpdater:
         """
         manifest = getattr(self, '_manifest', None)
         if not manifest:
-            response = tools.open_url(self.manifest_url)
-            if not response:
+            if getattr(self, '_manifest_checked', False):
                 return
-            try:
-                manifest = json.loads(response.text)
-                self._manifest = manifest
-            except Exception as e:
-                logging.log("[OTA-Heal] manifest parse failed: {0}".format(e), level=xbmc.LOGERROR)
+            manifest = self._load_manifest()
+            if not manifest:
                 return
+            self._manifest = manifest
+
         addons = manifest.get('addons', {})
 
         # 1. Manifest addons (our private addons + the third-party repos),
@@ -293,15 +322,19 @@ class ModularUpdater:
         #    pulled through the modular pipeline.
         missing = []
         disabled_on_disk = []
+
         for addon_id, mod in addons.items():
             if mod.get('type') == 'skin':
                 continue
             if xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
                 continue
             if self._on_disk(addon_id):
+                if (addon_id != addon_id.lower() and self._runtime_addon_enabled(addon_id)):
+                    continue
                 disabled_on_disk.append(addon_id)
             else:
                 missing.append(mod)
+
         if disabled_on_disk:
             logging.log("[OTA-Heal] On-disk but disabled -> enabling (NOT re-downloading): "
                         "{0}".format(disabled_on_disk), level=xbmc.LOGWARNING)
@@ -311,6 +344,7 @@ class ModularUpdater:
                 xbmc.executebuiltin('UpdateLocalAddons')
             except Exception:
                 pass
+
         if missing:
             logging.log("[OTA-Heal] Missing manifest addons -> installing: {0}".format(
                 [m.get('id') for m in missing]), level=xbmc.LOGWARNING)
@@ -359,6 +393,14 @@ class ModularUpdater:
         'plugin.video.otaku',               # <- repository.otaku (+ context.otaku); LAST: heavy
                                             #    + timeout-prone, must not block core install.
     ]
+
+    CORE_PROVISION_IDS = (
+        'script.module.acctmgr',
+        'plugin.video.pov',
+        'plugin.video.idanplus',
+        'plugin.video.youtube',
+        'resource.language.he_il',
+    )
 
     def post_install_provisioning(self, per_addon_timeout=60, ids=None):
         """Headless content provisioning WITHOUT the install window (used by the
@@ -415,39 +457,32 @@ class ModularUpdater:
             logging.log("[Provisioning] not provisioned this pass (retried next launch): {0}".format(
                 deferred), level=xbmc.LOGWARNING)
 
-        logging.log("[Provisioning] Provisioning finished", level=xbmc.LOGINFO)
+        return all(xbmc.getCondVisibility('System.HasAddon({0})'.format(a)) for a in provision_ids)
 
-        all_present = all(
-            xbmc.getCondVisibility('System.HasAddon({0})'.format(a)) for a in provision_ids
-        )
-        return all_present
+    @staticmethod
+    def _confirm_native_install():
+        if xbmcgui.getCurrentWindowDialogId() != 10100:
+            return False
+        try:
+            if xbmc.getInfoLabel('Control.GetLabel(1)') != xbmc.getLocalizedString(24076):
+                return False
+            body = xbmc.getInfoLabel('Control.GetLabel(9)')
+            phrases = [xbmc.getLocalizedString(key) for key in (24100, 24101)]
+            if not all(phrase and phrase in body for phrase in phrases):
+                return False
+            xbmc.executebuiltin('SendClick(10100,11)')
+            return True
+        except Exception:
+            return False
 
-    def _native_install_fallback(self, ids, per_addon_timeout=60):
-        """Last-resort native install, RESERVED for binary/platform addons
-        (inputstream.*, pvr.* ...) that the headless engine must never extract.
-        Anything that is not a binary addon is refused here and left to the next
-        launch's headless self-heal.
-
-        Uses Kodi's own InstallAddon so Kodi picks the platform-correct build,
-        with a MINIMAL confirmer thread that auto-accepts ONLY the dependency
-        Yes/No dialog (window 10100, control 11 = Yes -- fixed by Kodi core
-        regardless of skin). It NEVER closes any other dialog.
-        """
+    def _native_install_fallback(self, ids, per_addon_timeout=60, progress=None):
         import threading
         import time
-
-        refused = [a for a in ids if not a.startswith(BINARY_PREFIXES)]
+        monitor = xbmc.Monitor()
         ids = [a for a in ids if a.startswith(BINARY_PREFIXES)]
-        if refused:
-            logging.log("[Provisioning] native install refused for non-binary addons "
-                        "(headless self-heal will retry): {0}".format(refused),
-                        level=xbmc.LOGWARNING)
         if not ids:
             return
 
-        monitor = xbmc.Monitor()
-
-        # Make sure repo indexes are fresh so InstallAddon can find the addons.
         try:
             xbmc.executebuiltin('UpdateAddonRepos', True)
         except Exception:
@@ -460,8 +495,7 @@ class ModularUpdater:
         def _confirmer():
             while not stop.is_set():
                 try:
-                    if xbmcgui.getCurrentWindowDialogId() == 10100:
-                        xbmc.executebuiltin('SendClick(11)')  # Yes / OK
+                    if self._confirm_native_install():
                         if monitor.waitForAbort(0.8):
                             return
                         continue
@@ -474,15 +508,21 @@ class ModularUpdater:
         watcher.daemon = True
         watcher.start()
         try:
-            for addon_id in ids:
+            for position, addon_id in enumerate(ids):
                 if monitor.abortRequested():
                     break
                 if xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
                     continue
-                logging.log("[Provisioning] native install {0}".format(addon_id),
-                            level=xbmc.LOGINFO)
+                if progress is not None:
+                    try:
+                        progress(position, len(ids), addon_id)
+                    except Exception:
+                        pass
+                started = time.time()
+                logging.log("[Provisioning] native install {0}".format(addon_id), level=xbmc.LOGINFO)
                 xbmc.executebuiltin('InstallAddon({0})'.format(addon_id))
                 deadline = time.time() + int(per_addon_timeout)
+                hard_deadline = started + max(int(per_addon_timeout), 240)
                 landed = False
                 while time.time() < deadline:
                     if monitor.waitForAbort(1):
@@ -490,10 +530,15 @@ class ModularUpdater:
                     if xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
                         landed = True
                         break
+                    if (xbmc.getCondVisibility('Window.IsActive(extendedprogressdialog)') and
+                            deadline - time.time() < 5 and deadline < hard_deadline):
+                        deadline = min(deadline + 10, hard_deadline)
                 if not landed:
-                    logging.log("[Provisioning] native install did not confirm {0} "
-                                "within {1}s (will self-heal next launch)".format(
-                                    addon_id, per_addon_timeout), level=xbmc.LOGWARNING)
+                    logging.log("[Provisioning] native install did not confirm {0} within {1}s".format(
+                        addon_id, per_addon_timeout), level=xbmc.LOGWARNING)
+                else:
+                    logging.log("[Provisioning] native install {0} landed after {1:.0f}s".format(
+                        addon_id, time.time() - started), level=xbmc.LOGINFO)
         finally:
             stop.set()
             watcher.join(5)
@@ -506,6 +551,38 @@ class ModularUpdater:
         if not remote:
             return False
         return CONFIG.get_setting('config_applied_version') != remote
+
+    def _fresh_install_complete(self, manifest):
+        missing = []
+        for addon_id, mod in (manifest.get('addons') or {}).items():
+            expected = mod.get('version')
+            actual = self.get_local_version(addon_id)
+            if self._pending_addon_receipt(addon_id):
+                missing.append('{0} (extraction not verified)'.format(addon_id))
+            if (not expected or not actual or
+                    self._version_tuple(actual) < self._version_tuple(expected)):
+                missing.append('{0} ({1}, expected {2})'.format(
+                    addon_id, actual or 'missing', expected or 'unspecified'))
+
+        for addon_id in list(self.CORE_PROVISION_IDS) + ['skin.povil.nox', 'script.fentastic.helper']:
+            try:
+                enabled = xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id))
+            except Exception:
+                enabled = False
+            if not enabled:
+                missing.append('{0} (native core addon unavailable)'.format(addon_id))
+
+        config_version = (manifest.get('config') or {}).get('config_version')
+        actual_config = CONFIG.get_setting('config_applied_version')
+        if not config_version or actual_config != config_version:
+            missing.append('config ({0}, expected {1})'.format(
+                actual_config or 'missing', config_version or 'unspecified'))
+
+        self.last_install_issues = missing
+        if missing:
+            logging.log('[Provisioning] incomplete; retry required: {0}'.format(', '.join(missing)), level=xbmc.LOGERROR)
+            return False
+        return True
 
     # ---- install pipelines ---------------------------------------------------
     def _make_ui_orchestrator(self, queue, fresh):
@@ -637,9 +714,7 @@ class ModularUpdater:
                 ui_handled = True
                 self._track('complete', 'content')
             except Exception as _ui_err:
-                logging.log("[ModularUpdater] install-manager UI failed ({0}); "
-                            "continuing with the dialog-free headless pipeline".format(_ui_err),
-                            level=xbmc.LOGWARNING)
+                logging.log("[ModularUpdater] install-manager UI failed ({0}); falling back to headless".format(_ui_err), level=xbmc.LOGWARNING)
                 self._missing_native = []
 
         # Path B -- no window (background OTA / self-heal) or the window could not
@@ -716,10 +791,29 @@ class ModularUpdater:
         self._track('complete', 'config')
 
         if fresh:
-            if not xbmc.Monitor().abortRequested():
-                cfg = (getattr(self, '_manifest', None) or {}).get('config') or {}
+            manifest = getattr(self, '_manifest', None) or {}
+            monitor = xbmc.Monitor()
+            if self._config_pending(manifest):
+                self._fresh_install_complete(manifest)
+                return False
+
+            for _ in range(20):
+                if self._fresh_install_complete(manifest):
+                    break
+                core = list(self.CORE_PROVISION_IDS) + ['skin.povil.nox', 'script.fentastic.helper']
+                for addon_id in core:
+                    if not xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
+                        self._enable_addon(addon_id)
+                if monitor.waitForAbort(1):
+                    return False
+            else:
+                return False
+
+            if not monitor.abortRequested():
+                cfg = manifest.get('config') or {}
                 self.mark_provisioned(cfg.get('config_version') or CONFIG.BUILDVERSION_DEFAULT)
-            return True
+                return True
+            return False
 
         if requires_restart:
             if not self.background:

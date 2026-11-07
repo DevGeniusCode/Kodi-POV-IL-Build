@@ -3,10 +3,285 @@
 
 _AI_MDBL_REFRESH_LOCK = 'pov_ai_mdbl_refreshing'
 _ai_liked_ids_cache = [False]
+_refresh_mutex = __import__('threading').Lock()
+_last_failure = [0]
 
-def handle_401_reauth(e, path, params, json_data, method):
-    """Intercepts a 401 error, attempts to acquire a GUI lock, refreshes the token, and recurses safely."""
-    status = getattr(getattr(e, 'response', None), 'status_code', 0)
+
+class MDBListUnavailable(Exception):
+    """A failed read must not become a cached, apparently empty list."""
+
+
+def record_failure(response=None):
+    _last_failure[0] = getattr(response, 'status_code', 0) or 0
+
+
+def notify_unavailable():
+    import time
+    from modules import kodi_utils
+    try:
+        import xbmcgui
+        window = xbmcgui.Window(10000)
+        now = time.time()
+        if now - float(window.getProperty('povil.mdbl.error_notice') or 0) < 15:
+            return
+        window.setProperty('povil.mdbl.error_notice', str(now))
+    except Exception:
+        pass
+    if _last_failure[0] == 401:
+        text = 'MDBList: החיבור אינו תקף. יש לחבר מחדש דרך חיבור שירותים.'
+    elif _last_failure[0] == 403:
+        text = 'MDBList: אין הרשאה לפעולה. בדוק את הרשאות החיבור.'
+    elif _last_failure[0] == 429:
+        text = 'MDBList: הגעת למגבלת הבקשות. נסה שוב מאוחר יותר.'
+    else:
+        text = 'MDBList: הרשימה לא נטענה. נסה שוב; הרשימות שלך לא נמחקו.'
+    kodi_utils.notification(text)
+
+
+def cache_list(function, string, url):
+    """Support both constructor-opened and context-managed native caches."""
+    from caches import mdbl_cache
+    cache = mdbl_cache.MDBLCache()
+    if hasattr(type(cache), '__enter__'):
+        with cache as opened:
+            return _cache_list_with_cursor(function, string, url, opened.dbcur)
+    return _cache_list_with_cursor(function, string, url, cache.dbcur)
+
+
+def _cache_list_with_cursor(function, string, url, cur):
+    """Keep native keys/invalidation; invalidate poisoned legacy reads once.
+
+    The epoch also isolates account changes. Do not touch watched/progress
+    tables, and never store failed or incomplete responses.
+    """
+    import hashlib, json
+    from caches import mdbl_cache
+    from modules import kodi_utils
+    def valid(data):
+        key = ('items' if string in ('mdbl_my_lists', 'mdbl_external')
+               else 'lists' if string == 'mdbl_liked_lists' else None)
+        if key:
+            return isinstance(data, dict) and isinstance(data.get(key), list)
+        return isinstance(data, (dict, list))
+    def epoch():
+        token = kodi_utils.get_setting('mdblist.token') or ''
+        return 'v3:' + hashlib.sha256(token.encode('utf-8')).hexdigest()
+    def prepare(cur):
+        value = epoch()
+        cur.execute(mdbl_cache.MC_BASE_GET, ('povil_mdbl_cache_epoch',))
+        row = cur.fetchone()
+        if not row or row[0] != value:
+            cur.execute('DELETE FROM mdbl_data')
+            cur.execute(mdbl_cache.MC_BASE_SET, ('povil_mdbl_cache_epoch', value))
+        return value
+    prepare(cur)
+    cur.execute(mdbl_cache.MC_BASE_GET, (string,))
+    row = cur.fetchone()
+    if row:
+        try:
+            data = json.loads(row[0])
+            if valid(data):
+                return data
+        except (ValueError, TypeError):
+            pass
+    result = function(url)
+    if not valid(result):
+        raise MDBListUnavailable('MDBList read failed')
+    # A refresh during the request changes the token/epoch.
+    prepare(cur)
+    cur.execute(mdbl_cache.MC_BASE_SET, (string, json.dumps(result)))
+    return result
+
+
+def list_response_pagination(result, response):
+    """Keep pagination headers for bucketed JSON, as native POV does for arrays.
+
+    MDBList documents next_cursor (including null at the end) for collection
+    and watched history, and X-Has-More for list responses. has_more is not a
+    required JSON field. Do not guess that an unknown response is complete.
+    """
+    if not isinstance(result, dict) or not any(
+            isinstance(result.get(key), list) for key in ('movies', 'shows', 'seasons', 'episodes', 'items')):
+        return result
+    headers = response.headers
+    more = headers.get('X-Has-More')
+    cursor = headers.get('X-Next-Cursor')
+    if more is None and cursor is None:
+        return result
+    result = dict(result)
+    pagination = result.get('pagination', {})
+    if not isinstance(pagination, dict):
+        raise MDBListUnavailable('MDBList pagination invalid')
+    pagination = dict(pagination)
+    if more is not None:
+        more = str(more).strip().lower()
+        if more not in ('true', 'false'):
+            raise MDBListUnavailable('MDBList pagination header invalid')
+        more = more == 'true'
+        if 'has_more' in pagination and pagination['has_more'] is not more:
+            raise MDBListUnavailable('MDBList pagination conflict')
+        pagination['has_more'] = more
+    if cursor:
+        if 'next_cursor' in pagination and pagination['next_cursor'] != cursor:
+            raise MDBListUnavailable('MDBList cursor conflict')
+        pagination['next_cursor'] = cursor
+    result['pagination'] = pagination
+    return result
+
+
+def paginated_list(url, max_items=250000):
+    """Accept complete valid pages only, including genuinely empty lists."""
+    items = {'movies': [], 'shows': [], 'seasons': [], 'episodes': [], 'items': []}
+    params, cursors, received = {'limit': 1000}, set(), 0
+    for _ in range(max_items // params['limit']):
+        result = _call_mdblist(url, params=dict(params))
+        if not isinstance(result, dict):
+            raise MDBListUnavailable('MDBList page unavailable')
+        pagination = result.get('pagination')
+        if not isinstance(pagination, dict):
+            raise MDBListUnavailable('MDBList pagination unavailable')
+        if not any(isinstance(result.get(key), list) for key in items):
+            raise MDBListUnavailable('MDBList items unavailable')
+        for key in items:
+            if key in result:
+                if not isinstance(result[key], list):
+                    raise MDBListUnavailable('MDBList items invalid')
+                items[key].extend(result[key])
+        # A legacy terminal page can omit next_cursor but still give an exact
+        # total/offset. Only those counts can prove completion without a flag.
+        page_count = sum(len(result[key]) for key in ('movies', 'shows', 'seasons', 'episodes', 'items')
+                         if isinstance(result.get(key), list))
+        received += page_count
+        total, offset = pagination.get('total'), pagination.get('offset')
+        end = offset + page_count if type(offset) is int and offset >= 0 else received
+        cursor = pagination.get('next_cursor')
+        if cursor is not None and not isinstance(cursor, str):
+            raise MDBListUnavailable('MDBList cursor invalid')
+        if 'has_more' in pagination:
+            more = pagination['has_more']
+            if not isinstance(more, bool) or (not more and cursor):
+                raise MDBListUnavailable('MDBList pagination invalid')
+        elif 'next_cursor' in pagination:
+            more = bool(cursor)
+        elif type(total) is int and total >= 0 and total == end:
+            more = False
+        else:
+            raise MDBListUnavailable('MDBList pagination unavailable')
+        if not more:
+            if type(total) is int and total > end:
+                raise MDBListUnavailable('MDBList pagination incomplete')
+            return items
+        if not cursor or cursor in cursors:
+            raise MDBListUnavailable('MDBList cursor invalid')
+        cursors.add(cursor)
+        params['cursor'] = cursor
+    raise MDBListUnavailable('MDBList pagination incomplete')
+
+
+def collection_items(results, mediatype):
+    """Project collected seasons/episodes to their explicit parent show IDs.
+
+    Never use a season/episode ID as a show ID. Missing optional IMDb/title/year
+    fields do not invalidate other valid collected titles. No cloud writes.
+    """
+    movie = mediatype in ('movie', 'movies')
+    key = 'movie' if movie else 'show'
+    buckets = ('movies',) if movie else ('shows', 'seasons', 'episodes')
+    merged, skipped = {}, 0
+    for bucket in buckets:
+        for row in results.get(bucket, []):
+            if not isinstance(row, dict):
+                skipped += 1
+                continue
+            media = row.get(key)
+            ids = media.get('ids') if isinstance(media, dict) else None
+            value = ids.get('tmdb') if isinstance(ids, dict) else None
+            try:
+                if isinstance(value, bool) or str(value).strip() != str(int(value)) or int(value) <= 0:
+                    raise ValueError('invalid media id')
+                value = int(value)
+            except (TypeError, ValueError, OverflowError):
+                skipped += 1
+                continue
+            date = row.get('collected_at')
+            date = date if isinstance(date, str) else ''
+            year = media.get('year')
+            year = str(year) if type(year) is int else year if isinstance(year, str) else ''
+            item = {'id': value, 'imdb_id': ids.get('imdb'),
+                    'title': media.get('title') if isinstance(media.get('title'), str) else '',
+                    'year': year,
+                    'collected_at': date}
+            previous = merged.get(value)
+            if previous is None or date > previous['collected_at']:
+                merged[value] = item
+    try:
+        from modules import kodi_utils
+        kodi_utils.logger('MDBList collection projection',
+                          'media=%s direct=%d seasons=%d episodes=%d unique=%d skipped=%d' % (
+                              key, len(results.get('movies' if movie else 'shows', [])),
+                              len(results.get('seasons', [])), len(results.get('episodes', [])),
+                              len(merged), skipped))
+    except Exception:
+        pass
+    return list(merged.values())
+
+def _call_mdblist(path, **kwargs):
+    from indexers.mdblist_api import call_mdblist, base_url
+    if '%s' not in base_url: path = '/' + path.lstrip('/')
+    return call_mdblist(path, **kwargs)
+
+
+def repair_api_key_auth(client=None, timeout=None):
+    """Recover a valid API key left beside an old OAuth refresh token.
+
+    Probe after an authentication failure or before expired OAuth metadata
+    is refreshed. A healthy, unexpired OAuth connection makes no extra request.
+    A rejected key, changed account or incomplete response cannot clear the
+    current OAuth credentials.
+    """
+    from modules import kodi_utils
+    from indexers import mdblist_api
+    token = kodi_utils.get_setting('mdblist.token') or ''
+    refresh = kodi_utils.get_setting('mdblist.refresh') or ''
+    user = kodi_utils.get_setting('mdblist_user') or ''
+    if not token or not refresh:
+        return False
+    profile_path = getattr(kodi_utils, 'translate_path', None)
+    profile = profile_path('special://profile/') if profile_path else None
+    try:
+        response = (client or mdblist_api.session).request('get',
+            mdblist_api.base_url.rstrip('/') + '/user', params={'apikey': token},
+            headers=None, timeout=timeout if timeout is not None else min(3, mdblist_api.timeout))
+        if not response.ok:
+            return False
+        data = response.json()
+        username = data.get('username') if isinstance(data, dict) else None
+        if not isinstance(username, str) or not username.strip():
+            return False
+        if user and username.casefold() != user.casefold():
+            return False
+        if profile_path and profile_path('special://profile/') != profile:
+            return False
+        if (kodi_utils.get_setting('mdblist.token'), kodi_utils.get_setting('mdblist.refresh')) != (token, refresh):
+            return False
+        kodi_utils.set_setting('mdblist.refresh', '')
+        if kodi_utils.get_setting('mdblist.refresh'):
+            return False
+        kodi_utils.set_setting('mdblist.expires', '0')
+        kodi_utils.set_setting('mdblist_user', username.strip())
+        # The selected watched provider and history remain unchanged.
+        kodi_utils.logger('mdblist auth', 'Verified API-key authentication recovered')
+        return True
+    except Exception:
+        return False
+
+
+def handle_401_reauth(e, path, params, json_data, method, response=None):
+    """Recover one failed request; never recursively retry or steal a busy lock."""
+    import hashlib, time
+    response = response if response is not None else getattr(e, 'response', None)
+    record_failure(response)
+    status = getattr(response, 'status_code', 0)
     if status != 401: return None
     from modules import kodi_utils
     if not kodi_utils.get_setting('mdblist.refresh', ''): return None
@@ -18,47 +293,62 @@ def handle_401_reauth(e, path, params, json_data, method):
         window = None
 
     before = kodi_utils.get_setting('mdblist.token')
+    failure_key = 'povil.mdbl.refresh_failed.' + hashlib.sha256((before or '').encode('utf-8')).hexdigest()[:16]
     if window is not None:
+        if time.time() - float(window.getProperty(failure_key) or 0) < 60:
+            return None
         from modules.kodi_utils import sleep
         for _ in range(60):
             if window.getProperty(_AI_MDBL_REFRESH_LOCK) != 'true': break
             sleep(250)
         if kodi_utils.get_setting('mdblist.token') != before: return _retry_call(path, params, json_data, method)
+        if window.getProperty(_AI_MDBL_REFRESH_LOCK) == 'true': return None
         window.setProperty(_AI_MDBL_REFRESH_LOCK, 'true')
         if kodi_utils.get_setting('mdblist.token') != before:
             window.clearProperty(_AI_MDBL_REFRESH_LOCK)
             return _retry_call(path, params, json_data, method)
 
+    repaired = False
     try:
-        from indexers.mdblist_api import mdbl_refresh
-        mdbl_refresh()
+        with _refresh_mutex:
+            if kodi_utils.get_setting('mdblist.token') == before:
+                repaired = repair_api_key_auth()
+                if not repaired:
+                    from indexers.mdblist_api import mdbl_refresh
+                    mdbl_refresh()
     finally:
         if window is not None: window.clearProperty(_AI_MDBL_REFRESH_LOCK)
 
-    if kodi_utils.get_setting('mdblist.token') != before:
+    if repaired or kodi_utils.get_setting('mdblist.token') != before:
         return _retry_call(path, params, json_data, method)
+    if window is not None: window.setProperty(failure_key, str(time.time()))
     return None
 
 def _retry_call(path, params, json_data, method):
     from indexers.mdblist_api import session, base_url, timeout
     from modules import kodi_utils
     headers = None
-    params = params or {}
+    params = dict(params or {})
     if not bool(kodi_utils.get_setting('mdblist.refresh')):
         params['apikey'] = kodi_utils.get_setting('mdblist.token')
     else:
+        params.pop('apikey', None)
         headers = {'Authorization': 'Bearer %s' % kodi_utils.get_setting('mdblist.token')}
     try:
         response = session.request(
             method or 'get',
-            base_url % path,
+            (base_url % path if '%s' in base_url else base_url + '/' + path.lstrip('/')),
             params=params,
             json=json_data,
             headers=headers,
             timeout=timeout
         )
         result = response.json() if 'json' in response.headers.get('Content-Type', '') else response.text
-        if not response.ok: response.raise_for_status()
+        if not response.ok:
+            record_failure(response)
+            return None
+        result = list_response_pagination(result, response)
+        _last_failure[0] = 0
         if isinstance(result, list):
             result = {'items': result, 'pagination': {'has_more': response.headers.get('X-Has-More') == 'true'}}
             if response.headers.get('X-Next-Cursor'): result['pagination']['next_cursor'] = response.headers.get('X-Next-Cursor')
@@ -75,7 +365,7 @@ def scrobble_stop_if_watched(action, key, media, media_id, season, episode):
                 sd = {'movie': {'ids': {'tmdb': media_id}}, 'progress': 100.0}
             else:
                 sd = {'show': {'ids': {'tmdb': media_id}, 'season': {'number': int(season), 'episode': {'number': int(episode)}}}, 'progress': 100.0}
-            call_mdblist('scrobble/stop', json=sd, method='post')
+            _call_mdblist('scrobble/stop', json=sd, method='post')
         except Exception: pass
 
 def merge_collection_to_watchlist(original_list, mediatype):
@@ -108,7 +398,8 @@ def pre_search_check(params):
         return None
     if params.get('ai_prompt') and not params.get('search_title'):
         from modules import kodi_utils
-        query = kodi_utils.dialog.input('POV')
+        import xbmcgui
+        query = xbmcgui.Dialog().input('POV')
         if not query:
             import sys, xbmcplugin
             xbmcplugin.endOfDirectory(int(sys.argv[1]), succeeded=False)
@@ -209,7 +500,7 @@ def like_a_list(params):
     from caches import mdbl_cache
     from modules import kodi_utils
     list_id = params['list_id']
-    result = call_mdblist('lists/%s/like' % list_id, method='put')
+    result = _call_mdblist('lists/%s/like' % list_id, method='put')
     if result is None: return kodi_utils.notification(32574)
     mdbl_cache.clear_mdbl_list_data('liked_lists')
     _ai_liked_ids_cache[0] = False
@@ -221,7 +512,7 @@ def unlike_a_list(params):
     from caches import mdbl_cache
     from modules import kodi_utils
     list_id = params['list_id']
-    result = call_mdblist('lists/%s/like' % list_id, method='delete')
+    result = _call_mdblist('lists/%s/like' % list_id, method='delete')
     if result is None: return kodi_utils.notification(32574)
     mdbl_cache.clear_mdbl_list_data('liked_lists')
     _ai_liked_ids_cache[0] = False
@@ -246,6 +537,54 @@ def lists_sort_order_override(orig_func, setting, mediatype):
         return 1
 
 
+def newest_personal_items(items):
+    """Order a copy by addition time, never mutate a provider's cached list."""
+    from datetime import datetime, timezone
+    def added(item):
+        for key in ('listed_at', 'watchlisted_at', 'watchlist_at', 'collected_at', 'last_collected_at', 'added'):
+            value = item.get(key) if isinstance(item, dict) else None
+            if value in (None, ''): continue
+            try:
+                date = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+                if date.tzinfo is None: date = date.replace(tzinfo=timezone.utc)
+                return date.timestamp()
+            except (ValueError, TypeError, OverflowError): pass
+        return float('-inf')
+    return sorted(items, key=added, reverse=True) if isinstance(items, list) else items
+
+
+def personal_mdbl_url(url, enabled=True):
+    """Use the documented server sort before cursor pagination; strip UI flag."""
+    from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+    parts = urlsplit(url)
+    query = parse_qsl(parts.query, keep_blank_values=True)
+    personal = any(k == 'povil_personal' and v == '1' for k, v in query)
+    if not any(k == 'povil_personal' for k, v in query): return url
+    query = [(k, v) for k, v in query if k != 'povil_personal']
+    if personal and enabled:
+        query = [(k, v) for k, v in query if k not in ('sort', 'order')]
+        query.extend((('sort', 'added'), ('order', 'desc')))
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def is_own_trakt_url(url, username):
+    from urllib.parse import urlsplit, unquote
+    parts = [unquote(p).casefold() for p in urlsplit(url).path.split('/') if p]
+    return (len(parts) >= 4 and parts[0] == 'users' and parts[2] == 'lists'
+            and parts[1] in ('me', str(username or '').strip().casefold()))
+
+
+def umbrella_personal_sort(owner, setting, get_setting, url=None):
+    """Default personal views use newest first; explicit sorting stays native."""
+    if str(get_setting('sort.%s.type' % setting) or '0') != '0': return False
+    personal = setting.endswith(('.watchlist', '.collection'))
+    if url is not None:
+        personal = is_own_trakt_url(url, get_setting('trakt.user.name'))
+    if not personal: return False
+    owner.list = newest_personal_items(owner.list)
+    return True
+
+
 def heal_mdblist_account_if_needed():
     """
     Repairs the 'No MDBList Account Active' state.
@@ -260,21 +599,10 @@ def heal_mdblist_account_if_needed():
     # Only execute if broken (token exists, but user string is empty)
     if token and not user:
         try:
-            import json
-            import urllib.request
-            import urllib.parse
-
-            url = 'https://api.mdblist.com/user?apikey=' + urllib.parse.quote(token, safe='')
-            req = urllib.request.Request(url, headers={'User-Agent': 'kodi-pov-il'})
-
-            # Short timeout to prevent stalling boot
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                if getattr(resp, 'status', 200) == 200:
-                    data = json.loads(resp.read().decode('utf-8', 'replace'))
-                    username = str((data or {}).get('username') or '').strip()
-
-                    if username:
-                        kodi_utils.set_setting('mdbl_indicators_active', 'true')
-                        kodi_utils.set_setting('mdblist_user', username)
+            data = _call_mdblist('/user')
+            username = str((data or {}).get('username') or '').strip()
+            if username:
+                kodi_utils.set_setting('mdbl_indicators_active', 'true')
+                kodi_utils.set_setting('mdblist_user', username)
         except Exception:
             pass # Fail gracefully; the native check will simply return 'no account' as it originally did.

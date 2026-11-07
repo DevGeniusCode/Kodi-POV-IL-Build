@@ -88,9 +88,11 @@ class Wizard:
         # A user-triggered Full Install starts clean: drop the marker so the whole
         # fresh sequence runs (and so an interrupted run is resumable).
         ModularUpdater.clear_provisioned()
+        from resources.libs import fresh_install
+        fresh_install.begin()
 
         try:
-            ModularUpdater(background=False).run_fresh_install()
+            completed, issues = fresh_install.provision()
         except Exception as err:
             logging.log("[Build] Modular fresh install failed: {0}".format(err), level=xbmc.LOGERROR)
             self.dialog.ok(CONFIG.ADDONTITLE,
@@ -103,36 +105,23 @@ class Wizard:
         # must have written the .provisioned marker (ran end-to-end). Otherwise do
         # NOT flip the build to installed -- startup resumes it next launch.
         engine_present = os.path.exists(os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai'))
-        if not engine_present or not ModularUpdater.is_provisioned():
+        if not completed or not engine_present or not ModularUpdater.is_provisioned():
             logging.log("[Build] Full install did not complete (engine={0}, marker={1}); "
                         "will resume next launch.".format(engine_present, ModularUpdater.is_provisioned()),
                         level=xbmc.LOGERROR)
-            self.dialog.ok(CONFIG.ADDONTITLE,
-                           "[COLOR {0}]ההתקנה לא הושלמה. הפעל מחדש את קודי כדי להמשיך.[/COLOR]".format(CONFIG.COLOR2))
+            self.dialog.ok(CONFIG.ADDONTITLE, fresh_install.failure_message(issues))
             return
 
-        db.fix_metas()
-        CONFIG.set_setting('buildname', build_name)
-        CONFIG.set_setting('buildversion', build_version)
-        CONFIG.set_setting('buildtheme', '')
-        CONFIG.set_setting('latestversion', build_version)
-        CONFIG.set_setting('nextbuildcheck', tools.get_date(days=CONFIG.UPDATECHECK, formatted=True))
-        CONFIG.set_setting('installed', 'true')
-        CONFIG.set_setting('extract', '100')
-        CONFIG.set_setting('errors', '0')
-        CONFIG.set_setting('fresh_build_auto_install_done', build_version)
+        try:
+            if not fresh_install.finalize():
+                self.dialog.ok(CONFIG.ADDONTITLE, 'ההתקנה ממתינה להשלמה. אשר את הסקין או נסה שוב.')
+                return
+        except Exception as err:
+            logging.log('[Build] finalization failed: {0}'.format(err), level=xbmc.LOGERROR)
+            self.dialog.ok(CONFIG.ADDONTITLE, 'ההתקנה לא הושלמה. ניתן לנסות שוב בלי למחוק הגדרות.')
+            return
         db.addon_database(CONFIG.ADDON_ID, 1)
-
-        CONFIG.BUILDNAME = build_name
-        CONFIG.BUILDVERSION = build_version
-        CONFIG.BUILDLATEST = build_version
-        CONFIG.INSTALLED = 'true'
-
-        # First-launch notification windows (build-first-launch + skin-switch help).
-        CONFIG.set_setting('notedismiss', 'false')
-        CONFIG.set_setting('build_skin_switch_notifcation_dismiss', 'false')
-
-        self.force_close_kodi_in_5_seconds(dialog_header="התקנת הבילד הסתיימה בהצלחה")
+        self.dialog.notification(CONFIG.ADDONTITLE, 'הבילד הותקן ומוכן לשימוש')
 
     def gui(self, name, over=False):
         # KODI-POV-IL - DEPRECATED legacy "GuiFix" quickfix installer.
@@ -400,7 +389,11 @@ def update_favourites_xml_file(gotoskin):
             'povil_favourites_generator', module_file)
         generator = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(generator)
-        generator.generate_favourites_xml(gotoskin)
+        if generator.generate_favourites_xml(gotoskin) is None:
+            logging.log("DEBUG | update_favourites_xml_file | invalid existing "
+                        "favourites; kept the file unchanged for skin {0}"
+                        .format(gotoskin))
+            return True
         logging.log("DEBUG | update_favourites_xml_file | regenerated favourites "
                     "for skin {0}".format(gotoskin))
         return True
@@ -436,7 +429,7 @@ def update_favourites_xml_file(gotoskin):
 # from Switch Skin, so it never bloats the base build. Its only hard dependency,
 # script.fentastic.helper, already ships in the build.
 NOX_PACK_BASE_URL = "https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist"
-NOX_SKIN_VERSION = '1.0.10'
+NOX_SKIN_VERSION = '1.0.17'
 NOX_PACKS = [
     {
         'name': 'סקין NOX',
@@ -940,11 +933,30 @@ def ensure_arctic_fuse_3_installed():
 
 
 def ensure_nox_installed():
-    """Download + extract the NOX skin pack on demand (see _ensure_packs_installed)."""
-    return _ensure_packs_installed(
-        NOX_PACKS,
-        '[COLOR {0}][B]מוריד את סקין NOX[/B][/COLOR]'.format(CONFIG.COLOR2),
-        '[COLOR {0}][B]סקין NOX מוכן לשימוש[/B][/COLOR]'.format(CONFIG.COLOR1))
+    """Use the verified modular skin, never the obsolete static pack."""
+    from resources.libs.modular_updater import ModularUpdater
+    from resources.libs import build_skin
+    updater = ModularUpdater(background=True)
+    ident = 'skin.povil.nox'
+    if updater._version_tuple(updater.get_local_version(ident)) >= updater._version_tuple(NOX_SKIN_VERSION):
+        return build_skin.enable_skin(ident)
+    manifest = updater._load_manifest() or {}
+    entry = (manifest.get('addons') or {}).get(ident)
+    if not entry or updater._version_tuple(entry.get('version')) < updater._version_tuple(NOX_SKIN_VERSION):
+        return False
+    entry = dict(entry, id=ident)
+    tools.ensure_folders(CONFIG.PACKAGES)
+    package = os.path.join(CONFIG.PACKAGES, 'nox-modular.zip')
+    try:
+        updater._download_background_zip(entry['zip'], package, entry)
+        updater._install_verified_module(package, entry, entry['sha256'])
+        xbmc.executebuiltin('UpdateLocalAddons')
+        xbmc.Monitor().waitForAbort(0.5)
+        return (updater.get_local_version(ident) == entry['version'] and
+                build_skin.enable_skin(ident))
+    except Exception as err:
+        logging.log('[NOX] modular installation failed: {}'.format(type(err).__name__), level=xbmc.LOGERROR)
+        return False
 
 
 def auto_update_active_skin_pack():
@@ -1134,6 +1146,12 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
 
 AF3_TOOLS = [
     {
+        'id': 'profiles',
+        'label': 'מי צופה? — פרופילים',
+        'icon': 'DefaultUser.png',
+        'builtin': 'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profiles)',
+    },
+    {
         'id': 'connect_services',
         'label': 'חיבור שירותים',
         'icon': 'special://home/media/povil_icons/Connect_Services.png',
@@ -1238,40 +1256,29 @@ def af3_tool_action(tool_id):
 
 
 def switch_skin_in_gui_settings(gotoskin):
-    try:
-        import xbmcvfs
-        guisettings_file_path = xbmcvfs.translatePath("special://userdata/guisettings.xml")
-        import xml.etree.ElementTree as ET
-        tree = ET.parse(guisettings_file_path)
-        root = tree.getroot()
-        # Find the setting with id="lookandfeel.skin"
-        for setting in root.iter('setting'):
-            if setting.get('id') == 'lookandfeel.skin':
-                # Remove default attribute, if present
-                if 'default' in setting.attrib:
-                    del setting.attrib['default']
-                # Change the value to gotoskin
-                setting.text = gotoskin
-        # Write the modified tree back to the file
-        tree.write(guisettings_file_path)
-        return True
-    except Exception as e:
-        logging.log_notify(CONFIG.ADDONTITLE,
-                           '[COLOR {0}]שגיאה בהחלפת סקין![/COLOR]'.format(CONFIG.COLOR2))
-        logging.log(f"DEBUG | switch_skin_in_gui_settings | Exception: {str(e)}")
-        return False
+    from resources.libs import build_skin
+    return build_skin.switch(gotoskin)
+
 
 def build_switch_skin():
-
+    from resources.libs.patches import profile_age_guard
+    policy = profile_age_guard.active_policy()
+    if policy is not None and policy.get('blocked'):
+        xbmcgui.Dialog().ok('סקין פרופיל הילדים', 'יש להשלים את בקרת ההורים במשתמש הראשי.')
+        return
     if not CONFIG.get_setting('buildname'):
         logging.log_notify(CONFIG.ADDONTITLE,
                            '[COLOR {0}]לא מותקן בילד![/COLOR]'.format(CONFIG.COLOR2))
         return
 
 
+    from resources.libs import build_skin
+    if not build_skin.close_switch_menu():
+        return
     from resources.libs.gui import window
     msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX"
-    window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
+    if policy is None:
+        window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 
     skin_mapping = {
         'סקין Estuary - מראה פשוט עם כפתורים': 'skin.estuary',
@@ -1288,12 +1295,12 @@ def build_switch_skin():
     # user can pick a known skin to recover.
     current_skin_name = next(
         (skin_name for skin_name, skin_addon_name in
-         skin_mapping.items() if skin_addon_name in CONFIG.SKIN),
+         skin_mapping.items() if skin_addon_name == xbmc.getSkinDir()),
         'סקין לא מזוהה'
     )
 
     # Filter out the current active skin from the list
-    skins_list = [skin_name for skin_name, skin_addon_name in skin_mapping.items() if skin_addon_name not in CONFIG.SKIN]
+    skins_list = [skin_name for skin_name, skin_addon_name in skin_mapping.items() if skin_addon_name != xbmc.getSkinDir()]
 
     # Create a dialog window
     dialog = xbmcgui.Dialog()
@@ -1338,16 +1345,17 @@ def build_switch_skin():
             dialogProgress.update(int((3 - s) / 3.0 * 100), dialog_text)
             xbmc.sleep(1000)
 
-        # guisettings.xml | Configure lookandfeel.skin setting
-        if not switch_skin_in_gui_settings(gotoskin): return
-
-        xbmc.sleep(500)
-
-        # favourites.xml | Switch to selected build's skin favourites.xml
-        if not update_favourites_xml_file(gotoskin): return
-
         dialogProgress.close()
-        Wizard().force_close_kodi_in_5_seconds(dialog_header="סקין הוחלף בהצלחה!")
+        from resources.libs import build_profiles
+        if not build_profiles._wait_dialogs():
+            logging.log('[Skin Switch] Deferred by dialog %s' % xbmcgui.getCurrentWindowDialogId(),
+                        level=xbmc.LOGWARNING)
+            dialog.ok(CONFIG.ADDONTITLE, 'סגור את החלון הפתוח ונסה להחליף סקין שוב.')
+            return
+        if not switch_skin_in_gui_settings(gotoskin):
+            logging.log('[Skin Switch] Activation failed: ' + gotoskin, level=xbmc.LOGWARNING)
+            dialog.ok(CONFIG.ADDONTITLE, 'לא ניתן להשלים את החלפת הסקין. אפשר לנסות שוב דרך הוויזרד.')
+
     else:
         return
 

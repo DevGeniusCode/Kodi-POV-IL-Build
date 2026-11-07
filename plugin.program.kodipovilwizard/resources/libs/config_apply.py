@@ -16,8 +16,11 @@ bundled ``config_policy.json``:
 Apply modes:
   replace        overwrite the whole destination file.
   merge_id       per <setting id=...>: the build value wins, every other user
-                 setting in the file is left untouched. ids in ``exclude_ids``
-                 are never written (machine-specific: deviceuuid, resolution).
+                 setting in the file is left untouched.
+  merge_missing_id
+                 add setting IDs absent on the device; keep existing values.
+                 ids in ``exclude_ids`` are never written (machine-specific:
+                 deviceuuid, resolution).
   merge_name     per <source><name> under each sources.xml section: add the
                  build's sources, keep the user's; never delete.
   seed_if_absent write only when the destination does not already exist.
@@ -36,8 +39,8 @@ apply_config_pack() accepts an optional shared ``ProvisionProgress`` tracker
 the tracker's 'config' phase via ``progress.set_fraction('config', current/total)``
 as real work completes (download bytes, zip members extracted, policy files
 applied, unlisted files seeded), replacing the tracker's time-based creep. The
-download uses the dialog-free ``headless_installer.download_zip`` so no extra
-Kodi progress dialog pops up over the install window. With ``progress=None`` the
+download is dialog-free and reports real byte progress, so no extra Kodi
+progress dialog pops up over the install window. With ``progress=None`` the
 function behaves exactly as before.
 """
 
@@ -45,6 +48,7 @@ import os
 import json
 import hashlib
 import shutil
+import tempfile
 import xml.etree.ElementTree as ET
 
 
@@ -73,11 +77,14 @@ def _parse_settings(text):
     return ET.Element('settings')
 
 
-def merge_settings_xml(existing_text, incoming_text, exclude_ids=None):
+def merge_settings_xml(existing_text, incoming_text, exclude_ids=None,
+                       overwrite_existing=True):
     """Merge incoming <setting id=...> values into existing, build wins.
 
     Returns the merged document as a unicode string. Settings present only in
-    ``existing`` (the user's own) are preserved untouched. ids in
+    ``existing`` (the user's own) are preserved untouched. If
+    ``overwrite_existing`` is false, even matching IDs retain the installed
+    value. ids in
     ``exclude_ids`` are skipped entirely (never written).
     """
     exclude = set(exclude_ids or ())
@@ -96,6 +103,8 @@ def merge_settings_xml(existing_text, incoming_text, exclude_ids=None):
         if sid is None or sid in exclude:
             continue
         if sid in by_id:
+            if not overwrite_existing:
+                continue
             target = by_id[sid]
             target.text = inc.text
             # Carry a meaningful type attr if the incoming file declares one
@@ -169,11 +178,23 @@ def _tostring(root):
 POLICY_NAME = 'config_policy.json'
 
 
+def _safe_relative_path(value):
+    """Reject policy paths that could escape the config pack or Kodi home."""
+    if not isinstance(value, str):
+        raise ValueError('config path must be text')
+    normalized = value.replace('\\', '/')
+    parts = normalized.split('/')
+    if (not normalized or normalized.startswith('/') or
+            any(part in ('', '.', '..') or ':' in part for part in parts)):
+        raise ValueError('unsafe config path: {0}'.format(value))
+    return normalized
+
+
 def _home_path(dest_rel):
     """Map a policy 'dest' (relative to special://home/) to an absolute path,
     staying profile-aware for anything under userdata/."""
     from resources.libs.common.config import CONFIG
-    dest_rel = dest_rel.replace('\\', '/')
+    dest_rel = _safe_relative_path(dest_rel)
     if dest_rel.startswith('userdata/'):
         return os.path.join(CONFIG.USERDATA, *dest_rel.split('/')[1:])
     return os.path.join(CONFIG.HOME, *dest_rel.split('/'))
@@ -188,21 +209,121 @@ def _read_text(path):
 
 
 def _write_text(path, text):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as fh:
-        fh.write(text)
+    _atomic_write(path, text.encode('utf-8'))
+
+
+def _atomic_write(path, data):
+    """Keep the installed file intact if a copy/write is interrupted."""
+    folder = os.path.dirname(path)
+    os.makedirs(folder, exist_ok=True)
+    tmp = None
+    try:
+        fd, tmp = tempfile.mkstemp(prefix='.config-', dir=folder)
+        with os.fdopen(fd, 'wb') as fh:
+            fh.write(data)
+        os.replace(tmp, path)
+    finally:
+        if tmp and os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def _atomic_copy(src, dest):
+    with open(src, 'rb') as fh:
+        _atomic_write(dest, fh.read())
+
+
+def _download_config_zip(url, dest, report):
+    """Stream a config ZIP with a timeout and report real byte progress."""
+    from urllib.request import Request, ProxyHandler, HTTPSHandler, build_opener
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    temp = None
+    try:
+        request = Request(url)
+        handlers = [ProxyHandler({})]
+        if url.lower().startswith('https://'):
+            import ssl
+            context = ssl.create_default_context()
+            # Keep Kodi/system trust and add the portable bundle already used
+            # by requests. Android may have no usable system CA store.
+            try:
+                import certifi
+                context.load_verify_locations(cafile=certifi.where())
+            except ImportError:
+                pass
+            handlers.append(HTTPSHandler(context=context))
+        opener = build_opener(*handlers)
+        with opener.open(request, timeout=20) as source:
+            try:
+                total = int(source.headers.get('Content-Length') or 0)
+            except (TypeError, ValueError):
+                total = 0
+            fd, temp = tempfile.mkstemp(prefix='.config-download-',
+                                        dir=os.path.dirname(dest))
+            with os.fdopen(fd, 'wb') as out:
+                done = 0
+                while True:
+                    chunk = source.read(1 << 20)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+                    done += len(chunk)
+                    if total:
+                        report.step('download', done, total)
+        os.replace(temp, dest)
+        temp = None
+        report.done('download')
+    finally:
+        if temp and os.path.exists(temp):
+            os.remove(temp)
+
+
+def _require_valid_xml(text, expected_root, label):
+    if text is None:
+        raise ValueError('{0} could not be read'.format(label))
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError as exc:
+        raise ValueError('{0} is malformed; refusing to overwrite it'.format(label)) from exc
+    if root.tag != expected_root:
+        raise ValueError('{0} has unexpected root; refusing to overwrite it'.format(label))
+
+
+def _preflight_policy(policy, src_dir, fresh):
+    """Validate every declared write before changing any user file."""
+    seen = set()
+    destinations = []
+    for spec in policy.get('files', []):
+        src = os.path.join(src_dir, *_safe_relative_path(spec['src']).split('/'))
+        dest = _home_path(spec['dest'])
+        mode = spec.get('fresh' if fresh else 'update', 'replace')
+        if dest in seen:
+            raise ValueError('duplicate config destination: {0}'.format(spec['dest']))
+        seen.add(dest)
+        if not os.path.isfile(src):
+            raise FileNotFoundError('missing config source {0}'.format(spec['src']))
+        if mode not in ('replace', 'seed_if_absent', 'merge_id',
+                        'merge_missing_id', 'merge_name'):
+            raise ValueError('unknown config mode {0}'.format(mode))
+        if mode in ('merge_id', 'merge_missing_id', 'merge_name'):
+            tag = 'sources' if mode == 'merge_name' else 'settings'
+            _require_valid_xml(_read_text(src), tag, src)
+            if os.path.exists(dest):
+                _require_valid_xml(_read_text(dest), tag, dest)
+        if mode != 'seed_if_absent' or not os.path.exists(dest):
+            destinations.append(dest)
+    for rel in (policy.get('cleanup', {}) or {}).get('remove_paths', []) or []:
+        _home_path(rel)
+    return destinations
 
 
 def _apply_file(spec, src_dir, fresh):
     """Apply a single policy file entry. Returns the dest path applied, or None
     when nothing was written (e.g. seed_if_absent and dest already exists)."""
-    import xbmc
     from resources.libs.common import logging
 
-    src_path = os.path.join(src_dir, spec['src'].replace('/', os.sep))
+    src_path = os.path.join(src_dir, *_safe_relative_path(spec['src']).split('/'))
     if not os.path.exists(src_path):
-        logging.log("[config_apply] missing source {0}; skipping".format(spec['src']), level=xbmc.LOGWARNING)
-        return None
+        raise FileNotFoundError('missing config source {0}'.format(spec['src']))
 
     dest_path = _home_path(spec['dest'])
     mode = spec.get('fresh' if fresh else 'update', 'replace')
@@ -213,18 +334,27 @@ def _apply_file(spec, src_dir, fresh):
         return None
 
     if mode in ('replace', 'seed_if_absent'):
-        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-        shutil.copyfile(src_path, dest_path)
-    elif mode == 'merge_id':
-        merged = merge_settings_xml(_read_text(dest_path), _read_text(src_path), exclude_ids)
+        _atomic_copy(src_path, dest_path)
+    elif mode in ('merge_id', 'merge_missing_id'):
+        old = _read_text(dest_path)
+        incoming = _read_text(src_path)
+        if os.path.exists(dest_path):
+            _require_valid_xml(old, 'settings', dest_path)
+        _require_valid_xml(incoming, 'settings', src_path)
+        merged = merge_settings_xml(
+            old, incoming, exclude_ids,
+            overwrite_existing=(mode == 'merge_id'))
         _write_text(dest_path, merged)
     elif mode == 'merge_name':
-        merged = merge_sources_xml(_read_text(dest_path), _read_text(src_path))
+        old = _read_text(dest_path)
+        incoming = _read_text(src_path)
+        if os.path.exists(dest_path):
+            _require_valid_xml(old, 'sources', dest_path)
+        _require_valid_xml(incoming, 'sources', src_path)
+        merged = merge_sources_xml(old, incoming)
         _write_text(dest_path, merged)
     else:
-        logging.log("[config_apply] unknown mode '{0}' for {1}; using replace".format(mode, spec['dest']), level=xbmc.LOGWARNING)
-        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-        shutil.copyfile(src_path, dest_path)
+        raise ValueError("unknown config policy mode '{0}' for {1}".format(mode, spec['dest']))
 
     logging.log("[config_apply] {0} -> {1} ({2})".format(spec['src'], spec['dest'], mode))
     return dest_path
@@ -276,42 +406,6 @@ class _ConfigProgress(object):
         self.step(stage, 1, 1)
 
 
-def _download_config_zip(url, zip_path, background, report):
-    """Fetch the config zip. Primary path is the dialog-free downloader (real
-    byte progress, no popup over the install window). If that fails, fall back
-    once to the legacy Downloader so a quirk of the silent path can never block
-    the config apply. Returns True on a non-empty file."""
-    import xbmc
-    from resources.libs.common import logging
-    from resources.libs.common import tools
-
-    silent_ok = False
-    try:
-        from resources.libs.headless_installer import download_zip
-        silent_ok = bool(download_zip(
-            url, zip_path, on_progress=lambda pct: report.step('download', pct, 100)))
-    except Exception as e:
-        logging.log("[config_apply] silent config download unavailable: {0}".format(e),
-                    level=xbmc.LOGWARNING)
-
-    if not silent_ok:
-        logging.log("[config_apply] silent download failed; trying legacy Downloader",
-                    level=xbmc.LOGWARNING)
-        tools.remove_file(zip_path)
-        try:
-            from resources.libs.downloader import Downloader
-            Downloader(progress_dialog_bg=background).download(url, zip_path)
-        except Exception as e:
-            logging.log("[config_apply] config download failed: {0}".format(e), level=xbmc.LOGERROR)
-            return False
-        xbmc.sleep(300)
-
-    ok = os.path.exists(zip_path) and os.path.getsize(zip_path) > 0
-    if ok:
-        report.done('download')
-    return ok
-
-
 def _run_cleanup(policy):
     import xbmc
     from resources.libs.common.config import CONFIG
@@ -327,6 +421,25 @@ def _run_cleanup(policy):
                 logging.log("[config_apply] cleanup removed file {0}".format(rel))
         except Exception as e:
             logging.log("[config_apply] cleanup failed for {0}: {1}".format(rel, e), level=xbmc.LOGWARNING)
+
+
+def _saved_active_skin(userdata):
+    """Read startup skin from disk without waiting on Kodi's GUI thread.
+
+    During AF3 widget startup xbmc.getSkinDir() can block the background
+    updater for longer than the whole update budget. The persisted skin is
+    enough to tell whether a policy file belongs to the active skin; an
+    unknown skin simply means no skin-specific reload is requested.
+    """
+    path = os.path.join(userdata, 'guisettings.xml')
+    try:
+        root = ET.parse(path).getroot()
+        setting = root.find(".//setting[@id='lookandfeel.skin']")
+        if setting is not None and setting.text:
+            return setting.text.strip()
+    except (OSError, ET.ParseError):
+        pass
+    return None
 
 
 def apply_config_pack(manifest, fresh=False, background=True, progress=None):
@@ -368,7 +481,12 @@ def apply_config_pack(manifest, fresh=False, background=True, progress=None):
     tools.ensure_folders(CONFIG.PACKAGES)
     zip_path = os.path.join(CONFIG.PACKAGES, 'build_config.zip')
     tools.remove_file(zip_path)
-    if not _download_config_zip(url, zip_path, background, report):
+    try:
+        _download_config_zip(url, zip_path, report)
+    except Exception as e:
+        logging.log("[config_apply] config download failed: {0}".format(e), level=xbmc.LOGERROR)
+        return result
+    if not os.path.exists(zip_path) or os.path.getsize(zip_path) == 0:
         logging.log("[config_apply] config zip missing/empty after download", level=xbmc.LOGERROR)
         return result
 
@@ -406,16 +524,54 @@ def apply_config_pack(manifest, fresh=False, background=True, progress=None):
         logging.log("[config_apply] cannot read bundled policy: {0}".format(e), level=xbmc.LOGERROR)
         return result
 
-    active_skin = xbmc.getSkinDir()
+    active_skin = _saved_active_skin(CONFIG.USERDATA)
     policy_files = policy.get('files', [])
     total_policy = len(policy_files)
+    try:
+        destinations = _preflight_policy(policy, work_dir, fresh)
+    except Exception as exc:
+        logging.log('[config_apply] preflight failed: {0}'.format(exc),
+                    level=xbmc.LOGERROR)
+        result['failed_files'] = [spec.get('dest') for spec in policy_files]
+        shutil.rmtree(work_dir, ignore_errors=True)
+        tools.remove_file(zip_path)
+        return result
+
+    # Back up to disk, not RAM: Kodi databases can be large on 32-bit devices.
+    # If even the snapshot cannot be made, leave userdata as-is.
+    backup_dir = tempfile.mkdtemp(prefix='config-rollback-', dir=CONFIG.PACKAGES)
+    original_files = {}
+    try:
+        for index, path in enumerate(destinations):
+            if os.path.isfile(path):
+                backup = os.path.join(backup_dir, str(index))
+                # Android emulated storage allows copying the bytes but can
+                # reject copy2's chmod/utime metadata operation (EACCES).
+                # Rollback needs the original content, not its filesystem
+                # metadata. A real read/write failure must still abort here.
+                shutil.copyfile(path, backup)
+                original_files[path] = backup
+            else:
+                original_files[path] = None
+    except Exception as exc:
+        logging.log('[config_apply] could not back up userdata: {0}'.format(exc),
+                    level=xbmc.LOGERROR)
+        shutil.rmtree(backup_dir, ignore_errors=True)
+        shutil.rmtree(work_dir, ignore_errors=True)
+        tools.remove_file(zip_path)
+        return result
+
+    failed_files = []
     for i, spec in enumerate(policy_files, 1):
         applied_path = None
         try:
             applied_path = _apply_file(spec, work_dir, fresh)
         except Exception as e:
             logging.log("[config_apply] failed applying {0}: {1}".format(spec.get('dest'), e), level=xbmc.LOGERROR)
-        report.step('apply', i, total_policy)   # counted whether it applied, skipped or failed
+            failed_files.append(spec.get('dest'))
+            report.step('apply', i, total_policy)
+            continue
+        report.step('apply', i, total_policy)   # counted whether it applied or was skipped
         if applied_path:
             result['applied'] = True
             d = spec.get('dest', '')
@@ -448,6 +604,7 @@ def apply_config_pack(manifest, fresh=False, background=True, progress=None):
 
         if not os.path.exists(dest_path):
             try:
+                original_files.setdefault(dest_path, None)
                 os.makedirs(os.path.dirname(dest_path), exist_ok=True)
                 shutil.copyfile(full_src_path, dest_path)
                 result['applied'] = True
@@ -456,12 +613,54 @@ def apply_config_pack(manifest, fresh=False, background=True, progress=None):
                 logging.log("[config_apply] unlisted file auto-seeded: {0} -> {1}".format(dest_rel, dest_path))
             except Exception as e:
                 logging.log("[config_apply] failed auto-seeding unlisted {0}: {1}".format(dest_rel, e), level=xbmc.LOGERROR)
+                failed_files.append(dest_rel)
         report.step('seed', i, total_unlisted)
     report.done('seed')
+
+    if failed_files:
+        # Do not leave a partially applied config if a later write fails.
+        restore_failed = []
+        for path, previous in original_files.items():
+            try:
+                if previous is None:
+                    if os.path.isfile(path):
+                        os.remove(path)
+                else:
+                    _atomic_copy(previous, path)
+            except Exception as exc:
+                restore_failed.append('{0}: {1}'.format(path, exc))
+        logging.log('[config_apply] incomplete config {0}; failed: {1}'.format(
+            version, ', '.join(failed_files)), level=xbmc.LOGERROR)
+        if restore_failed:
+            logging.log('[config_apply] rollback failed: {0}'.format(
+                ', '.join(restore_failed)), level=xbmc.LOGERROR)
+        result['failed_files'] = failed_files
+        result['applied'] = False
+        shutil.rmtree(backup_dir, ignore_errors=True)
+        shutil.rmtree(work_dir, ignore_errors=True)
+        tools.remove_file(zip_path)
+        return result
+
+    if fresh:
+        # Kodi may rewrite guisettings.xml on shutdown after a failed skin
+        # activation. Keep the intended fresh defaults until finalization can
+        # verify them, rather than certifying the rewritten old profile.
+        gui_spec = next((s for s in policy_files
+                         if s.get('src') == 'guisettings.xml'), None)
+        if gui_spec:
+            gui = ET.parse(os.path.join(work_dir, 'guisettings.xml'))
+            excluded = set(gui_spec.get('exclude_ids', []))
+            for node in list(gui.getroot()):
+                if node.get('id') in excluded:
+                    gui.getroot().remove(node)
+            snapshot = os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')
+            gui.write(snapshot + '.tmp', encoding='utf-8', xml_declaration=True)
+            os.replace(snapshot + '.tmp', snapshot)
 
     _run_cleanup(policy)
 
     CONFIG.set_setting('config_applied_version', version)
+    shutil.rmtree(backup_dir, ignore_errors=True)
     shutil.rmtree(work_dir, ignore_errors=True)
     tools.remove_file(zip_path)
     report.done('finish')

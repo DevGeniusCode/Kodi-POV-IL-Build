@@ -19,12 +19,9 @@ def _log(msg, level=xbmc.LOGINFO):
 
 def _enabled():
     try:
-        # Falls back to old subtitle setting if wizard setting is absent
         wiz = xbmcaddon.Addon('plugin.program.kodipovilwizard')
-        if wiz.getSetting('pov_remember_source') == 'true':
-            return True
-        sub = xbmcaddon.Addon('service.subtitles.kodipovilai')
-        return (sub.getSetting('remember_source') or '').strip().lower() == 'true'
+        choice = (wiz.getSetting('pov_remember_source') or '').strip().lower()
+        return choice == 'true'
     except Exception:
         return False
 
@@ -81,7 +78,6 @@ def run_capture(sources_self, item, link):
     """
     Hook 1: Stashes window properties for external modules and saves the selected source.
     """
-    # 1. Stash Window Properties
     try:
         win = xbmcgui.Window(10000)
         name = item.get('name', '') or item.get('URLName', '') or ''
@@ -91,7 +87,6 @@ def run_capture(sources_self, item, link):
     except Exception as e:
         _log('Failed setting Window properties: ' + str(e), xbmc.LOGWARNING)
 
-    # 2. Capture Source Memory
     if not _enabled():
         return
     try:
@@ -137,7 +132,6 @@ def run_reorder(sources_self, results):
 
         item = results.pop(idx)
 
-        # Apply the marker to display_name and fallback URLName
         try:
             fld = 'display_name' if item.get('display_name') else 'URLName'
             nm = item.get(fld) or ''
@@ -149,9 +143,7 @@ def run_reorder(sources_self, results):
         except Exception:
             pass
 
-        # Protect from downstream sorting processes in POV
         item['_pin_top'] = True
-
         results.insert(0, item)
         _log('Remembered source moved to top, marked, and pinned.')
         return True
