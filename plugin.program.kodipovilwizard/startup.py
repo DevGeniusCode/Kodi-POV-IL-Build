@@ -562,8 +562,46 @@ def wait_for_gui_ready(timeout=90):
         return False
 
 
+def _start_watch(name, target):
+    """Run a long-lived watch loop as a thread of this service. Kodi tells
+    services that it is closing; a script started with RunScript never hears
+    it in time and was killed after 5 s each -- 10 s added to every exit
+    (QA, Oct 2026). Not a daemon: it keeps this service alive after the
+    startup steps below finish or exit early."""
+    import threading
+    try:
+        worker = threading.Thread(target=target, name=name)
+        worker.start()
+    except Exception as watch_error:
+        logging.log('[{0}] start failed: {1}'.format(name, watch_error), level=xbmc.LOGWARNING)
+
+
+def _profile_guard():
+    import profile_service
+    profile_service.run()
+
+
 # Don't run the script while video is playing :)
+_start_watch('POVILProfileGuard', _profile_guard)
 check_for_video()
+# A native secondary profile does not include build addon_data/favourites.
+# Repair missing defaults before interpreting it as a fresh APK installation.
+# build_profiles stays None if the Profiles module cannot load; every later
+# Profiles step checks for that, so the build still starts as a master-only one.
+try:
+    from resources.libs import build_profiles
+except Exception as profile_err:
+    build_profiles = None
+    logging.log('[Profiles] module unavailable: {}'.format(type(profile_err).__name__), level=xbmc.LOGERROR)
+if build_profiles is not None:
+    try:
+        build_profiles.install_login_hooks()
+        build_profiles.repair_active()
+        if not build_profiles.prepare_first_login():
+            logging.log('[Profiles] add-on registration incomplete; retrying next startup', level=xbmc.LOGWARNING)
+    except Exception as profile_err:
+        logging.log('[Profiles] active repair failed: {}'.format(type(profile_err).__name__), level=xbmc.LOGERROR)
+
 # Ensure that any needed folders are created
 tools.ensure_folders()
 
@@ -612,6 +650,33 @@ if not wait_for_gui_ready():
     logging.log('[Startup] GUI unavailable; deferring dialogs', level=xbmc.LOGWARNING)
     sys.exit()
 
+# SECONDARY PROFILE HOME (Profiles). The only engine surface used here is
+# fresh_install.apply_live_defaults(defaults_path=...), fresh_install.live_favourites_ready()
+# and build_skin.refresh_home(). The master profile never enters this block.
+if build_profiles is not None:
+    try:
+        build_profiles.repair_single_login()
+        build_profiles.prepare_inactive()
+        profile_defaults = os.path.join(CONFIG.USERDATA, 'kodipovil.profile_gui_defaults.xml')
+        if not build_profiles.is_master() and os.path.isfile(profile_defaults):
+            from resources.libs import fresh_install
+            if fresh_install.apply_live_defaults(defaults_path=profile_defaults):
+                from resources.libs import build_skin
+                if build_skin.refresh_home() and fresh_install.live_favourites_ready():
+                    build_profiles.profile_store.write_missing(CONFIG.USERDATA, 'kodipovil.profile_home_ready', b'1')
+                    os.remove(profile_defaults)
+        elif not build_profiles.is_master():
+            from resources.libs import build_skin, fresh_install
+            if not os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.profile_home_ready')) and build_skin.refresh_home() and fresh_install.live_favourites_ready():
+                build_profiles.profile_store.write_missing(CONFIG.USERDATA, 'kodipovil.profile_home_ready', b'1')
+    except Exception as profile_err:
+        logging.log('[Profiles] login repair failed: {}'.format(type(profile_err).__name__), level=xbmc.LOGERROR)
+
+    if not build_profiles.is_master() and not os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.profile_home_ready')):
+        # Keep normal boot dialogs deferred until the live home is verified.
+        logging.log('[Profiles] home completion pending; deferring dialogs', level=xbmc.LOGINFO)
+        sys.exit()
+
 # FIRST-BOOT STABILIZER (race shield). Runs ONLY when the one-shot marker from a
 # just-completed install is present. Warms POV up (user-visible countdown) and
 # ReloadSkin()s so the FENtastic home widgets load against a ready POV instead of
@@ -620,7 +685,14 @@ if not wait_for_gui_ready():
 first_boot_stabilize_if_needed()
 
 # SHOW NOTIFICATIONS
-if CONFIG.ENABLE_NOTIFICATION == 'Yes' and CONFIG.get_setting('buildname'):
+try:
+    from resources.libs.patches import profile_age_guard
+    child_profile_active = profile_age_guard.active_policy() is not None
+except Exception as guard_err:
+    child_profile_active = False
+    logging.log('[Profiles] age guard unavailable: {}'.format(type(guard_err).__name__), level=xbmc.LOGERROR)
+if (not child_profile_active and CONFIG.ENABLE_NOTIFICATION == 'Yes'
+        and CONFIG.get_setting('buildname')):
     show_notification()
 else:
     logging.log('[Notifications] Not Enabled', level=xbmc.LOGINFO)

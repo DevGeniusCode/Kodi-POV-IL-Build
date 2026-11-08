@@ -1146,6 +1146,12 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
 
 AF3_TOOLS = [
     {
+        'id': 'profiles',
+        'label': 'מי צופה? — פרופילים',
+        'icon': 'DefaultUser.png',
+        'builtin': 'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profiles)',
+    },
+    {
         'id': 'connect_services',
         'label': 'חיבור שירותים',
         'icon': 'special://home/media/povil_icons/Connect_Services.png',
@@ -1250,40 +1256,29 @@ def af3_tool_action(tool_id):
 
 
 def switch_skin_in_gui_settings(gotoskin):
-    try:
-        import xbmcvfs
-        guisettings_file_path = xbmcvfs.translatePath("special://userdata/guisettings.xml")
-        import xml.etree.ElementTree as ET
-        tree = ET.parse(guisettings_file_path)
-        root = tree.getroot()
-        # Find the setting with id="lookandfeel.skin"
-        for setting in root.iter('setting'):
-            if setting.get('id') == 'lookandfeel.skin':
-                # Remove default attribute, if present
-                if 'default' in setting.attrib:
-                    del setting.attrib['default']
-                # Change the value to gotoskin
-                setting.text = gotoskin
-        # Write the modified tree back to the file
-        tree.write(guisettings_file_path)
-        return True
-    except Exception as e:
-        logging.log_notify(CONFIG.ADDONTITLE,
-                           '[COLOR {0}]שגיאה בהחלפת סקין![/COLOR]'.format(CONFIG.COLOR2))
-        logging.log(f"DEBUG | switch_skin_in_gui_settings | Exception: {str(e)}")
-        return False
+    from resources.libs import build_skin
+    return build_skin.switch(gotoskin)
+
 
 def build_switch_skin():
-
+    from resources.libs.patches import profile_age_guard
+    policy = profile_age_guard.active_policy()
+    if policy is not None and policy.get('blocked'):
+        xbmcgui.Dialog().ok('סקין פרופיל הילדים', 'יש להשלים את בקרת ההורים במשתמש הראשי.')
+        return
     if not CONFIG.get_setting('buildname'):
         logging.log_notify(CONFIG.ADDONTITLE,
                            '[COLOR {0}]לא מותקן בילד![/COLOR]'.format(CONFIG.COLOR2))
         return
 
 
+    from resources.libs import build_skin
+    if not build_skin.close_switch_menu():
+        return
     from resources.libs.gui import window
     msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX"
-    window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
+    if policy is None:
+        window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 
     skin_mapping = {
         'סקין Estuary - מראה פשוט עם כפתורים': 'skin.estuary',
@@ -1300,12 +1295,12 @@ def build_switch_skin():
     # user can pick a known skin to recover.
     current_skin_name = next(
         (skin_name for skin_name, skin_addon_name in
-         skin_mapping.items() if skin_addon_name in CONFIG.SKIN),
+         skin_mapping.items() if skin_addon_name == xbmc.getSkinDir()),
         'סקין לא מזוהה'
     )
 
     # Filter out the current active skin from the list
-    skins_list = [skin_name for skin_name, skin_addon_name in skin_mapping.items() if skin_addon_name not in CONFIG.SKIN]
+    skins_list = [skin_name for skin_name, skin_addon_name in skin_mapping.items() if skin_addon_name != xbmc.getSkinDir()]
 
     # Create a dialog window
     dialog = xbmcgui.Dialog()
@@ -1350,16 +1345,17 @@ def build_switch_skin():
             dialogProgress.update(int((3 - s) / 3.0 * 100), dialog_text)
             xbmc.sleep(1000)
 
-        # guisettings.xml | Configure lookandfeel.skin setting
-        if not switch_skin_in_gui_settings(gotoskin): return
-
-        xbmc.sleep(500)
-
-        # favourites.xml | Switch to selected build's skin favourites.xml
-        if not update_favourites_xml_file(gotoskin): return
-
         dialogProgress.close()
-        Wizard().force_close_kodi_in_5_seconds(dialog_header="סקין הוחלף בהצלחה!")
+        from resources.libs import build_profiles
+        if not build_profiles._wait_dialogs():
+            logging.log('[Skin Switch] Deferred by dialog %s' % xbmcgui.getCurrentWindowDialogId(),
+                        level=xbmc.LOGWARNING)
+            dialog.ok(CONFIG.ADDONTITLE, 'סגור את החלון הפתוח ונסה להחליף סקין שוב.')
+            return
+        if not switch_skin_in_gui_settings(gotoskin):
+            logging.log('[Skin Switch] Activation failed: ' + gotoskin, level=xbmc.LOGWARNING)
+            dialog.ok(CONFIG.ADDONTITLE, 'לא ניתן להשלים את החלפת הסקין. אפשר לנסות שוב דרך הוויזרד.')
+
     else:
         return
 

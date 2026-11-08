@@ -42,6 +42,15 @@ applied, unlisted files seeded), replacing the tracker's time-based creep. The
 download is dialog-free and reports real byte progress, so no extra Kodi
 progress dialog pops up over the install window. With ``progress=None`` the
 function behaves exactly as before.
+
+RETAINED VERIFIED PACK
+----------------------
+After a successful apply, the zip whose sha256 matched the manifest is kept in
+the MASTER profile's wizard ``addon_data/config_pack/`` together with a small
+receipt (version + sha256). Secondary profiles are seeded from that copy
+through ``open_verified_pack()``; they never read the master's accounts and the
+Wizard ships no config bundle. The copy is re-hashed on every open, and a pack
+the manifest did not provide a sha256 for is never retained.
 """
 
 import os
@@ -49,6 +58,7 @@ import json
 import hashlib
 import shutil
 import tempfile
+import zipfile
 import xml.etree.ElementTree as ET
 
 
@@ -169,6 +179,207 @@ def merge_sources_xml(existing_text, incoming_text):
 
 def _tostring(root):
     return ET.tostring(root, encoding='unicode')
+
+
+def _gui_defaults(policy, gui_bytes):
+    """guisettings.xml with the policy's machine-specific ``exclude_ids`` removed.
+
+    Returns None when the policy declares no guisettings.xml entry. Shared by
+    the fresh-install snapshot and the secondary-profile seed, so both start
+    from exactly the same defaults.
+    """
+    spec = next((s for s in policy.get('files', [])
+                 if s.get('src') == 'guisettings.xml'), None)
+    if spec is None:
+        return None
+    root = ET.fromstring(gui_bytes)
+    excluded = set(spec.get('exclude_ids', []))
+    for node in list(root):
+        if node.get('id') in excluded:
+            root.remove(node)
+    return ET.tostring(root, encoding='utf-8', xml_declaration=True)
+
+
+def _pack_layout(zf):
+    """Return (policy, {userdata-relative path: zip member}) for an opened pack.
+
+    Mirrors how apply_config_pack places files: policy entries go to their
+    declared ``dest``; every unlisted member is auto-seeded to the same
+    relative path under userdata/. Only userdata destinations are returned.
+    """
+    policy = json.loads(zf.read(POLICY_NAME).decode('utf-8'))
+    members, handled = {}, set()
+    for spec in policy.get('files', []):
+        src = _safe_relative_path(spec['src'])
+        handled.add(src)
+        dest = _safe_relative_path(spec['dest'])
+        if dest.startswith('userdata/'):
+            members[dest[len('userdata/'):]] = src
+    for name in zf.namelist():
+        if name.endswith('/') or name == POLICY_NAME:
+            continue
+        relative = _safe_relative_path(name)
+        if relative not in handled:
+            members.setdefault(relative, name)
+    return policy, members
+
+
+# --------------------------------------------------------------------------- #
+#  Retained, hash-verified pack (read by secondary-profile seeding).           #
+# --------------------------------------------------------------------------- #
+
+RETAINED_DIR = 'config_pack'
+RETAINED_ZIP = 'build_config.zip'
+RETAINED_RECEIPT = 'build_config.json'
+
+
+class PackUnavailable(Exception):
+    """No hash-verified build config pack is retained on this device."""
+
+
+def _retained_dir():
+    from resources.libs.common.config import CONFIG
+    return os.path.join(CONFIG.MASTERPROFILE, 'addon_data', CONFIG.ADDON_ID, RETAINED_DIR)
+
+
+def _retain_verified_pack(zip_path, version, sha256):
+    """Keep a copy of a pack that was just verified against the manifest.
+
+    The zip is replaced before the receipt; a crash in between leaves a zip
+    that no longer matches the old receipt, which _verified() rejects.
+    """
+    folder = _retained_dir()
+    _atomic_copy(zip_path, os.path.join(folder, RETAINED_ZIP))
+    _write_text(os.path.join(folder, RETAINED_RECEIPT), json.dumps(
+        {'config_version': version, 'sha256': str(sha256).lower()}))
+
+
+def _verified():
+    """(zip path, version) of the retained pack if its bytes still match the
+    sha256 recorded when it was verified, else None."""
+    folder = _retained_dir()
+    zip_path = os.path.join(folder, RETAINED_ZIP)
+    try:
+        with open(os.path.join(folder, RETAINED_RECEIPT), 'r', encoding='utf-8') as fh:
+            receipt = json.load(fh)
+        version, want = receipt['config_version'], receipt['sha256']
+        if not isinstance(version, str) or not version or not isinstance(want, str):
+            return None
+        if sha256_file(zip_path).lower() != want.lower():
+            return None
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return zip_path, version
+
+
+def verified_pack_path():
+    """Path of the retained, hash-verified config pack, or None."""
+    found = _verified()
+    return found[0] if found else None
+
+
+def ensure_verified_pack(manifest=None):
+    """Return the retained pack path, downloading it once when it is absent.
+
+    Used when the pack was never retained (for example the config version was
+    already applied before this device could retain it). Nothing is applied to
+    userdata. A manifest without a sha256 yields None: an unverifiable pack is
+    never trusted for profile seeding.
+    """
+    from resources.libs.common.config import CONFIG
+    from resources.libs.common import logging
+    from resources.libs.common import tools
+    import xbmc
+    existing = verified_pack_path()
+    if existing:
+        return existing
+    if manifest is None:
+        from resources.libs.modular_updater import ModularUpdater
+        manifest = ModularUpdater(background=True)._load_manifest()
+    cfg = (manifest or {}).get('config') or {}
+    version, url, want = cfg.get('config_version'), cfg.get('zip'), cfg.get('sha256')
+    if not (version and url and want):
+        logging.log('[config_apply] no verifiable config pack in manifest', level=xbmc.LOGWARNING)
+        return None
+    tools.ensure_folders(CONFIG.PACKAGES)
+    zip_path = os.path.join(CONFIG.PACKAGES, 'build_config_profiles.zip')
+    tools.remove_file(zip_path)
+    try:
+        _download_config_zip(url, zip_path, _ConfigProgress(None))
+        if sha256_file(zip_path).lower() != str(want).lower():
+            logging.log('[config_apply] sha256 mismatch for retained pack', level=xbmc.LOGERROR)
+            return None
+        _retain_verified_pack(zip_path, version, want)
+    except Exception as exc:
+        logging.log('[config_apply] could not fetch config pack: {0}'.format(exc), level=xbmc.LOGERROR)
+        return None
+    finally:
+        tools.remove_file(zip_path)
+    return verified_pack_path()
+
+
+class VerifiedPack(object):
+    """Read-only view of the retained pack, keyed by userdata-relative path.
+
+    ``names()`` / ``in`` / ``read()`` use the same paths the pack's files land
+    on under userdata/ (policy ``dest`` honoured). ``guisettings()`` returns
+    the build's GUI defaults without the machine-specific ``exclude_ids``.
+    """
+
+    def __init__(self, path, version):
+        self.path = path
+        self.version = version
+        self._zf = None
+        self._policy = None
+        self._members = {}
+
+    def __enter__(self):
+        try:
+            self._zf = zipfile.ZipFile(self.path, 'r')
+            self._policy, self._members = _pack_layout(self._zf)
+        except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
+            self.close()
+            raise PackUnavailable('retained config pack is unreadable: {0}'.format(exc))
+        return self
+
+    def __exit__(self, *exc_info):
+        self.close()
+        return False
+
+    def close(self):
+        if self._zf is not None:
+            self._zf.close()
+            self._zf = None
+
+    def names(self):
+        return list(self._members)
+
+    def __contains__(self, relative):
+        return relative in self._members
+
+    def read(self, relative):
+        return self._zf.read(self._members[relative])
+
+    def guisettings(self):
+        relative = 'guisettings.xml'
+        if relative not in self._members:
+            return None
+        return _gui_defaults(self._policy, self.read(relative))
+
+
+def open_verified_pack(fetch=False, manifest=None):
+    """Context manager over the retained pack; raises PackUnavailable if none.
+
+    ``fetch=True`` downloads and verifies the pack first when it is absent.
+    Only the master profile should pass it: it is the owner of the shared copy.
+    """
+    found = _verified()
+    if found is None and fetch:
+        ensure_verified_pack(manifest)
+        found = _verified()
+    if found is None:
+        raise PackUnavailable('no hash-verified config pack is retained')
+    return VerifiedPack(*found)
 
 
 # --------------------------------------------------------------------------- #
@@ -503,7 +714,6 @@ def apply_config_pack(manifest, fresh=False, background=True, progress=None):
     shutil.rmtree(work_dir, ignore_errors=True)
     os.makedirs(work_dir, exist_ok=True)
     try:
-        import zipfile
         with zipfile.ZipFile(zip_path, 'r') as zf:
             members = zf.namelist()
             total_members = len(members)
@@ -645,21 +855,22 @@ def apply_config_pack(manifest, fresh=False, background=True, progress=None):
         # Kodi may rewrite guisettings.xml on shutdown after a failed skin
         # activation. Keep the intended fresh defaults until finalization can
         # verify them, rather than certifying the rewritten old profile.
-        gui_spec = next((s for s in policy_files
-                         if s.get('src') == 'guisettings.xml'), None)
-        if gui_spec:
-            gui = ET.parse(os.path.join(work_dir, 'guisettings.xml'))
-            excluded = set(gui_spec.get('exclude_ids', []))
-            for node in list(gui.getroot()):
-                if node.get('id') in excluded:
-                    gui.getroot().remove(node)
-            snapshot = os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')
-            gui.write(snapshot + '.tmp', encoding='utf-8', xml_declaration=True)
-            os.replace(snapshot + '.tmp', snapshot)
+        with open(os.path.join(work_dir, 'guisettings.xml'), 'rb') as fh:
+            defaults = _gui_defaults(policy, fh.read())
+        if defaults is not None:
+            _atomic_write(os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml'), defaults)
 
     _run_cleanup(policy)
 
     CONFIG.set_setting('config_applied_version', version)
+    if want_sha:
+        # Secondary profiles are seeded from this verified copy. Retaining it
+        # can never fail the apply that already succeeded.
+        try:
+            _retain_verified_pack(zip_path, version, want_sha)
+        except Exception as exc:
+            logging.log('[config_apply] could not retain verified pack: {0}'.format(exc),
+                        level=xbmc.LOGWARNING)
     shutil.rmtree(backup_dir, ignore_errors=True)
     shutil.rmtree(work_dir, ignore_errors=True)
     tools.remove_file(zip_path)

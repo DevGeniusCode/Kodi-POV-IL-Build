@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 
 import xbmc
 import xbmcgui
+import xbmcvfs
 from resources.libs.common.config import CONFIG
 from resources.libs.common import logging, tools
 
@@ -154,6 +155,12 @@ def live_favourites_ready():
     actual = {item.get('title') for item in (_rpc('Favourites.GetFavourites', {}).get('favourites') or [])}
     if expected and expected.issubset(actual):
         return True
+    # Loading the already active secondary profile stops Kodi services without
+    # restarting them (native LoadProfile returns early for this index).
+    # The master prepares its complete favourites before the real switch.
+    master = xbmcvfs.translatePath('special://masterprofile/')
+    if os.path.normcase(os.path.realpath(CONFIG.USERDATA)) != os.path.normcase(os.path.realpath(master)):
+        return False
     # The subtitle service can add home tiles after the first refresh.
     # Allow at most two reloads of the active profile, then leave the pending
     # marker in place. This never closes Kodi or loops indefinitely.
@@ -183,6 +190,7 @@ def seed_fresh_home_shortcuts():
                         'resources', 'lib')
     for name, relative, entry in (
             ('tonight', os.path.join('tonight', 'entrypoints.py'), 'ensure'),
+            ('recent', 'recent_updates_tile_patcher.py', 'ensure_patched')):
         spec = importlib.util.spec_from_file_location(
             'povil_fresh_' + name, os.path.join(base, relative))
         module = importlib.util.module_from_spec(spec)
