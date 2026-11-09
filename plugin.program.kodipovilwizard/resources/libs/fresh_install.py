@@ -89,7 +89,7 @@ def _rpc(method, params):
 
 
 def _accept_initial_skin_confirmation():
-    from resources.libs.build_skin import confirm_requested_skin
+    from resources.libs.profiles.build_skin import confirm_requested_skin
     return confirm_requested_skin('skin.povil.nox')
 
 
@@ -133,7 +133,7 @@ def apply_live_defaults(defaults_path=None):
         if current != value and _rpc('Settings.SetSettingValue',
                                       {'setting': key, 'value': value}) is not True:
             raise RuntimeError('Fresh setting was rejected: ' + key)
-    from resources.libs import build_skin
+    from resources.libs.profiles import build_skin
     if not build_skin.activate(target_skin):
         return False
     # A manual completion runs inside the Wizard menu. That is not evidence

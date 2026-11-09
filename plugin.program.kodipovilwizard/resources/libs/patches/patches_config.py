@@ -13,6 +13,99 @@
 # action   : prepend_before | append_after   (additive-only; "replace" is forbidden)
 # marker   : "# WIZARD_<ADDON>_<NAME>_v<X>"
 # A description ending in [NEEDS_MODULE_CHECK] is queued for Phase 2 module inspection.
+#
+# Writing a hook
+# --------------
+# * A hook that imports a module from PATCHES_DIR is built with _build_patch_hook().
+#   The helper emits one self-contained try/except block (sys.path setup, import,
+#   custom logic), so a patch never depends on a name injected by another patch and
+#   a failing patch is logged to the Kodi log instead of breaking the host add-on.
+#   If the hook must still do something when the patch module fails (return a value,
+#   bail out), put that statement AFTER the helper call, at the same indent.
+# * A hook that needs no patch module (pure code substitution) stays a plain string.
+# * Identical hooks shared by several patches live in the _*_HOOK constants below.
+#
+# Run `python patches_config.py [PATCHES_DIR]` to validate the registry (schema,
+# unique ids/markers, every hook compiles; with PATCHES_DIR also that every
+# imported patch module exists).
+
+# -*- coding: utf-8 -*-
+
+PATCHES_DIR = 'special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'
+GUARD_DIR = 'special://home/addons/plugin.program.kodipovilwizard/resources/libs/profiles/'
+
+def _build_patch_hook(module_name, custom_logic='', indent='', fail_closed=False, patch_dir=PATCHES_DIR):
+    """Self-contained import-and-delegate block for a host patch.
+
+    Every hook imports the wizard module itself, so no patch depends on a name
+    another patch injected, and a drifted anchor can disable one hook without
+    breaking the host add-on.
+
+    Names that only the hook needs are unique (``_povil_dir`` and the module).
+    ``sys``, ``xbmcvfs``, ``xbmc`` and ``traceback`` are reached through
+    ``__import__`` on purpose: an ``import`` statement inside a host function
+    makes that name a LOCAL of the whole function, so the host's own earlier
+    use of ``sys``/``xbmcvfs`` would raise UnboundLocalError.
+
+    fail_closed=False  Enrichment hooks (stamping metadata). On any error the
+                       trace is logged and the host carries on.
+    fail_closed=True   Enforcement hooks (route, playback, directory, source
+                       guards). The trace is logged and the error is re-raised.
+    patch_dir          The directory path to append to sys.path (defaults to PATCHES_DIR).
+    """
+    lines = [
+        "try:",
+        f"\t_povil_dir = __import__('xbmcvfs').translatePath('{patch_dir}')",
+        "\tif _povil_dir not in __import__('sys').path:",
+        "\t\t__import__('sys').path.append(_povil_dir)",
+        f"\timport {module_name}"
+    ]
+
+    if custom_logic:
+        for line in custom_logic.strip('\n').split('\n'):
+            lines.append(("\t" + line) if line else "")
+
+    lines.extend([
+        "except Exception:",
+        f"\t__import__('xbmc').log('Wizard Patch Error [{module_name}]:\\n' + __import__('traceback').format_exc(), __import__('xbmc').LOGERROR)"
+    ])
+
+    if fail_closed:
+        lines.append("\traise")
+
+    return ''.join((indent + line if line else '') + '\n' for line in lines)
+
+def _debrid_unbound_hook(provider):
+    """Module-level torrent_id default plus the guard-active log line for a debrid API module."""
+    return "torrent_id = None\n" + _build_patch_hook(
+        module_name="pov_debrid_guardian",
+        custom_logic="pov_debrid_guardian.log_guard_active('%s')" % provider
+    )
+
+
+# Hooks shared by several patches (identical code, different targets).
+
+_META_BLANK_GUARD_HOOK = (
+    "\t\t\t# WIZARD: Bypass cache persistence and purge poisoned DB rows\n"
+    + _build_patch_hook(
+        module_name="pov_meta_handler",
+        indent="\t\t\t",
+        custom_logic="pov_meta_handler.clear_blank_meta()"
+    )
+    + "\t\t\treturn meta\n"
+)
+
+_GENRE_TRANSLATE_HOOK = _build_patch_hook(
+    module_name="pov_translations",
+    indent="\t\t",
+    custom_logic="genre_list = pov_translations.translate_genres(genre_list)"
+)
+
+_HTTP_LAZY_HOOK = _build_patch_hook(
+    module_name="pov_http_lazy",
+    custom_logic="pov_http_lazy.run()"
+)
+
 PATCH_CONFIG = [
     {
         "id": "pov_directory_clock",
@@ -43,9 +136,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_DIRECTORY_LATENCY_v1",
         "anchor": "class Router:",
         "action": "prepend_before",
-        "hook": (
-            "import pov_directory_latency\n"
-            "pov_directory_latency.install(globals())\n"
+        "hook": _build_patch_hook(
+            module_name="pov_directory_latency",
+            custom_logic="pov_directory_latency.install(globals())"
         )
     },
     {
@@ -60,16 +153,12 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_SNAPSHOT_EARLY_v2",
         "anchor": "__import__('entry').Router()()",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "try:\n"
-            "\timport pov_list_snapshot\n"
-            "\t_povil_served = pov_list_snapshot.serve_early(sys.argv)\n"
-            "except Exception:\n"
-            "\t_povil_served = False\n"
-            "if _povil_served: raise SystemExit\n"
+        "hook": _build_patch_hook(
+            module_name="pov_list_snapshot",
+            custom_logic=(
+                "if pov_list_snapshot.serve_early(sys.argv):\n"
+                "\traise SystemExit"
+            )
         )
     },
     {
@@ -84,16 +173,12 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_PLAY_GUARD_v2",
         "anchor": "__import__('entry').Router()()",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "try:\n"
-            "\timport pov_play_guard\n"
-            "\t_povil_drop = pov_play_guard.duplicate(sys.argv)\n"
-            "except Exception:\n"
-            "\t_povil_drop = False\n"
-            "if _povil_drop: raise SystemExit\n"
+        "hook": _build_patch_hook(
+            module_name="pov_play_guard",
+            custom_logic=(
+                "if pov_play_guard.duplicate(sys.argv):\n"
+                "\traise SystemExit"
+            )
         )
     },
     {
@@ -108,12 +193,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_PLAY_GUARD_END_v1",
         "anchor": "__import__('entry').Router()()",
         "action": "append_after",
-        "hook": (
-            "try:\n"
-            "\timport pov_play_guard\n"
-            "\tpov_play_guard.request_over()\n"
-            "except Exception:\n"
-            "\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_play_guard",
+            custom_logic="pov_play_guard.request_over()"
         )
     },
     {
@@ -128,15 +210,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_LINEAR_TV_HISTORY_v2",
         "anchor": "\t\tcommand = GET_MOVIE_SHOW % ('media_id, title, last_played, season, episode')",
         "action": "prepend_before",
-        "hook": (
-            "\t\ttry:\n"
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "\t\t\timport pov_watch_history\n"
-            "\t\t\treturn pov_watch_history.tv_history(globals(), watched_indicators)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_watch_history",
+            indent="\t\t",
+            custom_logic="return pov_watch_history.tv_history(globals(), watched_indicators)"
         )
     },
     {
@@ -151,12 +228,14 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_IDANPLUS_CHILD_SOURCE_v1",
         "anchor": "from resources.main import route",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "_povil_guards = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_guards not in sys.path: sys.path.append(_povil_guards)\n"
-            "import profile_age_guard\n"
-            "if not profile_age_guard.unclassified_source_allowed(): raise SystemExit()\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            fail_closed=True,
+            patch_dir=GUARD_DIR,
+            custom_logic=(
+                "if not profile_age_guard.unclassified_source_allowed():\n"
+                "\traise SystemExit()"
+            )
         )
     },
     {
@@ -171,16 +250,12 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_IDANPLUS_SNAPSHOT_v2",
         "anchor": "from resources.main import route",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "try:\n"
-            "\timport pov_list_snapshot\n"
-            "\t_povil_served = pov_list_snapshot.idanplus(sys.argv)\n"
-            "except Exception:\n"
-            "\t_povil_served = False\n"
-            "if _povil_served: raise SystemExit\n"
+        "hook": _build_patch_hook(
+            module_name="pov_list_snapshot",
+            custom_logic=(
+                "if pov_list_snapshot.idanplus(sys.argv):\n"
+                "\traise SystemExit"
+            )
         )
     },
     {
@@ -195,12 +270,11 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_PROFILE_MOVIE_META_v2",
         "anchor": "\t\t\tself.append((url_params, listitem, False))",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\ttry:\n"
-            "\t\t\t\timport profile_age_guard\n"
-            "\t\t\t\tprofile_age_guard.stamp_item(listitem, meta)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            patch_dir=GUARD_DIR,
+            indent="\t\t\t",
+            custom_logic="profile_age_guard.stamp_item(listitem, meta)"
         )
     },
     {
@@ -215,12 +289,11 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_PROFILE_TV_META_v2",
         "anchor": "\t\t\tself.append((url_params, listitem, self.is_folder))",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\ttry:\n"
-            "\t\t\t\timport profile_age_guard\n"
-            "\t\t\t\tprofile_age_guard.stamp_item(listitem, meta)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            patch_dir=GUARD_DIR,
+            indent="\t\t\t",
+            custom_logic="profile_age_guard.stamp_item(listitem, meta)"
         )
     },
     {
@@ -232,12 +305,14 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/metadata.py",
-        "marker": "# WIZARD_POV_PROFILE_EPISODE_META_v1",
+        "marker": "# WIZARD_POV_PROFILE_EPISODE_META_v2",
         "anchor": "\tinfotag = listitem.getVideoInfoTag(offscreen=True)",
         "action": "prepend_before",
-        "hook": (
-            "\timport profile_age_guard\n"
-            "\tprofile_age_guard.stamp_item(listitem, meta or {})\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            patch_dir=GUARD_DIR,
+            indent="\t",
+            custom_logic="profile_age_guard.stamp_item(listitem, meta or {})"
         )
     },
     {
@@ -249,11 +324,14 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.umbrella",
         "enabled": True,
         "target_file": "resources/lib/modules/control.py",
-        "marker": "# WIZARD_UMBRELLA_PROFILE_META_v1",
+        "marker": "# WIZARD_UMBRELLA_PROFILE_META_v2",
         "anchor": "\t\t\tinfo_tag.setMpaa(meta_get('mpaa'))",
         "action": "append_after",
-        "hook": (
-            "\t\t\tprofile_age_guard.stamp_item(item, meta)\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            patch_dir=GUARD_DIR,
+            indent="\t\t\t",
+            custom_logic="profile_age_guard.stamp_item(item, meta)"
         )
     },
     {
@@ -268,12 +346,11 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_PROFILE_DIRECTORY_v1",
         "anchor": "from modules import kodi_utils, settings",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "_povil_guards = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_guards not in sys.path: sys.path.append(_povil_guards)\n"
-            "import profile_age_guard\n"
-            "profile_age_guard.install_directory_guard()\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            fail_closed=True,
+            patch_dir=GUARD_DIR,
+            custom_logic="profile_age_guard.install_directory_guard()"
         )
     },
     {
@@ -285,11 +362,18 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/entry.py",
-        "marker": "# WIZARD_POV_PROFILE_ROUTE_v1",
+        "marker": "# WIZARD_POV_PROFILE_ROUTE_v2",
         "anchor": "\tparams = kodi_utils.parsed_query(sys_obj.argv[2])",
         "action": "append_after",
-        "hook": (
-            "\tif not profile_age_guard.route_allowed(params, 'pov'): return\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            indent="\t",
+            fail_closed=True,
+            patch_dir=GUARD_DIR,
+            custom_logic=(
+                "if not profile_age_guard.route_allowed(params, 'pov'):\n"
+                "\treturn"
+            )
         )
     },
     {
@@ -304,12 +388,15 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_PROFILE_PLAY_v1",
         "anchor": "\t\tif not url: return",
         "action": "prepend_before",
-        "hook": (
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _p not in sys.path: sys.path.append(_p)\n"
-            "\t\timport profile_age_guard\n"
-            "\t\tif not profile_age_guard.permit_play(meta or {}, 'pov', url): return\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            indent="\t\t",
+            fail_closed=True,
+            patch_dir=GUARD_DIR,
+            custom_logic=(
+                "if not profile_age_guard.permit_play(meta or {}, 'pov', url):\n"
+                "\treturn"
+            )
         )
     },
     {
@@ -324,12 +411,11 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_UMBRELLA_PROFILE_DIRECTORY_v1",
         "anchor": "import xbmcvfs",
         "action": "append_after",
-        "hook": (
-            "import sys\n"
-            "_povil_guards = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_guards not in sys.path: sys.path.append(_povil_guards)\n"
-            "import profile_age_guard\n"
-            "profile_age_guard.install_directory_guard()\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            fail_closed=True,
+            patch_dir=GUARD_DIR,
+            custom_logic="profile_age_guard.install_directory_guard()"
         )
     },
     {
@@ -344,12 +430,15 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_UMBRELLA_PROFILE_ROUTE_v1",
         "anchor": "\taction = params.get('action')",
         "action": "prepend_before",
-        "hook": (
-            "\timport sys, xbmcvfs\n"
-            "\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tif _p not in sys.path: sys.path.append(_p)\n"
-            "\timport profile_age_guard\n"
-            "\tif not profile_age_guard.route_allowed(params, 'umbrella'): return\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            indent="\t",
+            fail_closed=True,
+            patch_dir=GUARD_DIR,
+            custom_logic=(
+                "if not profile_age_guard.route_allowed(params, 'umbrella'):\n"
+                "\treturn"
+            )
         )
     },
     {
@@ -364,13 +453,16 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_UMBRELLA_PROFILE_PLAY_v1",
         "anchor": "\t\t\tposter, thumb, season_poster, fanart, banner, clearart, clearlogo, discart, meta = self.getMeta(meta)",
         "action": "append_after",
-        "hook": (
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _p not in sys.path: sys.path.append(_p)\n"
-            "\t\t\timport profile_age_guard\n"
-            "\t\t\t_age_meta = dict(meta or {}, mediatype=self.media_type, tmdb=self.tmdb)\n"
-            "\t\t\tif not profile_age_guard.permit_play(_age_meta, 'umbrella', url): return control.cancelPlayback()\n"
+        "hook": _build_patch_hook(
+            module_name="profile_age_guard",
+            indent="\t\t\t",
+            fail_closed=True,
+            patch_dir=GUARD_DIR,
+            custom_logic=(
+                "_age_meta = dict(meta or {}, mediatype=self.media_type, tmdb=self.tmdb)\n"
+                "if not profile_age_guard.permit_play(_age_meta, 'umbrella', url):\n"
+                "\treturn control.cancelPlayback()"
+            )
         )
     },
     {
@@ -401,17 +493,13 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_TRAKT_PERSONAL_NEWEST_v2",
         "anchor": "\treturn trakt_cache.cache_trakt_object(_get_trakt_paginated_list, string, url)",
         "action": "prepend_before",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_mdblist_patch_logic\n"
-            "\t\tif list_type == 'my_lists':\n"
-            "\t\t\treturn pov_mdblist_patch_logic.newest_personal_items(trakt_cache.cache_trakt_object(_get_trakt_paginated_list, string, url))\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_mdblist_patch_logic",
+            indent="\t",
+            custom_logic=(
+                "if list_type == 'my_lists':\n"
+                "\treturn pov_mdblist_patch_logic.newest_personal_items(trakt_cache.cache_trakt_object(_get_trakt_paginated_list, string, url))"
+            )
         )
     },
     {
@@ -426,18 +514,14 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MDBLIST_PERSONAL_NEWEST_v2",
         "anchor": "\treturn mdbl_cache.cache_mdbl_object(_get_mdbl_paginated_list, string, url)['items']",
         "action": "prepend_before",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_mdblist_patch_logic\n"
-            "\t\tif list_type == 'my_lists':\n"
-            "\t\t\turl = pov_mdblist_patch_logic.personal_mdbl_url(url + '&povil_personal=1')\n"
-            "\t\t\treturn mdbl_cache.cache_mdbl_object(_get_mdbl_paginated_list, string + '_newest_v1', url)['items']\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_mdblist_patch_logic",
+            indent="\t",
+            custom_logic=(
+                "if list_type == 'my_lists':\n"
+                "\turl = pov_mdblist_patch_logic.personal_mdbl_url(url + '&povil_personal=1')\n"
+                "\treturn mdbl_cache.cache_mdbl_object(_get_mdbl_paginated_list, string + '_newest_v1', url)['items']"
+            )
         )
     },
     {
@@ -452,19 +536,14 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_HEBREW_INTERFACE_v1",
         "anchor": "\ttry: _string = int(string)",
         "action": "prepend_before",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys\n"
-            "\t\timport xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\tfrom pov_ui_labels import hebrew_label\n"
-            "\t\t_povil_hebrew_label = hebrew_label(string)\n"
-            "\t\tif _povil_hebrew_label is not None:\n"
-            "\t\t\treturn _povil_hebrew_label\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_ui_labels",
+            indent="\t",
+            custom_logic=(
+                "_povil_hebrew_label = pov_ui_labels.hebrew_label(string)\n"
+                "if _povil_hebrew_label is not None:\n"
+                "\treturn _povil_hebrew_label"
+            )
         )
     },
     {
@@ -498,13 +577,15 @@ PATCH_CONFIG = [
         "anchor": "\tmaincache.set(string, result, expiration)",
         "action": "prepend_before",
         "hook": (
+            # The import stays lazy (only paid for empty results) and an empty result is
+            # never cached, even when the patch module fails.
             "\tif not result:\n"
-            "\t\timport sys, xbmcvfs;\n"
-            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
-            "\t\tsys.path.append(p) if p not in sys.path else None;\n"
-            "\t\timport pov_cache_handler;\n"
-            "\t\tpov_cache_handler.handle_empty(string);\n"
-            "\t\treturn result\n"
+            + _build_patch_hook(
+                module_name="pov_cache_handler",
+                indent="\t\t",
+                custom_logic="pov_cache_handler.handle_empty(string)"
+            )
+            + "\t\treturn result\n"
         )
     },
     {
@@ -535,16 +616,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_VISIBILITY_MGR_v3",
         "anchor": "\t\tcontents = nc.get_shortcut_folder_contents(list_name)",
         "action": "append_after",
-        "hook": (
-            "\t\ttry:\n"
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\timport pov_visibility_mgr\n"
-            "\t\t\tcontents = pov_visibility_mgr.filter_navigator_list(contents, list_name)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_visibility_mgr",
+            indent="\t\t",
+            custom_logic="contents = pov_visibility_mgr.filter_navigator_list(contents, list_name)"
         )
     },
     {
@@ -666,17 +741,7 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_GENRE_DICT_MAIN_LOOP_v2",
         "anchor": "\t\tself._add_item({'mode': 'navigator.multiselect_genres', 'genre_list': json.dumps(genre_list), 'menu_type': menu_type, 'exclude_external': 'true', 'name': ls(32846)}, 'genres.png', isFolder=False)",
         "action": "append_after",
-        "hook": (
-            "\t\ttry:\n"
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\timport pov_translations\n"
-            "\t\t\tgenre_list = pov_translations.translate_genres(genre_list)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
-        )
+        "hook": _GENRE_TRANSLATE_HOOK
     },
     {
         "id": "pov_genre_dict_multiselect_translation",
@@ -690,17 +755,7 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_GENRE_DICT_MULTISELECT_v3",
         "anchor": "\t\tgenre_list = dict(sorted(json.loads(genre_list).items()))",
         "action": "append_after",
-        "hook": (
-            "\t\ttry:\n"
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\timport pov_translations\n"
-            "\t\t\tgenre_list = pov_translations.translate_genres(genre_list)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
-        )
+        "hook": _GENRE_TRANSLATE_HOOK
     },
     {
         "id": "pov_tmdb_timeout_widen",
@@ -750,15 +805,7 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MOVIE_META_GUARD_v3",
         "anchor": "\t\t\tmetacache_set('movie', id_type, meta, EXPIRES_2_DAYS)",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\t# WIZARD: Bypass cache persistence and purge poisoned DB rows\n"
-            "\t\t\timport sys, xbmcvfs;\n"
-            "\t\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
-            "\t\t\tsys.path.append(p) if p not in sys.path else None;\n"
-            "\t\t\timport pov_meta_handler;\n"
-            "\t\t\tpov_meta_handler.clear_blank_meta();\n"
-            "\t\t\treturn meta\n"
-        )
+        "hook": _META_BLANK_GUARD_HOOK
     },
     {
         "id": "pov_tvshow_meta_blank_guard",
@@ -772,15 +819,7 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_TVSHOW_META_GUARD_v3",
         "anchor": "\t\t\tmetacache_set('tvshow', id_type, meta, EXPIRES_2_DAYS)",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\t# WIZARD: Bypass cache persistence and purge poisoned DB rows\n"
-            "\t\t\timport sys, xbmcvfs;\n"
-            "\t\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
-            "\t\t\tsys.path.append(p) if p not in sys.path else None;\n"
-            "\t\t\timport pov_meta_handler;\n"
-            "\t\t\tpov_meta_handler.clear_blank_meta();\n"
-            "\t\t\treturn meta\n"
-        )
+        "hook": _META_BLANK_GUARD_HOOK
     },
     {
         "id": "pov_repeat_timer_resiliency",
@@ -814,19 +853,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_SERVICES_ACCTMGR_v2",
         "anchor": "class RepeatTimer(Timer):",
         "action": "prepend_before",
-        "hook": (
-            "import sys\n"
-            "import xbmcvfs\n"
-            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_p not in sys.path:\n"
-            "\tsys.path.append(_povil_p)\n"
-            "try:\n"
-            "\timport pov_myservices\n"
-            "\tauthorize = pov_myservices.get_authorize_override(authorize)\n"
-            "except Exception:\n"
-            "\tpass\n"
-            "\n"
-        )
+        "hook": _build_patch_hook(
+            module_name="pov_myservices",
+            custom_logic="authorize = pov_myservices.get_authorize_override(authorize)"
+        ) + "\n"
     },
     {
         "id": "pov_torbox_api_user_stats",
@@ -859,18 +889,13 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_TORBOX_USAGE_UI_v4",
         "anchor": "\t\t\tappend('[B]Downloaded[/B]: %s' % account_info['total_downloaded'])",
         "action": "append_after",
-        "hook": (
-            "\t\t\timport sys\n"
-            "\t\t\timport xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\ttry:\n"
-            "\t\t\t\timport pov_torbox_usage\n"
-            "\t\t\t\tkodi_utils.hide_busy_dialog()\n"
-            "\t\t\t\treturn pov_torbox_usage.show_textviewer_and_exit(self, account_info)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_torbox_usage",
+            indent="\t\t\t",
+            custom_logic=(
+                "kodi_utils.hide_busy_dialog()\n"
+                "return pov_torbox_usage.show_textviewer_and_exit(self, account_info)"
+            )
         )
     },
     {
@@ -885,12 +910,13 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_TRAKT_EMPTY_CACHE_v3",
         "anchor": "dbcur.execute(TC_BASE_SET, (string, json.dumps(result)))",
         "action": "prepend_before",
-        "hook": (
-            "\timport sys, xbmcvfs\n"
-            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tsys.path.append(p) if p not in sys.path else None\n"
-            "\timport pov_trakt_cache\n"
-            "\tif pov_trakt_cache.is_empty_result(result, string): return result\n"
+        "hook": _build_patch_hook(
+            module_name="pov_trakt_cache",
+            indent="\t",
+            custom_logic=(
+                "if pov_trakt_cache.is_empty_result(result, string):\n"
+                "\treturn result"
+            )
         )
     },
     {
@@ -924,18 +950,13 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_VIEW_MODE_FIX_v2",
         "anchor": "\t\tfor _ in range(60):",
         "action": "prepend_before",
-        "hook": (
-            "\t\ttry:\n"
-            "\t\t\timport sys\n"
-            "\t\t\timport xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\timport pov_view_mode\n"
-            "\t\t\tpov_view_mode.force_view(view_id, content)\n"
-            "\t\t\treturn\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_view_mode",
+            indent="\t\t",
+            custom_logic=(
+                "pov_view_mode.force_view(view_id, content)\n"
+                "return"
+            )
         )
     },
     {
@@ -950,18 +971,12 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_ADDON_WINDOW_IMPORT_v3",
         "anchor": "from xbmcaddon import Addon",
         "action": "append_after",
-        "hook": (
-            "try:\n"
-            "\timport sys\n"
-            "\timport xbmcvfs\n"
-            "\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tif _povil_p not in sys.path:\n"
-            "\t\tsys.path.append(_povil_p)\n"
-            "\timport pov_addon_window\n"
-            "\tpov_addon_window.wait_for_window()\n"
-            "\tAddon = pov_addon_window.patient_addon(Addon)\n"
-            "except Exception:\n"
-            "\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_addon_window",
+            custom_logic=(
+                "pov_addon_window.wait_for_window()\n"
+                "Addon = pov_addon_window.patient_addon(Addon)"
+            )
         )
     },
     {
@@ -976,19 +991,14 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_COMBINED_DISCOVER_v4",
         "anchor": "\t\treturn tmdb_api.list_details(self.list_id)",
         "action": "prepend_before",
-        "hook": (
-            "\t\timport sys\n"
-            "\t\timport xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\ttry:\n"
-            "\t\t\timport pov_combined_discover\n"
-            "\t\t\t_povil_res = pov_combined_discover.handle_fetch(self.params)\n"
-            "\t\t\tif _povil_res is not None:\n"
-            "\t\t\t\treturn _povil_res\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_combined_discover",
+            indent="\t\t",
+            custom_logic=(
+                "_povil_res = pov_combined_discover.handle_fetch(self.params)\n"
+                "if _povil_res is not None:\n"
+                "\treturn _povil_res"
+            )
         )
     },
     {
@@ -1019,16 +1029,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MY_LISTS_MOVIES_v4",
         "anchor": "\t\t\texcept ValueError: page_no = params_get('new_page')",
         "action": "append_after",
-        "hook": (
-            "\t\t\ttry:\n"
-            "\t\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\t\timport pov_my_lists\n"
-            "\t\t\t\tpov_my_lists.maybe_populate_movies(self, page_no)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_my_lists",
+            indent="\t\t\t",
+            custom_logic="pov_my_lists.maybe_populate_movies(self, page_no)"
         )
     },
     {
@@ -1043,16 +1047,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MY_LISTS_TVSHOWS_v4",
         "anchor": "\t\t\texcept ValueError: page_no = params_get('new_page')",
         "action": "append_after",
-        "hook": (
-            "\t\t\ttry:\n"
-            "\t\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\t\timport pov_my_lists\n"
-            "\t\t\t\tpov_my_lists.maybe_populate_tvshows(self, page_no)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_my_lists",
+            indent="\t\t\t",
+            custom_logic="pov_my_lists.maybe_populate_tvshows(self, page_no)"
         )
     },
     {
@@ -1067,17 +1065,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_DEBRID_STATUS_v3",
         "anchor": "\tSettingsMonitor()()",
         "action": "prepend_before",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys\n"
-            "\t\timport xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_debrid_status\n"
-            "\t\tpov_debrid_status.run(locals())\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_debrid_status",
+            indent="\t",
+            custom_logic="pov_debrid_status.run(locals())"
         )
     },
     {
@@ -1092,18 +1083,13 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_CUSTOM_DEBRID_TOASTS_v3",
         "anchor": "\tSettingsMonitor()()",
         "action": "prepend_before",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys\n"
-            "\t\timport xbmcvfs\n"
-            "\t\timport threading\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_custom_debrid_toasts\n"
-            "\t\tthreading.Thread(target=pov_custom_debrid_toasts.run, args=(locals(),)).start()\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_custom_debrid_toasts",
+            indent="\t",
+            custom_logic=(
+                "import threading\n"
+                "threading.Thread(target=pov_custom_debrid_toasts.run, args=(locals(),)).start()"
+            )
         )
     },
     {
@@ -1118,16 +1104,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_FAV_REFRESH_MANAGE_v2",
         "anchor": "return self.execute_toggle(choice, action_add)",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_p not in sys.path:\n"
-            "\tsys.path.append(_povil_p)\n"
-            "try:\n"
-            "\timport pov_fav_refresh_manage\n"
-            "\treturn pov_fav_refresh_manage.run(locals())\n"
-            "except Exception:\n"
-            "\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_fav_refresh_manage",
+            custom_logic="return pov_fav_refresh_manage.run(locals())"
         )
     },
     {
@@ -1158,14 +1137,7 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_AD_UNBOUND_GUARD_v2",
         "anchor": "from modules.source_utils import supported_video_extensions",
         "action": "append_after",
-        "hook": (
-            "torrent_id = None\n"
-            "import sys, xbmcvfs\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "sys.path.append(p) if p not in sys.path else None\n"
-            "import pov_debrid_guardian\n"
-            "pov_debrid_guardian.log_guard_active('alldebrid')\n"
-        )
+        "hook": _debrid_unbound_hook('alldebrid')
     },
     {
         "id": "pov_rd_unbound_guard",
@@ -1179,14 +1151,7 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_RD_UNBOUND_GUARD_v2",
         "anchor": "from modules.source_utils import supported_video_extensions",
         "action": "append_after",
-        "hook": (
-            "torrent_id = None\n"
-            "import sys, xbmcvfs\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "sys.path.append(p) if p not in sys.path else None\n"
-            "import pov_debrid_guardian\n"
-            "pov_debrid_guardian.log_guard_active('realdebrid')\n"
-        )
+        "hook": _debrid_unbound_hook('realdebrid')
     },
     {
         "id": "pov_tb_unbound_guard",
@@ -1203,16 +1168,11 @@ PATCH_CONFIG = [
         "hook": (
             "\t\tpath = None\n"
             "\t\ttorrent_id = None\n"
-            "\t\timport sys\n"
-            "\t\timport xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\ttry:\n"
-            "\t\t\timport pov_debrid_guardian\n"
-            "\t\t\tpov_debrid_guardian.log_guard_active('torbox')\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+            + _build_patch_hook(
+                module_name="pov_debrid_guardian",
+                indent="\t\t",
+                custom_logic="pov_debrid_guardian.log_guard_active('torbox')"
+            )
         )
     },
     {
@@ -1229,16 +1189,13 @@ PATCH_CONFIG = [
         "action": "append_after",
         "hook": (
             "\t\t_povil_raw = self.api('get', path, params=params)\n"
-            "\t\timport sys\n"
-            "\t\timport xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\ttry:\n"
-            "\t\t\timport pov_torbox_url_fix\n"
-            "\t\t\treturn pov_torbox_url_fix.safe_url(_povil_raw)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\treturn _povil_raw\n"
+            + _build_patch_hook(
+                module_name="pov_torbox_url_fix",
+                indent="\t\t",
+                custom_logic="return pov_torbox_url_fix.safe_url(_povil_raw)"
+            )
+            # Fail open to the raw response so the native API call below is not repeated.
+            + "\t\treturn _povil_raw\n"
         )
     },
     {
@@ -1253,12 +1210,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_AD_ERROR_LOG_v2",
         "anchor": "response = response.json() if 'json' in response.headers.get('Content-Type', '') else response",
         "action": "append_after",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "sys.path.append(p) if p not in sys.path else None\n"
-            "import pov_debrid_guardian\n"
-            "pov_debrid_guardian.log_debrid_error('alldebrid', response, locals().get('path', ''))\n"
+        "hook": _build_patch_hook(
+            module_name="pov_debrid_guardian",
+            custom_logic="pov_debrid_guardian.log_debrid_error('alldebrid', response, locals().get('path', ''))"
         )
     },
     {
@@ -1273,17 +1227,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_TB_ERROR_LOG_v3",
         "anchor": "\t\tresponse = response.json()",
         "action": "append_after",
-        "hook": (
-            "\t\timport sys\n"
-            "\t\timport xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\ttry:\n"
-            "\t\t\timport pov_debrid_guardian\n"
-            "\t\t\tpov_debrid_guardian.log_debrid_error('torbox', response)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_debrid_guardian",
+            indent="\t\t",
+            custom_logic="pov_debrid_guardian.log_debrid_error('torbox', response)"
         )
     },
     {
@@ -1298,12 +1245,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_PM_ERROR_LOG_v2",
         "anchor": "result = self._post(url, data)",
         "action": "append_after",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "sys.path.append(p) if p not in sys.path else None\n"
-            "import pov_debrid_guardian\n"
-            "pov_debrid_guardian.log_debrid_error('premiumize', result, locals().get('url', ''))\n"
+        "hook": _build_patch_hook(
+            module_name="pov_debrid_guardian",
+            custom_logic="pov_debrid_guardian.log_debrid_error('premiumize', result, locals().get('url', ''))"
         )
     },
     {
@@ -1318,15 +1262,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_DEBRID_TIMEOUT_v3",
         "anchor": "self.monitor(threads, debrid_format, True)",
         "action": "append_after",
-        "hook": (
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "\t\t\ttry:\n"
-            "\t\t\t\timport pov_debrid_timeout\n"
-            "\t\t\t\tpov_debrid_timeout.run(self, threads, torrent_sources)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_debrid_timeout",
+            indent="\t\t\t",
+            custom_logic="pov_debrid_timeout.run(self, threads, torrent_sources)"
         )
     },
     {
@@ -1357,15 +1296,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_HEB_PREWARM_v2",
         "anchor": "results = self.get_sources()",
         "action": "prepend_before",
-        "hook": (
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "\t\ttry:\n"
-            "\t\t\timport pov_prewarm\n"
-            "\t\t\tpov_prewarm.run(self.meta)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_prewarm",
+            indent="\t\t",
+            custom_logic="pov_prewarm.run(self.meta)"
         )
     },
     {
@@ -1380,15 +1314,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_PLAYBACK_CAPTURE_v3",
         "anchor": "return POVPlayer().run(link, item.get('name'), self.meta, progress_media)",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "\t\t\ttry:\n"
-            "\t\t\t\timport pov_source_remember\n"
-            "\t\t\t\tpov_source_remember.run_capture(self, item, link)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_source_remember",
+            indent="\t\t\t",
+            custom_logic="pov_source_remember.run_capture(self, item, link)"
         )
     },
     {
@@ -1403,15 +1332,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_REORDER_SOURCES_v3",
         "anchor": "window_style = results_xml_style()",
         "action": "prepend_before",
-        "hook": (
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "\t\ttry:\n"
-            "\t\t\timport pov_source_remember\n"
-            "\t\t\tpov_source_remember.run_reorder(self, results)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_source_remember",
+            indent="\t\t",
+            custom_logic="pov_source_remember.run_reorder(self, results)"
         )
     },
     {
@@ -1426,15 +1350,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_LEGACY_SCRAPERS_v2",
         "anchor": "for loader, module_name, is_pkg in pkgutil.iter_modules([source_path]):",
         "action": "prepend_before",
-        "hook": (
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "\t\ttry:\n"
-            "\t\t\timport pov_legacy_scrapers\n"
-            "\t\t\tpov_legacy_scrapers.run(self, source_path, append, prescrape)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_legacy_scrapers",
+            indent="\t\t",
+            custom_logic="pov_legacy_scrapers.run(self, source_path, append, prescrape)"
         )
     },
     {
@@ -1449,6 +1368,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_RESOLVE_DIAG_v2",
         "anchor": "if not selected_files: raise Exception('selected_files failed')",
         "action": "prepend_before",
+        # Kept as a raw hook on purpose: pov_resolve_diag.run() most likely raises the
+        # expanded exception itself, and _build_patch_hook() would swallow it (log only).
+        # Convert once the module has been checked.
         "hook": (
             "import sys, xbmcvfs;\n"
             "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
@@ -1469,13 +1391,13 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_DEBRID_ERROR_GUARD_v2",
         "anchor": "if self.debrid in ('rd', 'realdebrid'):",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs;\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
-            "sys.path.append(p) if p not in sys.path else None;\n"
-            "import pov_debrid_error_guard;\n"
-            "_wiz_res = pov_debrid_error_guard.run(self, unchecked_hashes);\n"
-            "if _wiz_res is not None: return _wiz_res\n"
+        "hook": _build_patch_hook(
+            module_name="pov_debrid_error_guard",
+            custom_logic=(
+                "_wiz_res = pov_debrid_error_guard.run(self, unchecked_hashes)\n"
+                "if _wiz_res is not None:\n"
+                "\treturn _wiz_res"
+            )
         )
     },
     {
@@ -1490,16 +1412,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_TRAKT_REAUTH_v3",
         "anchor": "def trakt_sync_activities(force_update=False, init_callback=None, monitor=None):",
         "action": "prepend_before",
-        "hook": (
-            "try:\n"
-            "\timport sys, xbmcvfs\n"
-            "\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tif _povil_p not in sys.path:\n"
-            "\t\tsys.path.append(_povil_p)\n"
-            "\timport pov_trakt_reauth\n"
-            "\tpov_trakt_reauth.run(sys.modules[__name__])\n"
-            "except Exception:\n"
-            "\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_trakt_reauth",
+            custom_logic="pov_trakt_reauth.run(sys.modules[__name__])"
         )
     },
     {
@@ -1514,12 +1429,13 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_SHARED_HTTP_TMDB_v2",
         "anchor": "from session import session, HTTPAdapter, Retry",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs, xbmcaddon\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "sys.path.append(p) if p not in sys.path else None\n"
-            "import pov_http_session\n"
-            "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/session.py'), getattr(pov_http_session, 'pov_version', str)())\n"
+        "hook": _build_patch_hook(
+            module_name="pov_http_session",
+            custom_logic=(
+                # The legacy hook also bound xbmcaddon in the host module; kept to preserve behavior.
+                "import xbmcaddon\n"
+                "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/session.py'), getattr(pov_http_session, 'pov_version', str)())"
+            )
         )
     },
     {
@@ -1534,16 +1450,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_SHARED_HTTP_TRAKT_v3",
         "anchor": "from modules.session import session, HTTPAdapter, Retry",
         "action": "prepend_before",
-        "hook": (
-            "try:\n"
-            "\timport sys, xbmcvfs\n"
-            "\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tif _povil_p not in sys.path:\n"
-            "\t\tsys.path.append(_povil_p)\n"
-            "\timport pov_http_session\n"
-            "\tpov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/modules/session.py'), name='modules.session')\n"
-            "except Exception:\n"
-            "\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_http_session",
+            custom_logic="pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/modules/session.py'), name='modules.session')"
         )
     },
     {
@@ -1558,13 +1467,7 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_HTTP_LAZY_TMDB_v2",
         "anchor": "import requests",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "sys.path.append(p) if p not in sys.path else None\n"
-            "import pov_http_lazy\n"
-            "pov_http_lazy.run()\n"
-        )
+        "hook": _HTTP_LAZY_HOOK
     },
     {
         "id": "pov_http_lazy_trakt",
@@ -1578,13 +1481,7 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_HTTP_LAZY_TRAKT_v2",
         "anchor": "import requests",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "sys.path.append(p) if p not in sys.path else None\n"
-            "import pov_http_lazy\n"
-            "pov_http_lazy.run()\n"
-        )
+        "hook": _HTTP_LAZY_HOOK
     },
     {
         "id": "pov_source_quality_fix",
@@ -1598,16 +1495,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_SOURCE_QUALITY_v2",
         "anchor": "for count, item in enumerate(self.results, 1):",
         "action": "prepend_before",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_p not in sys.path:\n"
-            "\tsys.path.append(_povil_p)\n"
-            "try:\n"
-            "\timport pov_source_quality_v2\n"
-            "\tpov_source_quality_v2.run(locals())\n"
-            "except Exception:\n"
-            "\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_source_quality_v2",
+            custom_logic="pov_source_quality_v2.run(locals())"
         )
     },
     {
@@ -1622,16 +1512,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_SUB_MATCH_v2",
         "anchor": "set_property('tikiskins.size_label', get('size_label', 'N/A'))",
         "action": "append_after",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_p not in sys.path:\n"
-            "\tsys.path.append(_povil_p)\n"
-            "try:\n"
-            "\timport pov_sub_match_v2\n"
-            "\tpov_sub_match_v2.run(locals())\n"
-            "except Exception:\n"
-            "\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_sub_match_v2",
+            custom_logic="pov_sub_match_v2.run(locals())"
         )
     },
     {
@@ -1646,16 +1529,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_SUB_MATCH_REFRESH_v1",
         "anchor": "self.win.addItems(self.item_list)",
         "action": "append_after",
-        "hook": (
-            "import sys, xbmcvfs\n"
-            "_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "if _povil_p not in sys.path:\n"
-            "\tsys.path.append(_povil_p)\n"
-            "try:\n"
-            "\timport pov_sub_match_v2\n"
-            "\tpov_sub_match_v2.refresh_when_ready(self)\n"
-            "except Exception:\n"
-            "\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_sub_match_v2",
+            custom_logic="pov_sub_match_v2.refresh_when_ready(self)"
         )
     },
     {
@@ -1670,12 +1546,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_NAV_READ_FIX_v2",
         "anchor": "navigator_cache = NavigatorCache()",
         "action": "append_after",
-        "hook": (
-            "import sys, xbmcvfs;\n"
-            "p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
-            "sys.path.append(p) if p not in sys.path else None;\n"
-            "import pov_nav_read_fix;\n"
-            "pov_nav_read_fix.run(navigator_cache)\n"
+        "hook": _build_patch_hook(
+            module_name="pov_nav_read_fix",
+            custom_logic="pov_nav_read_fix.run(navigator_cache)"
         )
     },
     {
@@ -1690,19 +1563,14 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_AIOSTREAMS_FIX_v4",
         "anchor": "\tsettings.extend(item[1] for item in (",
         "action": "prepend_before",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys\n"
-            "\t\timport xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_aiostreams_fix\n"
-            "\t\tsettings = pov_aiostreams_fix.enforce_credentials(settings)\n"
-            "\t\timport pov_legacy_scrapers\n"
-            "\t\tsettings = pov_legacy_scrapers.enabled_settings(settings)\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_aiostreams_fix",
+            indent="\t",
+            custom_logic=(
+                "settings = pov_aiostreams_fix.enforce_credentials(settings)\n"
+                "import pov_legacy_scrapers\n"
+                "settings = pov_legacy_scrapers.enabled_settings(settings)"
+            )
         )
     },
     {
@@ -1735,18 +1603,14 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MDBL_REAUTH_RETRY_v4",
         "anchor": "\t\tlogger('mdblist error', str(e))",
         "action": "append_after",
-        "hook": (
-            "\t\ttry:\n"
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\timport pov_mdblist_patch_logic\n"
-            "\t\t\t_povil_ai_retry = pov_mdblist_patch_logic.handle_401_reauth(_povil_orig_e, path, params, json, method, locals().get('response'))\n"
-            "\t\t\tif _povil_ai_retry is not None:\n"
-            "\t\t\t\treturn _povil_ai_retry\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_mdblist_patch_logic",
+            indent="\t\t",
+            custom_logic=(
+                "_povil_ai_retry = pov_mdblist_patch_logic.handle_401_reauth(_povil_orig_e, path, params, json, method, locals().get('response'))\n"
+                "if _povil_ai_retry is not None:\n"
+                "\treturn _povil_ai_retry"
+            )
         )
     },
     {
@@ -1763,16 +1627,14 @@ PATCH_CONFIG = [
         "action": "prepend_before",
         "hook": (
             "\tif interval + current >= expires:\n"
-            "\t\ttry:\n"
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\timport pov_mdblist_patch_logic\n"
-            "\t\t\tif pov_mdblist_patch_logic.repair_api_key_auth():\n"
-            "\t\t\t\treturn\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+            + _build_patch_hook(
+                module_name="pov_mdblist_patch_logic",
+                indent="\t\t",
+                custom_logic=(
+                    "if pov_mdblist_patch_logic.repair_api_key_auth():\n"
+                    "\treturn"
+                )
+            )
         )
     },
     {
@@ -1787,9 +1649,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MDBL_CACHE_READS_v1",
         "anchor": "\tdbcur = MDBLCache().dbcur",
         "action": "prepend_before",
-        "hook": (
-            "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic\n"
-            "\treturn pov_mdblist_patch_logic.cache_list(function, string, url)\n"
+        "hook": _build_patch_hook(
+            module_name="pov_mdblist_patch_logic",
+            indent="\t",
+            custom_logic="return pov_mdblist_patch_logic.cache_list(function, string, url)"
         )
     },
     {
@@ -1804,16 +1667,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MDBL_RESPONSE_PAGES_v2",
         "anchor": "\t\tif isinstance(result, list):",
         "action": "prepend_before",
-        "hook": (
-            "\t\ttry:\n"
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\timport pov_mdblist_patch_logic\n"
-            "\t\t\tresult = pov_mdblist_patch_logic.list_response_pagination(result, response)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_mdblist_patch_logic",
+            indent="\t\t",
+            custom_logic="result = pov_mdblist_patch_logic.list_response_pagination(result, response)"
         )
     },
     {
@@ -1830,15 +1687,11 @@ PATCH_CONFIG = [
         "action": "prepend_before",
         "hook": (
             "\tif list_type == 'collection':\n"
-            "\t\ttry:\n"
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\timport pov_mdblist_patch_logic\n"
-            "\t\t\treturn pov_mdblist_patch_logic.collection_items(results, mediatype)\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+            + _build_patch_hook(
+                module_name="pov_mdblist_patch_logic",
+                indent="\t\t",
+                custom_logic="return pov_mdblist_patch_logic.collection_items(results, mediatype)"
+            )
         )
     },
     {
@@ -1853,16 +1706,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MDBL_PAGES_v2",
         "anchor": "\tparams = {'limit': 1000}",
         "action": "prepend_before",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_mdblist_patch_logic\n"
-            "\t\treturn pov_mdblist_patch_logic.paginated_list(url, MAX_LIST_ITEMS)\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_mdblist_patch_logic",
+            indent="\t",
+            custom_logic="return pov_mdblist_patch_logic.paginated_list(url, MAX_LIST_ITEMS)"
         )
     },
     {
@@ -1877,6 +1724,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MDBL_MANAGER_READ_v1",
         "anchor": "class MdbListManager(list_helper.BaseListManager):",
         "action": "append_after",
+        # Kept as a raw hook on purpose: the except clause needs the patch module's
+        # exception class, and a helper-wrapped super().manage() could run twice
+        # (once inside the try, again as a fallback) if the native flow raised.
         "hook": (
             "# Guard only MDBList reads; keep native mutations.\n"
             "\tdef manage(self):\n"
@@ -1899,16 +1749,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MDBL_SCROBBLE_STOP_v3",
         "anchor": "\tsuccess = result[result_key][success_key] > 0",
         "action": "append_after",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_mdblist_patch_logic\n"
-            "\t\tpov_mdblist_patch_logic.scrobble_stop_if_watched(action, key, media, media_id, season, episode)\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_mdblist_patch_logic",
+            indent="\t",
+            custom_logic="pov_mdblist_patch_logic.scrobble_stop_if_watched(action, key, media, media_id, season, episode)"
         )
     },
     {
@@ -1997,27 +1841,19 @@ PATCH_CONFIG = [
         "hook": (
             "# Preserve the native function body below.\n"
             "def mdbl_like_a_list(params):\n"
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_mdblist_patch_logic\n"
-            "\t\tpov_mdblist_patch_logic.like_a_list(params)\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
-            "\n"
-            "def mdbl_unlike_a_list(params):\n"
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_mdblist_patch_logic\n"
-            "\t\tpov_mdblist_patch_logic.unlike_a_list(params)\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
-            "\n"
+            + _build_patch_hook(
+                module_name="pov_mdblist_patch_logic",
+                indent="\t",
+                custom_logic="pov_mdblist_patch_logic.like_a_list(params)"
+            )
+            + "\n"
+            + "def mdbl_unlike_a_list(params):\n"
+            + _build_patch_hook(
+                module_name="pov_mdblist_patch_logic",
+                indent="\t",
+                custom_logic="pov_mdblist_patch_logic.unlike_a_list(params)"
+            )
+            + "\n"
         )
     },
     {
@@ -2032,16 +1868,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MDBL_ACCOUNT_HEAL_v3",
         "anchor": "\tif not get_setting('mdblist_user', ''): return 'no account'",
         "action": "prepend_before",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_mdblist_patch_logic\n"
-            "\t\tpov_mdblist_patch_logic.heal_mdblist_account_if_needed()\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_mdblist_patch_logic",
+            indent="\t",
+            custom_logic="pov_mdblist_patch_logic.heal_mdblist_account_if_needed()"
         )
     },
     {
@@ -2072,11 +1902,15 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MDBL_PRE_SEARCH_v2",
         "anchor": "\treturn SearchMdblLists(params).build()",
         "action": "prepend_before",
-        "hook": (
-            "\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic;\n"
-            "\t_ai_params = pov_mdblist_patch_logic.pre_search_check(params)\n"
-            "\tif _ai_params is None: return\n"
-            "\tparams.update(_ai_params)\n"
+        "hook": _build_patch_hook(
+            module_name="pov_mdblist_patch_logic",
+            indent="\t",
+            custom_logic=(
+                "_ai_params = pov_mdblist_patch_logic.pre_search_check(params)\n"
+                "if _ai_params is None:\n"
+                "\treturn\n"
+                "params.update(_ai_params)"
+            )
         )
     },
     {
@@ -2091,9 +1925,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_MDBL_MENU_LIKE_v2",
         "anchor": "\t\t\t\tcm_append((add2menu_str, 'RunPlugin(%s)' % build_url({'mode': 'menu_editor.add_external', 'name': name, 'iconImage': 'mdblist.png'})))",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\t\timport sys, xbmcvfs; p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'); sys.path.append(p) if p not in sys.path else None; import pov_mdblist_patch_logic;\n"
-            "\t\t\t\tpov_mdblist_patch_logic.append_like_menu(cm_append, list_type, list_id)\n"
+        "hook": _build_patch_hook(
+            module_name="pov_mdblist_patch_logic",
+            indent="\t\t\t\t",
+            custom_logic="pov_mdblist_patch_logic.append_like_menu(cm_append, list_type, list_id)"
         )
     },
     {
@@ -2112,17 +1947,13 @@ PATCH_CONFIG = [
             "_povil_orig_lists_sort_order = lists_sort_order\n"
             "\n"
             "def lists_sort_order(setting, mediatype=None):\n"
-            "\ttry:\n"
-            "\t\timport sys\n"
-            "\t\timport xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_mdblist_patch_logic\n"
-            "\t\treturn pov_mdblist_patch_logic.lists_sort_order_override(_povil_orig_lists_sort_order, setting, mediatype)\n"
-            "\texcept Exception:\n"
-            "\t\treturn _povil_orig_lists_sort_order(setting, mediatype)\n"
-            "\n"
+            + _build_patch_hook(
+                module_name="pov_mdblist_patch_logic",
+                indent="\t",
+                custom_logic="return pov_mdblist_patch_logic.lists_sort_order_override(_povil_orig_lists_sort_order, setting, mediatype)"
+            )
+            + "\treturn _povil_orig_lists_sort_order(setting, mediatype)\n"
+            + "\n"
         )
     },
     {
@@ -2137,16 +1968,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_WIDGET_BUDGET_MOVIES_v3",
         "anchor": "\t\t\tkodi_utils.add_items(__handle__, worker())",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\ttry:\n"
-            "\t\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\t\timport pov_widget_budget\n"
-            "\t\t\t\tworker = pov_widget_budget.wrap_worker(self, worker)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_widget_budget",
+            indent="\t\t\t",
+            custom_logic="worker = pov_widget_budget.wrap_worker(self, worker)"
         )
     },
     {
@@ -2161,16 +1986,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_WIDGET_BUDGET_TVSHOWS_v3",
         "anchor": "\t\t\tkodi_utils.add_items(__handle__, self.worker())",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\ttry:\n"
-            "\t\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\t\timport pov_widget_budget\n"
-            "\t\t\t\tself.worker = pov_widget_budget.wrap_worker(self, self.worker)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_widget_budget",
+            indent="\t\t\t",
+            custom_logic="self.worker = pov_widget_budget.wrap_worker(self, self.worker)"
         )
     },
     {
@@ -2185,12 +2004,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_NEXT_EPISODE_BUDGET_v1",
         "anchor": "if self.list: kodi_utils.add_items(__handle__, self.worker())",
         "action": "prepend_before",
-        "hook": (
-            "\t\timport sys, xbmcvfs;\n"
-            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/');\n"
-            "\t\tsys.path.append(p) if p not in sys.path else None;\n"
-            "\t\timport pov_widget_budget;\n"
-            "\t\tself.worker = pov_widget_budget.wrap_next_episode_worker(self, self.worker)\n"
+        "hook": _build_patch_hook(
+            module_name="pov_widget_budget",
+            indent="\t\t",
+            custom_logic="self.worker = pov_widget_budget.wrap_next_episode_worker(self, self.worker)"
         )
     },
     {
@@ -2228,15 +2045,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_WATCHED_LAZY_MOCK_v3",
         "anchor": "from caches.mdbl_cache import clear_mdbl_collection_watchlist_data",
         "action": "prepend_before",
-        "hook": (
-            "try:\n"
-            "\timport sys, xbmcvfs\n"
-            "\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "\timport pov_watched_lazy_imports\n"
-            "\tpov_watched_lazy_imports.mock_modules()\n"
-            "except Exception:\n"
-            "\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_watched_lazy_imports",
+            custom_logic="pov_watched_lazy_imports.mock_modules()"
         )
     },
     {
@@ -2251,12 +2062,9 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_WATCHED_LAZY_PROXY_v3",
         "anchor": "from indexers.trakt_api import trakt_get_hidden_items, trakt_official_status, trakt_progress, trakt_watched_unwatched",
         "action": "append_after",
-        "hook": (
-            "try:\n"
-            "\timport pov_watched_lazy_imports\n"
-            "\tpov_watched_lazy_imports.apply_proxies(globals())\n"
-            "except Exception:\n"
-            "\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_watched_lazy_imports",
+            custom_logic="pov_watched_lazy_imports.apply_proxies(globals())"
         )
     },
     {
@@ -2271,6 +2079,8 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_NEXT_CONSTRUCTOR_v1",
         "anchor": "class Menu(Episodes):",
         "action": "append_after",
+        # Kept as a raw hook on purpose: this replaces __init__, and a swallowed failure
+        # would leave the menu object half-initialised instead of failing loudly.
         "hook": (
             "# Keep the inherited constructor unchanged outside this scoped read.\n"
             "\tdef __init__(self, params):\n"
@@ -2294,15 +2104,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_INDEXED_NEXT_HISTORY_v2",
         "anchor": "def get_next_episodes(watched_indicators):",
         "action": "append_after",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "\t\timport pov_next_history\n"
-            "\t\treturn pov_next_history.next_episodes(globals(), watched_indicators)\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_next_history",
+            indent="\t",
+            custom_logic="return pov_next_history.next_episodes(globals(), watched_indicators)"
         )
     },
     {
@@ -2317,17 +2122,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_TMDB_LIST_ACTIONS_v2",
         "anchor": "\t\treturn [(i.lower(), i, '', self.icon) for i in (watchl_str, fav_str)]",
         "action": "prepend_before",
-        "hook": (
-            "\t\timport sys\n"
-            "\t\timport xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\ttry:\n"
-            "\t\t\timport pov_list_actions\n"
-            "\t\t\treturn pov_list_actions.default_choices(self, globals(), 'tmdb')\n"
-            "\t\texcept Exception:\n"
-            "\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_list_actions",
+            indent="\t\t",
+            custom_logic="return pov_list_actions.default_choices(self, globals(), 'tmdb')"
         )
     },
     {
@@ -2342,12 +2140,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_TRAKT_LIST_ACTIONS_v1",
         "anchor": "\t\tchoices = [(i.lower(), i, '', self.icon) for i in (watchl_str, fav_str, coll_str)]",
         "action": "prepend_before",
-        "hook": (
-            "\t\timport sys, xbmcvfs\n"
-            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tsys.path.append(p) if p not in sys.path else None\n"
-            "\t\timport pov_list_actions\n"
-            "\t\treturn pov_list_actions.default_choices(self, globals(), 'trakt')\n"
+        "hook": _build_patch_hook(
+            module_name="pov_list_actions",
+            indent="\t\t",
+            custom_logic="return pov_list_actions.default_choices(self, globals(), 'trakt')"
         )
     },
     {
@@ -2362,15 +2158,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_CONTINUE_EXCLUSIONS_v2",
         "anchor": "def get_dropped_info_tv(watched_indicators):",
         "action": "append_after",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "\t\timport pov_continue_watching\n"
-            "\t\treturn pov_continue_watching.dropped_info(globals(), watched_indicators)\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_continue_watching",
+            indent="\t",
+            custom_logic="return pov_continue_watching.dropped_info(globals(), watched_indicators)"
         )
     },
     {
@@ -2385,12 +2176,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_CONTINUE_PREFETCH_v1",
         "anchor": "\t\tfor i in threads: i.start()",
         "action": "prepend_before",
-        "hook": (
-            "\t\timport sys, xbmcvfs\n"
-            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tsys.path.append(p) if p not in sys.path else None\n"
-            "\t\timport pov_continue_watching\n"
-            "\t\tthreads = (*threads, Thread(target=pov_continue_watching.service_prefetch, args=(self,)))\n"
+        "hook": _build_patch_hook(
+            module_name="pov_continue_watching",
+            indent="\t\t",
+            custom_logic="threads = (*threads, Thread(target=pov_continue_watching.service_prefetch, args=(self,)))"
         )
     },
     {
@@ -2405,12 +2194,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_CONTINUE_SOURCES_v1",
         "anchor": "\t\tif callable(func): func(params_get)",
         "action": "append_after",
-        "hook": (
-            "\t\timport sys, xbmcvfs\n"
-            "\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tsys.path.append(p) if p not in sys.path else None\n"
-            "\t\timport pov_continue_watching\n"
-            "\t\tpov_continue_watching.filter_episode_sources(self)\n"
+        "hook": _build_patch_hook(
+            module_name="pov_continue_watching",
+            indent="\t\t",
+            custom_logic="pov_continue_watching.filter_episode_sources(self)"
         )
     },
     {
@@ -2425,13 +2212,14 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_EPISODE_FOCUSED_INFO_v1",
         "anchor": "\t\t\tself.append((url_params, listitem, False))",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tsys.path.append(p) if p not in sys.path else None\n"
-            "\t\t\timport pov_continue_watching\n"
-            "\t\t\timport pov_episode_info\n"
-            "\t\t\tpov_episode_info.complete(listitem, meta, item, ep_name)\n"
+        "hook": _build_patch_hook(
+            module_name="pov_episode_info",
+            indent="\t\t\t",
+            custom_logic=(
+                # The legacy hook also imported pov_continue_watching here; kept to preserve behavior.
+                "import pov_continue_watching\n"
+                "pov_episode_info.complete(listitem, meta, item, ep_name)"
+            )
         )
     },
     {
@@ -2446,12 +2234,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_CONTINUE_ACTIONS_v2",
         "anchor": "\t\t\tcm.sort(key=lambda k: k[0])",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tsys.path.append(p) if p not in sys.path else None\n"
-            "\t\t\timport pov_continue_watching\n"
-            "\t\t\tpov_continue_watching.append_episode_actions(locals(), build_url, run_plugin)\n"
+        "hook": _build_patch_hook(
+            module_name="pov_continue_watching",
+            indent="\t\t\t",
+            custom_logic="pov_continue_watching.append_episode_actions(locals(), build_url, run_plugin)"
         )
     },
     {
@@ -2466,16 +2252,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_CONTINUE_SHOW_ACTIONS_v2",
         "anchor": "\t\t\tcm.sort(key=lambda k: k[0])",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\ttry:\n"
-            "\t\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\t\timport pov_continue_watching\n"
-            "\t\t\t\tpov_continue_watching.append_show_actions(locals(), build_url, run_plugin)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_continue_watching",
+            indent="\t\t\t",
+            custom_logic="pov_continue_watching.append_show_actions(locals(), build_url, run_plugin)"
         )
     },
     {
@@ -2490,16 +2270,10 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_CONTINUE_SHOW_SOURCES_v2",
         "anchor": "\t\t\tkodi_utils.add_items(__handle__, self.worker())",
         "action": "prepend_before",
-        "hook": (
-            "\t\t\ttry:\n"
-            "\t\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\t\tif _povil_p not in sys.path:\n"
-            "\t\t\t\t\tsys.path.append(_povil_p)\n"
-            "\t\t\t\timport pov_continue_watching\n"
-            "\t\t\t\tpov_continue_watching.filter_show_sources(self)\n"
-            "\t\t\texcept Exception:\n"
-            "\t\t\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_continue_watching",
+            indent="\t\t\t",
+            custom_logic="pov_continue_watching.filter_show_sources(self)"
         )
     },
     {
@@ -2516,14 +2290,13 @@ PATCH_CONFIG = [
         "action": "append_after",
         "hook": (
             "\tif str(params.get('season')) == 'choose':\n"
-            "\t\ttry:\n"
-            "\t\t\timport sys, xbmcvfs\n"
-            "\t\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n"
-            "\t\t\timport pov_continue_watching\n"
-            "\t\t\treturn pov_continue_watching.choose_season(params, globals())\n"
-            "\t\texcept Exception:\n"
-            "\t\t\treturn\n"
+            + _build_patch_hook(
+                module_name="pov_continue_watching",
+                indent="\t\t",
+                custom_logic="return pov_continue_watching.choose_season(params, globals())"
+            )
+            # A failed picker must not fall through to native marking with season='choose'.
+            + "\t\treturn\n"
         )
     },
     {
@@ -2540,11 +2313,11 @@ PATCH_CONFIG = [
         "action": "append_after",
         "hook": (
             "# Preserve the native function body below.\n"
-            "\timport sys, xbmcvfs\n"
-            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tsys.path.append(p) if p not in sys.path else None\n"
-            "\timport pov_continue_watching\n"
-            "\treturn pov_continue_watching.dropped_choice(params, globals())\n"
+            + _build_patch_hook(
+                module_name="pov_continue_watching",
+                indent="\t",
+                custom_logic="return pov_continue_watching.dropped_choice(params, globals())"
+            )
         )
     },
     {
@@ -2577,11 +2350,14 @@ PATCH_CONFIG = [
         "action": "append_after",
         "hook": (
             "# Preserve the native function body below.\n"
-            "\timport sys, xbmcvfs\n"
-            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tsys.path.append(p) if p not in sys.path else None\n"
-            "\timport pov_continue_watching\n"
-            "\tif list_type == 'dropped': pov_continue_watching.invalidate('trakt')\n"
+            + _build_patch_hook(
+                module_name="pov_continue_watching",
+                indent="\t",
+                custom_logic=(
+                    "if list_type == 'dropped':\n"
+                    "\tpov_continue_watching.invalidate('trakt')"
+                )
+            )
         )
     },
     {
@@ -2596,17 +2372,13 @@ PATCH_CONFIG = [
         "marker": "# WIZARD_POV_TRAKT_CONTINUE_TOGGLE_v3",
         "anchor": "def hide_unhide_trakt_items(action, mediatype, media_id, list_type):",
         "action": "append_after",
-        "hook": (
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_continue_watching\n"
-            "\t\tif mediatype in ('show', 'shows', 'tvshow') and list_type == 'dropped':\n"
-            "\t\t\treturn pov_continue_watching.remote_toggle(globals(), 'trakt', action, mediatype, media_id, list_type)\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+        "hook": _build_patch_hook(
+            module_name="pov_continue_watching",
+            indent="\t",
+            custom_logic=(
+                "if mediatype in ('show', 'shows', 'tvshow') and list_type == 'dropped':\n"
+                "\treturn pov_continue_watching.remote_toggle(globals(), 'trakt', action, mediatype, media_id, list_type)"
+            )
         )
     },
     {
@@ -2623,11 +2395,14 @@ PATCH_CONFIG = [
         "action": "append_after",
         "hook": (
             "# Preserve the native function body below.\n"
-            "\timport sys, xbmcvfs\n"
-            "\tp = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\tsys.path.append(p) if p not in sys.path else None\n"
-            "\timport pov_continue_watching\n"
-            "\tif list_type == 'dropped': pov_continue_watching.invalidate('mdblist')\n"
+            + _build_patch_hook(
+                module_name="pov_continue_watching",
+                indent="\t",
+                custom_logic=(
+                    "if list_type == 'dropped':\n"
+                    "\tpov_continue_watching.invalidate('mdblist')"
+                )
+            )
         )
     },
     {
@@ -2644,16 +2419,103 @@ PATCH_CONFIG = [
         "action": "append_after",
         "hook": (
             "# Preserve the native function body below.\n"
-            "\ttry:\n"
-            "\t\timport sys, xbmcvfs\n"
-            "\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n"
-            "\t\tif _povil_p not in sys.path:\n"
-            "\t\t\tsys.path.append(_povil_p)\n"
-            "\t\timport pov_continue_watching\n"
-            "\t\tif mediatype in ('show', 'shows', 'tvshow') and list_type == 'dropped':\n"
-            "\t\t\treturn pov_continue_watching.remote_toggle(globals(), 'mdblist', action, mediatype, media_id, list_type)\n"
-            "\texcept Exception:\n"
-            "\t\tpass\n"
+            + _build_patch_hook(
+                module_name="pov_continue_watching",
+                indent="\t",
+                custom_logic=(
+                    "if mediatype in ('show', 'shows', 'tvshow') and list_type == 'dropped':\n"
+                    "\treturn pov_continue_watching.remote_toggle(globals(), 'mdblist', action, mediatype, media_id, list_type)"
+                )
+            )
         )
     }
 ]
+
+
+# ---------------------------------------------------------------------------
+# Registry validation (not run at import time; used from the command line / CI)
+# ---------------------------------------------------------------------------
+
+_REQUIRED_FIELDS = (
+    'id', 'name', 'description', 'category', 'priority', 'addon_id', 'enabled',
+    'target_file', 'marker', 'anchor', 'action', 'hook',
+)
+_CATEGORIES = {
+    'translation', 'ui', 'ux', 'performance', 'subtitles', 'crash_guard',
+    'account_manager', 'parental_control', 'reliability', 'diagnostics', 'compatibility',
+}
+_PRIORITIES = {'critical', 'major', 'minor'}
+_ACTIONS = {'prepend_before', 'append_after'}
+# Imports in a hook that do not come from PATCHES_DIR.
+_NON_PATCH_MODULES = {'sys', 'time', 're', 'threading', 'traceback', 'xbmc', 'xbmcvfs', 'xbmcaddon'}
+
+
+def _compile_hook(hook):
+    """Compiles a hook inside a dummy function/loop nested to the hook's own indent depth."""
+    import re
+    lines = hook.split('\n')
+    if lines and lines[-1] == '':
+        lines.pop()
+    code = [l for l in lines if l.strip() and not l.lstrip().startswith('#')]
+    depth = len(code[0]) - len(code[0].lstrip('\t')) if code else 0
+    src = ['def _outer():']
+    src += ['\t%s = None' % name for name in sorted(set(re.findall(r'nonlocal\s+(\w+)', hook)))]
+    src += ['\tdef _inner():', '\t\twhile True:']
+    base = '\t\t\t'
+    src += [base + '\t' * i + 'if True:' for i in range(depth)]
+    src += [base + line for line in lines]
+    compile('\n'.join(src) + '\n', '<hook>', 'exec')
+
+
+def validate_registry(patches_dir=None):
+    """Returns a list of problems found in PATCH_CONFIG (empty list means valid)."""
+    import os
+    import re
+    problems = []
+    seen_ids, seen_markers = set(), set()
+    for index, patch in enumerate(PATCH_CONFIG):
+        pid = patch.get('id', '#%d' % index)
+        missing = [f for f in _REQUIRED_FIELDS if f not in patch]
+        if missing:
+            problems.append('%s: missing fields %s' % (pid, ', '.join(missing)))
+            continue
+        if pid in seen_ids:
+            problems.append('%s: duplicate id' % pid)
+        seen_ids.add(pid)
+        key = (patch['target_file'], patch['marker'])
+        if key in seen_markers:
+            problems.append('%s: duplicate marker %s in %s' % (pid, patch['marker'], patch['target_file']))
+        seen_markers.add(key)
+        if not re.match(r'^# WIZARD_[A-Z0-9_]+_v\d+$', patch['marker']):
+            problems.append('%s: marker %r does not match "# WIZARD_<ADDON>_<NAME>_v<X>"' % (pid, patch['marker']))
+        if patch['category'] not in _CATEGORIES:
+            problems.append('%s: unknown category %r' % (pid, patch['category']))
+        if patch['priority'] not in _PRIORITIES:
+            problems.append('%s: unknown priority %r' % (pid, patch['priority']))
+        if patch['action'] not in _ACTIONS:
+            problems.append('%s: unknown action %r' % (pid, patch['action']))
+        if not isinstance(patch['enabled'], bool):
+            problems.append('%s: enabled must be a bool' % pid)
+        hook = patch['hook']
+        if not isinstance(hook, str) or not hook.endswith('\n'):
+            problems.append('%s: hook must be a string ending in a newline' % pid)
+            continue
+        try:
+            _compile_hook(hook)
+        except SyntaxError as exc:
+            problems.append('%s: hook does not compile (%s, line %s)' % (pid, exc.msg, exc.lineno))
+        if patches_dir:
+            names = set(re.findall(r'(?:^|;)\s*(?:from|import)\s+(\w+)', hook, re.M)) - _NON_PATCH_MODULES
+            for name in sorted(names):
+                if not os.path.isfile(os.path.join(patches_dir, name + '.py')):
+                    problems.append('%s: patch module %s.py not found in %s' % (pid, name, patches_dir))
+    return problems
+
+
+if __name__ == '__main__':
+    import sys
+    _problems = validate_registry(sys.argv[1] if len(sys.argv) > 1 else None)
+    for _problem in _problems:
+        print(_problem)
+    print('%d patches checked, %d problem(s)' % (len(PATCH_CONFIG), len(_problems)))
+    sys.exit(1 if _problems else 0)

@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 import xbmc
 import xbmcvfs
 
-from resources.libs import profile_store
+from resources.libs.profiles import profile_store
 from resources.libs.patches import pov_visibility_mgr
 
 

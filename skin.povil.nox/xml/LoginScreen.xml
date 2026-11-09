@@ -1,5 +1,6 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="UTF-8"?>
 <window>
+  <!-- ######## PROFILES ###### -->
   <!--POVIL Profile UI v1: native control 52 owns profile selection and locks.-->
   <defaultcontrol always="true">52</defaultcontrol>
   <controls>
@@ -212,4 +213,5 @@
       <onclick>ActivateWindow(ShutdownMenu)</onclick>
     </control>
   </controls>
+  <!-- ######## PROFILES ###### -->
 </window>

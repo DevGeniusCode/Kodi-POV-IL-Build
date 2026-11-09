@@ -2,7 +2,7 @@
 import os
 import xml.etree.ElementTree as ET
 
-from resources.libs import profile_store
+from resources.libs.profiles import profile_store
 
 # Copy account fields, not databases, watched state or unrelated preferences.
 GROUPS = (
@@ -41,7 +41,7 @@ def available(master):
 
 
 def copy_selected(master, target, selected):
-    from resources.libs.parental_profiles import atomic_write
+    from resources.libs.profiles.parental_profiles import atomic_write
     dest = profile_store.profile_path(master, target)
     if target['id'] == 0:
         raise ValueError('Accounts can only be copied to a secondary profile')

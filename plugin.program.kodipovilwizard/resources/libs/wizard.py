@@ -935,7 +935,7 @@ def ensure_arctic_fuse_3_installed():
 def ensure_nox_installed():
     """Use the verified modular skin, never the obsolete static pack."""
     from resources.libs.modular_updater import ModularUpdater
-    from resources.libs import build_skin
+    from resources.libs.profiles import build_skin
     updater = ModularUpdater(background=True)
     ident = 'skin.povil.nox'
     if updater._version_tuple(updater.get_local_version(ident)) >= updater._version_tuple(NOX_SKIN_VERSION):
@@ -1256,12 +1256,12 @@ def af3_tool_action(tool_id):
 
 
 def switch_skin_in_gui_settings(gotoskin):
-    from resources.libs import build_skin
+    from resources.libs.profiles import build_skin
     return build_skin.switch(gotoskin)
 
 
 def build_switch_skin():
-    from resources.libs.patches import profile_age_guard
+    from resources.libs.profiles import profile_age_guard
     policy = profile_age_guard.active_policy()
     if policy is not None and policy.get('blocked'):
         xbmcgui.Dialog().ok('סקין פרופיל הילדים', 'יש להשלים את בקרת ההורים במשתמש הראשי.')
@@ -1272,7 +1272,7 @@ def build_switch_skin():
         return
 
 
-    from resources.libs import build_skin
+    from resources.libs.profiles import build_skin
     if not build_skin.close_switch_menu():
         return
     from resources.libs.gui import window
@@ -1346,7 +1346,7 @@ def build_switch_skin():
             xbmc.sleep(1000)
 
         dialogProgress.close()
-        from resources.libs import build_profiles
+        from resources.libs.profiles import build_profiles
         if not build_profiles._wait_dialogs():
             logging.log('[Skin Switch] Deferred by dialog %s' % xbmcgui.getCurrentWindowDialogId(),
                         level=xbmc.LOGWARNING)

@@ -71,7 +71,7 @@ def wrap_worker(instance, original_worker):
     # Child publication filters by classification after the native worker.
     # It needs the complete candidate page, including unrated/blocked titles.
     try:
-        import profile_age_guard
+        from resources.libs.profiles import profile_age_guard
         policy = (profile_age_guard.work_policy(instance.params)
                   if hasattr(profile_age_guard, 'work_policy') else profile_age_guard.active_policy())
         if policy is not None:
@@ -153,7 +153,7 @@ def wrap_next_episode_worker(instance, original_worker):
                 not isinstance(row, dict) or not isinstance(row.get('last_played', fallback), str)
                 for row in source):
             return original_worker
-        import profile_age_guard
+        from resources.libs.profiles import profile_age_guard
         policy = (profile_age_guard.work_policy(instance.params)
                   if hasattr(profile_age_guard, 'work_policy') else profile_age_guard.active_policy())
         if policy is not None:

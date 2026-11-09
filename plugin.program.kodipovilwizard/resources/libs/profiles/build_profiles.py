@@ -9,9 +9,9 @@ import xbmcaddon
 import xbmcgui
 import xbmcvfs
 
-from resources.libs import config_apply, profile_store
-from resources.libs.build_skin import wait_dialogs as _wait_dialogs
-from resources.libs.patches import profile_age_guard
+from resources.libs.profiles import config_apply, profile_store
+from resources.libs.profiles.build_skin import wait_dialogs as _wait_dialogs
+from resources.libs.profiles import profile_age_guard
 
 WIZARD = 'plugin.program.kodipovilwizard'
 # Everything a seed can raise: bad profile folder/POV database, or no retained pack.
@@ -56,7 +56,7 @@ def _seed(profile):
         result = profile_store.seed_profile(_master_path(), profile, pack, build,
                                             prepare_login=is_master())
     if is_master():
-        from resources.libs import profile_home
+        from resources.libs.profiles import profile_home
         profile_home.prepare(_master_path(), profile)
     return result
 
@@ -117,13 +117,13 @@ def install_login_hooks():
             if not os.path.isfile(path):
                 continue
             try:
-                from resources.libs import child_profiles
+                from resources.libs.profiles import child_profiles
                 if child_profiles.install_home(path) and ident == xbmc.getSkinDir():
                     active_home_changed = True
                 with open(path, encoding='utf-8-sig') as source:
                     text = source.read()
                 if 'profile_bootstrap.py' not in text:
-                    bootstrap = '<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/profile_bootstrap.py)</onload>'
+                    bootstrap = '<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/resources/libs/profiles/profile_bootstrap.py)</onload>'
                     changed, count = re.subn(r'(<window(?:\s[^>]*)?>)', r'\1\n    ' + bootstrap, text, count=1)
                     if count == 1:
                         ET.fromstring(changed)
@@ -163,7 +163,7 @@ def install_login_design(path):
                if 'single_profile_login.py' not in (action.text or '')]
     for index, action in enumerate(actions):
         design.insert(index, action)
-    from resources.libs import child_profiles
+    from resources.libs.profiles import child_profiles
     child_profiles.adapt_fonts(design, path)
     changed = ET.tostring(design, encoding='utf-8', xml_declaration=True)
     if ET.tostring(original) == ET.tostring(design):
@@ -363,7 +363,7 @@ def add_profile():
     kind = xbmcgui.Dialog().select('איזה פרופיל להוסיף?', ['פרופיל רגיל', 'פרופיל ילדים עם הגבלת גיל'])
     if kind < 0:
         return
-    from resources.libs import profile_connections
+    from resources.libs.profiles import profile_connections
     connections = profile_connections.choose(master)
     if connections is None:
         return
@@ -402,7 +402,7 @@ def add_profile():
             idle_since = None
             copy_native_profile_defaults()
             if kind == 1:
-                from resources.libs import child_profiles
+                from resources.libs.profiles import child_profiles
                 child_profiles.preset_native_locks(child_locks)
         elif saw_dialog:
             idle_since = idle_since or time.monotonic()
@@ -417,7 +417,7 @@ def add_profile():
                     return
                 xbmc.executebuiltin('ActivateWindow(home)')
                 if kind == 1:
-                    from resources.libs import parental_profiles
+                    from resources.libs.profiles import parental_profiles
                     # An unfinished child setup must never become an
                     # unrestricted profile merely because the parent cancels.
                     profile_store.write_missing(profile_store.profile_path(master, new[0]),
@@ -457,7 +457,7 @@ def load_profile(name):
                 break
     if not _wait_dialogs():
         return
-    from resources.libs import build_skin
+    from resources.libs.profiles import build_skin
     if not build_skin.persist_live_settings():
         xbmcgui.Dialog().notification('החלפת פרופיל', 'שמירת ההגדרות לא הושלמה. נסה שוב.')
         return
@@ -472,7 +472,7 @@ def open_child_content(kind):
     policy = profile_age_guard.active_policy()
     if policy is None:
         return
-    if policy.get('blocked') or not profile_age_guard.host_integrity(xbmcvfs.translatePath('special://home/addons/')):
+    if policy.get('blocked'):
         xbmcgui.Dialog().ok('פרופיל ילדים', 'הסינון אינו מוכן. עבור למשתמש הראשי להשלמת העדכון או הגדרות הנעילה.')
         return
     routes = {
@@ -556,7 +556,7 @@ def show():
         elif action == 'native' and _require_master():
             _native_settings()
         elif action == 'parental':
-            from resources.libs import parental_profiles
+            from resources.libs.profiles import parental_profiles
             parental_profiles.setup()
         elif action == 'settings':
             if profile_age_guard.active_policy() is not None:

@@ -9,8 +9,8 @@ import xbmc
 import xbmcaddon
 import xbmcgui
 
-from resources.libs import profile_store
-from resources.libs.patches import profile_age_guard as guard
+from resources.libs.profiles import profile_store
+from resources.libs.profiles import profile_age_guard as guard
 
 
 def read(master):
@@ -69,7 +69,7 @@ def set_child(master, target, age):
     atomic_write(os.path.join(path, 'guisettings.xml'), ET.tostring(gui.getroot(), encoding='utf-8', xml_declaration=True))
     atomic_write(os.path.join(path, 'kodipovil.profile_gui_defaults.xml'),
                  ET.tostring(gui.getroot(), encoding='utf-8', xml_declaration=True))
-    from resources.libs import child_profiles
+    from resources.libs.profiles import child_profiles
     child_profiles.seed_skin_flags(path)
     previous = data['children'].get(key, {})
     data['children'][key] = dict(age=age, approved=previous.get('approved', {}))
@@ -78,7 +78,7 @@ def set_child(master, target, age):
 
 def copy_debrid(master, target):
     """Only after the parent elects to share these connections, no watch lists."""
-    from resources.libs.profile_connections import copy_selected
+    from resources.libs.profiles.profile_connections import copy_selected
     copy_selected(master, target, ['realdebrid', 'alldebrid', 'premiumize', 'torbox'])
 
 
@@ -132,7 +132,7 @@ def _approve_search(master, profile):
 
 
 def setup(profile=None):
-    from resources.libs import build_profiles as profiles
+    from resources.libs.profiles import build_profiles as profiles
     if not profiles._require_master():
         return
     master = profiles._master_path()
@@ -155,8 +155,9 @@ def setup(profile=None):
     if action == 0:
         from resources.libs.patch_engine import PatchEngine
         import xbmcvfs
-        PatchEngine().run()
-        if not guard.host_integrity(xbmcvfs.translatePath('special://home/addons/')):
+        stats = PatchEngine().run()
+        if any(stats.get(k, 0) for k in ('failed', 'missing', 'anchor_missing', 'malformed')):
+            # Logic for failed patches
             xbmcgui.Dialog().ok('בקרת הורים', 'סינון התוכן אינו מוכן בגרסת ההרחבות המותקנת. השלם עדכון מהיר ונסה שוב.')
             return
         if not prerequisites(master, profile, data['children']):

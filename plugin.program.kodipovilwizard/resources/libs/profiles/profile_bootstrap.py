@@ -40,7 +40,7 @@ def _settled_adult(master, active):
         except (OSError, ValueError, TypeError, AttributeError):
             return False
     return (xbmc.getSkinDir() != 'skin.estuary' or
-            xbmc.getCondVisibility('Skin.HasSetting(POVIL.BuildSidebarReadyV2)'))
+            xbmc.getCondVisibility('Skin.HasSetting(POVIL.BuildSidebarReady)'))
 
 
 def resume():
@@ -56,10 +56,10 @@ def resume():
         return False
     if _settled_adult(master, active):
         return False
-    from resources.libs import build_skin
+    from resources.libs.profiles import build_skin
     if build_skin.prepare_active_skin_defaults():
         xbmc.executebuiltin('ReloadSkin()')
-    from resources.libs import child_profiles
+    from resources.libs.profiles import child_profiles
     child_profiles.focus_home()
     if active == master:
         return False

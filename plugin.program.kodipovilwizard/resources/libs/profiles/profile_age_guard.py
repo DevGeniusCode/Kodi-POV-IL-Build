@@ -4,6 +4,16 @@ Adult profiles pass through unchanged. Unknown classifications fail closed in
 children's profiles; only master-authored title approvals can override them.
 This is parental filtering within Kodi, not protection against filesystem or
 remote-control access to Kodi itself.
+
+STANDALONE: host patches (POV, Umbrella, Idan Plus) import this file by bare
+name after appending this folder to their sys.path, in interpreters where the
+Wizard's ``resources`` package is not importable. It may therefore use only the
+standard library and, lazily inside functions, xbmc/xbmcgui/xbmcplugin/xbmcvfs.
+Never ``import resources.*`` here. Hosts see it as ``profile_age_guard``; the
+Wizard imports it as ``resources.libs.profiles.profile_age_guard``.
+
+It makes decisions from the profile's own files. It does not verify that host
+patches were applied: patch application is the patch engine's responsibility.
 """
 import json
 import os
@@ -126,43 +136,6 @@ def locks_ready(master, active, children):
         return found and master_found
     except (OSError, ValueError, ET.ParseError):
         return False
-
-
-# POV 6.10.16 moved resources/lib/entry.py to resources/lib/modules/entry.py;
-# the patch engine follows the file (target_alternatives), so the check does.
-_POV_ENTRY = ('resources/lib/entry.py', 'resources/lib/modules/entry.py')
-
-
-def host_integrity(addons):
-    required = {
-        'plugin.video.pov': [(_POV_ENTRY, 'WIZARD_POV_PROFILE_DIRECTORY_v1'),
-                             (_POV_ENTRY, 'WIZARD_POV_PROFILE_ROUTE_v1'),
-                             ('resources/lib/modules/player.py', 'WIZARD_POV_PROFILE_PLAY_v1'),
-                             ('resources/lib/menus/movies.py', 'WIZARD_POV_PROFILE_MOVIE_META_v1'),
-                             ('resources/lib/menus/tvshows.py', 'WIZARD_POV_PROFILE_TV_META_v1'),
-                             ('resources/lib/indexers/metadata.py', 'WIZARD_POV_PROFILE_EPISODE_META_v1')],
-        'plugin.video.umbrella': [('resources/lib/modules/control.py', 'WIZARD_UMBRELLA_PROFILE_DIRECTORY_v1'),
-                                  ('resources/lib/modules/router.py', 'WIZARD_UMBRELLA_PROFILE_ROUTE_v1'),
-                                  ('resources/lib/modules/player.py', 'WIZARD_UMBRELLA_PROFILE_PLAY_v1'),
-                                  ('resources/lib/modules/control.py', 'WIZARD_UMBRELLA_PROFILE_META_v1')],
-        'plugin.video.idanplus': [('default.py', 'WIZARD_IDANPLUS_CHILD_SOURCE_v1')]}
-    for addon, rows in required.items():
-        directory = os.path.join(addons, addon)
-        if not os.path.isdir(directory):
-            if addon == 'plugin.video.pov':
-                return False
-            continue
-        for relative, marker in rows:
-            if not isinstance(relative, str):
-                relative = next((r for r in relative
-                                 if os.path.isfile(os.path.join(directory, r))), relative[0])
-            try:
-                with open(os.path.join(directory, relative), encoding='utf-8') as fh:
-                    if marker not in fh.read():
-                        return False
-            except (OSError, UnicodeError):
-                return False
-    return True
 
 
 # Skin.HasSetting is answered by Kodi's GUI thread, so each query waits for a

@@ -7,7 +7,7 @@ import xbmc
 import xbmcgui
 import xbmcvfs
 
-from resources.libs.patches import profile_age_guard as guard
+from resources.libs.profiles import profile_age_guard as guard
 
 
 def permitted_receipt(receipt, profile, url, policy, now):

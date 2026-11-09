@@ -130,7 +130,7 @@ def focus_home():
 
 def sync_active():
     """Never let a different skin restore an unrestricted child's Home."""
-    from resources.libs.patches import profile_age_guard
+    from resources.libs.profiles import profile_age_guard
     policy = profile_age_guard.active_policy()
     wanted = policy is not None
     current = xbmc.getCondVisibility('Skin.HasSetting(POVILChild)')

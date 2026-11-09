@@ -952,7 +952,7 @@ def _discard(path, xbmc):
 
 def _adult_profile():
     try:
-        import profile_age_guard
+        from resources.libs.profiles import profile_age_guard
         return profile_age_guard.active_policy() is None
     except Exception:
         return False

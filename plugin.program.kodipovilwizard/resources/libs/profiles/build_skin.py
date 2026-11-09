@@ -5,7 +5,7 @@ knowledge): SKINS, rpc, enable_skin, confirm_requested_skin, activate,
 persist_live_settings, close_switch_menu, wait_dialogs.
 
 Profiles-facing: prepare_active_skin_defaults, prepare_layout, refresh_home and
-switch. They import child_profiles / build_profiles / profile_store lazily.
+switch. They import resources.libs.profiles.* lazily.
 """
 import importlib.util
 import json
@@ -201,7 +201,7 @@ def activate(target):
 
 def prepare_active_skin_defaults():
     """Initialize the build's Estuary sidebar once in each native profile."""
-    from resources.libs import child_profiles
+    from resources.libs.profiles import child_profiles
     child_changed = child_profiles.sync_active()
     if xbmc.getSkinDir() != 'skin.estuary':
         return child_changed
@@ -225,7 +225,8 @@ def prepare_active_skin_defaults():
 
 def prepare_layout():
     """Seed shipped layout only when absent; use the active profile's paths."""
-    from resources.libs import build_profiles, config_apply, profile_store
+    from resources.libs import config_apply
+    from resources.libs.profiles import build_profiles, profile_store
     profile = xbmcvfs.translatePath('special://profile/')
     # Include skins installed on demand before their first profile logout.
     build_profiles.install_login_hooks()
@@ -275,14 +276,12 @@ def refresh_home():
 
 
 def switch(target):
-    from resources.libs.patches import profile_age_guard
+    from resources.libs.profiles import profile_age_guard
     policy = profile_age_guard.active_policy()
     if xbmc.getCondVisibility('Player.Playing') or (policy is not None and policy.get('blocked')):
         return False
     if policy is not None:
-        from resources.libs import child_profiles, build_profiles
-        if not profile_age_guard.host_integrity(xbmcvfs.translatePath('special://home/addons/')):
-            return False
+        from resources.libs.profiles import build_profiles, child_profiles
         child_profiles.seed_skin_flags(xbmcvfs.translatePath('special://profile/'))
         build_profiles.install_login_hooks()
     # FENtastic's helper starts at skin activation. Seed its layout first.
