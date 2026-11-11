@@ -1,5 +1,4 @@
 """Profile cards backed by Kodi's native profile creation, locks and loader."""
-import json
 import os
 import time
 import xml.etree.ElementTree as ET
@@ -9,25 +8,13 @@ import xbmcaddon
 import xbmcgui
 import xbmcvfs
 
-from resources.libs.profiles import config_apply, profile_store
-from resources.libs.profiles.build_skin import wait_dialogs as _wait_dialogs
-from resources.libs.profiles import profile_age_guard
+from resources.libs import config_apply
+from resources.libs.build_skin import rpc as _rpc, wait_dialogs as _wait_dialogs
+from resources.libs.profiles import profile_age_guard, profile_store
 
 WIZARD = 'plugin.program.kodipovilwizard'
 # Everything a seed can raise: bad profile folder/POV database, or no retained pack.
 SEED_ERRORS = profile_store.SEED_ERRORS + (config_apply.PackUnavailable,)
-SKINS = (('skin.povil.nox', 'NOX'), ('skin.fentastic', 'FENtastic'),
-         ('skin.estuary', 'Estuary'), ('skin.arctic.fuse.3', 'Arctic Fuse 3'))
-
-
-def _rpc(method, params=None):
-    request = dict(jsonrpc='2.0', id=1, method=method)
-    if params is not None:
-        request['params'] = params
-    reply = json.loads(xbmc.executeJSONRPC(json.dumps(request)))
-    if 'error' in reply or 'result' not in reply:
-        raise RuntimeError('Profile API failed: ' + method)
-    return reply['result']
 
 
 def _master_path():
@@ -105,83 +92,8 @@ def prepare_inactive():
             xbmc.log('[Profiles] inactive home preparation deferred', xbmc.LOGWARNING)
 
 
-def install_login_hooks():
-    """Keep profile bootstrap and the native branded picker in build skins."""
-    import re
-    import tempfile
-    addons = xbmcvfs.translatePath('special://home/addons/')
-    active_home_changed = False
-    for ident, _label in SKINS:
-        for folder in ('xml', '1080i', '720p'):
-            path = os.path.join(addons, ident, folder, 'Home.xml')
-            if not os.path.isfile(path):
-                continue
-            try:
-                from resources.libs.profiles import child_profiles
-                if child_profiles.install_home(path) and ident == xbmc.getSkinDir():
-                    active_home_changed = True
-                with open(path, encoding='utf-8-sig') as source:
-                    text = source.read()
-                if 'profile_bootstrap.py' not in text:
-                    bootstrap = '<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/resources/libs/profiles/profile_bootstrap.py)</onload>'
-                    changed, count = re.subn(r'(<window(?:\s[^>]*)?>)', r'\1\n    ' + bootstrap, text, count=1)
-                    if count == 1:
-                        ET.fromstring(changed)
-                        fd, temporary = tempfile.mkstemp(prefix='.povil-profile-', dir=os.path.dirname(path))
-                        try:
-                            with os.fdopen(fd, 'w', encoding='utf-8') as output:
-                                output.write(changed)
-                            os.replace(temporary, path)
-                        finally:
-                            if os.path.exists(temporary):
-                                os.unlink(temporary)
-            except (OSError, ValueError, ET.ParseError):
-                xbmc.log('[Profiles] startup hook deferred for ' + ident, xbmc.LOGWARNING)
-        for folder in ('xml', '1080i', '720p'):
-            path = os.path.join(addons, ident, folder, 'LoginScreen.xml')
-            if not os.path.isfile(path):
-                continue
-            try:
-                install_login_design(path)
-            except (OSError, ValueError, ET.ParseError):
-                xbmc.log('[Profiles] login hook deferred for ' + ident, xbmc.LOGWARNING)
-    if active_home_changed and profile_age_guard.active_policy() is not None:
-        xbmc.executebuiltin('ReloadSkin()')
-
-
-def install_login_design(path):
-    """Replace presentation only; native list 52 still owns loading and PINs."""
-    import tempfile
-    original = ET.parse(path).getroot()
-    if original.find(".//control[@id='52']") is None:
-        return False  # unknown third-party login contract
-    source = os.path.join(xbmcaddon.Addon(WIZARD).getAddonInfo('path'),
-                          'resources', 'skins', 'Default', '1080i', 'ProfileLogin.xml')
-    design = ET.parse(source).getroot()
-    # Keep skin-owned startup actions, excluding the obsolete auto-login hook.
-    actions = [action for action in original.findall('onload')
-               if 'single_profile_login.py' not in (action.text or '')]
-    for index, action in enumerate(actions):
-        design.insert(index, action)
-    from resources.libs.profiles import child_profiles
-    child_profiles.adapt_fonts(design, path)
-    changed = ET.tostring(design, encoding='utf-8', xml_declaration=True)
-    if ET.tostring(original) == ET.tostring(design):
-        return False
-    fd, temporary = tempfile.mkstemp(prefix='.povil-login-', dir=os.path.dirname(path))
-    try:
-        with os.fdopen(fd, 'wb') as output:
-            output.write(changed)
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
-    return True
-
-
 def addon_enabled(ident):
-    # System.HasAddon includes installed-but-disabled add-ons in Kodi 21.
-    # The native Addons API exposes the actual profile-local enabled state.
+    # The native Addons API exposes the profile-local enabled state.
     try:
         return _rpc('Addons.GetAddonDetails', dict(addonid=ident, properties=['enabled']))['addon']['enabled'] is True
     except (RuntimeError, KeyError, TypeError):
@@ -262,12 +174,10 @@ def prepare_first_login():
 
 def _native_settings():
     monitor = xbmc.Monitor()
-    # Dialog.ok/select return before their close animation releases Kodi's
-    # modal window. ActivateWindow during that interval is silently refused.
-    closing = time.monotonic() + 3
-    while xbmcgui.getCurrentWindowDialogId() not in (0, 9999, 10000):
-        if time.monotonic() >= closing or monitor.waitForAbort(0.1):
-            return False
+    # ActivateWindow while a closing dialog still holds Kodi's modal window is
+    # silently refused.
+    if not _wait_dialogs():
+        return False
     xbmc.executebuiltin('ActivateWindow(10034)')
     deadline = time.monotonic() + 5
     lock_deadline = time.monotonic() + 600
@@ -285,9 +195,14 @@ def _native_settings():
     return False
 
 
-def repair_single_login():
-    """Enable login once for this rollout; retain later manual OFF choices."""
-    receipt = 'kodipovil.login_default_v2'
+def enable_login_screen():
+    """Turn the login screen on once, as the build's default.
+
+    The receipt means a later manual OFF choice is never undone. Kodi's own
+    settings page performs the change, so ProfileManager and profiles.xml stay
+    consistent.
+    """
+    receipt = 'kodipovil.login_screen_default'
     master = _master_path()
     if os.path.isfile(os.path.join(master, receipt)):
         return False
@@ -312,11 +227,6 @@ def repair_single_login():
     return ready
 
 
-def resume_single_login():
-    """Compatibility with older startup scripts; never skip explicit login."""
-    return False
-
-
 def copy_native_profile_defaults():
     """Answer only Kodi's two copy-default questions during add_profile()."""
     if not is_master() or xbmcgui.getCurrentWindowDialogId() != 10100:
@@ -334,10 +244,6 @@ def copy_native_profile_defaults():
 
 
 def choose_skin():
-    policy = profile_age_guard.active_policy()
-    if policy is not None and policy.get('blocked'):
-        xbmcgui.Dialog().ok('סקין הפרופיל', 'יש להשלים קודם את בקרת ההורים במשתמש הראשי.')
-        return
     if xbmc.getCondVisibility('Player.Playing'):
         xbmcgui.Dialog().ok('סקין הפרופיל', 'יש לעצור את הניגון לפני החלפת סקין.')
         return
@@ -457,7 +363,7 @@ def load_profile(name):
                 break
     if not _wait_dialogs():
         return
-    from resources.libs.profiles import build_skin
+    from resources.libs import build_skin
     if not build_skin.persist_live_settings():
         xbmcgui.Dialog().notification('החלפת פרופיל', 'שמירת ההגדרות לא הושלמה. נסה שוב.')
         return
@@ -468,11 +374,13 @@ def load_profile(name):
 
 
 def open_child_content(kind):
-    import xbmcvfs
     policy = profile_age_guard.active_policy()
     if policy is None:
         return
-    if policy.get('blocked'):
+    from resources.libs.profiles import parental_profiles
+    # The patch engine repairs a hook that a host update overwrote and reports
+    # whether every parental hook is now present; unfiltered content never opens.
+    if policy.get('blocked') or not parental_profiles.hosts_ready():
         xbmcgui.Dialog().ok('פרופיל ילדים', 'הסינון אינו מוכן. עבור למשתמש הראשי להשלמת העדכון או הגדרות הנעילה.')
         return
     routes = {

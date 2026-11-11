@@ -1347,7 +1347,7 @@ def build_switch_skin():
 
         dialogProgress.close()
         from resources.libs.profiles import build_profiles
-        if not build_profiles._wait_dialogs():
+        if not build_skin.wait_dialogs():
             logging.log('[Skin Switch] Deferred by dialog %s' % xbmcgui.getCurrentWindowDialogId(),
                         level=xbmc.LOGWARNING)
             dialog.ok(CONFIG.ADDONTITLE, 'סגור את החלון הפתוח ונסה להחליף סקין שוב.')

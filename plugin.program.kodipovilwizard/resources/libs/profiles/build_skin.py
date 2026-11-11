@@ -5,7 +5,8 @@ knowledge): SKINS, rpc, enable_skin, confirm_requested_skin, activate,
 persist_live_settings, close_switch_menu, wait_dialogs.
 
 Profiles-facing: prepare_active_skin_defaults, prepare_layout, refresh_home and
-switch. They import resources.libs.profiles.* lazily.
+switch. They import resources.libs.profiles.* lazily; rpc and wait_dialogs are
+shared with the Profiles package.
 """
 import importlib.util
 import json
@@ -57,9 +58,11 @@ def wait_dialogs(timeout=3):
     return True
 
 
-def rpc(method, params):
-    reply = json.loads(xbmc.executeJSONRPC(json.dumps(dict(
-        jsonrpc='2.0', id=1, method=method, params=params))))
+def rpc(method, params=None):
+    request = dict(jsonrpc='2.0', id=1, method=method)
+    if params is not None:
+        request['params'] = params
+    reply = json.loads(xbmc.executeJSONRPC(json.dumps(request)))
     if 'error' in reply or 'result' not in reply:
         raise RuntimeError('Build skin API failed: ' + method)
     return reply['result']
@@ -226,10 +229,10 @@ def prepare_active_skin_defaults():
 def prepare_layout():
     """Seed shipped layout only when absent; use the active profile's paths."""
     from resources.libs import config_apply
-    from resources.libs.profiles import build_profiles, profile_store
+    from resources.libs.profiles import af3_skin, profile_store
     profile = xbmcvfs.translatePath('special://profile/')
-    # Include skins installed on demand before their first profile logout.
-    build_profiles.install_login_hooks()
+    # Arctic Fuse is installed on demand and is not shipped with profile UI.
+    af3_skin.patch()
     prepare_active_skin_defaults()
     try:
         with config_apply.open_verified_pack() as pack:
@@ -281,9 +284,9 @@ def switch(target):
     if xbmc.getCondVisibility('Player.Playing') or (policy is not None and policy.get('blocked')):
         return False
     if policy is not None:
-        from resources.libs.profiles import build_profiles, child_profiles
+        from resources.libs.profiles import af3_skin, child_profiles
         child_profiles.seed_skin_flags(xbmcvfs.translatePath('special://profile/'))
-        build_profiles.install_login_hooks()
+        af3_skin.patch()
     # FENtastic's helper starts at skin activation. Seed its layout first.
     if target == 'skin.fentastic':
         if not prepare_layout():

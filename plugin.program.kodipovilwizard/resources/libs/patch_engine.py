@@ -82,17 +82,49 @@ class PatchEngine(object):
             'malformed': 0,        # patch entry itself failed schema validation
             'removed': 0,          # disabled patch actively scrubbed from disk
             'skipped_disabled': 0, # disabled patch already not present
+            'selected': 0,         # valid patches this run looked at (see run(category=))
         }
 
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
-    def run(self, _normalized=None):
-        """Apply every configured patch. Returns the internal stats dict.
-        Guaranteed not to raise."""
+    @staticmethod
+    def _select(raw_list, category):
+        """Entries of one category, or all of them for the default 'all'.
+
+        Selection happens BEFORE schema validation, so a scoped run is judged
+        only on its own entries: an unrelated malformed entry can neither
+        block it nor be counted against it.
+        """
+        if category in (None, 'all'):
+            return raw_list
+        return [entry for entry in (raw_list or [])
+                if isinstance(entry, dict) and entry.get('category') == category]
+
+    @staticmethod
+    def all_applied(stats):
+        """True when a run left every patch it selected present and current.
+
+        Meant for scoped verification (``run(category=...)``). A patch that is
+        disabled, missing, unanchored or failed makes this False, and so does
+        an empty selection: a category that matches nothing is never "ready".
+        An optional host that is not installed does not count against it.
+        """
+        selected = stats.get('selected', 0)
+        healthy = sum(stats.get(key, 0) for key in
+                      ('applied', 'upgraded', 'skipped_current', 'optional_absent'))
+        return selected > 0 and healthy == selected and not stats.get('malformed', 0)
+
+    def run(self, _normalized=None, category='all'):
+        """Apply every configured patch (or only those of ``category``).
+
+        Returns the internal stats dict. Guaranteed not to raise. ``_normalized``
+        (pre-validated patches, used by run_if_changed) bypasses the category.
+        """
         try:
             patches = (_normalized if _normalized is not None else
-                       self._normalize_patches(self._raw_config))
+                       self._normalize_patches(self._select(self._raw_config, category)))
+            self._stats['selected'] = len(patches)
             if not patches:
                 logging.log('[PatchEngine] No valid patches configured; nothing to do.',
                             level=xbmc.LOGDEBUG)

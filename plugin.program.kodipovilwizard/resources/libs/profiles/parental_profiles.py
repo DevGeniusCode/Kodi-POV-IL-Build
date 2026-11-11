@@ -9,8 +9,21 @@ import xbmc
 import xbmcaddon
 import xbmcgui
 
-from resources.libs.profiles import profile_store
-from resources.libs.profiles import profile_age_guard as guard
+
+from resources.libs.profiles import profile_age_guard as guard, profile_store
+
+PARENTAL_CATEGORY = 'parental_control'
+
+
+def hosts_ready():
+    """Repair and verify every parental host hook through the patch engine.
+
+    Scoped to the parental_control patches, so an unrelated UI patch that fails
+    can neither block child setup nor be repaired as a side effect. A hook that
+    a host update overwrote is re-applied in this same call.
+    """
+    from resources.libs.patch_engine import PatchEngine
+    return PatchEngine.all_applied(PatchEngine().run(category=PARENTAL_CATEGORY))
 
 
 def read(master):
@@ -153,10 +166,7 @@ def setup(profile=None):
     if action < 0:
         return
     if action == 0:
-        from resources.libs.patch_engine import PatchEngine
-        import xbmcvfs
-        stats = PatchEngine().run()
-        if any(stats.get(k, 0) for k in ('failed', 'missing', 'anchor_missing', 'malformed')):
+        if not hosts_ready():
             # Logic for failed patches
             xbmcgui.Dialog().ok('בקרת הורים', 'סינון התוכן אינו מוכן בגרסת ההרחבות המותקנת. השלם עדכון מהיר ונסה שוב.')
             return

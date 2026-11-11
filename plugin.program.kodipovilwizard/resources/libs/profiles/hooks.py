@@ -65,11 +65,19 @@ def prepare_startup():
 
     A native secondary profile does not include build addon_data/favourites.
     """
+    # Only Arctic Fuse is patched at runtime; NOX, Estuary and FENtastic ship
+    # the profile UI in their own source.
+    af3 = _load('af3_skin')
+    if af3 is not None:
+        try:
+            af3.patch()
+        except Exception as exc:
+            logging.log('[Profiles] AF3 patch failed: {}'.format(type(exc).__name__),
+                        level=xbmc.LOGERROR)
     profiles = _load('build_profiles')
     if profiles is None:
         return
     try:
-        profiles.install_login_hooks()
         profiles.repair_active()
         if not profiles.prepare_first_login():
             logging.log('[Profiles] add-on registration incomplete; retrying next startup',
@@ -91,11 +99,11 @@ def complete_home():
         return True
     ready = os.path.join(CONFIG.USERDATA, HOME_READY)
     try:
-        profiles.repair_single_login()
+        profiles.enable_login_screen()
         profiles.prepare_inactive()
         if not profiles.is_master():
-            from resources.libs import fresh_install
-            from resources.libs.profiles import build_skin, profile_store
+            from resources.libs import build_skin, fresh_install
+            from resources.libs.profiles import profile_store
             defaults = os.path.join(CONFIG.USERDATA, GUI_DEFAULTS)
             if os.path.isfile(defaults):
                 done = (fresh_install.apply_live_defaults(defaults_path=defaults) and

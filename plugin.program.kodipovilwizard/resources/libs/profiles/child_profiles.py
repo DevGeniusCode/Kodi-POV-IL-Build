@@ -1,12 +1,16 @@
-"""Child presentation across build skins and native creation lock defaults."""
-import copy
+"""Child-profile state: skin flag, focus and native creation-lock defaults.
+
+The child Home layout itself ships inside NOX, Estuary and FENtastic; Arctic
+Fuse 3 receives it at runtime from af3_skin.
+"""
 import os
 import tempfile
 import xml.etree.ElementTree as ET
 
 import xbmc
-import xbmcaddon
 import xbmcgui
+
+from resources.libs.profiles import profile_age_guard
 
 SKINS = ('skin.povil.nox', 'skin.estuary', 'skin.fentastic', 'skin.arctic.fuse.3')
 # Kodi's native settings controls are generated from negative IDs (-180).
@@ -36,84 +40,15 @@ def seed_skin_flags(profile):
     """Inactive profile only; retain every unrelated skin preference."""
     for ident in SKINS:
         path = os.path.join(profile, 'addon_data', ident, 'settings.xml')
-        root = ET.parse(path).getroot() if os.path.isfile(path) else ET.Element('settings')
+        try:
+            root = ET.parse(path).getroot() if os.path.isfile(path) else ET.Element('settings')
+        except ET.ParseError:
+            root = ET.Element('settings')  # unreadable skin settings cannot be preserved
         row = root.find("setting[@id='POVILChild']")
         if row is None:
             row = ET.SubElement(root, 'setting', id='POVILChild', type='bool')
         row.text = 'true'
         write_xml(path, root)
-
-
-def install_home(path):
-    """Retain adult Home, place its controls behind the profile-local flag."""
-    root = ET.parse(path).getroot()
-    controls = root.find('controls')
-    if controls is None:
-        if root.find("include[@content='skin_home_child']") is None:
-            return False
-        # NOX composes entire windows through root-level includes, unlike
-        # the other skins' root controls. Retain that native structure.
-        includes = ET.Element('includes')
-        section = ET.SubElement(includes, 'include', name='skin_home_child')
-        ET.SubElement(section, 'defaultcontrol', always='true').text = '9500'
-        ET.SubElement(section, 'controls').append(child_control(path))
-        return write_xml(os.path.join(os.path.dirname(path), 'Home_child.xml'), includes)
-    old = controls.find("control[@id='9879']")
-    if old is None:
-        old = ET.Element('control', type='group', id='9879')
-        ET.SubElement(old, 'visible').text = '!Skin.HasSetting(POVILChild)'
-        for row in list(controls):
-            controls.remove(row)
-            # Supersede NOX's first child-only include with the shared layout.
-            if row.tag == 'include' and row.get('content') == 'skin_home_child':
-                continue
-            old.append(row)
-        controls.append(old)
-    existing = controls.find("control[@id='9880']")
-    if existing is not None:
-        controls.remove(existing)
-    controls.append(child_control(path))
-    action = 'SetFocus(9500)'
-    if not any(r.text == action for r in root.findall('onload')):
-        row = ET.Element('onload', condition='Skin.HasSetting(POVILChild)')
-        row.text = action
-        root.insert(0, row)
-    return write_xml(path, root)
-
-
-def child_control(path):
-    source = os.path.join(xbmcaddon.Addon('plugin.program.kodipovilwizard').getAddonInfo('path'),
-                          'resources/skins/Default/1080i/ChildHome.xml')
-    child = copy.deepcopy(ET.parse(source).getroot().find('controls/control'))
-    for button in child.findall(".//control[@type='button']"):
-        ET.SubElement(button, 'textcolor').text = 'FFFFFFFF'
-        ET.SubElement(button, 'focusedcolor').text = 'FFF0D394'
-    adapt_fonts(child, path)
-    return child
-
-
-def adapt_fonts(layout, path):
-    """Resolve the shared layouts' font names against each installed skin."""
-    fonts_path = os.path.join(os.path.dirname(path), 'Font.xml')
-    if os.path.isfile(fonts_path):
-        fonts = [(f.findtext('name'), float(f.findtext('size', '30')))
-                 for f in ET.parse(fonts_path).findall('.//fontset/font')
-                 if not any(term in (f.findtext('name', '') + f.findtext('filename', '')).lower()
-                            for term in ('icon', 'awesome', 'codec', 'nick-titling'))]
-        for row in layout.iter('font'):
-            if fonts:
-                wanted = {'font60': 60, 'font37': 37, 'font13': 30, 'font12': 25}[row.text]
-                row.text = min(fonts, key=lambda f: (abs(f[1] - wanted), f[0] != row.text))[0]
-        if not fonts and os.path.isfile(os.path.join(os.path.dirname(path), 'Includes_Font.xml')):
-            # Arctic Fuse declares its fonts in parameterized includes.
-            # Use only names declared by that skin, not a nonexistent font60.
-            available = {f.findtext('name') for f in ET.parse(
-                os.path.join(os.path.dirname(path), 'Includes_Font.xml')).findall('.//font')}
-            names = {'font60': 'font_title_midi', 'font37': 'font_head_bold',
-                     'font13': 'font_main', 'font12': 'font_mini'}
-            for row in layout.iter('font'):
-                if names.get(row.text) in available:
-                    row.text = names[row.text]
 
 
 def focus_home():
@@ -130,7 +65,6 @@ def focus_home():
 
 def sync_active():
     """Never let a different skin restore an unrestricted child's Home."""
-    from resources.libs.profiles import profile_age_guard
     policy = profile_age_guard.active_policy()
     wanted = policy is not None
     current = xbmc.getCondVisibility('Skin.HasSetting(POVILChild)')
