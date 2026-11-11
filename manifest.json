@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "DevGeniusCode/Kodi-POV-IL-Build",
   "release_tag": "addons-latest",
-  "generated": "2026-10-16T15:09:56Z",
+  "generated": "2026-11-11T11:05:38Z",
   "manifest_url": "https://raw.githubusercontent.com/DevGeniusCode/Kodi-POV-IL-Build/main/manifest.json",
   "config": {
     "config_version": "2.0.6",
@@ -28,13 +28,13 @@
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
       "name": "[COLOR yellow]Kodi POV IL Wizard[/COLOR]",
-      "version": "0.4.9",
+      "version": "0.5.0",
       "type": "plugin",
-      "filename": "plugin.program.kodipovilwizard-0.4.9.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.4.9.zip",
-      "size": 2208441,
-      "sha256": "ffda679117d77cb73ae1040aa8d42e00d6fab27a944637fd42c4cc00404fc3ee",
-      "updated": "2026-10-16T15:09:56Z"
+      "filename": "plugin.program.kodipovilwizard-0.5.0.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.5.0.zip",
+      "size": 2391357,
+      "sha256": "6913485f4af239e7fd5cdfd7c4d1ce0fd22364754a58608586e2c2cc392390c2",
+      "updated": "2026-11-11T11:05:38Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
@@ -127,24 +127,24 @@
     "service.subtitles.kodipovilai": {
       "id": "service.subtitles.kodipovilai",
       "name": "MoranSubs",
-      "version": "0.3.16",
+      "version": "0.3.50",
       "type": "subtitle",
-      "filename": "service.subtitles.kodipovilai-0.3.16.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.16.zip",
-      "size": 3482893,
-      "sha256": "52316a35bbd0f781c3003488666f56a8ebfa019a6be2a9ad2d3df16cc7a222d8",
-      "updated": "2026-10-09T21:08:37Z"
+      "filename": "service.subtitles.kodipovilai-0.3.50.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.50.zip",
+      "size": 3523600,
+      "sha256": "64e3864ca6090ef2c6a8ad0c52d144b845cf9f82260f9fc73a93cf8a0a4adda5",
+      "updated": "2026-11-11T11:05:38Z"
     },
     "skin.estuary": {
       "id": "skin.estuary",
       "name": "Estuary (Kodi + Real Debrid Israel)",
-      "version": "4.0.3",
+      "version": "4.0.8",
       "type": "skin",
-      "filename": "skin.estuary-4.0.3.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.estuary-4.0.3.zip",
-      "size": 6815865,
-      "sha256": "70bbd0a2472ebfe9eaaa941dc3c82e95497805ee45d0d4cfbcc6078eae34b438",
-      "updated": "2026-10-09T20:07:58Z"
+      "filename": "skin.estuary-4.0.8.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.estuary-4.0.8.zip",
+      "size": 6685860,
+      "sha256": "60115aa345d3f3a80e92c031f25263ca58b71663fe15a08c11bd5cd9aa9b4cd8",
+      "updated": "2026-11-11T11:05:38Z"
     },
     "skin.fentastic": {
       "id": "skin.fentastic",
@@ -153,20 +153,20 @@
       "type": "skin",
       "filename": "skin.fentastic-1.0.30.zip",
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.fentastic-1.0.30.zip",
-      "size": 20861663,
-      "sha256": "a89d953ceb102d95ff9d5d23bb49a827b826bfd6a68fa730aea4b43120e75848",
-      "updated": "2026-10-16T15:09:56Z"
+      "size": 20862770,
+      "sha256": "d6b9f40a3956a4bbf9834233581b84930104c51da453e402ce939ad3f646909c",
+      "updated": "2026-11-11T11:05:38Z"
     },
     "skin.povil.nox": {
       "id": "skin.povil.nox",
       "name": "Kodi POV IL - NOX",
-      "version": "1.0.11",
+      "version": "1.0.18",
       "type": "skin",
-      "filename": "skin.povil.nox-1.0.11.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.povil.nox-1.0.11.zip",
-      "size": 24370927,
-      "sha256": "1ca7d560f1967be0481bcb55f34b48088bef0f7f0537cbd3d97376cc2e16a59e",
-      "updated": "2026-10-09T20:07:58Z"
+      "filename": "skin.povil.nox-1.0.18.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.povil.nox-1.0.18.zip",
+      "size": 24501445,
+      "sha256": "91ee9b5ab11488bbdf01bf5b339f730599a44373844bdb29f7d1296f49a33fb6",
+      "updated": "2026-11-11T11:05:38Z"
     }
   }
 }
