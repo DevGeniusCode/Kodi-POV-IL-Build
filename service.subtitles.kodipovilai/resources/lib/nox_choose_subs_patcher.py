@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Make NOX's player open MoranSubs's subtitle chooser -- WITHOUT adding a new
 # OSD button.
 #
@@ -61,6 +63,9 @@ def _osd_path():
             'special://home/addons/' + NOX_SKIN_ID + '/')
     except Exception:
         return ''
+    native = os.path.join(base, 'xml', 'Includes_POVIL_NativePlayer.xml')
+    if os.path.isfile(native):
+        return native
     p = os.path.join(base, OSD_REL_PATH.replace('/', os.sep))
     return p if os.path.isfile(p) else ''
 

@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Fix the NOX fullscreen-OSD "next episode" button.
 #
 # The NOX skin (skin.povil.nox) OSD has a "הפרק הבא" button next to the
@@ -59,6 +61,9 @@ def _osd_path():
         base = xbmcvfs.translatePath('special://home/addons/' + NOX_SKIN_ID + '/')
     except Exception:
         return ''
+    native = os.path.join(base, 'xml', 'Includes_POVIL_NativePlayer.xml')
+    if os.path.isfile(native):
+        return native
     p = os.path.join(base, OSD_REL_PATH.replace('/', os.sep))
     return p if os.path.isfile(p) else ''
 
@@ -76,7 +81,7 @@ def ensure_patched():
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    if _DONE_TOKEN in content:
+    if _DONE_TOKEN in content or 'mode=player_episodes' in content:
         return 'already_patched'
     if not _OLD_RE.search(content):
         _log('OSD next=1 button not found -- skin/POV changed it; leaving alone',

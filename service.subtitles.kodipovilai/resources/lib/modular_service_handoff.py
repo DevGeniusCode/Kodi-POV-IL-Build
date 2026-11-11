@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Let a prepared MoranSubs replacement start only after a real Kodi restart.
 
 The old service keeps running on the boot when the Wizard prepares the next
@@ -35,7 +37,7 @@ def maybe_yield():
     """Return True only after writing an acknowledgement for a staged update."""
     try:
         import xbmcvfs
-        userdata = xbmcvfs.translatePath('special://home/userdata')
+        userdata = xbmcvfs.translatePath('special://profile/')
         addons_parent = xbmcvfs.translatePath('special://home')
         request_path = os.path.join(userdata, REQUEST)
         with open(request_path, 'rb') as source:
