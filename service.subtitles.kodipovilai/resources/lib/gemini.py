@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Google Generative Language API client. Just the bits we need:
 # generateContent for translation, ListModels for the connection
 # test. Bring your own API key.
@@ -78,6 +80,10 @@ def sampling_params_supported(model):
 
 class GeminiError(Exception):
     """Raised on any non-recoverable API failure."""
+    # True when the model took the request: a reply came back (cut off,
+    # blocked, empty, malformed), or none came in time after it was sent. It
+    # counted against the day's quota whatever the reply was worth.
+    answered = False
 
 
 class QuotaExceeded(GeminiError):
@@ -124,8 +130,21 @@ class FilteredResponse(GeminiError):
         self.partial_text = partial_text
 
 
+class StoppedEarly(FilteredResponse):
+    """The reply has text but the model stopped for a reason other than the end
+    of its answer or the token cap (RECITATION, SPII, LANGUAGE, OTHER...).
+    Subtitle translation treats it as a block; the audio path keeps the text."""
+
+
 _FILTERED_FINISH_REASONS = frozenset((
     'SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST',
+))
+# The model stopped early for a reason that is not the end of its answer, the
+# token cap or a safety block. Named, not "anything unknown": a new harmless
+# reason Google may add must not send every chunk down the block ladder.
+_EARLY_STOP_REASONS = frozenset((
+    'RECITATION', 'SPII', 'LANGUAGE', 'OTHER', 'MALFORMED_FUNCTION_CALL',
+    'IMAGE_SAFETY', 'UNEXPECTED_TOOL_CALL',
 ))
 _CONTENT_REJECTION_RE = re.compile(
     r'PROHIBITED_CONTENT|'
@@ -246,10 +265,25 @@ def _generated_text(data):
             partial_text=text,
         )
     if not text:
-        if finish_reason in ('OTHER', ''):
+        if finish_reason in ('MAX_TOKENS', 'LENGTH'):
+            # Thinking used the whole output budget: a smaller request helps.
+            raise TruncatedResponse(
+                'empty reply at the output-token cap (finish={0})'.format(
+                    finish_reason))
+        if finish_reason in _EARLY_STOP_REASONS or not finish_reason:
             raise FilteredResponse(
                 'empty/blocked content (finish={0})'.format(finish_reason))
         raise GeminiError('Empty text in response')
+    if finish_reason in _EARLY_STOP_REASONS:
+        # RECITATION (song lyrics, quoted text), SPII, LANGUAGE, OTHER...: the
+        # model stopped early, so the text is a cut-off reply. These used to be
+        # accepted as complete (a last cue cut mid-sentence shipped) or, when
+        # empty, end the whole job as a generic error. The caller's ladder
+        # isolates the line the model would not write.
+        raise StoppedEarly(
+            'reply stopped early (finish={0})'.format(finish_reason),
+            partial_text=text,
+        )
     if finish_reason in ('MAX_TOKENS', 'LENGTH'):
         raise TruncatedResponse(
             'Gemini hit output-token cap (finishReason={0})'.format(
@@ -414,14 +448,22 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
         gemini_quota.note_request(model)
     except Exception:
         pass
-    return _generated_text(data)
+    try:
+        return _generated_text(data)
+    except StoppedEarly as e:
+        # A speech list cut off by RECITATION (sung lyrics) still has its
+        # earlier cues; SubSync used them before 0.3.51 and still does.
+        return e.partial_text
 
 
 def generate(api_key, model, prompt, temperature=0.2,
              max_output_tokens=16384, top_p=None,
              thinking_budget=None, thinking_level=None,
-             timeout=REQUEST_TIMEOUT):
+             timeout=REQUEST_TIMEOUT, count_usage=True):
     """One-shot text generation. Returns the model's text response.
+
+    count_usage=False leaves the daily-usage counter alone: it holds ONE
+    model, the translator's, and a call to another model would restart it.
 
     Raises QuotaExceeded on 429, InvalidKey on 400/403, GeminiError
     on anything else."""
@@ -472,7 +514,13 @@ def generate(api_key, model, prompt, temperature=0.2,
                                        'x-goog-api-key': api_key},
                               timeout=timeout)
         except requests.RequestException as e:
-            raise GeminiError('Network error: {0}'.format(e))
+            err = GeminiError('Network error: {0}'.format(e))
+            # sent, and no reply in time or one cut off mid-read: the model
+            # may well have taken it
+            err.answered = isinstance(e, (getattr(requests, 'ReadTimeout', ()),
+                                          getattr(getattr(requests, 'exceptions', None),
+                                                  'ChunkedEncodingError', ())))
+            raise err
         if (_attempt == 0 and model not in _SAFETY_OFF_MODELS
                 and _refused_threshold(r)):
             _SAFETY_OFF_MODELS.add(model)
@@ -483,8 +531,11 @@ def generate(api_key, model, prompt, temperature=0.2,
     if r.status_code == 429:
         raise _classify_429(r)
     if r.status_code in (500, 502, 503, 504):
-        raise OverloadError(
+        err = OverloadError(
             'Gemini overloaded (HTTP {0})'.format(r.status_code))
+        # past the server's deadline: the model was working on it
+        err.answered = r.status_code == 504
+        raise err
     if r.status_code in (401, 407):
         # 401 (and 407 proxy-auth) is ALWAYS an authentication failure -- the key
         # is invalid / expired / revoked, or the project has no access. It is
@@ -500,18 +551,25 @@ def generate(api_key, model, prompt, temperature=0.2,
     try:
         data = r.json()
     except ValueError:
-        raise GeminiError('Unparseable response from API')
+        err = GeminiError('Unparseable response from API')
+        err.answered = True
+        raise err
 
-    text = _generated_text(data)
+    try:
+        text = _generated_text(data)
+    except GeminiError as e:
+        e.answered = True
+        raise
 
     # Bump the daily-quota counter. Lazy import + try/except so a
     # bug here can never break translation. We only count successful
     # responses (i.e. after all the error branches above), and the
     # tracker itself decides which models to actually record.
-    try:
-        from . import gemini_quota
-        gemini_quota.note_request(model)
-    except Exception:
-        pass
+    if count_usage:
+        try:
+            from . import gemini_quota
+            gemini_quota.note_request(model)
+        except Exception:
+            pass
 
     return text

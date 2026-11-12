@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # MoranSubs subtitle-chooser window (pyxbmct), opened from the player's
 # "בחר כתוביות" button. It lists the SAME Hebrew candidates the search dialog
 # offers -- WITH a Hebrew match % per real Hebrew sub -- and applies the picked
@@ -523,6 +525,8 @@ def _show_pyxbmct():
                     if kodi_utils.apply_subtitle_file(
                             path, selection=timing_selection):
                         self.close()
+                        # a pooled AI translation: its gender proofread
+                        _t.proofread_later(link, timing_selection)
                     elif not _still_current():
                         self.close()
                     else:
@@ -674,6 +678,8 @@ def _deliver_pick(c, info, close_cb):
             if kodi_utils.apply_subtitle_file(
                     path, selection=timing_selection):
                 close_cb()
+                # a pooled AI translation: its gender proofread
+                _t.proofread_later(link, timing_selection)
             elif not _still_current():
                 close_cb()
             else:

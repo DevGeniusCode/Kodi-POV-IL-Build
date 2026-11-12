@@ -23,6 +23,7 @@ import xbmcgui
 import glob
 import os
 import shutil
+import time
 
 from datetime import datetime
 from datetime import timedelta
@@ -32,6 +33,15 @@ import sqlite3 as database
 from resources.libs.common.config import CONFIG
 from resources.libs.common import logging
 from resources.libs.common import tools
+
+
+def _kept_cache_dirs(profile_addon_data):
+    """Cache folders Clear Cache leaves alone (and does not count): MoranSubs
+    keeps its finished AI translations in its "cache" folder; each one cost
+    Gemini quota, and clearing it meant translating again. Its other caches
+    (downloaded subtitles, search results) are cheap and still go."""
+    return set(os.path.normcase(os.path.join(base, 'service.subtitles.kodipovilai', 'cache'))
+               for base in (CONFIG.ADDON_DATA, profile_addon_data))
 
 
 def get_cache_size():
@@ -86,6 +96,7 @@ def get_cache_size():
         cachelist.append(PROFILEADDONDATA)
 
     totalsize = 0
+    keep = _kept_cache_dirs(PROFILEADDONDATA)
 
     for item in cachelist:
         if not os.path.exists(item):
@@ -94,6 +105,7 @@ def get_cache_size():
             totalsize = tools.get_size(item, totalsize)
         else:
             for root, dirs, files in os.walk(item):
+                dirs[:] = [d for d in dirs if os.path.normcase(os.path.join(root, d)) not in keep]
                 for d in dirs:
                     if 'cache' in d.lower() and d.lower() not in ['meta_cache']:
                         totalsize = tools.get_size(os.path.join(root, d), totalsize)
@@ -175,45 +187,85 @@ def clear_packages(over=None):
                   '[COLOR {0}]Clear Packages: None Found![/COLOR]'.format(CONFIG.COLOR2))
 
 
+# Maintenance > Cleaning Tools > "Auto Clean Up On Startup": how many days
+# each "Auto Clean Frequency" choice waits (Every Startup ... Monthly).
+_AUTO_CLEAN_DAYS = (0, 1, 3, 7, 30)
+_AUTO_CLEAN_FORMAT = '%Y-%m-%d %H:%M:%S'
+# Same as storage_guard: a package written in the last hour may still be
+# downloading or unpacking (Kodi's repository update runs at start-up too).
+_PACKAGE_MIN_AGE = timedelta(hours=1)
+
+
+def auto_clean_startup(now=None):
+    """Run the start-up clean the user switched on in the maintenance menu.
+
+    The toggles were in the menu all along, but nothing ever ran them. Only
+    "Clear Packages on Startup" is run. "Clear Cache on Startup" would wipe
+    every add-on's caches (and Kodi's temp) at each start, so every start
+    would rebuild them -- and old_thumbs()
+    finds nothing (it compares Kodi's date text with a number) but VACUUMs the
+    live Textures DB; both toggles are hidden. Returns True when a clean ran."""
+    if CONFIG.AUTOCLEANUP != 'true':
+        return False
+    try:
+        freq = min(max(int(CONFIG.AUTOFREQ), 0), len(_AUTO_CLEAN_DAYS) - 1)
+    except (TypeError, ValueError):
+        freq = 3
+    days = _AUTO_CLEAN_DAYS[freq]
+    now = datetime.now() if now is None else now
+    try:
+        # time.strptime: Kodi's embedded Python can fail datetime.strptime
+        # ("'NoneType' object is not callable") after the first call.
+        due = datetime(*time.strptime(CONFIG.AUTONEXTRUN or '', _AUTO_CLEAN_FORMAT)[:6])
+    except (TypeError, ValueError):
+        due = now
+    # A date further ahead than the frequency allows came from a wrong clock.
+    if days and now < due <= now + timedelta(days=days):
+        logging.log('[Auto Clean Up] next run {0}'.format(CONFIG.AUTONEXTRUN),
+                    level=xbmc.LOGINFO)
+        return False
+    CONFIG.set_setting('nextautocleanup',
+                       (now + timedelta(days=days)).strftime(_AUTO_CLEAN_FORMAT))
+    if CONFIG.AUTOPACKAGES == 'true':
+        logging.log('[Auto Clean Up] packages', level=xbmc.LOGINFO)
+        clear_packages_startup()
+    return True
+
+
 def clear_packages_startup():
     from resources.libs.common import tools
 
-    start = datetime.utcnow() - timedelta(minutes=3)
+    start = time.time() - _PACKAGE_MIN_AGE.total_seconds()
     file_count = 0
     cleanupsize = 0
-    if os.path.exists(CONFIG.PACKAGES):
+    try:
         pack = os.listdir(CONFIG.PACKAGES)
-        pack.sort(key=lambda f: os.path.getmtime(os.path.join(CONFIG.PACKAGES, f)))
+    except OSError:
+        return
+    for item in pack:
+        # One file at a time: a file that vanished or is locked (Windows)
+        # must not stop the rest.
+        file = os.path.join(CONFIG.PACKAGES, item)
         try:
-            for item in pack:
-                file = os.path.join(CONFIG.PACKAGES, item)
-                lastedit = datetime.utcfromtimestamp(os.path.getmtime(file))
-                if lastedit <= start:
-                    if os.path.isfile(file):
-                        file_count += 1
-                        cleanupsize += os.path.getsize(file)
-                        os.unlink(file)
-                    elif os.path.isdir(file):
-                        cleanupsize += tools.get_size(file)
-                        cleanfiles, cleanfold = tools.clean_house(file)
-                        file_count += cleanfiles + cleanfold
-                        try:
-                            shutil.rmtree(file)
-                        except Exception as e:
-                            logging.log("Failed to remove {0}: {1}".format(file, str(e), xbmc.LOGERROR))
-            if file_count > 0:
-                logging.log_notify(CONFIG.ADDONTITLE,
-                          '[COLOR {0}]Clear Packages: Success: {1}[/COLOR]'.format(CONFIG.COLOR2, tools.convert_size(cleanupsize)))
-            else:
-                logging.log_notify(CONFIG.ADDONTITLE,
-                          '[COLOR {0}]Clear Packages: None Found![/COLOR]'.format(CONFIG.COLOR2))
+            if os.path.getmtime(file) > start:
+                continue
+            if os.path.isfile(file):
+                size = os.path.getsize(file)
+                os.unlink(file)
+                file_count += 1
+                cleanupsize += size
+            elif os.path.isdir(file):
+                cleanupsize += tools.get_size(file)
+                cleanfiles, cleanfold = tools.clean_house(file)
+                file_count += cleanfiles + cleanfold
+                shutil.rmtree(file)
         except Exception as e:
-            logging.log_notify(CONFIG.ADDONTITLE,
-                      '[COLOR {0}]Clear Packages: Error![/COLOR]'.format(CONFIG.COLOR2))
-            logging.log("Clear Packages Error: {0}".format(str(e)), level=xbmc.LOGERROR)
-    else:
+            logging.log("Clear Packages: could not remove {0}: {1}".format(item, e),
+                        level=xbmc.LOGWARNING)
+    # Start-up: a toast only when something was removed.
+    if file_count > 0:
         logging.log_notify(CONFIG.ADDONTITLE,
-                  '[COLOR {0}]Clear Packages: None Found![/COLOR]'.format(CONFIG.COLOR2))
+                           '[COLOR {0}]Clear Packages: Success: {1}[/COLOR]'.format(CONFIG.COLOR2, tools.convert_size(cleanupsize)))
 
 
 def clear_archive():
@@ -291,6 +343,7 @@ def clear_cache(over=None):
 
     delfiles = 0
     excludes = ['meta_cache', 'archive_cache']
+    keep = _kept_cache_dirs(PROFILEADDONDATA)
     for item in cachelist:
         if not os.path.exists(item):
             continue
@@ -321,7 +374,8 @@ def clear_cache(over=None):
                                         level=xbmc.LOGINFO)
         else:
             for root, dirs, files in os.walk(item):
-                dirs[:] = [d for d in dirs if d not in excludes]
+                dirs[:] = [d for d in dirs if d not in excludes
+                           and os.path.normcase(os.path.join(root, d)) not in keep]
                 for d in dirs:
                     if not str(d.lower()).find('cache') == -1:
                         try:

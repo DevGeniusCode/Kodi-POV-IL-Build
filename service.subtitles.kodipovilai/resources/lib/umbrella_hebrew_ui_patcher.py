@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Hebrew for Umbrella's navigation, on a Hebrew-interface Kodi.
 #
 # Umbrella ships English, German, Dutch, Polish and Hungarian -- and nothing
@@ -18,7 +20,7 @@
 # a string with no entry here simply is not in the file, Kodi falls back to
 # en_gb, and it renders in English exactly as it does today. Nothing breaks,
 # nothing goes blank. That lets us translate the surface a user actually
-# touches -- 302 ids covering the menus, the Discover and My-Lists rows, the
+# touches -- 308 ids covering the menus, the Discover and My-Lists rows, the
 # dialogs and the context actions -- and leave the settings labels in English,
 # where the terms are technical and a translation would more often confuse
 # than help.
@@ -437,6 +439,16 @@ HE = {
     '40829': 'חיפוש משולב',   # fits an AF3 tile; a longer label shows only its last word
     '40830': 'ייצוא הגדרות',
     '40831': 'ייבוא הגדרות',
+    # Umbrella 6.7.99: browse by year from IMDb (a Movies and a TV row)
+    '40846': 'שנה (IMDb)',
+    '40852': 'דפדוף בסרטים לפי שנה מ-IMDb לא זמין כרגע. נסו שוב מאוחר יותר, או דפדפו לפי שנה מ-TMDb.',
+    '40859': 'דפדוף בסדרות לפי שנה מ-IMDb לא זמין כרגע. נסו שוב מאוחר יותר, או דפדפו לפי שנה מ-TMDb.',
+    # Umbrella 6.8.00: the kind beside a combined search result, and the new
+    # Download Manager (a Tools/Downloads row and its window title; the
+    # window's own buttons and statuses are written in English in its code)
+    '40865': 'סרט',
+    '40866': 'סדרה',
+    '40867': 'מנהל הורדות',
 }
 
 

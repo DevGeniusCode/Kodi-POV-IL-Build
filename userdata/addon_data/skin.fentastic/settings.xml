@@ -111,7 +111,7 @@
     <setting id="osdiconinfosize" type="string">550</setting>
     <setting id="MenuCustom1Label" type="string">[B]עידן פלוס[/B]</setting>
     <setting id="defaultbackgroundbrightness" type="string">High</setting>
-    <setting id="mdblist_api_key" type="string">use_my_custom_list</setting>
+    <setting id="mdblist_api_key" type="string"></setting>
     <setting id="MenuIdanPlusLabel" type="string">[B]עידן פלוס[/B]</setting>
     <setting id="subtitlesearch" type="string">kodisubtitle</setting>
     <setting id="WeatherFanart.path" type="string"></setting>

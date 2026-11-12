@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Repoint the player's "בחר כתוביות" / "חפש כתובית" button to MoranSubs's own
 # subtitle chooser, in EVERY skin + EVERY player style that ships it.
 #
@@ -66,6 +68,8 @@ TARGETS = (
     # reaches our chooser even before the skin updates. (nox_choose_subs_patcher
     # also handles NOX's newer ActivateWindow(2118) form -- both are idempotent.)
     ('skin.povil.nox', 'xml/VideoOSD.xml'),
+    ('skin.povil.nox', 'xml/Includes_POVIL_NativePlayer.xml'),
+    ('skin.povil.nox', 'xml/Includes_POVIL_Players.xml'),
 )
 
 # FENtastic's OSD files use raw, unescaped "&" in RunPlugin URLs (Kodi's skin

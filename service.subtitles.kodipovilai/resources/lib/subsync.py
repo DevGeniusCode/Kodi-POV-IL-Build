@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # SubSync Phase S2 -- delivery-time verify & auto-retime orchestration.
 #
 # Called by translate.resolve() right before a Hebrew subtitle (engine human /
@@ -4222,7 +4224,7 @@ _SOFT_PROBE_SHIFT_MS = 1000
 
 # Keys that must survive the JSON round-trip for bridge.search /
 # playing_release to work in the service process.
-_INFO_KEYS = ('imdb_id', 'tmdb_id', 'season', 'episode', 'title', 'tvshow',
+_INFO_KEYS = ('imdb_id', 'tmdb_id', 'dbid', 'season', 'episode', 'title', 'tvshow',
               'tvshowtitle', 'year', 'filepath', 'picked_release', 'tagline',
               'label', 'media_type', 'is_episode')
 

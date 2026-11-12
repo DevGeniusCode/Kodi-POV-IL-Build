@@ -1,3 +1,5 @@
+# MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
+# SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Which add-on the home SEARCH button searches: POV or Umbrella.
 #
 # The build is POV-centric and its search has always been POV's. Umbrella
@@ -206,6 +208,16 @@ def _active_skin():
         return xbmc.getSkinDir() or ''
     except Exception:
         return ''
+
+
+# Skins whose search button asks Kodi for the provider at click time
+# (Addon.SettingStr in an onclick condition): a switch shows there at once,
+# with no file to rewrite and no reload.
+LIVE_SKINS = ('skin.povil.onyx',)
+
+
+def active_skin_reads_live():
+    return _active_skin() in LIVE_SKINS
 
 
 def _refresh_active_skin(af3_changed):

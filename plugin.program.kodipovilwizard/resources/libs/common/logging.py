@@ -106,7 +106,7 @@ def log(msg, level=xbmc.LOGINFO):
 
 def check_log():
     next = tools.get_date(days=1, formatted=True)
-    lines = tools.read_from_file(CONFIG.WIZLOG).split('\n')
+    lines = tools.read_from_file(CONFIG.WIZLOG, errors='replace').split('\n')
 
     if CONFIG.CLEANWIZLOGBY == '0':  # By Days
         keep = tools.get_date(days=-CONFIG.MAXWIZDATES[int(float(CONFIG.CLEANDAYS))])
@@ -140,7 +140,7 @@ def log_notify(title, message, times=2000, icon=CONFIG.ADDON_ICON, sound=False):
 def grab_log(file=False, old=False, wizard=False):
     if wizard:
         if os.path.exists(CONFIG.WIZLOG):
-            return CONFIG.WIZLOG if file else tools.read_from_file(CONFIG.WIZLOG)
+            return CONFIG.WIZLOG if file else tools.read_from_file(CONFIG.WIZLOG, errors='replace')
         else:
             return False
                 
@@ -158,7 +158,7 @@ def grab_log(file=False, old=False, wizard=False):
         if file:
             return logsfound[-1]
         else:
-            return tools.read_from_file(logsfound[-1])
+            return tools.read_from_file(logsfound[-1], errors='replace')
     else:
         return False
 
@@ -261,7 +261,9 @@ def read_log(path):
     lf = None
     try:
         lf = xbmcvfs.File(path)
-        content = lf.read()
+        # Bytes, decoded leniently: File.read() decodes strictly, and one byte
+        # that is not UTF-8 made the upload fail ("Unable to Read File").
+        content = bytes(lf.readBytes()).decode('utf-8', 'replace')
         if content:
             return True, content
         else:
@@ -284,6 +286,42 @@ def clean_log(content):
     return content
 
 
+_SETTINGS_NOISE = ('<CSettingsManager>: requested setting (', ') was not found')
+
+
+def _drop_settings_noise(data):
+    """Kodi's debug "requested setting (x) was not found" lines, taken out.
+
+    With debug logging on, Kodi writes one for every stale key in an add-on's
+    settings file each time the file is loaded. A field log (24 Oct 2026)
+    was ~5,500 such lines in its last second -- the 600 KB we keep held
+    nothing else, and the problem it was meant to show was cut off.
+
+    Returns (text, header): header names how many lines and which keys were
+    taken out, '' when none were."""
+    try:
+        if not isinstance(data, str) or _SETTINGS_NOISE[0] not in data:
+            return data, ''
+        kept, dropped, keys = [], 0, []
+        for line in data.split('\n'):
+            if _SETTINGS_NOISE[0] in line and _SETTINGS_NOISE[1] in line:
+                dropped += 1
+                key = line.split(_SETTINGS_NOISE[0], 1)[1].split(_SETTINGS_NOISE[1], 1)[0]
+                if key not in keys:
+                    keys.append(key)
+            else:
+                kept.append(line)
+        names = ', '.join(keys)
+        if len(names) > 3000:
+            names = names[:3000] + ', ...'
+        header = ('[Kodi POV IL Wizard] {0} debug lines "requested setting (...) was '
+                  'not found" removed from this log ({1} keys: {2})\n'.format(
+                      dropped, len(keys), names))
+        return '\n'.join(kept), header
+    except Exception:
+        return data, ''
+
+
 def post_log(data, name):
     """Upload the given log contents and return (success, url_or_error_msg).
 
@@ -301,11 +339,17 @@ def post_log(data, name):
         log(msg, level=xbmc.LOGERROR)
         return False, msg
 
+    data, header = _drop_settings_noise(data)
+
     # Keep the most-recent ~600 KB: Hastebin caps document size, and the tail
-    # of the log is where the actual error is. Logs only grow at the end.
+    # of the log is where the actual error is. Logs only grow at the end. The
+    # header goes on AFTER the cut, so a long log still says what was removed.
     try:
-        if isinstance(data, str) and len(data) > 600000:
-            data = data[-600000:]
+        if isinstance(data, str):
+            room = 600000 - len(header)
+            if len(data) > room:
+                data = data[-room:]
+            data = header + data
     except Exception:
         pass
 
@@ -593,7 +637,7 @@ def _dialog_watch():
 
 def error_list(file):
     errors = []
-    b = tools.read_from_file(file).replace('\n', '[CR]').replace('\r', '')
+    b = tools.read_from_file(file, errors='replace').replace('\n', '[CR]').replace('\r', '')
 
     match = re.compile("-->Python callback/script returned the following error<--(.+?)-->End of Python script error report<--").findall(b)
     for item in match:

@@ -3,11 +3,9 @@
 Kodi owns profiles.xml and the in-memory profile list. This module never edits
 that file: native creation/deletion/locks remain authoritative. Only missing
 build files are seeded, and only beneath the registered profile directory.
-
-Defaults come from the hash-verified config pack that the engine retains
-(``config_apply.open_verified_pack``). This module receives that pack as an
-argument and imports nothing from the engine.
 """
+import hashlib
+import ast
 from contextlib import closing
 import json
 import os
@@ -16,59 +14,161 @@ import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 
+
+BOOTSTRAP_SHA256 = '20f3f23b5571bc48be7313096e144fd01e903b346b050ca9a7a2899a92963f85'
 WIZARD = 'plugin.program.kodipovilwizard'
-DEFAULT_SKIN = 'skin.povil.nox'
-NAVIGATOR = 'addon_data/plugin.video.pov/navigator.db'
-SHORTCUT_RECEIPT = 'addon_data/plugin.video.pov/povil-shortcuts-defaults-v1.json'
-
-# Everything a seed can raise for a bad profile folder, pack or POV database.
-SEED_ERRORS = (OSError, ValueError, KeyError, ET.ParseError, sqlite3.Error, zipfile.BadZipFile)
 
 
-def _seed_shortcuts(profile, pack):
-    """Add the build's missing POV shortcut folders; never copy accounts,
-    history or whole databases."""
-    if NAVIGATOR not in pack:
+def _shortcut_items(value):
+    # Shipped/POV rows use Python literals. On embedded Kodi, JSONDecodeError
+    # can itself fail after unloading another profile's interpreter.
+    for parser in (ast.literal_eval, json.loads):
+        try:
+            result = parser(value)
+        except (ValueError, TypeError, SyntaxError, NameError):
+            continue
+        return result if isinstance(result, list) and all(isinstance(i, dict) for i in result) else None
+    return None
+
+
+# The receipt that the build's shortcut folders were seeded once. POV's own
+# 3-day clean-up deleted the copy in its folder, so every start seeded again
+# and a folder the user had deleted came back; the Wizard's copy is out of
+# its reach. POV's copy alone always counts. The Wizard's copy counts only
+# while POV's menu still holds shortcut folders: when POV's data is wiped
+# (Remove Addon Data, POV reinstalled) the new menu has to be seeded again.
+RECEIPTS = ('addon_data/' + WIZARD + '/povil-shortcuts-defaults-v1.json',
+            'addon_data/plugin.video.pov/povil-shortcuts-defaults-v1.json')
+
+
+def _menu_shortcuts(profile):
+    """'yes' / 'no': POV's menu does or does not hold a shortcut folder;
+    'unknown' when it cannot be read (locked, damaged)."""
+    path = _inside(profile, 'addon_data/plugin.video.pov/navigator.db')
+    if not os.path.isfile(path):
+        return 'no'
+    try:
+        with closing(sqlite3.connect(path, timeout=1)) as conn:
+            row = conn.execute("SELECT 1 FROM navigator WHERE list_type='shortcut_folder' "
+                               "LIMIT 1").fetchone()
+        return 'yes' if row else 'no'
+    except sqlite3.OperationalError as exc:
+        return 'no' if 'no such table' in str(exc).lower() else 'unknown'
+    except sqlite3.Error:
+        return 'unknown'
+
+
+def _copy_receipt(profile, source, target):
+    try:
+        with open(_inside(profile, source), 'rb') as handle:
+            write_missing(profile, target, handle.read())
+    except (OSError, ValueError):
+        pass
+
+
+def shortcuts_seeded(profile):
+    """True when the build's shortcut folders were seeded here already; a lost
+    copy of the receipt is put back once that is certain."""
+    wizard_copy, pov_copy = RECEIPTS
+    if os.path.isfile(_inside(profile, pov_copy)):
+        if not os.path.isfile(_inside(profile, wizard_copy)):
+            _copy_receipt(profile, pov_copy, wizard_copy)
+        return True
+    if not os.path.isfile(_inside(profile, wizard_copy)):
+        return False
+    state = _menu_shortcuts(profile)
+    if state == 'no':
+        return False
+    if state == 'yes':
+        _copy_receipt(profile, wizard_copy, pov_copy)
+    # 'unknown': seeded for this start; looked at again on the next.
+    return True
+
+
+def _seed_shortcuts(profile, source):
+    """Seed build menu records only; never copy accounts, history or whole DBs."""
+    if shortcuts_seeded(profile):
         return 0
-    receipt = _inside(profile, SHORTCUT_RECEIPT)
-    if os.path.isfile(receipt):
-        return 0
-    database = _inside(profile, NAVIGATOR)
+    database = _inside(profile, 'addon_data/plugin.video.pov/navigator.db')
     os.makedirs(os.path.dirname(database), exist_ok=True)
     pending = None
     try:
         with tempfile.NamedTemporaryFile(dir=os.path.dirname(database), suffix='.db', delete=False) as handle:
             pending = handle.name
-            handle.write(pack.read(NAVIGATOR))
+            handle.write(source.read('addon_data/plugin.video.pov/navigator.db'))
         with closing(sqlite3.connect(pending)) as conn:
             defaults = conn.execute('SELECT list_name,list_type,list_contents FROM navigator '
                                     'WHERE list_type=?', ('shortcut_folder',)).fetchall()
         existed = os.path.isfile(database)
+        folders, personal = [], []
         with closing(sqlite3.connect(database, timeout=1)) as conn:
             conn.execute('BEGIN IMMEDIATE')
-            if os.path.isfile(receipt):
+            if shortcuts_seeded(profile):
                 return 0
             conn.execute('CREATE TABLE IF NOT EXISTS navigator (list_name text, list_type text, '
                          'list_contents text, UNIQUE(list_name,list_type))')
             if [r[1] for r in conn.execute('PRAGMA table_info(navigator)')] != [
                     'list_name', 'list_type', 'list_contents']:
                 raise ValueError('Unknown POV navigator schema')
-            current = {(r[0], r[1]) for r in conn.execute('SELECT list_name,list_type FROM navigator')}
-            updates = [row for row in defaults if (row[0], row[1]) not in current]
+            current = {(r[0], r[1]): r[2] for r in conn.execute(
+                'SELECT list_name,list_type,list_contents FROM navigator')}
+            updates = []
+            for name, kind, contents in defaults:
+                if (name, kind) not in current:
+                    updates.append((name, kind, contents));folders.append(name)
+                    continue
+                if name not in ('FENtastic - סרטים - איזור אישי', 'FENtastic - סדרות - איזור אישי'):
+                    continue
+                # Restore the old build's missing MDBList row only once in a
+                # recognizable personal folder. Explicit empty/custom rows stay.
+                try:
+                    expected = _shortcut_items(contents)
+                    items = _shortcut_items(current[(name, kind)])
+                except (ValueError, SyntaxError, TypeError):
+                    continue
+                identity = lambda i: tuple(i.get(k) for k in ('mode','action','name'))
+                mdblist = [i for i in (expected or []) if str(i.get('action','')).startswith('mdblist_')]
+                if (not expected or not items or len(items) < 2 or len(mdblist) != 1 or
+                        any(str(i.get('action','')).startswith('mdblist_') for i in items) or
+                        any(identity(i) not in [identity(e) for e in expected] for i in items)):
+                    continue
+                updates.append((name, kind, json.dumps(items + mdblist, ensure_ascii=False)))
+                personal.append(name)
             if updates and existed:
                 backup = _inside(profile, 'addon_data/plugin.video.pov/navigator.before-build-shortcuts-v1.db')
                 if not os.path.isfile(backup):
                     with closing(sqlite3.connect(database)) as reader:
                         with closing(sqlite3.connect(backup)) as dest:
                             reader.backup(dest)
-            conn.executemany('INSERT OR IGNORE INTO navigator VALUES (?,?,?)', updates)
+            conn.executemany('INSERT OR REPLACE INTO navigator VALUES (?,?,?)', updates)
             conn.commit()
-        write_missing(profile, SHORTCUT_RECEIPT, json.dumps(
-            dict(version=1, folders=[row[0] for row in updates]), ensure_ascii=False).encode('utf8'))
+        content = json.dumps(dict(version=1, folders=folders, mdblist=personal),
+                             ensure_ascii=False).encode('utf8')
+        # Each copy on its own: one that fails (a full disk) must not keep the
+        # other from being written after navigator.db is already committed.
+        failed = None
+        for relative in RECEIPTS:
+            try:
+                write_missing(profile, relative, content)
+            except (OSError, ValueError) as exc:
+                failed = failed or exc
+        if failed is not None:
+            raise failed
         return len(updates)
     finally:
         if pending and os.path.isfile(pending):
             os.remove(pending)
+
+
+def repair_build_shortcuts(addons, profile):
+    if shortcuts_seeded(profile):
+        return 0
+    archive = os.path.join(addons, WIZARD, 'resources', 'bootstrap', 'config.zip')
+    with open(archive, 'rb') as handle:
+        if hashlib.sha256(handle.read()).hexdigest() != BOOTSTRAP_SHA256:
+            raise ValueError('Profile defaults failed integrity verification')
+    with zipfile.ZipFile(archive) as source:
+        return _seed_shortcuts(profile, source)
 
 
 def registered_profiles(master):
@@ -148,89 +248,89 @@ def write_missing(root, relative, content):
         os.unlink(tmp)
 
 
-def _replace(path, content):
-    """Atomically replace an existing file with ``content`` (bytes)."""
-    fd, temporary = tempfile.mkstemp(prefix='.profile-', dir=os.path.dirname(path))
-    try:
-        with os.fdopen(fd, 'wb') as output:
-            output.write(content)
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
-
-
-def seed_profile(master, profile, pack, build, prepare_login=False):
+def seed_profile(master, profile, archive, prepare_login=False):
     """Repair a secondary profile using shipped defaults, never master tokens.
 
-    ``pack`` is an opened ``config_apply.VerifiedPack``; ``build`` supplies the
-    installed identity (``buildname``, ``buildversion``). Excludes
-    watched/history/cache DBs and per-device advancedsettings. The receipt is
-    written last, only when the master build is provisioned. An interrupted
-    seed can resume, preserving every existing target setting.
+    Excludes watched/history/cache DBs and per-device advancedsettings. The
+    receipt is written last, only when the master build is provisioned. An
+    interrupted seed can resume, preserving every existing target setting.
     """
     target = profile_path(master, profile)
     if profile['id'] == 0:
         return False
     if not os.path.isfile(os.path.join(master, 'kodipovil.provisioned')):
         raise ValueError('Complete the master build installation first')
-    gui = pack.guisettings()
-    if gui is None:
-        raise ValueError('The build config pack has no guisettings.xml')
+    with open(archive, 'rb') as fh:
+        if hashlib.sha256(fh.read()).hexdigest() != BOOTSTRAP_SHA256:
+            raise ValueError('Profile defaults failed integrity verification')
     os.makedirs(target, exist_ok=True)
     initializing = not os.path.isfile(os.path.join(target, 'kodipovil.profile_addons_ready'))
     completing_home = not os.path.isfile(os.path.join(target, 'kodipovil.profile_home_ready'))
-    # Keep installed device settings supplied by native "copy from master";
-    # fresh native settings are also respected. Apply only build defaults.
-    for name in pack.names():
-        allowed = (name == 'favourites.xml' or name == 'sources.xml' or
-                   name.startswith('keymaps/') or
-                   name == 'addon_data/script.fentastic.helper/cpath_cache.db' or
-                   (name.startswith('addon_data/') and name.endswith('/settings.xml')))
-        if not allowed:
-            continue
-        content = pack.read(name)
-        if name == 'favourites.xml':
-            favourites = ET.fromstring(content)
-            tile = ET.Element('favourite', {
-                'name': '[B]מי צופה? — פרופילים[/B]',
-                'thumb': 'special://home/addons/' + WIZARD + '/resources/skins/Default/media/DefaultUser.png'})
-            tile.text = 'RunPlugin(plugin://' + WIZARD + '/?mode=profiles)'
-            if not any('mode=profiles' in (row.text or '') for row in favourites):
-                favourites.insert(1, tile)
-            content = ET.tostring(favourites, encoding='utf-8', xml_declaration=True)
-            existing = _inside(target, name)
-            # Kodi can create an empty file before our first seed.
-            # An established profile's deliberate deletions remain intact.
-            if initializing and os.path.isfile(existing) and not ET.parse(existing).getroot().findall('favourite'):
-                _replace(existing, content)
-        write_missing(target, name, content)
-    # Native "start fresh" does not save guisettings until first login.
-    # Seed the verified build defaults before that login, so the new
-    # profile starts in NOX with Hebrew/subtitles instead of bare Kodi.
-    # Existing native/user settings are never replaced.
-    if completing_home:
-        write_missing(target, 'kodipovil.profile_gui_defaults.xml', gui)
-    write_missing(target, 'guisettings.xml', gui)
-    ET.parse(_inside(target, 'guisettings.xml'))
-    if completing_home and prepare_login:
-        # Only the master calls this before native LoadProfile. Set the
-        # inactive profile's initial skin before Kodi reads its settings,
-        # instead of first showing the copied/stock Estuary interface.
-        path = _inside(target, 'guisettings.xml')
-        root = ET.parse(path).getroot()
-        row = root.find("setting[@id='lookandfeel.skin']")
-        if row is None:
-            row = ET.SubElement(root, 'setting', {'id': 'lookandfeel.skin'})
-        row.text = DEFAULT_SKIN
-        row.attrib.pop('default', None)
-        _replace(path, ET.tostring(root, encoding='utf-8', xml_declaration=True))
-    _seed_shortcuts(target, pack)
+    with zipfile.ZipFile(archive) as zf:
+        version = json.loads(zf.read('config_policy.json')).get('config_version', '')
+        # Keep installed device settings supplied by native "copy from master";
+        # fresh native settings are also respected. Apply only build defaults.
+        for name in zf.namelist():
+            allowed = (name == 'favourites.xml' or name == 'sources.xml' or
+                       name.startswith('keymaps/') or
+                       name == 'addon_data/script.fentastic.helper/cpath_cache.db' or
+                       (name.startswith('addon_data/') and name.endswith('/settings.xml')))
+            if allowed:
+                content = zf.read(name)
+                if name == 'favourites.xml':
+                    favourites = ET.fromstring(content)
+                    tile = ET.Element('favourite', {
+                        'name': '[B]מי צופה? — פרופילים[/B]',
+                        'thumb': 'special://home/addons/plugin.program.kodipovilwizard/resources/skins/Default/media/DefaultUser.png'})
+                    tile.text = 'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=profiles)'
+                    if not any('mode=profiles' in (row.text or '') for row in favourites):
+                        favourites.insert(1, tile)
+                    content = ET.tostring(favourites, encoding='utf-8', xml_declaration=True)
+                    existing = _inside(target, name)
+                    # Kodi can create an empty file before our first seed.
+                    # An established profile's deliberate deletions remain intact.
+                    if initializing and os.path.isfile(existing) and not ET.parse(existing).getroot().findall('favourite'):
+                        fd, temporary = tempfile.mkstemp(prefix='.profile-', dir=target)
+                        try:
+                            with os.fdopen(fd, 'wb') as output:
+                                output.write(content)
+                            os.replace(temporary, existing)
+                        finally:
+                            if os.path.exists(temporary):
+                                os.unlink(temporary)
+                write_missing(target, name, content)
+        # Native "start fresh" does not save guisettings until first login.
+        # Seed the verified build defaults before that login, so the new
+        # profile starts in NOX with Hebrew/subtitles instead of bare Kodi.
+        # Existing native/user settings are never replaced.
+        if completing_home:
+            write_missing(target, 'kodipovil.profile_gui_defaults.xml', zf.read('guisettings.xml'))
+        write_missing(target, 'guisettings.xml', zf.read('guisettings.xml'))
+        ET.parse(_inside(target, 'guisettings.xml'))
+        if completing_home and prepare_login:
+            # Only the master calls this before native LoadProfile. Set the
+            # inactive profile's initial skin before Kodi reads its settings,
+            # instead of first showing the copied/stock Estuary interface.
+            path = _inside(target, 'guisettings.xml')
+            root = ET.parse(path).getroot()
+            row = root.find("setting[@id='lookandfeel.skin']")
+            if row is None:
+                row = ET.SubElement(root, 'setting', {'id': 'lookandfeel.skin'})
+            row.text = 'skin.povil.nox'
+            row.attrib.pop('default', None)
+            fd, temporary = tempfile.mkstemp(prefix='.profile-', dir=target)
+            try:
+                with os.fdopen(fd, 'wb') as output:
+                    output.write(ET.tostring(root, encoding='utf-8', xml_declaration=True))
+                os.replace(temporary, path)
+            finally:
+                if os.path.exists(temporary):
+                    os.unlink(temporary)
+        _seed_shortcuts(target, zf)
     # Kodi uses the target add-on settings on next LoadProfile. Do not clone
     # the master's complete wizard settings (queues, update receipts, flags).
-    defaults = dict(buildname=build['buildname'], installed='true',
-                    buildversion=build['buildversion'],
-                    config_applied_version=str(pack.version),
+    defaults = dict(buildname='Kodi POV IL - FENtastic', installed='true',
+                    buildversion='0.1.45', config_applied_version=str(version),
                     build_skin_switch_notifcation_dismiss='true')
     settings = ET.Element('settings', {'version': '2'})
     for key, value in defaults.items():
@@ -245,8 +345,21 @@ def seed_profile(master, profile, pack, build, prepare_login=False):
                 row = ET.SubElement(root, 'setting', {'id': key})
             row.text = value
         # Only small build bootstrap flags, never accounts or preferences.
-        _replace(existing, ET.tostring(root, encoding='utf-8', xml_declaration=True))
+        fd, temporary = tempfile.mkstemp(prefix='.profile-', dir=os.path.dirname(existing))
+        try:
+            with os.fdopen(fd, 'wb') as output:
+                output.write(ET.tostring(root, encoding='utf-8', xml_declaration=True))
+            os.replace(temporary, existing)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
     else:
         write_missing(target, relative, ET.tostring(settings, encoding='utf-8', xml_declaration=True))
-    write_missing(target, 'kodipovil.provisioned', str(pack.version).encode('utf-8'))
+    write_missing(target, 'kodipovil.provisioned', str(version).encode('utf-8'))
     return True
+
+
+def lone_unlocked(profiles):
+    """A login screen can be removed automatically only without any lock."""
+    return (len(profiles) == 1 and profiles[0]['id'] == 0 and
+            profiles[0]['lockmode'] == 0)
