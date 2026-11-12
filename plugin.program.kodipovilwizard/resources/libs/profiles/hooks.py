@@ -25,7 +25,7 @@ PACKAGE = 'resources.libs.profiles.'
 GUARD = PACKAGE + 'profile_age_guard'
 HOME_READY = 'kodipovil.profile_home_ready'
 GUI_DEFAULTS = 'kodipovil.profile_gui_defaults.xml'
-_CHILD_ALLOWED = ('profiles', 'profile_child_open', 'profile_skin')
+_CHILD_ALLOWED = ('profiles', 'profile_child_open', 'profile_skin', 'player_season_episodes')
 ROUTES = frozenset(_CHILD_ALLOWED + ('choose_player_style', 'player_settings',
                                      'player_change_source', 'player_episodes'))
 
@@ -164,6 +164,9 @@ def dispatch(mode, params, handle):
         _load('build_profiles').open_child_content(params.get('kind'))
     elif mode == 'profile_skin':
         _load('build_profiles').choose_skin()
+    elif mode == 'player_season_episodes':
+        # the skins' 'פרקי העונה' list for an Idan Plus episode on screen
+        _load('player_styles').season_episodes(handle)
     else:
         styles = _load('player_styles')
         {'choose_player_style': styles.choose, 'player_settings': styles.settings,

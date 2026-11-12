@@ -19,7 +19,7 @@ import xbmc
 import xbmcvfs
 import xbmcgui
 
-SKINS = ('skin.estuary', 'skin.fentastic', 'skin.povil.nox', 'skin.arctic.fuse.3')
+SKINS = ('skin.estuary', 'skin.fentastic', 'skin.povil.nox', 'skin.arctic.fuse.3', 'skin.povil.onyx')
 # Seeded into the active profile when absent (the master receives them with
 # its config pack; secondary profiles through profile_store.seed_profile).
 LAYOUT_DEFAULTS = ('addon_data/script.fentastic.helper/cpath_cache.db',
