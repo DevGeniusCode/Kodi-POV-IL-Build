@@ -23,118 +23,126 @@
 #   If the hook must still do something when the patch module fails (return a value,
 #   bail out), put that statement AFTER the helper call, at the same indent.
 # * A hook that needs no patch module (pure code substitution) stays a plain string.
-# * Identical hooks shared by several patches live in the _*_HOOK constants below.
+# * Identical hooks shared by several patches live in the _*_HOOK constants of
+#   patches_registry_utils.py (together with _build_patch_hook and the validator).
+# * Entries are never reordered; new ones are appended inside the banner of their domain
+#   (or at the end of the list when no domain fits).
 #
 # Run `python patches_config.py [PATCHES_DIR]` to validate the registry (schema,
 # unique ids/markers, every hook compiles; with PATCHES_DIR also that every
 # imported patch module exists).
 
-# -*- coding: utf-8 -*-
+try:
+    from resources.libs.patches.patches_registry_utils import (
+        _build_patch_hook, _debrid_unbound_hook, _META_BLANK_GUARD_HOOK,
+        _GENRE_TRANSLATE_HOOK, _HTTP_LAZY_HOOK, GUARD_DIR, validate_registry)
+except ImportError:  # run directly: python patches_config.py
+    from patches_registry_utils import (
+        _build_patch_hook, _debrid_unbound_hook, _META_BLANK_GUARD_HOOK,
+        _GENRE_TRANSLATE_HOOK, _HTTP_LAZY_HOOK, GUARD_DIR, validate_registry)
 
-PATCHES_DIR = 'special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/'
-GUARD_DIR = 'special://home/addons/plugin.program.kodipovilwizard/resources/libs/profiles/'
-
-def _build_patch_hook(module_name, custom_logic='', indent='', fail_closed=False, patch_dir=PATCHES_DIR):
-    """Self-contained import-and-delegate block for a host patch.
-
-    Every hook imports the wizard module itself, so no patch depends on a name
-    another patch injected, and a drifted anchor can disable one hook without
-    breaking the host add-on.
-
-    Names that only the hook needs are unique (``_povil_dir`` and the module).
-    ``sys``, ``xbmcvfs``, ``xbmc`` and ``traceback`` are reached through
-    ``__import__`` on purpose: an ``import`` statement inside a host function
-    makes that name a LOCAL of the whole function, so the host's own earlier
-    use of ``sys``/``xbmcvfs`` would raise UnboundLocalError.
-
-    fail_closed=False  Enrichment hooks (stamping metadata). On any error the
-                       trace is logged and the host carries on.
-    fail_closed=True   Enforcement hooks (route, playback, directory, source
-                       guards). The trace is logged and the error is re-raised.
-    patch_dir          The directory path to append to sys.path (defaults to PATCHES_DIR).
-    """
-    lines = [
-        "try:",
-        f"\t_povil_dir = __import__('xbmcvfs').translatePath('{patch_dir}')",
-        "\tif _povil_dir not in __import__('sys').path:",
-        "\t\t__import__('sys').path.append(_povil_dir)",
-        f"\timport {module_name}"
-    ]
-
-    if custom_logic:
-        for line in custom_logic.strip('\n').split('\n'):
-            lines.append(("\t" + line) if line else "")
-
-    lines.extend([
-        "except Exception:",
-        f"\t__import__('xbmc').log('Wizard Patch Error [{module_name}]:\\n' + __import__('traceback').format_exc(), __import__('xbmc').LOGERROR)"
-    ])
-
-    if fail_closed:
-        lines.append("\traise")
-
-    return ''.join((indent + line if line else '') + '\n' for line in lines)
-
-def _debrid_unbound_hook(provider):
-    """Module-level torrent_id default plus the guard-active log line for a debrid API module."""
-    return "torrent_id = None\n" + _build_patch_hook(
-        module_name="pov_debrid_guardian",
-        custom_logic="pov_debrid_guardian.log_guard_active('%s')" % provider
-    )
-
-
-# Hooks shared by several patches (identical code, different targets).
-
-_META_BLANK_GUARD_HOOK = (
-    "\t\t\t# WIZARD: Bypass cache persistence and purge poisoned DB rows\n"
-    + _build_patch_hook(
-        module_name="pov_meta_handler",
-        indent="\t\t\t",
-        custom_logic="pov_meta_handler.clear_blank_meta()"
-    )
-    + "\t\t\treturn meta\n"
-)
-
-_GENRE_TRANSLATE_HOOK = _build_patch_hook(
-    module_name="pov_translations",
-    indent="\t\t",
-    custom_logic="genre_list = pov_translations.translate_genres(genre_list)"
-)
-
-_HTTP_LAZY_HOOK = _build_patch_hook(
-    module_name="pov_http_lazy",
-    custom_logic="pov_http_lazy.run()"
-)
 
 PATCH_CONFIG = [
-    # Right-to-left rows for skin.povil.onyx: first thing in each entry script,
-    # ahead of the saved-list blocks, so a saved list is reversed the same way.
-    {'id': 'pov_rtl_rows', 'name': 'Right-to-left rows for the Onyx skin',
-     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
-     'target_file': 'resources/lib/router.py', 'marker': '# WIZARD_POV_RTL_ROWS_v1',
-     'anchor': "if __name__ == '__main__':", 'action': 'prepend_before',
-     'hook': "import sys, xbmcvfs\n_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif _povil_p not in sys.path: sys.path.append(_povil_p)\ntry:\n\timport povil_rtl\n\tpovil_rtl.install(pov=True)\nexcept Exception:\n\tpass\n"},
-    {'id': 'idanplus_rtl_rows', 'name': 'Right-to-left Idan Plus rows for the Onyx skin',
-     'addon_id': 'plugin.video.idanplus', 'enabled': True, 'optional': True, 'target_file': 'default.py',
-     'marker': '# WIZARD_IDANPLUS_RTL_ROWS_v1',
-     'anchor': 'from sys import argv', 'action': 'append_after',
-     'hook': "import sys, xbmcvfs\n_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif _povil_p not in sys.path: sys.path.append(_povil_p)\ntry:\n\timport povil_rtl\n\tpovil_rtl.install()\nexcept Exception:\n\tpass\n"},
-    {'id': 'umbrella_rtl_rows', 'name': 'Right-to-left Umbrella lists for the Onyx skin',
-     'addon_id': 'plugin.video.umbrella', 'enabled': True, 'optional': True, 'target_file': 'umbrella.py',
-     'marker': '# WIZARD_UMBRELLA_RTL_ROWS_v1',
-     'anchor': 'from resources.lib.modules import router', 'action': 'prepend_before',
-     'hook': "import sys, xbmcvfs\n_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\nif _povil_p not in sys.path: sys.path.append(_povil_p)\ntry:\n\timport povil_rtl\n\tpovil_rtl.install(umbrella=True)\nexcept Exception:\n\tpass\n"},
-    # Clear logos in the build's language (Hebrew logos with Hebrew posters).
-    {'id': 'pov_logo_language', 'name': 'Clear logo in the meta language',
-     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
-     'target_file': 'resources/lib/indexers/metadata.py', 'marker': '# WIZARD_POV_LOGO_LANGUAGE_v1',
-     'anchor': "if not path: return ''", 'action': 'prepend_before',
-     'hook': "if key_type == 'logo':\n\ttry:\n\t\timport sys, xbmcvfs\n\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\t\timport pov_logo_lang\n\t\tpath = pov_logo_lang.pick(self.data, self.lang, path)\n\texcept Exception:\n\t\tpass\n"},
-    {'id': 'pov_logo_for_ui', 'name': 'Logo that suits a Hebrew screen (povil_logo art)',
-     'addon_id': 'plugin.video.pov', 'enabled': True, 'optional': True,
-     'target_file': 'resources/lib/indexers/metadata.py', 'marker': '# WIZARD_POV_LOGO_FOR_UI_v2',
-     'anchor': "if meta_get('mediatype') == 'movie': return art", 'action': 'prepend_before',
-     'hook': "try:\n\timport sys\n\t_povil_logo = sys.modules.get('pov_logo_lang')\n\tif _povil_logo is None:\n\t\timport xbmcvfs\n\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\t\timport pov_logo_lang as _povil_logo\n\tart['povil_logo'] = _povil_logo.for_ui(meta, clearlogo)\nexcept Exception:\n\tpass\n"},
+    # =======================================================================================
+    # ================= ONYX SKIN SUPPORT: RIGHT-TO-LEFT ROWS & CLEAR LOGOS =================
+    # =======================================================================================
+    {
+        "id": "pov_rtl_rows",
+        "name": "Right-to-left rows for the Onyx skin",
+        "description": "Runs first in POV's entry script, ahead of the saved-list blocks, so a saved list is reversed right-to-left like any other row (Onyx skin only).",
+        "category": "ui",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/router.py",
+        "marker": "# WIZARD_POV_RTL_ROWS_v1",
+        "anchor": "if __name__ == '__main__':",
+        "action": "prepend_before",
+        "hook": _build_patch_hook(
+            module_name="povil_rtl",
+            custom_logic="povil_rtl.install(pov=True)"
+        )
+    },
+    {
+        "id": "idanplus_rtl_rows",
+        "name": "Right-to-left Idan Plus rows for the Onyx skin",
+        "description": "Reverses Idan Plus rows right-to-left for the Onyx skin.",
+        "category": "ui",
+        "priority": "minor",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "optional": True,
+        "target_file": "default.py",
+        "marker": "# WIZARD_IDANPLUS_RTL_ROWS_v1",
+        "anchor": "from sys import argv",
+        "action": "append_after",
+        "hook": _build_patch_hook(
+            module_name="povil_rtl",
+            custom_logic="povil_rtl.install()"
+        )
+    },
+    {
+        "id": "umbrella_rtl_rows",
+        "name": "Right-to-left Umbrella lists for the Onyx skin",
+        "description": "Reverses Umbrella lists right-to-left for the Onyx skin.",
+        "category": "ui",
+        "priority": "minor",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "optional": True,
+        "target_file": "umbrella.py",
+        "marker": "# WIZARD_UMBRELLA_RTL_ROWS_v1",
+        "anchor": "from resources.lib.modules import router",
+        "action": "prepend_before",
+        "hook": _build_patch_hook(
+            module_name="povil_rtl",
+            custom_logic="povil_rtl.install(umbrella=True)"
+        )
+    },
+    {
+        "id": "pov_logo_language",
+        "name": "Clear logo in the meta language",
+        "description": "Picks the clear logo in the build's language (Hebrew logos with Hebrew posters) when POV asks for a logo.",
+        "category": "ui",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/indexers/metadata.py",
+        "marker": "# WIZARD_POV_LOGO_LANGUAGE_v1",
+        "anchor": "if not path: return ''",
+        "action": "prepend_before",
+        "hook": (
+            "if key_type == 'logo':\n"
+            + _build_patch_hook(
+                module_name="pov_logo_lang",
+                indent="\t",
+                custom_logic="path = pov_logo_lang.pick(self.data, self.lang, path)"
+            )
+        )
+    },
+    {
+        "id": "pov_logo_for_ui",
+        "name": "Logo that suits a Hebrew screen (povil_logo art)",
+        "description": "Adds a povil_logo art entry chosen for a Hebrew screen next to the stock clear logo.",
+        "category": "ui",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/indexers/metadata.py",
+        "marker": "# WIZARD_POV_LOGO_FOR_UI_v2",
+        "anchor": "if meta_get('mediatype') == 'movie': return art",
+        "action": "prepend_before",
+        "hook": _build_patch_hook(
+            module_name="pov_logo_lang",
+            custom_logic="art['povil_logo'] = pov_logo_lang.for_ui(meta, clearlogo)"
+        )
+    },
+    # ==================================================================
+    # ================= DIAGNOSTICS: DIRECTORY LATENCY =================
+    # ==================================================================
     {
         "id": "pov_directory_clock",
         "name": "Directory entry latency clock",
@@ -169,6 +177,9 @@ PATCH_CONFIG = [
             custom_logic="pov_directory_latency.install(globals())"
         )
     },
+    # ========================================================================================
+    # ================= ROUTER: SAVED-LIST SNAPSHOT, PLAY GUARD & TV HISTORY =================
+    # ========================================================================================
     {
         "id": "pov_list_snapshot_early",
         "name": "Saved lists served before POV is imported",
@@ -244,6 +255,9 @@ PATCH_CONFIG = [
             custom_logic="return pov_watch_history.tv_history(globals(), watched_indicators)"
         )
     },
+    # =========================================================================================
+    # ================= IDAN PLUS: CHILD-PROFILE SOURCE GUARD & LIST SNAPSHOT =================
+    # =========================================================================================
     {
         "id": "idanplus_child_source",
         "name": "Child profile unclassified live source guard",
@@ -286,6 +300,9 @@ PATCH_CONFIG = [
             )
         )
     },
+    # ===========================================================================================
+    # ================= PARENTAL CONTROL: CHILD-PROFILE GUARDS (POV & UMBRELLA) =================
+    # ===========================================================================================
     {
         "id": "pov_profile_movie_metadata",
         "name": "Child movie classification",
@@ -493,6 +510,9 @@ PATCH_CONFIG = [
             )
         )
     },
+    # ===================================================================================
+    # ================= PAGINATION, LOCAL FAVOURITES & HEBREW INTERFACE =================
+    # ===================================================================================
     {
         "id": "pov_merged_personal_pagination",
         "name": "Merged personal lists paginate after ordering",
@@ -592,6 +612,9 @@ PATCH_CONFIG = [
             "\treturn [{'media_id': str(i['tmdb_id']), 'title': i['title']} for i in data], 1\n"
         )
     },
+    # =========================================================
+    # ================= CACHE & DEBRID SAFETY =================
+    # =========================================================
     {
         "id": "pov_cache_empty_prevention",
         "name": "POV Empty Cache Prevention",
@@ -632,6 +655,9 @@ PATCH_CONFIG = [
             "\tfiles = None; torrent_id = None\n"
         )
     },
+    # ===================================================================================
+    # ================= NAVIGATOR: VISIBILITY, SHORTCUTS & TRANSLATIONS =================
+    # ===================================================================================
     {
         "id": "wizard_pov_visibility_mgr_navigator",
         "name": "Dynamic Visibility Manager (Widget Folders)",
@@ -785,6 +811,9 @@ PATCH_CONFIG = [
         "action": "append_after",
         "hook": _GENRE_TRANSLATE_HOOK
     },
+    # ===========================================================================================
+    # ================= TMDB & METADATA: TIMEOUTS, NETWORKS & BLANK-META GUARDS =================
+    # ===========================================================================================
     {
         "id": "pov_tmdb_timeout_widen",
         "name": "POV TMDB Timeout Widen",
@@ -849,6 +878,9 @@ PATCH_CONFIG = [
         "action": "prepend_before",
         "hook": _META_BLANK_GUARD_HOOK
     },
+    # =========================================================================
+    # ================= MY SERVICES, ACCOUNT MANAGER & TORBOX =================
+    # =========================================================================
     {
         "id": "pov_repeat_timer_resiliency",
         "name": "RepeatTimer Crash Prevention",
@@ -926,6 +958,9 @@ PATCH_CONFIG = [
             )
         )
     },
+    # ===============================================
+    # ================= TRAKT CACHE =================
+    # ===============================================
     {
         "id": "pov_trakt_empty_cache_fix",
         "name": "Trakt Empty Cache Prevention",
@@ -966,6 +1001,9 @@ PATCH_CONFIG = [
             "\texcept Exception: pass\n"
         )
     },
+    # =============================================================
+    # ================= VIEW MODE & ADD-ON WINDOW =================
+    # =============================================================
     {
         "id": "wizard_pov_view_mode_fix",
         "name": "Persistent View Mode Patcher",
@@ -1007,6 +1045,9 @@ PATCH_CONFIG = [
             )
         )
     },
+    # =======================================================
+    # ================= DISCOVER & MY LISTS =================
+    # =======================================================
     {
         "id": "wizard_pov_combined_discover",
         "name": "Unified Discover Builder",
@@ -1081,6 +1122,9 @@ PATCH_CONFIG = [
             custom_logic="pov_my_lists.maybe_populate_tvshows(self, page_no)"
         )
     },
+    # ==================================================================
+    # ================= DEBRID STATUS TOASTS (SERVICE) =================
+    # ==================================================================
     {
         "id": "pov_debrid_status",
         "name": "Debrid Expiry Notification Override",
@@ -1120,6 +1164,9 @@ PATCH_CONFIG = [
             )
         )
     },
+    # ======================================================
+    # ================= FAVOURITES REFRESH =================
+    # ======================================================
     {
         "id": "wizard_fav_refresh_manage",
         "name": "Favorites Refresh (List Manager)",
@@ -1153,6 +1200,9 @@ PATCH_CONFIG = [
             "\trefresh = 'search' not in (__import__('xbmc').getInfoLabel('Container.FolderPath') or '').lower()\n"
         )
     },
+    # ==================================================================
+    # ================= DEBRID API GUARDS & ERROR LOGS =================
+    # ==================================================================
     {
         "id": "pov_ad_unbound_guard",
         "name": "POV AllDebrid Unbound Guard",
@@ -1278,6 +1328,9 @@ PATCH_CONFIG = [
             custom_logic="pov_debrid_guardian.log_debrid_error('premiumize', result, locals().get('url', ''))"
         )
     },
+    # =================================================================================================
+    # ================= SOURCES: DEBRID TIMEOUT, RANKING, PREWARM & REMEMBERED SOURCE =================
+    # =================================================================================================
     {
         "id": "pov_debrid_timeout",
         "name": "Debrid Timeout Resiliency",
@@ -1384,6 +1437,9 @@ PATCH_CONFIG = [
             custom_logic="pov_legacy_scrapers.run(self, source_path, append, prescrape)"
         )
     },
+    # =============================================================================
+    # ================= DEBRID RESOLVE: DIAGNOSTICS & ERROR GUARD =================
+    # =============================================================================
     {
         "id": "pov_resolve_diag",
         "name": "Debrid Resolve Diagnostics",
@@ -1428,6 +1484,9 @@ PATCH_CONFIG = [
             )
         )
     },
+    # ======================================================================
+    # ================= TRAKT RE-AUTH & SHARED / LAZY HTTP =================
+    # ======================================================================
     {
         "id": "pov_trakt_reauth_recovery",
         "name": "Trakt 401 Reauth Recovery",
@@ -1511,6 +1570,9 @@ PATCH_CONFIG = [
         "action": "prepend_before",
         "hook": _HTTP_LAZY_HOOK
     },
+    # =================================================================================
+    # ================= SOURCE WINDOW: QUALITY LABEL & SUBTITLE MATCH =================
+    # =================================================================================
     {
         "id": "pov_source_quality_fix",
         "name": "POV Source Quality Badge Fix",
@@ -1562,6 +1624,9 @@ PATCH_CONFIG = [
             custom_logic="pov_sub_match_v2.refresh_when_ready(self)"
         )
     },
+    # ================================================================
+    # ================= NAVIGATOR CACHE & AIOSTREAMS =================
+    # ================================================================
     {
         "id": "pov_navigator_read_fix",
         "name": "POV Navigator DB Parse Interceptor",
@@ -1601,6 +1666,9 @@ PATCH_CONFIG = [
             )
         )
     },
+    # ===========================================
+    # ================= MDBLIST =================
+    # ===========================================
     {
         "id": "mdblist_api_redact_and_reauth_prep",
         "name": "MDBList API Redact Log",
@@ -1984,6 +2052,9 @@ PATCH_CONFIG = [
             + "\n"
         )
     },
+    # =================================================
+    # ================= WIDGET BUDGET =================
+    # =================================================
     {
         "id": "pov_widget_budget_movies",
         "name": "POV Widget Rendering Budget (Movies)",
@@ -2038,6 +2109,9 @@ PATCH_CONFIG = [
             custom_logic="self.worker = pov_widget_budget.wrap_next_episode_worker(self, self.worker)"
         )
     },
+    # ========================================================================
+    # ================= WATCHED CACHE & NEXT-EPISODE HISTORY =================
+    # ========================================================================
     {
         "id": "pov_bookmark_refresh_order",
         "name": "Fix Bookmark UI Refresh Race Condition",
@@ -2138,6 +2212,9 @@ PATCH_CONFIG = [
             custom_logic="return pov_next_history.next_episodes(globals(), watched_indicators)"
         )
     },
+    # =======================================================
+    # ================= STABLE LIST ACTIONS =================
+    # =======================================================
     {
         "id": "pov_tmdb_stable_list_actions",
         "name": "Stable provider action IDs: tmdb",
@@ -2174,6 +2251,9 @@ PATCH_CONFIG = [
             custom_logic="return pov_list_actions.default_choices(self, globals(), 'trakt')"
         )
     },
+    # =====================================================
+    # ================= CONTINUE WATCHING =================
+    # =====================================================
     {
         "id": "pov_persistent_continue_exclusions",
         "name": "Honor local removals with every watched provider",
@@ -2460,90 +2540,9 @@ PATCH_CONFIG = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Registry validation (not run at import time; used from the command line / CI)
-# ---------------------------------------------------------------------------
-
-_REQUIRED_FIELDS = (
-    'id', 'name', 'description', 'category', 'priority', 'addon_id', 'enabled',
-    'target_file', 'marker', 'anchor', 'action', 'hook',
-)
-_CATEGORIES = {
-    'translation', 'ui', 'ux', 'performance', 'subtitles', 'crash_guard',
-    'account_manager', 'parental_control', 'reliability', 'diagnostics', 'compatibility',
-}
-_PRIORITIES = {'critical', 'major', 'minor'}
-_ACTIONS = {'prepend_before', 'append_after'}
-# Imports in a hook that do not come from PATCHES_DIR.
-_NON_PATCH_MODULES = {'sys', 'time', 're', 'threading', 'traceback', 'xbmc', 'xbmcvfs', 'xbmcaddon'}
-
-
-def _compile_hook(hook):
-    """Compiles a hook inside a dummy function/loop nested to the hook's own indent depth."""
-    import re
-    lines = hook.split('\n')
-    if lines and lines[-1] == '':
-        lines.pop()
-    code = [l for l in lines if l.strip() and not l.lstrip().startswith('#')]
-    depth = len(code[0]) - len(code[0].lstrip('\t')) if code else 0
-    src = ['def _outer():']
-    src += ['\t%s = None' % name for name in sorted(set(re.findall(r'nonlocal\s+(\w+)', hook)))]
-    src += ['\tdef _inner():', '\t\twhile True:']
-    base = '\t\t\t'
-    src += [base + '\t' * i + 'if True:' for i in range(depth)]
-    src += [base + line for line in lines]
-    compile('\n'.join(src) + '\n', '<hook>', 'exec')
-
-
-def validate_registry(patches_dir=None):
-    """Returns a list of problems found in PATCH_CONFIG (empty list means valid)."""
-    import os
-    import re
-    problems = []
-    seen_ids, seen_markers = set(), set()
-    for index, patch in enumerate(PATCH_CONFIG):
-        pid = patch.get('id', '#%d' % index)
-        missing = [f for f in _REQUIRED_FIELDS if f not in patch]
-        if missing:
-            problems.append('%s: missing fields %s' % (pid, ', '.join(missing)))
-            continue
-        if pid in seen_ids:
-            problems.append('%s: duplicate id' % pid)
-        seen_ids.add(pid)
-        key = (patch['target_file'], patch['marker'])
-        if key in seen_markers:
-            problems.append('%s: duplicate marker %s in %s' % (pid, patch['marker'], patch['target_file']))
-        seen_markers.add(key)
-        if not re.match(r'^# WIZARD_[A-Z0-9_]+_v\d+$', patch['marker']):
-            problems.append('%s: marker %r does not match "# WIZARD_<ADDON>_<NAME>_v<X>"' % (pid, patch['marker']))
-        if patch['category'] not in _CATEGORIES:
-            problems.append('%s: unknown category %r' % (pid, patch['category']))
-        if patch['priority'] not in _PRIORITIES:
-            problems.append('%s: unknown priority %r' % (pid, patch['priority']))
-        if patch['action'] not in _ACTIONS:
-            problems.append('%s: unknown action %r' % (pid, patch['action']))
-        if not isinstance(patch['enabled'], bool):
-            problems.append('%s: enabled must be a bool' % pid)
-        hook = patch['hook']
-        if not isinstance(hook, str) or not hook.endswith('\n'):
-            problems.append('%s: hook must be a string ending in a newline' % pid)
-            continue
-        try:
-            _compile_hook(hook)
-        except SyntaxError as exc:
-            problems.append('%s: hook does not compile (%s, line %s)' % (pid, exc.msg, exc.lineno))
-        if patches_dir:
-            names = set(re.findall(r'(?:^|;)\s*(?:from|import)\s+(\w+)', hook, re.M)) - _NON_PATCH_MODULES
-            for name in sorted(names):
-                if not os.path.isfile(os.path.join(patches_dir, name + '.py')):
-                    problems.append('%s: patch module %s.py not found in %s' % (pid, name, patches_dir))
-    return problems
-
-
 if __name__ == '__main__':
     import sys
-    _problems = validate_registry(sys.argv[1] if len(sys.argv) > 1 else None)
+    _problems = validate_registry(PATCH_CONFIG, sys.argv[1] if len(sys.argv) > 1 else None)
     for _problem in _problems:
         print(_problem)
     print('%d patches checked, %d problem(s)' % (len(PATCH_CONFIG), len(_problems)))
-    sys.exit(1 if _problems else 0)

@@ -249,41 +249,6 @@ def _maybe_quiet_update_nags():
             pass
 
 
-def _maybe_patch_pov_widget_crash_guard():
-    """Stop the "add to Trakt -> refresh widgets -> Kodi native crash".
-    POV's SyncMonitor, when `trakt.sync_refresh_widgets` is ON, fires
-    UpdateLibrary(video,special://skin/foo) after a Trakt/MDBList sync; every
-    home widget then reloads at once, spawning concurrent POV router.py
-    invocations that share POV's reuselanguageinvoker interpreter and corrupt
-    CPython dict internals (SystemError: dictobject.c:1756) -> the app dies.
-    Confirmed from a field crash log. We force that single setting OFF (only
-    when it is actually on); widgets then refresh on the next navigation
-    instead of in a crash-inducing burst. No source files touched."""
-    if _skip_pov_patchers():
-        return
-    try:
-        from resources.libs.host_repairs import pov_widget_crash_guard, kodi_utils
-    except Exception:
-        return
-    try:
-        status = pov_widget_crash_guard.ensure_patched()
-        if status == 'patched':
-            kodi_utils.log(
-                'pov_widget_crash_guard: disabled POV trakt.sync_refresh_'
-                'widgets (was ON -- prevents the add-to-Trakt native crash)',
-                level='INFO')
-        elif status in ('read_failed', 'write_failed'):
-            kodi_utils.log(
-                'pov_widget_crash_guard: ' + status, level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'pov_widget_crash_guard run failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-
-
 def _ensure_pov_enabled():
     """Switch POV back on if OUR OWN CYCLE left it off. Not otherwise.
 

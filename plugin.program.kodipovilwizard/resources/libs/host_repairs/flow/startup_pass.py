@@ -15,7 +15,7 @@ except ImportError:
 from resources.libs.host_repairs.flow.af3_steps import _maybe_patch_af3_home, _maybe_show_af3_first_launch_dialog
 from resources.libs.host_repairs.flow.common import _addon_version, _background_settle_seconds, _background_ui_busy
 from resources.libs.host_repairs.flow.idanplus_steps import _maybe_fix_idanplus_vod, _maybe_fix_idanplus_youtube_id, _maybe_patch_idanplus_channels
-from resources.libs.host_repairs.flow.pov_steps import _maybe_optimize_32bit_artwork, _maybe_patch_pov_widget_crash_guard, _maybe_quiet_update_nags, _maybe_repair_addon_settings_integrity, _maybe_seed_pov_seasons_view, _skip_pov_patchers
+from resources.libs.host_repairs.flow.pov_steps import _maybe_optimize_32bit_artwork, _maybe_quiet_update_nags, _maybe_repair_addon_settings_integrity, _maybe_seed_pov_seasons_view, _skip_pov_patchers
 from resources.libs.host_repairs.flow.tonight_steps import _maybe_add_tonight_entry
 from resources.libs.host_repairs.flow.umbrella_steps import _maybe_patch_mdblist_reauth, _maybe_patch_umbrella_language
 
@@ -53,7 +53,7 @@ def _report_patcher_health():
     race a repair the pass had not reached yet.
 
     Why it exists: the loop at the end of _run_build_startup_repairs calls
-    `step()` and DISCARDS the return value, and all 123 step functions return
+    `step()` and DISCARDS the return value, and all 122 step functions return
     None anyway. An anchor that stops matching is not an exception, so it never
     reaches the WARNING branch either -- it is a silent, ordinary-looking boot.
     That is exactly how five repairs died on POV 6.08.14 with nobody the wiser
@@ -177,7 +177,6 @@ def _run_build_startup_repairs():
         # race the skin and momentarily render an empty personal/network/genre
         # shelf. These are small local SQLite writes/checks, never web calls.
         _maybe_patch_af3_home,
-        _maybe_patch_pov_widget_crash_guard,
         _maybe_patch_umbrella_language,
         _maybe_add_tonight_entry,
         _maybe_fix_idanplus_youtube_id,
