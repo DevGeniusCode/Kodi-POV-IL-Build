@@ -36,12 +36,14 @@ def _require_master():
 
 
 def _seed(profile):
-    from resources.libs.common.config import CONFIG
-    build = dict(buildname=CONFIG.BUILDNAME_DEFAULT, buildversion=CONFIG.BUILDVERSION_DEFAULT)
     # Only the master owns the shared verified pack, so only it may fetch it.
+    # open_verified_pack() has just re-hashed the retained pack against the
+    # manifest receipt, so seed_profile skips its bundled-bootstrap pin; it is
+    # given the same guisettings defaults as the fresh install (machine ids out).
     with config_apply.open_verified_pack(fetch=is_master()) as pack:
-        result = profile_store.seed_profile(_master_path(), profile, pack, build,
-                                            prepare_login=is_master())
+        result = profile_store.seed_profile(_master_path(), profile, pack.path,
+                                            prepare_login=is_master(), verified=True,
+                                            gui_defaults=pack.guisettings())
     if is_master():
         from resources.libs.profiles import profile_home
         profile_home.prepare(_master_path(), profile)
@@ -251,8 +253,8 @@ def choose_skin():
         return
     # The same picker/install path as the master includes on-demand AF3.
     # An installed-only menu made secondary profiles look like another build.
-    from resources.libs import wizard
-    wizard.build_switch_skin()
+    from resources.libs.skins import switcher
+    switcher.build_switch_skin()
 
 
 def add_profile():

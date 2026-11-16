@@ -393,7 +393,7 @@ def show_update_window(name='Testing Window', current='1.0', new='1.1', icon=CON
     install = xbmcgui.Dialog().yesno(CONFIG.ADDONTITLE, final_msg,
                                      yeslabel='לחץ לעדכון גרסה', nolabel='הזכר מאוחר יותר')
     if install:
-        from resources.libs.wizard import Wizard
+        from resources.libs.build.wizard_actions import Wizard
         Wizard().build(CONFIG.BUILDNAME)    
 
 

@@ -251,26 +251,35 @@ def write_missing(root, relative, content):
         os.unlink(tmp)
 
 
-def seed_profile(master, profile, archive, prepare_login=False):
+def seed_profile(master, profile, archive, prepare_login=False, *, verified=False, gui_defaults=None):
     """Repair a secondary profile using shipped defaults, never master tokens.
 
     Excludes watched/history/cache DBs and per-device advancedsettings. The
     receipt is written last, only when the master build is provisioned. An
     interrupted seed can resume, preserving every existing target setting.
+
+    ``archive`` is a zip whose root mirrors userdata/. By default it must be
+    the bundled bootstrap pinned by BOOTSTRAP_SHA256. ``verified=True`` means
+    the caller passes the build config pack that config_apply has already
+    hash-verified against the manifest, so the bootstrap pin does not apply.
+    ``gui_defaults`` (bytes) replaces the archive's raw guisettings.xml, e.g.
+    the pack's guisettings with the policy's machine-specific ids removed.
     """
     target = profile_path(master, profile)
     if profile['id'] == 0:
         return False
     if not os.path.isfile(os.path.join(master, 'kodipovil.provisioned')):
         raise ValueError('Complete the master build installation first')
-    with open(archive, 'rb') as fh:
-        if hashlib.sha256(fh.read()).hexdigest() != BOOTSTRAP_SHA256:
-            raise ValueError('Profile defaults failed integrity verification')
+    if not verified:
+        with open(archive, 'rb') as fh:
+            if hashlib.sha256(fh.read()).hexdigest() != BOOTSTRAP_SHA256:
+                raise ValueError('Profile defaults failed integrity verification')
     os.makedirs(target, exist_ok=True)
     initializing = not os.path.isfile(os.path.join(target, 'kodipovil.profile_addons_ready'))
     completing_home = not os.path.isfile(os.path.join(target, 'kodipovil.profile_home_ready'))
     with zipfile.ZipFile(archive) as zf:
         version = json.loads(zf.read('config_policy.json')).get('config_version', '')
+        gui = gui_defaults if gui_defaults is not None else zf.read('guisettings.xml')
         # Keep installed device settings supplied by native "copy from master";
         # fresh native settings are also respected. Apply only build defaults.
         for name in zf.namelist():
@@ -307,8 +316,8 @@ def seed_profile(master, profile, archive, prepare_login=False):
         # profile starts in NOX with Hebrew/subtitles instead of bare Kodi.
         # Existing native/user settings are never replaced.
         if completing_home:
-            write_missing(target, 'kodipovil.profile_gui_defaults.xml', zf.read('guisettings.xml'))
-        write_missing(target, 'guisettings.xml', zf.read('guisettings.xml'))
+            write_missing(target, 'kodipovil.profile_gui_defaults.xml', gui)
+        write_missing(target, 'guisettings.xml', gui)
         ET.parse(_inside(target, 'guisettings.xml'))
         if completing_home and prepare_login:
             # Only the master calls this before native LoadProfile. Set the
@@ -332,8 +341,11 @@ def seed_profile(master, profile, archive, prepare_login=False):
         _seed_shortcuts(target, zf)
     # Kodi uses the target add-on settings on next LoadProfile. Do not clone
     # the master's complete wizard settings (queues, update receipts, flags).
-    defaults = dict(buildname='Kodi POV IL - FENtastic', installed='true',
-                    buildversion='0.1.45', config_applied_version=str(version),
+    # Build identity comes from uservar.py through CONFIG, so a version bump
+    # reaches newly seeded profiles without editing this file.
+    from resources.libs.common.config import CONFIG
+    defaults = dict(buildname=CONFIG.BUILDNAME_DEFAULT, installed='true',
+                    buildversion=CONFIG.BUILDVERSION_DEFAULT, config_applied_version=str(version),
                     build_skin_switch_notifcation_dismiss='true')
     settings = ET.Element('settings', {'version': '2'})
     for key, value in defaults.items():

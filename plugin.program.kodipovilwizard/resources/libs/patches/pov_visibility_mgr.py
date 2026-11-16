@@ -388,9 +388,9 @@ def _coerce_list(value):
 # Hook entry point (POV navigator.build_shortcut_folder_list)
 # ---------------------------------------------------------------------------
 def filter_navigator_list(list_items, list_name=None):
-  """Return `list_items` without rows whose service is not connected, plus
-  the MDBList row when connected. Input is never mutated; on ANY failure the
-  original object is returned unchanged."""
+	"""Return `list_items` without rows whose service is not connected, plus
+	the MDBList row when connected. Input is never mutated; on ANY failure the
+	original object is returned unchanged."""
 	try:
 		items = _coerce_list(list_items)
 		if items is None:

@@ -135,7 +135,6 @@ PATCH_CONFIG = [
      'target_file': 'resources/lib/indexers/metadata.py', 'marker': '# WIZARD_POV_LOGO_FOR_UI_v2',
      'anchor': "if meta_get('mediatype') == 'movie': return art", 'action': 'prepend_before',
      'hook': "try:\n\timport sys\n\t_povil_logo = sys.modules.get('pov_logo_lang')\n\tif _povil_logo is None:\n\t\timport xbmcvfs\n\t\t_povil_p = xbmcvfs.translatePath('special://home/addons/plugin.program.kodipovilwizard/resources/libs/patches/')\n\t\tif _povil_p not in sys.path: sys.path.append(_povil_p)\n\t\timport pov_logo_lang as _povil_logo\n\tart['povil_logo'] = _povil_logo.for_ui(meta, clearlogo)\nexcept Exception:\n\tpass\n"},
-    },
     {
         "id": "pov_directory_clock",
         "name": "Directory entry latency clock",

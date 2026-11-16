@@ -810,7 +810,7 @@ class ModularUpdater:
                     nolabel="מאוחר יותר"
                 )
                 if choice:
-                    from resources.libs.wizard import Wizard
+                    from resources.libs.build.wizard_actions import Wizard
                     Wizard().force_close_kodi_in_5_seconds("עדכון קריטי הסתיים.")
         elif extracted_addons or config_skin_touched:
             xbmc.executebuiltin('ReloadSkin()')

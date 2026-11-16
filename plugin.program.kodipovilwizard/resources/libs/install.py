@@ -452,7 +452,7 @@ def fresh_start(install=None, over=False):
         elif install == 'restore':
             return True
         elif install:
-            from resources.libs.wizard import Wizard
+            from resources.libs.build.wizard_actions import Wizard
             Wizard().build('normal', install, over=True)
         else:
             dialog.ok(CONFIG.ADDONTITLE, "[COLOR {0}]To save changes you now need to force close Kodi, Press OK to force close Kodi[/COLOR]".format(CONFIG.COLOR2))

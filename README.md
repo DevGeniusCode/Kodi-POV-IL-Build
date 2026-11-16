@@ -31,6 +31,7 @@
     - [9.8 Developer Guide](#98-developer-guide)
 10. [Removed / Legacy Components](#10-removed--legacy-components)
 11. [Repository Layout & Addon Inventory](#11-repository-layout--addon-inventory)
+    - [Wizard code layout: domain folders under `libs/`](#wizard-code-layout-domain-folders-under-libs)
 12. [Strict Guidelines for AI Agents & Contributors (CRITICAL)](#12-strict-guidelines-for-ai-agents--contributors-critical)
 13. [Git & Release Workflow](#13-git--release-workflow)
 
@@ -229,7 +230,7 @@ Otaku is last so a transient Otaku stall can never block the core build; the boo
 - **First‑Boot Stabilizer (race shield).** The first boot after an install is a race: FENtastic fires parallel widget
   directory queries at `plugin.video.pov` while POV's service creates its databases for the first time, which can fail
   the directory calls or deadlock the skin‑variable engine (the "second boot is always fine" symptom).
-  `first_boot_stabilize_if_needed()` runs after `wait_for_gui_ready()` and is a **no‑op unless the one‑shot marker
+  `first_boot_stabilize_if_needed()` (`boot/first_boot.py`) runs after `wait_for_gui_ready()` (`boot/gui_ready.py`) and is a **no‑op unless the one‑shot marker
   `kodipovil.first_boot_stabilize` exists**. When it does, it holds briefly with a user‑visible Hebrew countdown while
   POV warms up (bounded by `first_boot_warmup_seconds`, default 25 s, early‑exit once `System.HasAddon(plugin.video.pov)`
   plus a minimum warm‑up), then runs `UpdateLocalAddons` + `ReloadSkin()`. It never patches the skin, uses no global
@@ -613,7 +614,7 @@ settings API, accepts Kodi's own retention question with the scoped confirmer, a
 that runs the **manifest‑based** update (version diff → modular download/extract →
 config merge). It is **not** a monolithic re‑download.
 
-**Force‑close** (`wizard.force_close_kodi_in_5_seconds(...)`) is used **only** when
+**Force‑close** (`Wizard.force_close_kodi_in_5_seconds(...)`, `build/wizard_actions.py`) is used **only** when
 a critical update genuinely requires a restart (the wizard itself or the active
 skin). It is a controlled, announced shutdown — **never** a way to "apply" ordinary
 updates and **never** a crash. Fresh installs and skin switches finish **live**; there is no forced
@@ -681,7 +682,7 @@ profile internals**; they call `hooks.py` and nothing else.
 |-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `hooks.py`              | **The only engine-facing surface.** Startup hooks, router gate and route dispatch (table below). Owns the failure policy for each.                                                                                                                                                        |
 | `build_profiles.py`     | Profile UI and lifecycle: `show()` / `ProfileCards` (picker), `add_profile()`, `load_profile()`, `choose_skin()`, `open_child_content()`; startup repair (`repair_active()`, `prepare_inactive()`, `prepare_first_login()`); `enable_login_screen()`; the native-dialog helpers (9.7).        |
-| `profile_store.py`      | Pure file-level seeding (standard library only): `registered_profiles()`, `profile_path()`, `write_missing()`, `seed_profile()`, `SEED_ERRORS`. Receives the verified pack as an argument; imports nothing from the engine.                                                                |
+| `profile_store.py`      | File-level seeding: `registered_profiles()`, `profile_path()`, `write_missing()`, `seed_profile()`, `SEED_ERRORS`. Standard library at import time; `seed_profile()` reads the build name/version from `CONFIG` lazily. Receives the verified pack's path as an argument. |
 | `profile_home.py`       | Regenerates an *inactive* profile's home tiles (favourites generator and the shortcut writers) against that profile's own files and connection state, before Kodi reads its cache.                                                                                                        |
 | `profile_connections.py`| Explicit account inheritance: copies the selected account **fields** (never databases, watch state or unrelated preferences) from the master into an inactive profile.                                                                                                                      |
 | `profile_age_guard.py`  | **Standalone** policy and decision module: `active_policy()`, `policy_for()`, `allows()`, `visible()`, `stamp_item()`, `permit_play()`, `route_allowed()`, `install_directory_guard()`, `unclassified_source_allowed()`. Imported by host add-ons by bare name (9.5).                         |
@@ -691,8 +692,9 @@ profile internals**; they call `hooks.py` and nothing else.
 | `profile_service.py`    | Service-side watcher started by `hooks.start_guard()`: refreshes the `POVIL.ChildProfile` window property and stops playback in a child profile that has no valid play receipt.                                                                                                           |
 | `player_styles.py`      | NOX playback controls: style chooser, player settings, change source, next-episodes list (routes in `hooks.ROUTES`).                                                                                                                                                                       |
 
-Outside the package: `profile_bootstrap.py` (add-on root; referenced by the skins' `Home.xml` `<onload>`, so its path is
-a contract), the Wizard windows `resources/skins/Default/1080i/{Profiles,ChildHome,ProfileLogin}.xml`, the artwork in
+Path-pinned inside the package: `profile_bootstrap.py` (`resources/libs/profiles/`; the skins' `Home.xml` `<onload>` runs it, so its path
+is a contract). **Known issue:** FENtastic and Estuary use that path, but NOX, Onyx and `af3_skin.BOOTSTRAP` (AF3) still
+point at the old add-on-root path, where the file no longer exists. Outside the package: the Wizard windows `resources/skins/Default/1080i/{Profiles,ChildHome,ProfileLogin}.xml`, the artwork in
 `resources/media/profile-ui/`, and the `parental_control` entries of the patch registry (`patches_config.py`).
 
 #### `hooks.py` — the engine-facing API
@@ -723,7 +725,7 @@ These are **all** the places where engine code knows about Profiles. Keep it tha
 | `fresh_install.py`        | `apply_live_defaults(defaults_path=…)` and `live_favourites_ready()`, reused to complete a secondary profile's home. `live_favourites_ready()` never reloads a non-master profile.   |
 | `build_skin.py`           | Engine-facing: `activate`, `confirm_requested_skin`, `rpc`, `wait_dialogs`, `persist_live_settings`. Profiles-facing: `prepare_active_skin_defaults`, `prepare_layout`, `refresh_home`, `switch`. |
 | `patch_engine.py`         | `PatchEngine.run(category=…)` and `PatchEngine.all_applied(stats)` — the readiness check for parental hooks (9.5).                                                                 |
-| `wizard.py`, `main_menu.py` | `build_switch_skin()` consults `profile_age_guard.active_policy()` (blocked children cannot switch skin; no promo image in a child profile) and calls `build_skin.switch()`. Menu and `AF3_TOOLS` carry the `mode=profiles` entry. |
+| `skins/switcher.py`, `skins/af3_tools.py`, `main_menu.py` | `build_switch_skin()` (`skins/switcher.py`) consults `profile_age_guard.active_policy()` (blocked children cannot switch skin; no promo image in a child profile) and calls `build_skin.switch()`. Menu and `AF3_TOOLS` (`skins/af3_tools.py`) carry the `mode=profiles` entry. |
 | `modular_updater.py`      | No Profiles code. It works per profile because `is_provisioned()` and `config_applied_version` read the active profile (9.3).                                                      |
 
 ### 9.3 Profile Seeding & Configuration Management
@@ -759,7 +761,13 @@ use the **same** filter (`_gui_defaults`), so device-specific values never reach
 
 #### Idempotent provisioning (`profile_store.seed_profile`)
 
-`seed_profile(master, profile, pack, build, prepare_login=False)` repairs a secondary profile from the verified pack:
+`seed_profile(master, profile, archive, prepare_login=False, *, verified=False, gui_defaults=None)` repairs a secondary
+profile from a zip whose root mirrors `userdata/`. By default `archive` must be the bundled bootstrap pinned by
+`BOOTSTRAP_SHA256`; the build ships none, so `build_profiles._seed()` passes the retained pack's path with
+`verified=True` (`open_verified_pack()` has just re-hashed it against the manifest receipt) and
+`gui_defaults=pack.guisettings()` (the policy's machine-specific `exclude_ids` removed, exactly as on a fresh install).
+The build name and version written into the profile come from `CONFIG.BUILDNAME_DEFAULT` /
+`CONFIG.BUILDVERSION_DEFAULT` (`uservar.py`). It seeds:
 
 | Seeded (only when missing)                                                    | Never seeded                                                                 |
 |-------------------------------------------------------------------------------|------------------------------------------------------------------------------|
@@ -1066,7 +1074,7 @@ history. New shortcut rows for POV go through `_seed_shortcuts` (insert-only).
 #### Verification checklist
 
 - `python -m pyflakes` on every changed module; `python patches_config.py` for any registry change.
-- Engine files import nothing from `resources.libs.profiles` except through `hooks`. (`wizard.py` and `build_skin.py`
+- Engine files import nothing from `resources.libs.profiles` except through `hooks`. (`skins/switcher.py` and `build_skin.py`
   use `profile_age_guard` and the lazy imports listed in 9.2 by design.)
 - Master: create an adult and a child profile; the child flow must end with a policy and a `blocked`-free
   `active_policy()` in the child.
@@ -1143,12 +1151,15 @@ reintroduce them or references to them**:
 │       ├── plugin.video.pov/settings.xml    # he metadata + fanart + keys (merge_id, creds excluded)
 │       └── skin.fentastic/settings.xml
 ├── plugin.program.kodipovilwizard/          # the install/OTA/self‑heal engine + the Profiles feature
-│   ├── profile_bootstrap.py                 # Home <onload> entry for Profiles (add‑on root: skins reference this path)
+│   ├── default.py / startup.py              # entry points named in addon.xml (plugin source / startup service)
+│   ├── uservar.py                           # build identity (BUILDNAME_DEFAULT, BUILDVERSION_DEFAULT, URLs) → CONFIG
 │   └── resources/
-│       ├── libs/
-│       │   ├── {modular_updater,headless_installer,config_apply,fresh_install,patch_engine,build_skin,downloader,extract,db}.py
+│       ├── libs/                            # see "Wizard code layout" below
+│       │   ├── {modular_updater,headless_installer,config_apply,fresh_install,patch_engine,downloader,extract,db}.py
+│       │   ├── boot/ provisioning/ build/ packs/ skins/ addons/ accounts_auth/ system/   # Phase 1 domain folders
+│       │   ├── common/ gui/                 # CONFIG, logging, router, tools · Wizard menus and windows
 │       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py) & decoupled logic modules
-│       │   └── profiles/                    # the Profiles feature (§9); hooks.py is its only engine‑facing surface
+│       │   └── profiles/                    # the Profiles feature (§9); hooks.py is its only engine‑facing surface (+ build_skin, profile_bootstrap)
 │       ├── skins/Default/1080i/             # Wizard windows: Profiles.xml + shared ChildHome.xml / ProfileLogin.xml templates
 │       └── media/profile-ui/                # picker / child‑home / login artwork
 ├── plugin.program.orderfavourites-hebrew/   # favourites generator + icon/media installer
@@ -1160,6 +1171,42 @@ reintroduce them or references to them**:
 ├── skin.{fentastic,povil.nox,estuary}/      # build skins; they carry the Profiles UI in their own XML (§9.6)
 └── script.{fentastic.helper,module.autocompletion}/ , plugin.program.autocompletion/
 ```
+
+### Wizard code layout: domain folders under `libs/`
+
+Phase 1 of the restructuring (November 2026) broke the Wizard's two monoliths, `startup.py` (848 lines) and
+`resources/libs/wizard.py` (1534 lines, now **deleted**), into small single-purpose modules, so most changes touch only
+one or two files. Every new folder lives inside `plugin.program.kodipovilwizard/resources/libs/`:
+
+| Folder           | Modules                                                                                    | Responsibility                                                                                                                                                                                |
+|------------------|--------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `boot/`          | `gui_ready`, `first_boot`, `notifications`, `build_check`, `maintenance_pass`, `language_sync` | `startup.py` helpers: wait for video / the Home window / the home rows, the first-boot stabilizer, start-up notices, APK build registration and the installed-build check, start-up housekeeping, the POV Hebrew strings sync |
+| `provisioning/`  | `banner`, `auto_install`, `ota`                                                            | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, and the start-up OTA pass (`run_startup_ota`)                                                   |
+| `build/`         | `wizard_actions`                                                                           | The `Wizard` class: fresh / normal install, GUI fix, theme, quick update, restart, force-close                                                                                                |
+| `packs/`         | `pack_installer`                                                                           | The shared on-demand zip-pack engine (`_ensure_packs_installed`, pack registration / version helpers, `NOX_PACK_BASE_URL`)                                                                    |
+| `skins/`         | `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`                                   | On-demand skins (NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch. Phase 2 moves the skin presentation logic here.      |
+| `addons/`        | `umbrella`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |
+| `accounts_auth/` | `acctmgr`                                                                                  | Account Manager Lite: pilot install and install-for-everyone                                                                                                                                  |
+| `system/`        | `kodi_version`, `speedtest`                                                                | The official-Kodi release check (Android / Windows) and the network speed tests                                                                                                               |
+
+`default.py` and `startup.py` stay at the add-on root because `addon.xml` names them. `startup.py` is now a ~180-line,
+ordered sequence of calls into these modules; every `sys.exit()` and both `PatchEngine` passes stay in it. `common/`,
+`gui/`, `profiles/`, `patches/` and the single-purpose engine modules at the `libs/` root (`modular_updater`,
+`config_apply`, `fresh_install`, `headless_installer`, …) are unchanged.
+
+Rules for this layout:
+
+- Import from the module that owns the code (`from resources.libs.skins.switcher import build_switch_skin`). There are
+  **no compatibility shims**: old paths such as `resources.libs.wizard` do not exist.
+- New subfolders of `resources/libs/` need **no `__init__.py`**: they are Python 3 namespace packages (`xbmc.python`
+  3.0.0, Kodi 19+), as `profiles/` and `patches/` always were. Keep `resources/__init__.py` and
+  `resources/libs/__init__.py`, which keep every `resources.libs.*` lookup inside the Wizard.
+- Build-wide values (build name / version, paths, settings) come from the `CONFIG` singleton
+  (`resources.libs.common.config`, fed by `uservar.py`), never from hard-coded copies.
+- Imports that sit inside a function stay inside it: they break import cycles (`build` with `install` and
+  `modular_updater`, `skins` with `profiles`).
+- Router `mode=` names are a public API used by skins, `favourites.xml` and other add-ons; moving code never renames a
+  mode.
 
 **Manifest addon inventory** (versions are illustrative — the manifest is the live
 source):
@@ -1201,6 +1248,9 @@ source):
 6. **Deleted files are never referenced**, and no dangling imports are left behind ([§10](#10-removed--legacy-components)).
 7. **Core dependencies stay** (for example `plugin.video.youtube` in hints, provision IDs and resolution lists).
 8. **Line endings:** existing sources and this document use **CRLF**; keep it.
+9. **Domain layout.** Wizard code goes in its `resources/libs/<domain>/` folder
+   ([§11](#wizard-code-layout-domain-folders-under-libs)): no compatibility shims, no empty `__init__.py`, build-wide
+   values through `CONFIG`.
 
 ### Anti‑patterns — DO NOT do these
 
@@ -1304,6 +1354,6 @@ token, or hardware value.
 ---
 
 *This README reflects the post‑migration architecture: the modular manifest engine, the headless installer with its
-verified live completion path, config‑pack timing and retention, the Unified Patching Engine, and the Profiles feature
-(§9). Keep it updated when the installation, config, asset, patching or Profiles contracts change — it is the contract
+verified live completion path, config‑pack timing and retention, the Unified Patching Engine, the Profiles feature (§9) and the domain-driven Wizard
+layout under `resources/libs/` (§11). Keep it updated when the installation, config, asset, patching or Profiles contracts change — it is the contract
 future agents will rely on.*

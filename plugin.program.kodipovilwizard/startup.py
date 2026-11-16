@@ -143,7 +143,7 @@ if CONFIG.get_setting('buildname'):
 # KOD-RD-IL - New Kodi ANDROID/WINDOWS version check on startup
 
 if tools.platform() in ['android', 'windows'] and CONFIG.get_setting('buildname'):
-    from resources.libs.wizard import kodi_version_update_check
+    from resources.libs.system.kodi_version import kodi_version_update_check
     kodi_version_update_check()
 ######################################
 
@@ -161,7 +161,7 @@ else:
 # having to toggle skins. Version-gated, so it never re-downloads needlessly.
 try:
     if CONFIG.get_setting('buildname'):
-        from resources.libs import wizard as _wiz_skin
+        from resources.libs.skins import skin_packs as _wiz_skin
         _wiz_skin.auto_update_active_skin_pack()
 except Exception as _skin_upd_err:
     logging.log("[Skin Auto Update] startup hook failed: {0}".format(_skin_upd_err),

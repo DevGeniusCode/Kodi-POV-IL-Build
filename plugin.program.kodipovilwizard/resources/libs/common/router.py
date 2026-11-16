@@ -103,7 +103,7 @@ class Router:
             from resources.libs.gui.build_menu import BuildMenu
             BuildMenu().build_info(name)
         elif mode == 'install':  # Builds -> Fresh Install/Standard Install/Apply guifix
-            from resources.libs.wizard import Wizard
+            from resources.libs.build.wizard_actions import Wizard
 
             over = self.params.get('over', 'false') == 'true'
             if action == 'build':
@@ -120,26 +120,26 @@ class Router:
                 # busy dialog before the picker/settings retention windows.
                 if handle >= 0:
                     xbmcplugin.endOfDirectory(handle, succeeded=False)
-                from resources.libs.wizard import build_switch_skin
+                from resources.libs.skins.switcher import build_switch_skin
                 build_switch_skin()
             elif action == 'install_af3_ce':
-                from resources.libs.wizard import ensure_arctic_fuse_3_installed
+                from resources.libs.skins.skin_packs import ensure_arctic_fuse_3_installed
                 ensure_arctic_fuse_3_installed()
             elif action == 'install_umbrella':
-                from resources.libs.wizard import install_umbrella_pilot
+                from resources.libs.addons.umbrella import install_umbrella_pilot
                 install_umbrella_pilot()
             elif action == 'install_acctmgr':
-                from resources.libs.wizard import install_acctmgr_pilot
+                from resources.libs.accounts_auth.acctmgr import install_acctmgr_pilot
                 install_acctmgr_pilot()
             elif action == 'af3_tools':
-                from resources.libs.wizard import af3_tools_menu
+                from resources.libs.skins.af3_tools import af3_tools_menu
                 af3_tools_menu()
             elif action == 'af3_tool':
-                from resources.libs.wizard import af3_tool_action
+                from resources.libs.skins.af3_tools import af3_tool_action
                 af3_tool_action(self.params.get('tool', ''))
             # KODI-RD-IL
             elif action == 'kodi_version_update_check':
-                from resources.libs.wizard import kodi_version_update_check
+                from resources.libs.system.kodi_version import kodi_version_update_check
                 kodi_version_update_check(kodi_version_update_check_manual)
             #####################################################
             elif action == 'theme':  # Builds -> "Your Build" -> "Your Theme"
@@ -199,13 +199,13 @@ class Router:
             menu.view_ip()
             self._finish(handle)
         elif mode == 'rd_speedtest':
-            from resources.libs.wizard import real_debrid_speedtest
+            from resources.libs.system.speedtest import real_debrid_speedtest
             real_debrid_speedtest()
         elif mode == 'standard_speedtest':
-            from resources.libs.wizard import standard_speedtest
+            from resources.libs.system.speedtest import standard_speedtest
             standard_speedtest()
         elif mode == 'build_speed_test':
-            from resources.libs.wizard import speedtest_dialog
+            from resources.libs.system.speedtest import speedtest_dialog
             speedtest_dialog()
         elif mode == 'removeaddondata':  # Maintenance - > Addon Tools -> Remove Addon Data
             menu.remove_addon_data_menu()
@@ -222,7 +222,7 @@ class Router:
 
         elif mode == 'run_acctmgr':
             if not xbmc.getCondVisibility('System.HasAddon(script.module.acctmgr)'):
-                from resources.libs.wizard import install_acctmgr_pilot
+                from resources.libs.accounts_auth.acctmgr import install_acctmgr_pilot
                 install_acctmgr_pilot()
             if action:
                 xbmc.executebuiltin('RunScript(script.module.acctmgr, action={})'.format(action))
