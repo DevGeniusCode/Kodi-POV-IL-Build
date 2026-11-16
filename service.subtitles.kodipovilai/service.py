@@ -42,115 +42,6 @@ FIRST_RUN_MARKER = '.disable_on_first_run'
 # be a local variable.
 _subs_filename_publisher = None
 
-BUILD_WIZARD_ID = 'plugin.program.kodipovilwizard'
-BUILD_MARKER = 'build_mode.json'
-BUILD_MARKER_TEXT = 'Kodi POV IL'
-_BUILD_MODE_CACHE = None
-
-
-def _translate_path(path):
-    try:
-        import xbmcvfs
-        return xbmcvfs.translatePath(path)
-    except Exception:
-        return ''
-
-
-def _safe_exists(path):
-    try:
-        return bool(path) and os.path.exists(path)
-    except Exception:
-        return False
-
-
-def _safe_read(path, limit=200000):
-    try:
-        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-            return f.read(limit)
-    except Exception:
-        return ''
-
-
-def _has_build_marker():
-    marker_paths = (
-        'special://profile/addon_data/{0}/{1}'.format(ADDON_ID, BUILD_MARKER),
-        'special://profile/addon_data/{0}/{1}'.format(BUILD_WIZARD_ID, BUILD_MARKER),
-    )
-    for marker in marker_paths:
-        text = _safe_read(_translate_path(marker))
-        if BUILD_MARKER_TEXT in text or 'managed_by_build' in text:
-            return True
-    return False
-
-
-def _is_kodi_pov_il_build():
-    """Return True when this profile is managed by the Kodi POV IL build."""
-    global _BUILD_MODE_CACHE
-    if _BUILD_MODE_CACHE is not None:
-        return _BUILD_MODE_CACHE
-
-    detected = False
-    try:
-        if _has_build_marker():
-            detected = True
-
-        wizard_addon = _translate_path(
-            'special://home/addons/{0}/addon.xml'.format(BUILD_WIZARD_ID))
-        if _safe_exists(wizard_addon):
-            detected = True
-
-        wizard_settings = _translate_path(
-            'special://profile/addon_data/{0}/settings.xml'.format(
-                BUILD_WIZARD_ID))
-        settings_text = _safe_read(wizard_settings)
-        if 'Kodi POV IL' in settings_text or 'FENtastic' in settings_text:
-            detected = True
-
-        wizard_uservar = _translate_path(
-            'special://home/addons/{0}/uservar.py'.format(BUILD_WIZARD_ID))
-        uservar_text = _safe_read(wizard_uservar)
-        if 'Kodi POV IL' in uservar_text or 'FENtastic' in uservar_text:
-            detected = True
-
-        povil_icons = _translate_path('special://home/media/povil_icons')
-        if _safe_exists(os.path.join(povil_icons, 'Connect_Services.png')):
-            detected = True
-    except Exception:
-        detected = False
-
-    _BUILD_MODE_CACHE = bool(detected)
-    return _BUILD_MODE_CACHE
-
-
-def _ensure_build_marker():
-    if not _is_kodi_pov_il_build():
-        return
-    try:
-        import xbmcvfs
-        base = _translate_path('special://profile/addon_data/{0}/'.format(
-            ADDON_ID))
-        if not base:
-            return
-        try:
-            xbmcvfs.mkdirs(base)
-        except Exception:
-            try:
-                os.makedirs(base, exist_ok=True)
-            except Exception:
-                pass
-        marker = os.path.join(base, BUILD_MARKER)
-        if _safe_exists(marker):
-            return
-        content = ('{\n'
-                   '  "build": "Kodi POV IL",\n'
-                   '  "managed_by_build": true,\n'
-                   '  "source": "auto-detected"\n'
-                   '}\n')
-        with open(marker, 'w', encoding='utf-8') as f:
-            f.write(content)
-    except Exception:
-        pass
-
 # Heavy work that is useful later must not compete with the first home-widget
 # wave.  This matters disproportionately on 32-bit Android boxes: two field
 # logs measured the subtitle engine's cold import at 13.1s and 19.7s, and the
@@ -1016,8 +907,7 @@ def _maybe_force_pool_share():
     background (the harvest), and AI translations are shared too -- so the pool
     fills for all users. Force-enabled once via a fresh marker (overriding a
     prior opt-out); a later MANUAL opt-out AFTER this run sticks. New installs
-    already default on via settings.xml. Build-edition only (the slim standalone
-    has its own service)."""
+    already default on via settings.xml."""
     try:
         from resources.lib import kodi_utils
         if kodi_utils.get_setting('_pool_share_force_v1', '') == '1':
@@ -1032,22 +922,6 @@ def _maybe_force_pool_share():
                            level='WARNING')
         except Exception:
             pass
-
-
-def _maybe_reenable_ktuvit():
-    """Ktuvit is working again -> turn the source back ON for everyone, ONCE
-    (marker _ktuvit_on_v4). Marker-gated, so a user who turns it OFF again AFTER
-    this keeps it off -- we never force it back on on later startups. (Fresh
-    marker so it runs once even for users who got the earlier off/on toggles.)"""
-    try:
-        from resources.lib import kodi_utils
-        if kodi_utils.get_setting('_ktuvit_on_v4', '') == '1':
-            return
-        kodi_utils.set_setting('ktuvit', 'true')
-        kodi_utils.set_setting('_ktuvit_on_v4', '1')
-        kodi_utils.log('Ktuvit source re-enabled (on v4)', level='INFO')
-    except Exception:
-        pass
 
 
 def _maybe_default_builtin_engine():
@@ -1236,22 +1110,15 @@ def main():
     if _check_first_run_marker():
         return
 
-    # The build edition and the standalone add-on (the repo channel) run this
-    # same service. Everything that touches POV, Umbrella, a skin's buttons
-    # and settings or the build's own state runs on a Kodi POV IL build only;
-    # without the build this is the subtitle service and nothing else.
-    build_mode = _is_kodi_pov_il_build()
-
     # Start the Hebrew-availability warm drainer FIRST -- before the seconds of
     # build startup repairs below. Otherwise the drainer thread isn't spawned yet
     # when the user plays something right after boot, so the first title's warm
     # sits queued for several seconds and misses the source window's first-entry
     # wait. It's a cheap idle poll until a job appears.
-    if build_mode:
-        try:
-            _start_he_warm_drainer(xbmc.Monitor())
-        except Exception:
-            pass
+    try:
+        _start_he_warm_drainer(xbmc.Monitor())
+    except Exception:
+        pass
 
     # SubSync deep-verify worker: resolve() delivers the subtitle IMMEDIATELY
     # and queues the slow verification (oracle download / file probe / audio)
@@ -1273,14 +1140,10 @@ def main():
     _prune_once()
     _prune_source_memory_once()
 
-    if build_mode:
-        _ensure_build_marker()
-
     # Grow the shared Hebrew pool: force community-pool sharing ON for everyone
     # once (a later manual opt-out sticks). Must run before the harvest/drainer
     # below so it mirrors Ktuvit subs to the pool already this session.
-    if build_mode:
-        _maybe_force_pool_share()
+    _maybe_force_pool_share()
 
     # ROLLOUT: switch everyone to MoranSubs's built-in engine (one-shot, marker-
     # gated). Must run before _ensure_darksubs_enabled() so that when it flips
@@ -1288,17 +1151,10 @@ def main():
     # sticks (marker prevents re-forcing).
     _maybe_default_builtin_engine()
 
-    # Ktuvit is back -> re-enable the source for everyone once (a later manual
-    # opt-out sticks). Build only: the build switched it off during the outage;
-    # the standalone never did, so a standalone user's choice is their own.
-    if build_mode:
-        _maybe_reenable_ktuvit()
-
     # When the engine is on, make MoranSubs the default subtitle service so it
     # opens/searches first in the dialog.
     _maybe_set_default_subtitle_service()
-    if not build_mode:
-        _maybe_seed_hebrew_subtitle_prefs()
+    _maybe_seed_hebrew_subtitle_prefs()
 
 
     # Pre-warm the built-in sources engine (only when the user enabled it) so
@@ -1321,8 +1177,7 @@ def main():
     # One-shot: turn the community pool ON (pull + share) for existing users
     # still on the old default-off. New installs get it via settings.xml
     # defaults. Marker-gated so a later manual opt-out sticks.
-    if build_mode:
-        _maybe_default_pool_on()
+    _maybe_default_pool_on()
 
     # One-shot: turn the Arabic-gender-reference setting ON for everyone (it
     # tested clean and lifts gender accuracy a lot). Forced once; a later manual
