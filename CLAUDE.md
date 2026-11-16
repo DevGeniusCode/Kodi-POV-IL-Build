@@ -81,6 +81,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, only `subs_engine/sources/telegram_impl` fails (missing `telegram_api`).
 - **WORKFLOW:** stop after each step; the user reviews and commits. No version bump or changelog per step.
 - **LINE ENDINGS:** sources and docs use CRLF (a file that is LF stays LF).
+- **Output Mirroring:** For every single response you generate in this project, you MUST automatically write your full, exact textual response into a file named `output.txt` in the root directory. Overwrite the file completely each time (do not append).
 
 ## 📝 OPEN NOTES (reported, not fixed; each needs user approval)
 

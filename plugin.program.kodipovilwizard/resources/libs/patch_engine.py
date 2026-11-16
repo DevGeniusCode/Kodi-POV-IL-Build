@@ -50,6 +50,34 @@ DEFAULT_ADDON_ID = 'plugin.video.pov'
 BEGIN_TAG = '# --- BEGIN PATCH ID: {id} ---'
 END_TAG = '# --- END PATCH ID: {id} ---'
 
+# XML targets (skin files) cannot hold '#' comments, so their blocks are fenced
+# with XML comments instead. Chosen by the target file's extension only; the
+# action set stays additive (prepend_before / append_after).
+# ('--' is illegal inside an XML comment, so the fence uses '=' instead of '-')
+XML_BEGIN_TAG = '<!-- ======== BEGIN PATCH ID: {id} ======== -->'
+XML_END_TAG = '<!-- ======== END PATCH ID: {id} ======== -->'
+_XML_EXTENSIONS = ('.xml',)
+
+
+def _tags_for(target_file):
+    """(begin_tag, end_tag) templates suited to the target file's extension."""
+    if str(target_file).lower().endswith(_XML_EXTENSIONS):
+        return XML_BEGIN_TAG, XML_END_TAG
+    return BEGIN_TAG, END_TAG
+
+
+def _is_xml_target(target_file):
+    return str(target_file).lower().endswith(_XML_EXTENSIONS)
+
+
+def _xml_wellformed(text):
+    try:
+        import xml.etree.ElementTree as ET
+        ET.fromstring(text.encode('utf-8'))
+        return True
+    except Exception:
+        return False
+
 # Fields every patch entry must supply (addon_id/description are optional --
 # see _normalize_entry).
 _REQUIRED_FIELDS = ('id', 'name', 'target_file', 'marker', 'anchor', 'action', 'hook')
@@ -435,6 +463,9 @@ class PatchEngine(object):
             try:
                 if target_path.endswith('.py'):
                     compile(content, target_path, 'exec')
+                elif _is_xml_target(target_path) and _xml_wellformed(original_content)                         and not _xml_wellformed(content):
+                    # never leave a skin file that Kodi cannot parse
+                    raise ValueError('patched XML is not well-formed')
                 self._write_file(target_path, content)
                 logging.log(
                     "[PatchEngine] Saved patched {0}/{1}.".format(addon_id, target_file),
@@ -449,9 +480,10 @@ class PatchEngine(object):
     # Single-patch application
     # ------------------------------------------------------------------
     @staticmethod
-    def _existing_block_regex(patch_id):
-        begin = re.escape(BEGIN_TAG.format(id=patch_id))
-        end = re.escape(END_TAG.format(id=patch_id))
+    def _existing_block_regex(patch_id, target_file=''):
+        begin_tag, end_tag = _tags_for(target_file)
+        begin = re.escape(begin_tag.format(id=patch_id))
+        end = re.escape(end_tag.format(id=patch_id))
         # Non-greedy DOTALL span, plus any leading indentation before BEGIN
         # and the single trailing newline after END -- mirrors exactly what
         # _build_block() produces, so removal is a clean, complete no-trace
@@ -462,7 +494,7 @@ class PatchEngine(object):
     def _apply_single_patch(self, content, patch, newline):
         """Returns (new_content, changed, status). `status` is one of:
         'skipped_current', 'applied', 'upgraded', 'anchor_missing'."""
-        block_regex = self._existing_block_regex(patch['id'])
+        block_regex = self._existing_block_regex(patch['id'], patch['target_file'])
         existing_match = block_regex.search(content)
 
         # ACTIVE SCRUBBING: If disabled, ensure it is completely removed.
@@ -549,9 +581,13 @@ class PatchEngine(object):
         return [(indent + ln) if ln.strip() else '' for ln in lines]
 
     def _build_block(self, patch, indent, newline):
-        lines = [indent + BEGIN_TAG.format(id=patch['id']), indent + patch['marker']]
+        begin_tag, end_tag = _tags_for(patch['target_file'])
+        marker = patch['marker']
+        if _is_xml_target(patch['target_file']) and not marker.lstrip().startswith('<!--'):
+            marker = '<!-- {0} -->'.format(marker)  # a bare marker would be stray text in XML
+        lines = [indent + begin_tag.format(id=patch['id']), indent + marker]
         lines.extend(self._reindent_hook(patch['hook'], indent))
-        lines.append(indent + END_TAG.format(id=patch['id']))
+        lines.append(indent + end_tag.format(id=patch['id']))
         return newline.join(lines) + newline
 
     # ------------------------------------------------------------------
