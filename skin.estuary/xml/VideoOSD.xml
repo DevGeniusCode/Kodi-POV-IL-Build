@@ -79,7 +79,9 @@
 						<texturenofocus colordiffuse="grey_a">kodirdil/subtitles_window/choose_subs.png</texturenofocus>
 						<texturefocus colordiffuse="button_focus">kodirdil/subtitles_window/choose_subs.png</texturefocus>
 						<onclick condition="!Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
-						<onclick condition="Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">ActivateWindow(SubtitleSearch)</onclick>
+						<!-- ======== WIZARD IL BAKED: choose-subtitles button opens MoranSubs chooser ======== -->
+						<onclick condition="Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
+						<!-- ======== END WIZARD IL BAKED ======== -->
 						<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
 						<!-- If current playing addon is NOT Idan Plus -->
 						<visible>!String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
@@ -327,6 +329,9 @@
 						<visible>!String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
 						<visible>!String.Contains(Player.Folderpath, plugin.video.supertv)</visible>
 						<visible>!String.Contains(Player.Folderpath, plugin.video.flashstream)</visible>
+						<!-- ======== WIZARD IL BAKED: change-source button pauses playback ======== -->
+						<onclick condition="Player.Playing">PlayerControl(Play)</onclick>
+						<!-- ======== END WIZARD IL BAKED ======== -->
 						<onclick condition="VideoPlayer.Content(movies)">RunPlugin(plugin://plugin.video.pov/?mode=play_media&amp;mediatype=movie&amp;tmdb_id=$INFO[VideoPlayer.UniqueID(tmdb)]&amp;autoplay=false)</onclick>
 						<onclick condition="VideoPlayer.Content(episodes)">RunPlugin(plugin://plugin.video.pov/?mode=play_media&amp;mediatype=episode&amp;tmdb_id=$INFO[VideoPlayer.UniqueID(tmdb)]&amp;season=$INFO[VideoPlayer.Season]&amp;episode=$INFO[VideoPlayer.Episode]&amp;autoplay=false)</onclick>
 					</control>

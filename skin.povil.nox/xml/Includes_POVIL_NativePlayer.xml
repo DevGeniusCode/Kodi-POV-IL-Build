@@ -176,7 +176,9 @@
 						<visible>VideoPlayer.Content(episodes)</visible>
 						<visible>!VideoPlayer.Content(LiveTV)</visible>
 						<height>80</height>
-						<width>220</width>
+						<!-- ======== WIZARD IL BAKED: NOX OSD button widths ======== -->
+						<width>160</width>
+						<!-- ======== END WIZARD IL BAKED ======== -->
 						<include>SettingsItemCommonOSD</include>
 						<font>font25_title</font>
 						<label>עבור לפרק הבא</label>
@@ -189,7 +191,9 @@
 						<visible>VideoPlayer.Content(episodes)</visible>
 						<visible>!VideoPlayer.Content(LiveTV)</visible>
 						<height>80</height>
-						<width>220</width>
+						<!-- ======== WIZARD IL BAKED: NOX OSD button widths ======== -->
+						<width>160</width>
+						<!-- ======== END WIZARD IL BAKED ======== -->
 						<include>SettingsItemCommonOSD</include>
 						<font>font25_title</font>
 						<label>הפרק הבא</label>
@@ -222,7 +226,9 @@
 						<visible>!String.Contains(Player.Folderpath, plugin.video.supertv)</visible>
 						<visible>!String.Contains(Player.Folderpath, plugin.video.flashstream)</visible>
 						<height>80</height>
-						<width>220</width>
+						<!-- ======== WIZARD IL BAKED: NOX OSD button widths ======== -->
+						<width>160</width>
+						<!-- ======== END WIZARD IL BAKED ======== -->
 						<include>SettingsItemCommonOSD</include>
 						<font>font25_title</font>
 						<label>החלף מקור</label>
@@ -233,7 +239,9 @@
 					</control>
 					<control type="button" id="70038">
 						<height>80</height>
-						<width>150</width>
+						<!-- ======== WIZARD IL BAKED: NOX OSD button widths ======== -->
+						<width>90</width>
+						<!-- ======== END WIZARD IL BAKED ======== -->
 						<include>SettingsItemCommonOSD</include>
 						<font>font25_title</font>
 						<label>שמע</label>
@@ -280,7 +288,9 @@
 					<control type="button" id="70043">
 						<description>Info</description>
 						<height>80</height>
-						<width>140</width>
+						<!-- ======== WIZARD IL BAKED: NOX OSD button widths ======== -->
+						<width>100</width>
+						<!-- ======== END WIZARD IL BAKED ======== -->
 						<include>SettingsItemCommonOSD</include>
 						<font>font25_title</font>
 						<label>מידע</label>
@@ -356,8 +366,10 @@
 					<include>SettingsItemCommonOSD</include>
 					<font>font25_title</font>
 					<label>כתוביות</label>
-					<onclick>ActivateWindow(2118)</onclick>
-					<!-- <onclick>ActivateWindow(SubtitleSearch)</onclick> -->
+					<!-- ======== WIZARD IL BAKED: choose-subtitles button opens MoranSubs chooser ======== -->
+					<onclick>RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
+					<!-- <onclick>RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick> -->
+					<!-- ======== END WIZARD IL BAKED ======== -->
 					<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
 				</control>
 			</control>

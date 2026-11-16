@@ -71,6 +71,20 @@
 					<wrapmultiline>true</wrapmultiline>
 				</control>
 				<control type="label" description="Video File name">
+					<!-- ======== WIZARD IL BAKED: subtitle dialog header ======== -->
+					<posx>75</posx>
+					<posy>100</posy>
+					<width>1320</width>
+					<height>60</height>
+					<font>font13</font>
+					<label>$INFO[Window(10000).Property(subs.player_filename)]</label>
+					<textcolor>$VAR[HighlightColor]</textcolor>
+					<align>center</align>
+					<aligny>center</aligny>
+					<wrapmultiline>true</wrapmultiline>
+				<visible>!String.IsEmpty(Window(10000).Property(subs.player_filename))</visible></control>
+								<control type="label" description="Video File name">
+					<!-- ======== END WIZARD IL BAKED ======== -->
 					<posx>75</posx>
 					<posy>100</posy>
 					<width>1320</width>
@@ -81,7 +95,9 @@
 					<align>center</align>
 					<aligny>center</aligny>
 					<wrapmultiline>true</wrapmultiline>
-				</control>
+				<!-- ======== WIZARD IL BAKED: subtitle dialog header ======== -->
+				<visible>String.IsEmpty(Window(10000).Property(subs.player_filename))</visible></control>
+				<!-- ======== END WIZARD IL BAKED ======== -->
 				<control type="label" id="140" description="Searching...">
 					<posx>75</posx>
 					<posy>75</posy>

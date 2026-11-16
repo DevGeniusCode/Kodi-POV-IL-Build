@@ -17,7 +17,7 @@ except ImportError:
 
 from resources.libs.host_repairs.flow.af3_steps import _maybe_patch_af3_dialog_subtitles, _maybe_patch_hub_search, _maybe_restore_af3_font_early
 from resources.libs.host_repairs.flow.pov_steps import _maybe_default_pov_autoplay, _maybe_revert_pov_always_resume, _maybe_revert_pov_autoplay
-from resources.libs.host_repairs.flow.skin_steps import _maybe_default_fentastic_player, _maybe_default_nox_poster_rating, _maybe_enable_osd_autoclose, _maybe_patch_change_source_pause, _maybe_patch_choose_subs_buttons, _maybe_patch_nox_change_source, _maybe_patch_nox_next_episode, _maybe_patch_nox_osd_collision, _maybe_patch_skin_dialog_subtitles, _maybe_patch_skin_dialog_subtitles_rows, _point_subtitle_button
+from resources.libs.host_repairs.flow.skin_steps import _maybe_default_fentastic_player, _maybe_default_nox_poster_rating, _maybe_enable_osd_autoclose, _point_subtitle_button
 from resources.libs.host_repairs.flow.startup_pass import _run_build_startup_repairs
 from resources.libs.host_repairs.flow.umbrella_steps import _start_service_mirror_keeper
 
@@ -62,23 +62,6 @@ def _run_build_flow(monitor):
     # engine is off. Affects the active skin (Estuary / FENtastic).
     _point_subtitle_button(_engine_on)
 
-    # Fix the subtitle-picker dialog HEADER (rendered by Kodi from
-    # the skin's DialogSubtitles.xml) to prefer our subs.player_filename
-    # property over the built-in Player.Filename. Without this, even
-    # if our other patchers set the property, the dialog title still
-    # shows the URL basename / UUID.
-    _maybe_patch_skin_dialog_subtitles()
-
-    # The picker users actually see when they hit "Choose subtitles"
-    # is Kodi's NATIVE DialogSubtitles, rendered by the active skin
-    # (FENtastic in this build). DarkSubs is just one of the listed
-    # services. The row layout (height, label/textbox dimensions)
-    # is in skin.fentastic/xml/DialogSubtitles.xml. We bump
-    # itemlayout/focusedlayout heights (and the inner Label2
-    # textbox heights) so two wrapped lines of font12 fit without
-    # clipping the bottom of the second line.
-    _maybe_patch_skin_dialog_subtitles_rows()
-
     # Arctic Fuse 3 ships its subtitle dialog layout in a separate
     # file (Dialog_DialogSubtitles.xml) referenced via a named
     # include. The generic skin header patcher above won't find
@@ -88,36 +71,9 @@ def _run_build_flow(monitor):
     # installed.
     _maybe_patch_af3_dialog_subtitles()
 
-    # Add a "change source" button to the NOX skin's player OSD -- NOX
-    # shipped without one, so a bad source mid-playback was a dead end.
-    # Skin-gated (no-op unless skin.povil.nox is installed), XML-checked.
-    _maybe_patch_nox_change_source()
-
-    # That change-source button widened NOX's right-aligned OSD group, pushing
-    # "הפרק הבא" left into the play controls during playback. Re-size the right-
-    # group buttons back to their original total width to clear it. Runs AFTER
-    # the change-source patcher so the button exists. Skin-gated, XML-checked.
-    _maybe_patch_nox_osd_collision()
-
-    # Repoint NOX's OSD "next episode" button: it used POV's old
-    # play_media&next=1 (dropped in POV 6.07, so it errored). Point it at POV's
-    # working next-episode list instead. Skin-gated, idempotent.
-    _maybe_patch_nox_next_episode()
-
     # Turn NOX's rating/score circle ON for posters by default (one-shot, only
     # while NOX is the active skin; a later manual change sticks).
     _maybe_default_nox_poster_rating()
-
-    # Point the player's subtitle button at MoranSubs's own chooser window
-    # (FENtastic + Estuary pointed at the now-disabled DarkSubs; NOX's existing
-    # subtitles button is rewired in place, not duplicated, to avoid widening
-    # its OSD group). Skin-gated, XML-parse-checked, self-healing.
-    _maybe_patch_choose_subs_buttons()
-
-    # Make "החלף מקור" pause before opening the source screen (it regressed to
-    # playing through in the background). Runs AFTER the change-source button
-    # patchers above so Estuary's inserted button is present to patch.
-    _maybe_patch_change_source_pause()
 
     # Same idea for POV: if we patched its sources.py and the user opted into
     # remember-source, cycle POV (deferred, idle-only) so it re-imports the

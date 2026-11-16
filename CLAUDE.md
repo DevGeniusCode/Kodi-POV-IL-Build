@@ -19,7 +19,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 | `addons/`        | Add-on install / management (Umbrella, `debrid_notice`)                                |
 | `accounts_auth/` | Account Manager                                                                        |
 | `system/`        | Kodi version check, speed tests                                                        |
-| `host_repairs/`  | Runtime repairs of other add-ons and skins (42 patcher modules, flat on purpose), `flow/` (startup-repair pass + runner), `kodi_utils` (subset copy) |
+| `host_repairs/`  | Runtime repairs of other add-ons and skins (34 patcher modules, flat on purpose), `flow/` (startup-repair pass + runner), `kodi_utils` (subset copy) |
 | `tonight/`       | The Tonight home tile (shortcut writer, picker window logic)                           |
 
 - **Phase 1 COMPLETE (Nov 2026):** `startup.py` 848 → ~180 lines; `wizard.py` split into the folders above and deleted.

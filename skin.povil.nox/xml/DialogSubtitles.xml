@@ -67,6 +67,21 @@
 				<top>130</top>
 				<left>360</left>
 				<control type="label">
+					<!-- ======== WIZARD IL BAKED: subtitle dialog header ======== -->
+					<description>Video label</description>
+					<top>-45</top>
+					<width>920</width>
+					<height>30</height>
+					<font>font30_title</font>
+					<label>$INFO[Window(10000).Property(subs.player_filename)]</label>
+					<align>center</align>
+					<aligny>center</aligny>
+					<textcolor>grey</textcolor>
+					<shadowcolor>black</shadowcolor>
+					<scroll>true</scroll>
+				<visible>!String.IsEmpty(Window(10000).Property(subs.player_filename))</visible></control>
+								<control type="label">
+					<!-- ======== END WIZARD IL BAKED ======== -->
 					<description>Video label</description>
 					<top>-45</top>
 					<width>920</width>
@@ -78,7 +93,9 @@
 					<textcolor>grey</textcolor>
 					<shadowcolor>black</shadowcolor>
 					<scroll>true</scroll>
-				</control>
+				<!-- ======== WIZARD IL BAKED: subtitle dialog header ======== -->
+				<visible>String.IsEmpty(Window(10000).Property(subs.player_filename))</visible></control>
+				<!-- ======== END WIZARD IL BAKED ======== -->
 				<control type="list" id="120">
 					<width>920</width>
 					<height>600</height>
@@ -88,7 +105,9 @@
 					<ondown>120</ondown>
 					<pagecontrol>73</pagecontrol>
 					<scrolltime>200</scrolltime>
-					<itemlayout width="920" height="100">
+					<!-- ======== WIZARD IL BAKED: subtitle dialog row height ======== -->
+					<itemlayout width="920" height="140">
+					<!-- ======== END WIZARD IL BAKED ======== -->
 						<control type="image">
 							<left>25</left>
 							<top>5</top>
@@ -127,7 +146,9 @@
 						<control type="textbox">
 							<left>130</left>
 							<width>645</width>
-							<height>100</height>
+							<!-- ======== WIZARD IL BAKED: subtitle dialog row height ======== -->
+							<height>140</height>
+							<!-- ======== END WIZARD IL BAKED ======== -->
 							<aligny>center</aligny>
 							<font>font12</font>
 							<label>$INFO[ListItem.Label2]</label>
@@ -142,7 +163,9 @@
 							<aspectratio>keep</aspectratio>
 						</control>
 					</itemlayout>
-					<focusedlayout width="920" height="100">
+					<!-- ======== WIZARD IL BAKED: subtitle dialog row height ======== -->
+					<focusedlayout width="920" height="140">
+					<!-- ======== END WIZARD IL BAKED ======== -->
 						<control type="image">
 							<left>0</left>
 							<right>0</right>
@@ -188,7 +211,9 @@
 						<control type="textbox">
 							<left>130</left>
 							<width>645</width>
-							<height>100</height>
+							<!-- ======== WIZARD IL BAKED: subtitle dialog row height ======== -->
+							<height>140</height>
+							<!-- ======== END WIZARD IL BAKED ======== -->
 							<aligny>center</aligny>
 							<font>font12</font>
 							<label>$INFO[ListItem.Label2]</label>

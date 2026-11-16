@@ -186,7 +186,9 @@
 			<icon>osd/fullscreen/buttons/subs.png</icon>
 			<visible>VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)</visible>
 			<onclick condition="String.IsEqual(Skin.String(subtitlesearch),darksubs)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
-			<onclick condition="String.IsEqual(Skin.String(subtitlesearch),kodisubtitle)">ActivateWindow(subtitlesearch)</onclick>
+			<!-- ======== WIZARD IL BAKED: choose-subtitles button opens MoranSubs chooser ======== -->
+			<onclick condition="String.IsEqual(Skin.String(subtitlesearch),kodisubtitle)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
+			<!-- ======== END WIZARD IL BAKED ======== -->
 		</item>	
 		<item>
 			<label>החלף מקור לניגון</label>
@@ -528,21 +530,33 @@
 		<content>
 		<item>
 			<label>החלף ובחר מקור חדש לסרט</label>
+			<!-- ======== WIZARD IL BAKED: change-source button pauses playback ======== -->
+			<onclick condition="Player.Playing">PlayerControl(Play)</onclick>
+			<!-- ======== END WIZARD IL BAKED ======== -->
 			<onclick>RunPlugIn($VAR[OsdReplaceSourceStartPoint]&mediatype=movie&tmdb_id=$VAR[_Fix_TMDB_ID]$VAR[AutoPlaySetToFalse])</onclick>
 			<visible>VideoPlayer.Content(movies)</visible>
 		</item>
 		<item>
 			<label>החלף ונגן אוטומט מקור אחר לסרט</label>
+			<!-- ======== WIZARD IL BAKED: change-source button pauses playback ======== -->
+			<onclick condition="Player.Playing">PlayerControl(Play)</onclick>
+			<!-- ======== END WIZARD IL BAKED ======== -->
 			<onclick>RunPlugIn($VAR[OsdReplaceSourceStartPoint]&mediatype=movie&tmdb_id=$VAR[_Fix_TMDB_ID]$VAR[AutoPlaySetToTrue])</onclick>
 			<visible>VideoPlayer.Content(movies)</visible>
 		</item>
 		<item>
 			<label>החלף ובחר מקור חדש לפרק</label>
+			<!-- ======== WIZARD IL BAKED: change-source button pauses playback ======== -->
+			<onclick condition="Player.Playing">PlayerControl(Play)</onclick>
+			<!-- ======== END WIZARD IL BAKED ======== -->
 			<onclick>RunPlugin($VAR[OsdReplaceSourceStartPoint]&mediatype=episode&tmdb_id=$VAR[_Fix_TMDB_ID]&season=$INFO[VideoPlayer.Season]&episode=$INFO[VideoPlayer.Episode]&query=$INFO[VideoPlayer.Title]$VAR[AutoPlaySetToFalse])</onclick>
 			<visible>VideoPlayer.Content(episodes)</visible>
 		</item>
 		<item>
 			<label>החלף ונגן אוטומט מקור אחר לפרק</label>
+			<!-- ======== WIZARD IL BAKED: change-source button pauses playback ======== -->
+			<onclick condition="Player.Playing">PlayerControl(Play)</onclick>
+			<!-- ======== END WIZARD IL BAKED ======== -->
 			<onclick>RunPlugin($VAR[OsdReplaceSourceStartPoint]&mediatype=episode&tmdb_id=$VAR[_Fix_TMDB_ID]&season=$INFO[VideoPlayer.Season]&episode=$INFO[VideoPlayer.Episode]&query=$INFO[VideoPlayer.Title]$VAR[AutoPlaySetToTrue])</onclick>
 			<visible>VideoPlayer.Content(episodes)</visible>
 		</item>

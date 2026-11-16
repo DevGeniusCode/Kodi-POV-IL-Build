@@ -472,7 +472,9 @@
 	<item>
 		<label>חפש כתובית</label>
 		<icon>osd/fullscreen/buttons/subs3.png</icon>
-		<onclick>ActivateWindow(subtitlesearch)</onclick>
+		<!-- ======== WIZARD IL BAKED: choose-subtitles button opens MoranSubs chooser ======== -->
+		<onclick>RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
+		<!-- ======== END WIZARD IL BAKED ======== -->
 		<visible>!$EXP[__livetv_OSD]</visible>
 	</item>	
 	<item>

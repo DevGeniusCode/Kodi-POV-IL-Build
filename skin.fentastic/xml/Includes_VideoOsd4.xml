@@ -78,7 +78,9 @@
 	<shadowcolor>black</shadowcolor>
 	<texturenofocus colordiffuse="25FFFFFF" border="5">masks/menumain.png</texturenofocus>
 	<texturefocus border="5">masks/menumain.png</texturefocus>
-	<onclick>ActivateWindow(subtitlesearch)</onclick>
+	<!-- ======== WIZARD IL BAKED: choose-subtitles button opens MoranSubs chooser ======== -->
+	<onclick>RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
+	<!-- ======== END WIZARD IL BAKED ======== -->
 </control>
 <control type="button" id="29997">
 	<label>החלף מקור</label>

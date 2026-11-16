@@ -6,3 +6,6 @@ __pycache__/
 *.py[cod]
 
 /.idea/
+
+# Claude output mirror (CLAUDE.md "Output Mirroring")
+/output.txt

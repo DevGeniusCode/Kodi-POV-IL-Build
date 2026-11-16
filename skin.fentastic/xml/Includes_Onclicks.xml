@@ -19,6 +19,9 @@
 </include>
 
 <include name="__ChooseSourceOsd__">
+<!-- ======== WIZARD IL BAKED: change-source button pauses playback ======== -->
+<onclick condition="Player.Playing">PlayerControl(Play)</onclick>
+<!-- ======== END WIZARD IL BAKED ======== -->
 <onclick condition="$EXP[__Movies_OSD]">RunPlugIn($VAR[OsdReplaceSourceStartPoint]&mediatype=movie&tmdb_id=$VAR[_Fix_TMDB_ID]$VAR[AutoPlaySetToFalse])</onclick>
 <onclick condition="$EXP[__episode_OSD]">RunPlugin($VAR[OsdReplaceSourceStartPoint]&mediatype=episode&tmdb_id=$VAR[_Fix_TMDB_ID]&season=$INFO[VideoPlayer.Season]&episode=$INFO[VideoPlayer.Episode]&query=$INFO[VideoPlayer.Title]$VAR[AutoPlaySetToFalse])</onclick>
 </include>
