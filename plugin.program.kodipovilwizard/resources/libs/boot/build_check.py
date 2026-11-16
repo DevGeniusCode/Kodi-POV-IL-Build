@@ -10,7 +10,7 @@ import xbmcgui
 from resources.libs.common.config import CONFIG
 from resources.libs import check
 from resources.libs.common import logging
-from resources.libs import skin
+from resources.libs.skins import skin_settings as skin
 
 
 def autoset_buildname_for_apk():

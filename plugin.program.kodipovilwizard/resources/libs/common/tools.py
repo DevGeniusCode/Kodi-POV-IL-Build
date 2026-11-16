@@ -575,7 +575,7 @@ def redo_thumbs():
 def reload_fix(default=None):
     from resources.libs import db
     from resources.libs.common import logging
-    from resources.libs import skin
+    from resources.libs.skins import skin_settings as skin
     from resources.libs import update
 
     dialog = xbmcgui.Dialog()

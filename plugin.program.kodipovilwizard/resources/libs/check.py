@@ -205,7 +205,7 @@ def check_skin():
             CONFIG.set_setting('defaultskinignore', 'true')
             gotoskin = False
     if gotoskin:
-        from resources.libs import skin
+        from resources.libs.skins import skin_settings as skin
 
         if skin.switch_to_skin(gotoskin):
             skin.look_and_feel_data('restore')

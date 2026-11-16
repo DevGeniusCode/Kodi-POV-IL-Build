@@ -209,7 +209,7 @@ class AddonMenu:
         from resources.libs.downloader import Downloader
         from resources.libs import db
         from resources.libs import extract
-        from resources.libs import skin
+        from resources.libs.skins import skin_settings as skin
 
         response = tools.open_url(url, check=True)
 
@@ -394,7 +394,7 @@ class AddonMenu:
         from resources.libs import db
         from resources.libs import extract
         from resources.libs.common import logging
-        from resources.libs import skin
+        from resources.libs.skins import skin_settings as skin
         from resources.libs.common import tools
 
         progress_dialog = xbmcgui.DialogProgress()

@@ -281,7 +281,7 @@ class Wizard:
             test1 = False
             test2 = False
 
-            from resources.libs import skin
+            from resources.libs.skins import skin_settings as skin
             from resources.libs import test
             test1 = test.test_theme(lib) if CONFIG.SKIN not in skin.DEFAULT_SKINS else False
             test2 = test.test_gui(lib) if CONFIG.SKIN not in skin.DEFAULT_SKINS else False

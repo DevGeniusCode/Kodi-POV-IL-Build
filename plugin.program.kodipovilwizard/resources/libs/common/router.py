@@ -45,6 +45,37 @@ class Router:
         url = self.params['url'] if 'url' in self.params else None
         name = self.params['name'] if 'name' in self.params else None
         action = self.params['action'] if 'action' in self.params else None
+        #####################################################
+        # ONYX HOME (skins/onyx_home): the home's favourites and live TV rows and its hero's details.
+        # Answered BEFORE the child-profile gate below, on purpose: these modules decide for themselves
+        # what a child profile may see (an empty row), so the gate's "build management" dialog must
+        # never fire for them. They used to be fast-pathed in default.py; the mode names are called by
+        # the Onyx skin and stay byte-identical.
+        if mode == 'favourites_row':
+            from resources.libs.skins.onyx_home import favourites_row
+            favourites_row.row(handle)
+            return
+        if mode == 'favourite_run':
+            from resources.libs.skins.onyx_home import favourites_row
+            favourites_row.run(handle, self.params)
+            return
+        if mode == 'pvr_row':
+            from resources.libs.skins.onyx_home import pvr_row
+            pvr_row.row(handle)
+            return
+        if mode == 'pvr_play':
+            from resources.libs.skins.onyx_home import pvr_row
+            pvr_row.play(handle, self.params)
+            return
+        if mode == 'hero_details':
+            from resources.libs.skins.onyx_home import hero_details
+            hero_details.run()
+            return
+        if mode == 'hero_warm':
+            from resources.libs.skins.onyx_home import hero_details
+            hero_details.warm()
+            return
+        #####################################################
         from resources.libs.profiles import hooks as profile_hooks
         if profile_hooks.deny_in_child_profile(mode, handle):
             return
@@ -266,7 +297,7 @@ class Router:
             from resources.libs import db
             db.kodi_17_fix()
         elif mode == 'unknownsources':  # Misc Maintenance -> Enable Unknown Sources
-            from resources.libs import skin
+            from resources.libs.skins import skin_settings as skin
             skin.swap_us()
         elif mode == 'enabledebug':  # Misc Maintenance -> Enable Debug Logging
             logging.swap_debug()

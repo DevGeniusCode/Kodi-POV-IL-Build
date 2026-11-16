@@ -32,7 +32,7 @@ from resources.libs.common.config import CONFIG
 from resources.libs.common import logging
 from resources.libs.common import tools
 from resources.libs.common import custom_save_data_config
-from resources.libs import install
+from resources.libs.skins import fentastic_manager
 
 
                        
@@ -103,43 +103,6 @@ from resources.libs import install
     # pass
     
 ########################################################################################################################################################
-
-
-def preserve_widget_layout(_out, file, ignore):
-    """True if this archive member is a FENtastic home-widget file that must
-    be left alone.
-
-    `file` is the member name already split on '/'. Kept as a named function
-    so it can be tested directly instead of being restated somewhere else.
-
-    The home widgets are rendered from script-fentastic-widget_*.xml, which
-    FENtastic's widget editor rewrites from the user's saved skin settings.
-    Overwriting them on every quickfix reverted the home to our default until
-    the user next touched a widget, so a quick update leaves them alone.
-
-    TWO conditions, and both matter:
-
-      ignore is not None
-        A deliberate (re)install -- Theme Install, Install Skin, a Restore the
-        user chose not to wipe first -- passes ignore=None and MUST lay down
-        the defaults it was asked to install. Preserving a stale layout there
-        would be the opposite of what the user asked for.
-
-      the file is already on disk
-        The fresh-build auto-install in startup.py passes ignore=True too, to
-        bypass the skip of the wizard's own files -- so on a brand-new install
-        the first condition alone skipped all five, and there was nothing to
-        preserve: they simply never arrived. The skin then failed every widget
-        include ("Skin has invalid include: MovieWidgets") and Movies, TV shows
-        and Idan+ came up empty. A quick update could not repair it either,
-        for the same reason. Nothing is preserved by refusing to write a file
-        that is not there.
-    """
-    return (ignore is not None
-            and file[0] == 'addons' and len(file) >= 4
-            and file[1] == 'skin.fentastic' and file[2] == 'xml'
-            and file[-1].startswith('script-fentastic-widget_')
-            and os.path.isfile(os.path.join(_out, *file)))
 
 
 def already_on_disk(item, _out):
@@ -312,7 +275,7 @@ def all_with_progress(_in, _out, dp, ignore, title, progress_dialog_bg):
             skip = True
         elif file[0] == 'userdata' and file[1] == 'addon_data' and file[2] in excludes:
             skip = True
-        elif preserve_widget_layout(_out, file, ignore):
+        elif fentastic_manager.preserve_widget_layout(_out, file, ignore):
             skip = True
         elif file[-1] in CONFIG.LOGFILES:
             skip = True
@@ -385,6 +348,6 @@ def all_with_progress(_in, _out, dp, ignore, title, progress_dialog_bg):
                     count - written - unchanged - errors, errors))
 
     # KODI_RD_ISRAEL
-    install.restore_fentasticdata()
+    fentastic_manager.restore_fentasticdata()
 
     return prog, errors, error

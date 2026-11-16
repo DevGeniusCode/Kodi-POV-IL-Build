@@ -149,7 +149,7 @@ class Restore:
                 window.show_text_box("Viewing Errors", error.replace('\t', ''))
 
     def choose(self, location):
-        from resources.libs import skin
+        from resources.libs.skins import skin_settings as skin
 
         skin.look_and_feel_data('restore')
         external = 'External' if self.external else 'Local'

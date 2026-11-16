@@ -1184,12 +1184,14 @@ one or two files. Every new folder lives inside `plugin.program.kodipovilwizard/
 | `provisioning/`  | `banner`, `auto_install`, `ota`                                                            | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, and the start-up OTA pass (`run_startup_ota`)                                                   |
 | `build/`         | `wizard_actions`                                                                           | The `Wizard` class: fresh / normal install, GUI fix, theme, quick update, restart, force-close                                                                                                |
 | `packs/`         | `pack_installer`                                                                           | The shared on-demand zip-pack engine (`_ensure_packs_installed`, pack registration / version helpers, `NOX_PACK_BASE_URL`)                                                                    |
-| `skins/`         | `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`                                   | On-demand skins (NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch. Phase 2 moves the skin presentation logic here.      |
+| `skins/`         | `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`, `skin_settings`, `fentastic_manager`, `onyx_home/` (`favourites_row`, `pvr_row`, `hero_details`) | On-demand skins (NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch; `skin_settings`: the `lookandfeel.*` JSON-RPC helpers (`switch_to_skin`, `skin_to_default`, `look_and_feel_data`); `fentastic_manager`: FENtastic helper data / skin XMLs kept across a wipe and the home-widget layout a quick update leaves alone; `onyx_home/`: the Onyx home's favourites / live TV rows and its hero details. |
 | `addons/`        | `umbrella`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |
 | `accounts_auth/` | `acctmgr`                                                                                  | Account Manager Lite: pilot install and install-for-everyone                                                                                                                                  |
 | `system/`        | `kodi_version`, `speedtest`                                                                | The official-Kodi release check (Android / Windows) and the network speed tests                                                                                                               |
 
-`default.py` and `startup.py` stay at the add-on root because `addon.xml` names them. `startup.py` is now a ~180-line,
+`default.py` and `startup.py` stay at the add-on root because `addon.xml` names them. `default.py` is a generic entry
+point: it hands every `mode=` to `Router` (the Onyx home modes are answered inside `Router.dispatch`, see the rules
+below). `startup.py` is now a ~180-line,
 ordered sequence of calls into these modules; every `sys.exit()` and both `PatchEngine` passes stay in it. `common/`,
 `gui/`, `profiles/`, `patches/` and the single-purpose engine modules at the `libs/` root (`modular_updater`,
 `config_apply`, `fresh_install`, `headless_installer`, …) are unchanged.
@@ -1205,6 +1207,10 @@ Rules for this layout:
   (`resources.libs.common.config`, fed by `uservar.py`), never from hard-coded copies.
 - Imports that sit inside a function stay inside it: they break import cycles (`build` with `install` and
   `modular_updater`, `skins` with `profiles`).
+- The Onyx home modes (`favourites_row`, `favourite_run`, `pvr_row`, `pvr_play`, `hero_details`, `hero_warm`) are answered
+  at the top of `Router.dispatch`, **before** the child-profile gate: their modules apply the child policy themselves
+  (a kids profile gets an empty row), and the gate's "build management" dialog must never fire for them. Do not add them
+  to `profiles/hooks._CHILD_ALLOWED` (it also feeds `ROUTES`).
 - Router `mode=` names are a public API used by skins, `favourites.xml` and other add-ons; moving code never renames a
   mode.
 

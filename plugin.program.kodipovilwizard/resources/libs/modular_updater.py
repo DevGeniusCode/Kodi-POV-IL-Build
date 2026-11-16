@@ -16,7 +16,7 @@ from resources.libs.headless_installer import HeadlessInstaller, BINARY_PREFIXES
 class ModularUpdater:
     # On-demand skins are installed by Fresh Install / Switch Skin only, never
     # by the background updater.
-    ON_DEMAND_SKINS = frozenset(('skin.povil.nox',))
+    ON_DEMAND_SKINS = frozenset(('skin.povil.nox', 'skin.povil.onyx'))
 
     def __init__(self, background=False):
         self.background = background
