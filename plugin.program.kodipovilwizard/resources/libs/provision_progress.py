@@ -8,7 +8,7 @@ banner. It never installs anything and never opens a dialog of its own:
 
   * install_manager (the DialogModularInstall window) and ModularUpdater only
     REPORT numbers into it (set_fraction / complete / begin_indeterminate).
-  * The banner (a DialogProgressBG created by startup.py) is written ONLY from
+  * The banner (a DialogProgressBG created by provisioning/banner.py) is written ONLY from
     this module's ticker thread, so there is exactly one banner writer.
   * The custom window READS percent() to draw its own overall bar, so the
     window and the banner can never disagree.

@@ -18,6 +18,9 @@ import zipfile
 BOOTSTRAP_SHA256 = '20f3f23b5571bc48be7313096e144fd01e903b346b050ca9a7a2899a92963f85'
 WIZARD = 'plugin.program.kodipovilwizard'
 
+# Everything a seed can raise for a bad profile folder, pack or POV database.
+SEED_ERRORS = (OSError, ValueError, KeyError, ET.ParseError, sqlite3.Error, zipfile.BadZipFile)
+
 
 def _shortcut_items(value):
     # Shipped/POV rows use Python literals. On embedded Kodi, JSONDecodeError

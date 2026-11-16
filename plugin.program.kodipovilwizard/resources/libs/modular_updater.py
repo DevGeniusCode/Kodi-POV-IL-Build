@@ -27,7 +27,7 @@ class ModularUpdater:
         self.manifest_url = getattr(CONFIG, 'MANIFEST_URL', 'http://missing_manifest_url')
 
         # Optional shared ProvisionProgress tracker (resources/libs/provision_progress.py).
-        # startup.fresh_build_auto_install_if_needed() sets it for a FRESH install so
+        # provisioning/auto_install.fresh_build_auto_install_if_needed() sets it for a FRESH install so
         # the top banner and the install window share one monotonic percentage. It is
         # None for ordinary OTA runs. Every call goes through _track(), which can never
         # raise, so a progress problem can never break an install.

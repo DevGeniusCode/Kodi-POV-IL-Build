@@ -18,7 +18,6 @@
 ################################################################################
 
 import xbmc
-import xbmcgui
 
 import os
 import sys
@@ -36,191 +35,8 @@ from resources.libs.boot import gui_ready
 from resources.libs.boot import language_sync
 from resources.libs.boot import maintenance_pass
 from resources.libs.boot import notifications
-
-
-# Optional: a missing/broken progress helper must never crash startup or abort the
-# install -- the banner then simply stays a static "please wait" message.
-try:
-    from resources.libs.provision_progress import ProvisionProgress
-except Exception:
-    ProvisionProgress = None
-
-
-# Polite Hebrew wait message shown for the whole provisioning run.
-PROVISION_WAIT_MSG_HE = 'אנא המתינו עד להשלמת ההתקנה וטעינת מסך הבית.'
-
-
-def _make_provisioning_banner():
-    """Create a persistent, NON-MODAL top banner for the entire fresh-install /
-    provisioning run.
-
-    A ``DialogProgressBG`` renders in Kodi's top-right corner and -- unlike a
-    modal dialog or a transient notification -- STAYS VISIBLE behind every
-    subsequent install dialog / first-run popup until we explicitly close it (or
-    Kodi shuts down at the end of setup). It never grabs focus or input, so there
-    is NO global watchdog and nothing to fight. Returns the dialog object, which
-    the caller MUST keep a reference to (letting it be garbage-collected would
-    close it), or ``None`` if it could not be created.
-
-    It starts at 0%. From then on the ONLY thing that updates it is the shared
-    ProvisionProgress tracker (see _make_provisioning_progress).
-    """
-    try:
-        banner = xbmcgui.DialogProgressBG()
-        banner.create(CONFIG.ADDONTITLE, PROVISION_WAIT_MSG_HE)
-        banner.update(0, CONFIG.ADDONTITLE, PROVISION_WAIT_MSG_HE)
-        return banner
-    except Exception:
-        return None
-
-
-def _close_provisioning_banner(banner):
-    try:
-        if banner is not None:
-            banner.close()
-    except Exception:
-        pass
-
-
-def _make_provisioning_progress():
-    """Create the banner and wrap it in the shared, monotonic ProvisionProgress
-    tracker (its ticker thread is the single banner writer and also drives the
-    indeterminate steps: dependency resolution, config apply, finalize).
-
-    Returns (progress_or_None, banner_or_None). Keep BOTH references alive for the
-    whole run. If the tracker is unavailable the plain banner is still shown."""
-    banner = _make_provisioning_banner()
-    if ProvisionProgress is None:
-        return None, banner
-    try:
-        progress = ProvisionProgress(banner, CONFIG.ADDONTITLE, PROVISION_WAIT_MSG_HE)
-        progress.start()
-        return progress, banner
-    except Exception as err:
-        logging.log("[Fresh Build Auto Install] progress tracker unavailable: {0}".format(err),
-                    level=xbmc.LOGWARNING)
-        return None, banner
-
-
-def _progress_call(progress, method, *args):
-    """Call a tracker method; a progress problem must never break the install."""
-    if progress is None:
-        return
-    try:
-        getattr(progress, method)(*args)
-    except Exception:
-        pass
-
-
-def _close_progress(progress, banner):
-    """Bail-out path: stop the tracker AND close the banner."""
-    if progress is not None:
-        try:
-            progress.close()
-        except Exception:
-            pass
-    _close_provisioning_banner(banner)
-
-
-def fresh_build_auto_install_if_needed():
-    """Hydrate (or RESUME) the modular build install.
-
-    Gated on the persistent .provisioned marker rather than buildname/installed,
-    so a setup the user force-closed mid-provisioning (addons half-installed,
-    config.zip never applied) is RESUMED on the next launch instead of being left
-    permanently broken. run_fresh_install() is idempotent -- present addons are
-    skipped, the config pack self-applies once -- and it writes the marker only
-    after the WHOLE sequence completes.
-    """
-    from resources.libs import fresh_install
-    from resources.libs.modular_updater import ModularUpdater
-
-    # 1. The updater writes .provisioned before startup finishes the build flags,
-    # media assets and first-boot setup. If Kodi dies in that interval, finish
-    # this tail on the next boot instead of treating the install as complete.
-    provision_marker = os.path.join(CONFIG.USERDATA, 'kodipovil.provisioned')
-    in_progress_marker = os.path.join(CONFIG.USERDATA, fresh_install.PENDING)
-    resume_finalization = (os.path.isfile(provision_marker) and
-                           os.path.isfile(in_progress_marker))
-    if resume_finalization and not os.path.isfile(os.path.join(
-            CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')):
-        resume_finalization = False
-
-    # Already fully provisioned end-to-end -> nothing to do.
-    if os.path.isfile(provision_marker) and not os.path.isfile(in_progress_marker):
-        return False
-
-    # 2. Marker absent AND setup incomplete -> (re)run the modular fresh install
-    #    to FINISH the job. Covers a brand-new device AND a force-closed setup
-    #    (pov may already be on disk, but config and/or other addons never
-    #    landed -- exactly the case that used to break the build permanently).
-    build_name = CONFIG.BUILDNAME_DEFAULT
-    build_version = CONFIG.BUILDVERSION_DEFAULT
-
-    if not resume_finalization:
-        try:
-            fresh_install.begin()
-        except OSError as exc:
-            logging.log('[Fresh Build Auto Install] cannot persist resume marker: '
-                        '{0}'.format(exc), level=xbmc.LOGERROR)
-            return False
-
-    # Persistent "please wait" banner for the whole provisioning, driven by the
-    # shared ProvisionProgress tracker so it moves in lockstep with the
-    # install window's overall bar (same monotonic 0..99 value). It stays at the
-    # top of Kodi, surviving every dialog/popup, until setup ends or we bail to
-    # resume next launch. Keep BOTH references alive.
-    progress, wait_banner = _make_provisioning_progress()
-    try:
-        tools.ensure_folders(CONFIG.PACKAGES)
-        logging.log(
-            "[Fresh Build Auto Install] Modular fresh install / resume of {0} v{1}".format(
-                build_name, build_version), level=xbmc.LOGINFO)
-
-        if resume_finalization:
-            logging.log('[Fresh Build Auto Install] resuming post-provision '
-                        'finalization.', level=xbmc.LOGINFO)
-        else:
-            # A transient repository/download failure can recover while the
-            # installer remains open; don't require several manual restarts.
-            ready, issues = fresh_install.provision(progress=progress)
-            if not ready:
-                _close_progress(progress, wait_banner)
-                xbmcgui.Dialog().ok(CONFIG.ADDONTITLE, fresh_install.failure_message(issues))
-                return False
-
-        # Sanity gate: the build engine must be on disk AND run_fresh_install
-        # must have written the .provisioned marker (i.e. it ran to completion
-        # and was NOT force-closed mid-provisioning). If either is missing, leave
-        # the flags untouched so the next launch resumes.
-        if not os.path.exists(os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai')):
-            logging.log(
-                "[Fresh Build Auto Install] build engine missing after install; "
-                "will resume next launch.", level=xbmc.LOGERROR)
-            _close_progress(progress, wait_banner)
-            return False
-        if not ModularUpdater.is_provisioned():
-            logging.log(
-                "[Fresh Build Auto Install] provisioning did not complete (marker "
-                "absent); will resume next launch.", level=xbmc.LOGWARNING)
-            _close_progress(progress, wait_banner)
-            return False
-
-        # Everything from here is the 'finalize' slice of the progress bar
-        # (media assets, runtime patching, live defaults, home verification).
-        _progress_call(progress, 'begin_indeterminate', 'finalize')
-        completed = fresh_install.finalize()
-        if completed:
-            _progress_call(progress, 'complete', 'finalize')
-        _close_progress(progress, wait_banner)
-        return completed
-    except Exception as err:
-        logging.log(
-            "[Fresh Build Auto Install] Failed: {0}".format(err),
-            level=xbmc.LOGERROR,
-        )
-        _close_progress(progress, wait_banner)
-        return False
+from resources.libs.provisioning import auto_install
+from resources.libs.provisioning import ota
 
 
 # Don't run the script while video is playing :)
@@ -260,7 +76,7 @@ if os.path.isfile(os.path.join(CONFIG.ADDONS, 'plugin.video.pov', 'addon.xml')):
         logging.log('[PatchEngine] Early boot run failed: {0}'.format(
             _early_patch_err), level=xbmc.LOGERROR)
 
-fresh_build_auto_install_if_needed()
+auto_install.fresh_build_auto_install_if_needed()
 if os.path.isfile(os.path.join(CONFIG.USERDATA, 'kodipovil.modular_install_started')):
     # Incomplete setup must not proceed to normal notifications or claim ready.
     logging.log('[FreshInstall] setup remains pending', level=xbmc.LOGWARNING)
@@ -312,15 +128,7 @@ build_check.autoset_buildname_for_apk()
 if CONFIG.get_setting('buildname'):
     maintenance_pass.run_startup_maintenance()
 
-    try:
-        from resources.libs.modular_updater import ModularUpdater
-        _mu = ModularUpdater(background=True)
-        _mu.run_update_check()        # version bumps for installed addons + config
-        _mu.heal_missing_addons()     # strict HasAddon enforcement -> install missing
-
-    except Exception as _modular_err:
-        logging.log("[ModularUpdater] Startup check failed: {0}".format(_modular_err),
-                    level=xbmc.LOGERROR)
+    ota.run_startup_ota()
     # Repair installed add-ons even when the manifest server is unavailable or
     # the updater raises. An upstream POV update can erase these hooks while
     # the network is down; patching must not depend on OTA success.
