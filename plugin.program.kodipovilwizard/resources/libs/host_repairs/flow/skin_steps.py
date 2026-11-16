@@ -14,44 +14,6 @@ except ImportError:
 from resources.libs.host_repairs.flow.common import ADDON_ID, _other_addon_version, _walk_all, _without
 
 
-def _tile_reload_worker():
-    """Do ONE skin reload so freshly-cache-dropped tiles re-cache from disk. The
-    home focus is snapshotted + restored (via pov_reload) so the menu doesn't snap
-    to the first tile if the user was already navigating. No-op while playing."""
-    try:
-        import xbmc
-        if xbmc.getCondVisibility('Player.HasMedia'):
-            return
-        # Wait out any POV cycle FIRST. This function has always imported
-        # pov_reload -- for the focus snapshot -- and never asked it the one
-        # question that matters: rebuilding every window while POV cannot be
-        # constructed is what breaks the home screen. It applies to every skin,
-        # since unlike the other reload sites this one has no skin guard at all.
-        settled, saved = True, None
-        try:
-            from resources.libs.host_repairs import pov_reload
-            settled = pov_reload.wait_until_settled()
-            if settled:
-                saved = pov_reload._capture_home_focus()
-        except Exception:
-            settled, saved = True, None
-        if not settled:
-            return
-        xbmc.executebuiltin('ReloadSkin()')
-        try:
-            xbmc.sleep(1200)
-        except Exception:
-            pass
-        if saved:
-            try:
-                from resources.libs.host_repairs import pov_reload
-                pov_reload._restore_home_focus(saved)
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-
 def _maybe_enable_osd_autoclose():
     """Turn on the skin's built-in OSD auto-close (4s) so the player bars hide
     after a few seconds instead of staying until Back.

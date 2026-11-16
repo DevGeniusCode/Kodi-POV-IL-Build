@@ -58,7 +58,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   (imported by bare name after a `sys.path` append by POV / Umbrella hooks and frozen `patches/pov_prewarm`, `pov_sub_match_v2`:
   stdlib-only at module level; API `prewarm`, `release_names`, `embedded_names`, `confirmed_releases`, `label_prefix`), with
   `subs_chooser` and `subs_filename_publisher`. The Wizard reads only `use_builtin_engine` (`flow/runner.py`) and
-  `pov_fast_navigation` (`pov_language_invoker_guard`; the frozen `patches/pov_invoker_safe.py` too) from it, and only through
+  `pov_fast_navigation` (`pov_language_invoker_guard`) from it, and only through
   `host_repairs/kodi_utils.subs_get_*`; it names the add-on id only as an existence / required-add-on reference
   (`build/wizard_actions`, `fresh_install`, `auto_install`, `build_profiles`, `pyc_warm`, `clear`, `manifest.json`).
 - **HOME ROUTES COME BEFORE THE CHILD GATE:** `Router.dispatch` answers the Onyx modes (`favourites_row`, `favourite_run`,
@@ -86,6 +86,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 ## 🔮 FUTURE ENHANCEMENTS
 
 - **Playlist Timeout UI setting:** the owner wants a user-facing setting (Wizard settings) for Kodi's `<playlisttimeout>`. Today `<playlisttimeout>0</playlisttimeout>` is pre-baked in `userdata/advancedsettings.xml` (WIZARD IL BAKED fence); the UI setting would replace that baked value. Not started.
+- **Startup cache / low-memory check:** create a Kodi startup check that detects low memory or cache issues and prompts the user with an alert to clear the cache. Once implemented, we can remove the runtime `pov_cache_guard` (registry entry `pov_results_cache_guard`).
 
 ## 📝 OPEN NOTES (reported, not fixed; each needs user approval)
 
@@ -93,7 +94,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `reuselanguageinvoker=false` each call imports ~12 modules instead of ~5 (stubs: ~48 → ~178 ms). If the Onyx home feels
   slow, add a thin generic hook that skips the router (it must stay before the child gate).
 - **Phase 4 investigation: POV `reuselanguageinvoker` mismatch.** Every boot races POV's own check (~20 s after start): the
-  repair pass's `_maybe_patch_pov_language_invoker` (measured 19 s margin) and the frozen `patches/pov_invoker_safe.py` keep
+  repair pass's `_maybe_patch_pov_language_invoker` (measured 19 s margin) keeps
   the setting and POV's `addon.xml` in agreement; losing shows POV's English "SETTING/XML mismatch" dialog. Investigate
   (a) preventing the mismatch at provisioning / install / POV-update time, (b) decoupling this clock-bound step from the
   rest of the repair bundle. Until then it stays FIRST in the pass.
@@ -125,7 +126,8 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 ## PHASE 4 (FROZEN until the user starts it)
 
 Optimize `patches_config.py`; decide which `host_repairs/` modules could become registry entries; run the invoker-mismatch
-investigation (Open Notes); once `patches/pov_invoker_safe.py` is unfrozen, move the `pov_fast_navigation` declaration out of the
-subtitle add-on (it stays there only because that frozen patch reads and writes it by the add-on id). Phases 1-3 are complete.
+investigation (Open Notes); move the `pov_fast_navigation` declaration out of the
+subtitle add-on (it stays there only because the Wizard's `pov_language_invoker_guard` reads and writes it by the add-on id;
+`patches/pov_invoker_safe.py` was deleted in Step 4). Phases 1-3 are complete.
 
 - **COMMIT COMMAND:** At the end of every step, provide a ready-to-copy Git commit snippet (using `git add -A && git commit -m "..."`) inside a bash code block, with a clear, concise summary of what changed in that step.

@@ -9,9 +9,10 @@
 # JSON-RPC, deferred until idle) makes the interpreter relaunch and re-import
 # the patched source the same session.
 #
-# Mirrors darksubs_reload, with one extra guard: callers only arm this when the
-# user has actually opted into the feature, so the 499 users who leave it off
-# never get POV cycled.
+# Mirrors darksubs_reload. Today the only thing that arms it is the settings-
+# integrity repair (flow/pov_steps: a repaired POV settings.xml needs POV to
+# re-read it); the sources.py caller it was written for is gone. It also
+# serves as the "is POV mid-cycle" gate (wait_until_settled / is_cycling).
 
 import json
 import time
@@ -177,7 +178,7 @@ def _owed_path():
     return xbmcvfs.translatePath(CYCLE_OWED_FILE)
 
 
-def _mark_owed(owed, applied=True, attempts=0):
+def _mark_owed(owed, applied=True):
     """Record -- or clear -- "a cycle is still owed". Never raises.
 
     A FAILURE HERE IS SAID OUT LOUD, like its sibling _mark_cycle_pending.
@@ -200,13 +201,10 @@ def _mark_owed(owed, applied=True, attempts=0):
             # the moment it succeeds, so a write that fails after that -- a
             # full disk is the ordinary way -- leaves an empty file: the debt
             # survives, because cycle_owed only asks whether the file exists,
-            # but the attempt count silently resets to zero and the escalation
-            # starts over. os.replace is atomic, so the file on disk is either
+            # but the record is left empty. os.replace is atomic, so the file on disk is either
             # the old one or the new one and never a truncated middle.
             # A UNIQUE TEMP NAME, not `path + '.tmp'`. Two writers CAN meet
-            # here -- request_reload writes the debt on the main thread and
-            # the deferred cycle rewrites it with a new count from its own
-            # thread -- and with one shared name the second `open(..., 'w')`
+            # here -- two threads can each write the debt -- and with one shared name the second `open(..., 'w')`
             # truncates the first writer's file before its os.replace runs, so
             # what lands is empty. The atomic rename was added to stop a
             # truncated file existing; a shared name put one back by another
@@ -215,7 +213,7 @@ def _mark_owed(owed, applied=True, attempts=0):
                                     threading.current_thread().ident or 0)
             try:
                 with open(tmp, 'w', encoding='utf-8') as handle:
-                    handle.write('%s\n%d\n' % (POV_ADDON_ID, attempts))
+                    handle.write('%s\n' % POV_ADDON_ID)
                 os.replace(tmp, path)
             except Exception:
                 try:
@@ -223,7 +221,6 @@ def _mark_owed(owed, applied=True, attempts=0):
                 except OSError:
                     pass
                 raise
-            _sweep_stale_temps(path)
         elif os.path.exists(path):
             os.remove(path)
         return True
@@ -254,179 +251,6 @@ def _mark_owed(owed, applied=True, attempts=0):
                  'so every start will keep trying to pay a debt to an add-on '
                  'that is not here'.format(exc), level='WARNING')
         return False
-
-
-def _owed_attempts():
-    """How many starts in a row have failed to pay the owed cycle.
-
-    A review asked the fair question about the new "never over a dialog"
-    rule: what happens on a device where the quiet moment simply never
-    comes? The debt is recorded, the next start tries again, and the answer
-    is the same -- for ever, with one INFO line a boot and nothing that
-    reads as a problem. Nobody would find that except by reading logs.
-
-    The owed FILE carries the count on a second line. The first line is
-    still the add-on id and cycle_owed() still only asks whether the file
-    exists, so a file written by an older release reads as zero rather than
-    breaking anything.
-    """
-    try:
-        import os
-        path = _owed_path()
-        if not os.path.isfile(path):
-            return 0
-        with open(path, encoding='utf-8') as handle:
-            lines = handle.read().splitlines()
-        return int(lines[1]) if len(lines) > 1 else 0
-    except Exception:
-        return 0
-
-
-# After this many consecutive starts that could not pay the debt, the line
-# stops being INFO. Three is "twice was a coincidence": a device restarted
-# three times with somebody browsing through the whole window every time is
-# no longer a coincidence, it is a device where this will never happen by
-# itself and somebody has to look.
-_OWED_SHOUT_AFTER = 3
-
-
-def _note_owed_attempt(why):
-    """Record one more failed attempt, and say so louder as they pile up."""
-    n = _owed_attempts() + 1
-    _mark_owed(True, attempts=n)
-    if n >= _OWED_SHOUT_AFTER:
-        _log('{0}; that is {1} starts in a row now. The patch POV is waiting '
-             'for has still not taken effect on this device'.format(why, n),
-             level='WARNING')
-    else:
-        _log('{0}; it stays owed and the next start tries again'.format(why))
-
-
-# An hour. A writer takes milliseconds; anything this old was orphaned by
-# a process that died between the write and the rename.
-_TEMP_STALE_SECONDS = 3600
-# The point past which a temp file is abandoned whatever its pid says.
-_TEMP_ABANDON_SECONDS = 82800          # 23h on top of the hour above
-
-
-def candidate_path(directory, name):
-    import os
-    return os.path.join(directory, name)
-
-
-def _mtime(path):
-    """The file's mtime, or 0 when it cannot be read (so it sweeps)."""
-    try:
-        import os
-        return os.path.getmtime(path)
-    except OSError:
-        return 0
-
-
-def _temp_owner_pid(name, stem):
-    """The pid encoded in a temp sibling's name, or None if unreadable."""
-    try:
-        rest = name[len(stem):]
-        return int(rest.split('.')[0])
-    except Exception:
-        return None
-
-
-def _pid_alive(pid):
-    """True when a process with this pid still exists. Unknown -> True.
-
-    Answering "yes" when we cannot tell is the safe direction: the cost is a
-    stale file surviving another boot, and the cost of the other answer is
-    deleting a file somebody is writing.
-    """
-    if not pid or pid < 1:
-        return False
-    try:
-        import os
-        # Windows implements non-console signals with TerminateProcess;
-        # signal 0 is NOT a harmless existence probe there. Unknown means
-        # alive: the sweep still expires sufficiently old abandoned files.
-        if os.name == 'nt':
-            return True
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True          # exists, owned by somebody else
-    except Exception:
-        return True
-
-
-def _sweep_stale_temps(path):
-    """Delete temp siblings left behind by a process that was killed.
-
-    The write is `open(tmp) -> os.replace(tmp, path)`, and a kill between the
-    two leaves the tmp file for ever: nothing else looks for it, and the name
-    carries a pid and a thread id so the next boot picks a different one. Each
-    leak is a few bytes and needs a kill inside a millisecond-wide window, so
-    this is slow accumulation rather than a problem -- but "nothing ever
-    cleans it up" is not a sentence worth leaving true when the sweep is six
-    lines and runs where a successful write has just proved the directory is
-    writable.
-
-    Never raises, and never touches the record itself: only siblings whose
-    name is the record's plus a .tmp suffix, and never the one just renamed.
-    """
-    try:
-        import os
-        import time
-        directory = os.path.dirname(path) or '.'
-        stem = os.path.basename(path) + '.'
-        cutoff = time.time() - _TEMP_STALE_SECONDS
-        mine = os.getpid()
-        for name in os.listdir(directory):
-            if not (name.startswith(stem) and name.endswith('.tmp')):
-                continue
-            # WHOSE IS IT, ASKED BEFORE HOW OLD IT IS. The age test alone
-            # assumed a stable wall clock, and this product ships to Android
-            # boxes with no RTC battery: an NTP step after boot moves the clock
-            # by hours, and a file written one second ago reads as a day old.
-            # A review forced that step and watched the sweep delete a live
-            # writer's file -- the exact regression the age guard was added to
-            # fix, reached by a different road.
-            #
-            # The name carries the pid that wrote it. Our own process is never
-            # swept (the dangerous case is a sibling thread, which shares it),
-            # and neither is a pid that is still running. Only then does age
-            # matter at all, and only as a backstop for a name we cannot read.
-            owner = _temp_owner_pid(name, stem)
-            if owner == mine:
-                continue
-            # A PID IS REUSED EVENTUALLY, and then a stale file's pid belongs
-            # to some unrelated live process and this would never sweep it
-            # again. So "alive" only protects a file that is also RECENT: a
-            # real writer's is milliseconds old, and a day is far beyond any
-            # clock skew worth respecting. The leak is a few bytes either way;
-            # what matters is that neither test alone can make it permanent.
-            if _pid_alive(owner) and _mtime(candidate_path(directory, name)) > (
-                    cutoff - _TEMP_ABANDON_SECONDS):
-                continue
-            candidate = os.path.join(directory, name)
-            try:
-                # AGE IS WHAT MAKES THIS SAFE. Every temp file shares a
-                # recognisable name, so a sweep that deletes them all deletes
-                # the one ANOTHER THREAD is between writing and renaming --
-                # and that writer's os.replace then fails, its update is lost,
-                # and the stress test cannot see it because the file ends up
-                # deleted rather than left behind. A review forced exactly
-                # that interleaving on the first version of this function.
-                #
-                # A live writer's temp file is milliseconds old. Anything that
-                # has been sitting here for an hour belongs to a process that
-                # is not coming back.
-                if os.path.getmtime(candidate) > cutoff:
-                    continue
-                os.remove(candidate)
-            except OSError:
-                pass
-    except Exception:
-        pass
 
 
 def cycle_owed():
@@ -816,15 +640,7 @@ def request_reload():
     _armed = True
     # WRITTEN BEFORE THE THREAD STARTS, so a Kodi that dies one second later
     # still leaves the debt behind. Cleared only by a cycle that ran.
-    #
-    # CARRYING THE COUNT FORWARD, which the first version of the escalation
-    # did not: this runs at every start, BEFORE the thread that would call
-    # _note_owed_attempt, and a bare _mark_owed(True) defaults attempts to 0.
-    # So every boot reset the tally to zero before anything could add to it,
-    # the count never got past 1, and _OWED_SHOUT_AFTER was unreachable -- a
-    # review drove six simulated boots through the real chain and watched the
-    # warning never fire. The whole feature was dead on arrival.
-    _mark_owed(True, attempts=_owed_attempts())
+    _mark_owed(True)
     try:
         import threading
         threading.Thread(target=_deferred_cycle, daemon=True).start()
@@ -1094,12 +910,13 @@ def _run_cycle():
         # both. A cycle that silently did not happen is the thing hardest to
         # diagnose from a user's log, which is the whole reason the near-miss
         # telemetry above exists.
-        _note_owed_attempt('cycle deferred (Kodi is closing, or the screen '
-                           'never settled)')
+        _log('cycle deferred (Kodi is closing, or the screen '
+             'never settled); it stays owed and the next start tries again')
         return
     try:
         if xbmc.getCondVisibility('Player.HasMedia'):
-            _note_owed_attempt('media playing; skipping POV cycle')
+            _log('media playing; skipping POV cycle; it stays owed '
+                 'and the next start tries again')
             return
     except Exception:
         pass
@@ -1107,7 +924,8 @@ def _run_cycle():
     # two seconds is long enough for somebody to press a title and start a
     # scrape. The whole cost of being wrong is one deferred cycle.
     if _dialog_up():
-        _note_owed_attempt('a dialog is on screen; skipping POV cycle')
+        _log('a dialog is on screen; skipping POV cycle; it stays owed '
+             'and the next start tries again')
         return
     saved_focus = _capture_home_focus()
     try:

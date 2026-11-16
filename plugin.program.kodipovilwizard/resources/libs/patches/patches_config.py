@@ -655,6 +655,40 @@ PATCH_CONFIG = [
             "\tfiles = None; torrent_id = None\n"
         )
     },
+    {
+        "id": "pov_results_cache_guard",
+        "name": "Results survive a failed results-cache write",
+        "description": "Wraps ExternalProvidersCache.set so a malformed or full providerscache.db costs only the cache, not every provider's results. Module scope, so a Wizard that is gone must never stop sources.py from importing.",
+        "category": "reliability",
+        "priority": "major",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/modules/sources.py",
+        "marker": "# WIZARD_POV_RESULTS_CACHE_GUARD_v1",
+        "anchor": "from caches.providers_cache import ExternalProvidersCache",
+        "action": "append_after",
+        "hook": _build_patch_hook(
+            module_name="pov_cache_guard",
+            custom_logic="pov_cache_guard.guard(ExternalProvidersCache)"
+        )
+    },
+    {
+        "id": "pov_keep_build_files",
+        "name": "POV clean-up keeps the build's files",
+        "description": "remove_old_databases keeps the build's povil* files and navigator.before-* menu backups in POV's data folder.",
+        "category": "reliability",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/modules/cache.py",
+        "marker": "# WIZARD_POV_KEEP_BUILD_FILES_v1",
+        "anchor": "	current_dbs = kodi_utils.current_dbs()",
+        "action": "append_after",
+        "hook": _build_patch_hook(
+            module_name="pov_keep_files",
+            custom_logic="current_dbs = pov_keep_files.keep(current_dbs)"
+        )
+    },
     # ===================================================================================
     # ================= NAVIGATOR: VISIBILITY, SHORTCUTS & TRANSLATIONS =================
     # ===================================================================================
@@ -1642,6 +1676,23 @@ PATCH_CONFIG = [
         "hook": _build_patch_hook(
             module_name="pov_nav_read_fix",
             custom_logic="pov_nav_read_fix.run(navigator_cache)"
+        )
+    },
+    {
+        "id": "pov_animated_networks",
+        "name": "Animated Networks Icons Toggle",
+        "description": "Dynamically swaps static network shortcut icons to animated ones based on Fentastic's no_slide_animations setting.",
+        "category": "ui",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/caches/navigator_cache.py",
+        "marker": "# WIZARD_POV_ANIMATED_NETWORKS_v1",
+        "anchor": "navigator_cache = NavigatorCache()",
+        "action": "append_after",
+        "hook": _build_patch_hook(
+            module_name="pov_animated_networks",
+            custom_logic="pov_animated_networks.run(navigator_cache)"
         )
     },
     {

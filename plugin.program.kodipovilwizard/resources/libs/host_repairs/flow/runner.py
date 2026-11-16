@@ -75,9 +75,8 @@ def _run_build_flow(monitor):
     # while NOX is the active skin; a later manual change sticks).
     _maybe_default_nox_poster_rating()
 
-    # Same idea for POV: if we patched its sources.py and the user opted into
-    # remember-source, cycle POV (deferred, idle-only) so it re-imports the
-    # patched code this session. No-op unless armed above.
+    # If something armed a POV cycle (today: a repaired POV settings.xml, see
+    # pov_steps), run it now (deferred, idle-only). No-op unless armed above.
     try:
         from resources.libs.host_repairs import pov_reload
         pov_reload.reload_if_patched()
@@ -111,9 +110,8 @@ def _run_build_flow(monitor):
         except Exception:
             pass
 
-    # Same idea for POV: if we patched its sources.py and the user opted into
-    # remember-source, cycle POV (deferred, idle-only) so it re-imports the
-    # patched code this session. No-op unless a patcher armed it.
+    # Same idea for POV: cycle it (deferred, idle-only) if something armed a
+    # cycle (today: a repaired POV settings.xml). No-op unless armed.
     #
     # ARMED HERE, AFTER THE BUILD REPAIRS, AND THAT POSITION IS THE POINT.
     # Arming raises a flag that pov_reload.wait_until_settled() blocks on, and
