@@ -46,7 +46,7 @@ def read():
 def _child():
     """A kids profile, or no way to tell: then nothing is listed or run."""
     try:
-        from resources.libs.patches import profile_age_guard
+        from resources.libs.profiles import profile_age_guard
         return profile_age_guard.active_policy() is not None
     except Exception:
         return True

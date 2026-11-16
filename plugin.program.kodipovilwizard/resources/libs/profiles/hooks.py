@@ -102,7 +102,8 @@ def complete_home():
         profiles.enable_login_screen()
         profiles.prepare_inactive()
         if not profiles.is_master():
-            from resources.libs import build_skin, fresh_install
+            from resources.libs import fresh_install
+            from resources.libs.profiles import build_skin
             from resources.libs.profiles import profile_store
             defaults = os.path.join(CONFIG.USERDATA, GUI_DEFAULTS)
             if os.path.isfile(defaults):

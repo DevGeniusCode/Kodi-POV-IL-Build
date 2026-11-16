@@ -9,7 +9,7 @@ import xbmcgui
 import xbmcvfs
 
 from resources.libs import config_apply
-from resources.libs.build_skin import rpc as _rpc, wait_dialogs as _wait_dialogs
+from resources.libs.profiles.build_skin import rpc as _rpc, wait_dialogs as _wait_dialogs
 from resources.libs.profiles import profile_age_guard, profile_store
 
 WIZARD = 'plugin.program.kodipovilwizard'
@@ -363,7 +363,7 @@ def load_profile(name):
                 break
     if not _wait_dialogs():
         return
-    from resources.libs import build_skin
+    from resources.libs.profiles import build_skin
     if not build_skin.persist_live_settings():
         xbmcgui.Dialog().notification('החלפת פרופיל', 'שמירת ההגדרות לא הושלמה. נסה שוב.')
         return
