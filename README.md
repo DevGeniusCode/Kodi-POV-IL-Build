@@ -947,7 +947,7 @@ The child/adult Home, the profile bootstrap hook and the login screen are part o
 not rewrite these skins at runtime. The contract every baked skin satisfies is specified in
 `skin_xml_runtime_modifications_spec.md`:
 
-- `Home.xml`: first `<onload>` runs `special://home/addons/plugin.program.kodipovilwizard/profile_bootstrap.py`; the
+- `Home.xml`: first `<onload>` runs `special://home/addons/plugin.program.kodipovilwizard/resources/libs/profiles/profile_bootstrap.py`; the
   adult controls sit in group `9879` (visible `!Skin.HasSetting(POVILChild)`), the child layout is group `9880` (visible
   `Skin.HasSetting(POVILChild)`), and `SetFocus(9500)` is applied for child profiles. NOX composes the child layout
   through its `Home_child.xml` include `skin_home_child`.
@@ -980,7 +980,7 @@ callers** (`hooks.prepare_startup`, `build_skin.prepare_layout`, `build_skin.swi
 
 #### Other skin-side pieces
 
-- **`profile_bootstrap.py`** (add-on root): run by the skins' Home `<onload>`; keep it short and import-light. In a newly
+- **`profile_bootstrap.py`** (`resources/libs/profiles/`): run by the skins' Home `<onload>`; keep it short and import-light. In a newly
   loaded secondary profile it enables the Wizard (disabled by default in that profile's add-on database) so
   `startup.py` runs, unless the profile is already set up, which preserves a deliberate disable. It also initialises the
   Estuary sidebar defaults (reloading the skin if that changed anything) and places child focus after the skin's own

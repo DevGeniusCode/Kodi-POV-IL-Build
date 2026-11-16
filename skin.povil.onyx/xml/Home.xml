@@ -11,7 +11,7 @@
 	<onload condition="String.IsEmpty(Window(home).Property(povil.tab))">SetProperty(povil.tab,movies,home)</onload>
 	<onload condition="String.IsEmpty(Window(home).Property(povil.tab.movies))">SetProperty(povil.tab.movies,1,home)</onload>
 	<backgroundcolor>FF000000</backgroundcolor>
-	<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/profile_bootstrap.py)</onload>
+	<onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/resources/libs/profiles/profile_bootstrap.py)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetBool(ShowClock)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetString(shutdown,quit)</onload>
 	<onload condition="!Skin.HasSetting(OnyxFirstRun)">Skin.SetBool(LibUpdateOff)</onload>

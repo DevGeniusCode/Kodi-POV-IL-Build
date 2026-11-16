@@ -24,7 +24,7 @@ from resources.libs.profiles import child_profiles, profile_age_guard
 WIZARD = 'plugin.program.kodipovilwizard'
 SKIN = 'skin.arctic.fuse.3'
 FOLDERS = ('xml', '1080i', '720p')
-BOOTSTRAP = 'RunScript(special://home/addons/' + WIZARD + '/profile_bootstrap.py)'
+BOOTSTRAP = 'RunScript(special://home/addons/' + WIZARD + '/resources/libs/profiles/profile_bootstrap.py)'
 FOCUS = 'SetFocus(9500)'
 # Logical fonts of the shared layouts and the size each should resolve to.
 FONT_TARGETS = {'font60': 60, 'font37': 37, 'font13': 30, 'font12': 25}

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <window>
     <!-- ######## PROFILES ###### -->
-    <onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/profile_bootstrap.py)</onload>
+    <onload>RunScript(special://home/addons/plugin.program.kodipovilwizard/resources/libs/profiles/profile_bootstrap.py)</onload>
     <!-- ######## PROFILES ###### -->
     <defaultcontrol always="true">9000</defaultcontrol>
 
