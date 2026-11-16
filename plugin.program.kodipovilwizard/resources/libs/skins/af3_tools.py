@@ -30,7 +30,7 @@ AF3_TOOLS = [
         'id': 'debrid_notice_settings',
         'label': 'הגדרת התראות מנוי',
         'icon': 'special://home/media/povil_icons/Connect_Services.png',
-        'builtin': 'RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)',
+        'builtin': 'RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=debrid_notice_settings)',
     },
     {
         'id': 'pov',

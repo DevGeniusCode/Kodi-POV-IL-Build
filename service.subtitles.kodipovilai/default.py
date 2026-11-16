@@ -1970,80 +1970,6 @@ def _gemini_type_flow(kodi_utils, gemini):
             return
 
 
-# --- MDBList API-key pairing (mirror of the Gemini flow) --------------------
-# MDBList's key lives in POV's OWN `mdblist.token` setting (POV is the consumer),
-# so we read/write it cross-addon. The phone form validates against MDBList
-# before submit; _test_save_mdblist re-checks Kodi-side and stores it.
-def _mdblist_pov_addon():
-    try:
-        import xbmcaddon as _mx
-        return _mx.Addon('plugin.video.pov')
-    except Exception:
-        return None
-
-
-def _handle_search_provider(_params):
-    """RunScript action=search_provider -- pick which add-on the home search
-    button searches, POV or Umbrella, on every skin the build ships.
-
-    One screen, two rows, the current one ticked. Choosing rewrites all four
-    skins' search wiring and reloads the skin the user is looking at, so the
-    change is visible immediately rather than after a restart."""
-    try:
-        from resources.lib import search_provider
-    except Exception as e:
-        try:
-            xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
-        except Exception:
-            pass
-        return
-
-    now = search_provider.current()
-    have_umbrella = search_provider.umbrella_available()
-    if not have_umbrella:
-        xbmcgui.Dialog().ok(
-            'מנוע החיפוש',
-            'החיפוש עובד כרגע דרך POV.\n\n'
-            'כדי לחפש דרך Umbrella צריך קודם להתקין אותו: '
-            'תוספים ← Kodi POV IL Wizard ← התקן Umbrella.')
-        return
-
-    options = []
-    order = (search_provider.POV, search_provider.UMBRELLA)
-    for key in order:
-        mark = '✓ ' if key == now else '   '
-        options.append('{0}{1}'.format(mark, search_provider.DISPLAY[key]))
-    try:
-        choice = xbmcgui.Dialog().select(
-            'מנוע החיפוש - במה לחפש?', options)
-    except Exception:
-        choice = -1
-    if choice < 0:
-        return
-    picked = order[choice]
-    if picked == now:
-        return
-
-    search_provider.set_provider(picked)
-    _statuses, reloaded = search_provider.apply_to_skins()
-    name = search_provider.DISPLAY[picked]
-    # Onyx reads the choice when the button is pressed: nothing to reload.
-    if reloaded or search_provider.active_skin_reads_live():
-        # The skin reload already IS the feedback; a dialog on top of it would
-        # land on a screen that is still rebuilding.
-        try:
-            from resources.lib import kodi_utils
-            kodi_utils.notify('החיפוש עובר ל-{0}'.format(name), time_ms=4000)
-        except Exception:
-            pass
-        return
-    xbmcgui.Dialog().ok(
-        'מנוע החיפוש',
-        'החיפוש יעבוד מעכשיו דרך {0}.\n\n'
-        'בסקין שאתם נמצאים בו כרגע השינוי ייכנס לתוקף לאחר הפעלה מחדש '
-        'של Kodi.'.format(name))
-
-
 def _test_save_or_retry(kodi_utils, gemini, api_key, retry_cb):
     """Run gemini.test_key on the supplied key. On success: save
     to settings + show success + nudge TMDB. On failure: show the
@@ -3067,13 +2993,6 @@ DEBRID_NOTICE_VALUES = (
 )
 
 
-def _pov_addon():
-    try:
-        return xbmcaddon.Addon('plugin.video.pov')
-    except Exception:
-        return None
-
-
 def _translate_path(path):
     try:
         if xbmcvfs is not None:
@@ -3372,10 +3291,7 @@ def main():
     action = (params.get('action') or 'search').lower()
 
     try:
-        if action == 'tonight':
-            from resources.lib.tonight.ui import run
-            run()
-        elif action == 'search':
+        if action == 'search':
             _handle_search(handle, params)
         elif action == 'manualsearch':
             _handle_manualsearch(handle, params)
@@ -3387,29 +3303,6 @@ def main():
             _handle_test_connection(params)
         elif action == 'connect_gemini':
             _handle_connect_gemini(params)
-        elif action == 'mdblist_mirror_umbrella':
-            # POV has just finished its own MDBList authorisation (or revoked
-            # it). Hand the access token to Umbrella so one authorisation
-            # covers both.
-            #
-            # `connected=1` is set by the Connect Services row itself, and
-            # ONLY when POV's token actually changed across POV's own set() --
-            # so it means a human authorised the service, not that they
-            # declined a confirmation and not that POV rotated the token on
-            # its own timer. Both of those were tried as signals from out here
-            # and both silently reverted settings people had chosen; this one
-            # is measured at the click rather than inferred after it. Nothing
-            # else in the build may pass it.
-            connected = params.get('connected') == '1'
-            try:
-                from resources.lib import mdblist_umbrella_mirror
-                _safe_log('mdblist mirror: '
-                          + mdblist_umbrella_mirror.mirror(reclaim=connected))
-            except Exception as e:
-                _safe_log('mdblist mirror failed: {0}'.format(e),
-                          level='WARNING')
-        elif action == 'search_provider':
-            _handle_search_provider(params)
         elif action == 'show_gemini_usage':
             _handle_show_gemini_usage(params)
         elif action == 'open_tmdb_notice':
@@ -3426,10 +3319,6 @@ def main():
             _handle_translate_file(params)
         elif action == 'bg_translate_picker':
             _handle_bg_translate_picker(params)
-        elif action == 'open_pov_settings':
-            _handle_open_pov_settings(params)
-        elif action == 'debrid_notice_settings':
-            _handle_debrid_notice_settings(params)
         elif action == 'he_avail':
             _handle_he_avail(params)
         elif action == 'engine_test':

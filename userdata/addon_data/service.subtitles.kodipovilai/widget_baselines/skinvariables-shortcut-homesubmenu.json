@@ -14,7 +14,7 @@
     {
         "label": "הגדרת התראות מנוי",
         "icon": "special://home/media/povil_icons/Connect_Services.png",
-        "path": "RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)",
+        "path": "RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=debrid_notice_settings)",
         "target": ""
     },
     {

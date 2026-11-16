@@ -572,9 +572,9 @@ Stats keys: `selected`, `applied`, `upgraded`, `skipped_current`, `removed`, `sk
 
 ## 7. The AI Subtitles Service
 
-**`service.subtitles.kodipovilai`** ("MoranSubs") is the build's Hebrew‑subtitles engine. Cross‑addon patches are **not** hosted here: they live in the Wizard's
-patch registry ([§6](#6-runtime-cross-addon-patching)). It also ships the home‑shortcut writers (`tonight`, recent
-updates) that fresh installs and Profiles seed.
+**`service.subtitles.kodipovilai`** ("MoranSubs") is the build's Hebrew‑subtitles engine. Cross‑addon patches are **not** hosted here: the
+source‑hook patches live in the Wizard's patch registry ([§6](#6-runtime-cross-addon-patching)), the runtime repairs of other add‑ons in
+`host_repairs/`, and the Tonight home tile in `resources/libs/tonight/` (all in the Wizard, [§11](#11-repository-layout--addon-inventory)).
 
 - **AI translation:** translates English (or other) subtitles to Hebrew on the fly
   via Google's Gemini Flash‑Lite API (user brings a free key from
@@ -1156,7 +1156,7 @@ reintroduce them or references to them**:
 │   └── resources/
 │       ├── libs/                            # see "Wizard code layout" below
 │       │   ├── {modular_updater,headless_installer,config_apply,fresh_install,patch_engine,downloader,extract,db}.py
-│       │   ├── boot/ provisioning/ build/ packs/ skins/ addons/ accounts_auth/ system/   # Phase 1 domain folders
+│       │   ├── boot/ provisioning/ build/ packs/ skins/ addons/ accounts_auth/ system/ host_repairs/   # domain folders (Phase 1 / 3)
 │       │   ├── common/ gui/                 # CONFIG, logging, router, tools · Wizard menus and windows
 │       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py) & decoupled logic modules
 │       │   └── profiles/                    # the Profiles feature (§9); hooks.py is its only engine‑facing surface (+ build_skin, profile_bootstrap)
@@ -1166,7 +1166,7 @@ reintroduce them or references to them**:
 │   ├── povil_icons/                         # flat canonical icon set (source of truth)
 │   ├── resources/favourites_config.json     # tiles + per‑skin order + icon_base
 │   └── favourites_generator.py
-├── service.subtitles.kodipovilai/           # AI Hebrew subtitles (+ home shortcut writer: tonight)
+├── service.subtitles.kodipovilai/           # AI Hebrew subtitles
 ├── repository.{kodifitzwell,Fishenzon,otaku,jurialmunkey}/   # third‑party repos (for content addons)
 ├── skin.{fentastic,povil.nox,estuary}/      # build skins; they carry the Profiles UI in their own XML (§9.6)
 └── script.{fentastic.helper,module.autocompletion}/ , plugin.program.autocompletion/
@@ -1184,10 +1184,12 @@ one or two files. Every new folder lives inside `plugin.program.kodipovilwizard/
 | `provisioning/`  | `banner`, `auto_install`, `ota`                                                            | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, and the start-up OTA pass (`run_startup_ota`)                                                   |
 | `build/`         | `wizard_actions`                                                                           | The `Wizard` class: fresh / normal install, GUI fix, theme, quick update, restart, force-close                                                                                                |
 | `packs/`         | `pack_installer`                                                                           | The shared on-demand zip-pack engine (`_ensure_packs_installed`, pack registration / version helpers, `NOX_PACK_BASE_URL`)                                                                    |
-| `skins/`         | `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`, `skin_settings`, `fentastic_manager`, `onyx_home/` (`favourites_row`, `pvr_row`, `hero_details`) | On-demand skins (NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch; `skin_settings`: the `lookandfeel.*` JSON-RPC helpers (`switch_to_skin`, `skin_to_default`, `look_and_feel_data`); `fentastic_manager`: FENtastic helper data / skin XMLs kept across a wipe and the home-widget layout a quick update leaves alone; `onyx_home/`: the Onyx home's favourites / live TV rows and its hero details. |
-| `addons/`        | `umbrella`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |
+| `skins/`         | `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`, `skin_settings`, `fentastic_manager`, `onyx_home/` (`favourites_row`, `pvr_row`, `hero_details`), `search_provider_picker` | On-demand skins (NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch; `skin_settings`: the `lookandfeel.*` JSON-RPC helpers (`switch_to_skin`, `skin_to_default`, `look_and_feel_data`); `fentastic_manager`: FENtastic helper data / skin XMLs kept across a wipe and the home-widget layout a quick update leaves alone; `onyx_home/`: the Onyx home's favourites / live TV rows and its hero details. |
+| `addons/`        | `umbrella`, `debrid_notice`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |
 | `accounts_auth/` | `acctmgr`                                                                                  | Account Manager Lite: pilot install and install-for-everyone                                                                                                                                  |
 | `system/`        | `kodi_version`, `speedtest`                                                                | The official-Kodi release check (Android / Windows) and the network speed tests                                                                                                               |
+| `host_repairs/`  | 44 patcher / repair modules (flat), `kodi_utils`, `media_assets/`, and `flow/` (`startup_pass`, `*_steps`, `runner`) | Runtime repairs of other add-ons and skins moved out of the subtitle add-on (Phase 3): the POV, Umbrella / MDBList / Trakt, Idan Plus, Arctic Fuse 3, NOX and Kodi patchers, the repair-state audit (`patcher_health`) and the startup-repair pass. Not the source-hook engine: that stays in `patches/`. |
+| `tonight/`       | `ui`, `entrypoints`, `hub`, `engine`, `catalog`, `providers`, `history`, `storage`, `taste`, `discovery`, `experience` | The "Tonight" home tile: the one-time favourites shortcut (`entrypoints.ensure`, called by `fresh_install`, `profile_home` and the repair runner) and the picker window (`script.moransubs.tonight.xml`, `resources/media/tonight.png`), served by `Router.dispatch` `mode=tonight`; its state lives under the Wizard's `addon_data/tonight/`. |
 
 `default.py` and `startup.py` stay at the add-on root because `addon.xml` names them. `default.py` is a generic entry
 point: it hands every `mode=` to `Router` (the Onyx home modes are answered inside `Router.dispatch`, see the rules
@@ -1210,7 +1212,15 @@ Rules for this layout:
 - The Onyx home modes (`favourites_row`, `favourite_run`, `pvr_row`, `pvr_play`, `hero_details`, `hero_warm`) are answered
   at the top of `Router.dispatch`, **before** the child-profile gate: their modules apply the child policy themselves
   (a kids profile gets an empty row), and the gate's "build management" dialog must never fire for them. Do not add them
-  to `profiles/hooks._CHILD_ALLOWED` (it also feeds `ROUTES`).
+  to `profiles/hooks._CHILD_ALLOWED` (it also feeds `ROUTES`). The same holds for `mode=tonight`, `mode=search_provider`
+  and `mode=debrid_notice_settings` (callers use `RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=…)`): they were
+  RunScript actions of the subtitle add-on and never gated. `addons/debrid_notice.py` was restored from git history.
+- `host_repairs/` is **flat on purpose**: `patcher_health.collect()` audits every `*.py` next to itself, so the patchers
+  must stay in one folder and non-patcher code (the `flow/` package) in a subfolder. The modules keep their original file
+  names; only the package prefix of their imports changed (`resources.lib` → `resources.libs.host_repairs`).
+- The build's startup repairs run in their own script: `startup.py` launches `host_repairs_service.py` (`RunScript`) as
+  its first statement, and `host_repairs/flow/runner.py` runs them with a single-runner lock. Kodi starts only one
+  service script per add-on, which is why this is not a second `xbmc.service` entry.
 - Router `mode=` names are a public API used by skins, `favourites.xml` and other add-ons; moving code never renames a
   mode.
 

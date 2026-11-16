@@ -76,6 +76,22 @@ class Router:
             hero_details.warm()
             return
         #####################################################
+        # HOME ACTIONS that used to be RunScript actions of the subtitle add-on (Phase 3): the Tonight tile, the home-search
+        # provider picker and the debrid-expiry notice settings. As RunScript actions they were never behind the
+        # child-profile gate, so, like the Onyx modes above, they are answered before it.
+        if mode == 'tonight':
+            from resources.libs.tonight import ui as tonight_ui
+            tonight_ui.run()
+            return
+        if mode == 'search_provider':
+            from resources.libs.skins import search_provider_picker
+            search_provider_picker._handle_search_provider(self.params)
+            return
+        if mode == 'debrid_notice_settings':
+            from resources.libs.addons import debrid_notice
+            debrid_notice._handle_debrid_notice_settings(self.params)
+            return
+        #####################################################
         from resources.libs.profiles import hooks as profile_hooks
         if profile_hooks.deny_in_child_profile(mode, handle):
             return

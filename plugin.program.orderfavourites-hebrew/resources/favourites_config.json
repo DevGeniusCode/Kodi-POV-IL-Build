@@ -16,7 +16,7 @@
     "search_provider": {
       "name": "[B][COLOR orange]מנוע החיפוש - POV / Umbrella[/COLOR][/B]",
       "icon": "special://home/addons/plugin.video.pov/resources/skins/Default/media/search.png",
-      "action": "RunScript(service.subtitles.kodipovilai,action=search_provider)",
+      "action": "RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=search_provider)",
       "condition": "umbrella"
     },
     "connect_services": {
@@ -28,7 +28,7 @@
     "debrid_notice": {
       "name": "[B][COLOR orange]הגדרת התראות מנוי[/COLOR][/B]",
       "icon": "Connect_Services.png",
-      "action": "RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)"
+      "action": "RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=debrid_notice_settings)"
     },
     "my_shows_tmdb": {
       "name": "[B]הסדרות שלי (TMDB)[/B]",

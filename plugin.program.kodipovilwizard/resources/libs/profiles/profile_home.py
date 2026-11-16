@@ -53,7 +53,6 @@ def prepare(master, profile):
     generator._VIS_MGR = _Connections(target)
     if generator.generate_favourites_xml('skin.povil.nox', merge=True, write=True) is None:
         raise ValueError('Profile favourites could not be prepared')
-    base = os.path.join(addons, 'service.subtitles.kodipovilai', 'resources', 'lib')
-    tonight = _module('tonight', os.path.join(base, 'tonight', 'entrypoints.py'))
+    from resources.libs.tonight import entrypoints as tonight
     path = os.path.join(target, 'favourites.xml')
     tonight.ensure(profile=target)

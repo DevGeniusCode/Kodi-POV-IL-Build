@@ -181,20 +181,12 @@ def live_favourites_ready():
 def seed_fresh_home_shortcuts():
     """Seed local service shortcuts before certifying Kodi's favourites cache.
 
-    The subtitle service starts asynchronously after activation. Its one-time
-    shortcuts can otherwise arrive after finalization and miss the first home.
-    Load just the existing local writers, without importing the service or
-    sharing its resources package with the Wizard.
+    The Tonight shortcut used to be written by the subtitle service, which starts
+    asynchronously after activation, so it could arrive after finalization and
+    miss the first home. Its writer is part of the Wizard now (resources/libs/tonight).
     """
-    base = os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai',
-                        'resources', 'lib')
-    for name, relative, entry in (
-            ('tonight', os.path.join('tonight', 'entrypoints.py'), 'ensure'),):
-        spec = importlib.util.spec_from_file_location(
-            'povil_fresh_' + name, os.path.join(base, relative))
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        getattr(module, entry)()
+    from resources.libs.tonight import entrypoints
+    entrypoints.ensure()
 
 
 def finalize():

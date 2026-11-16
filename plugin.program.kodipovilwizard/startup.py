@@ -39,6 +39,12 @@ from resources.libs.provisioning import auto_install
 from resources.libs.provisioning import ota
 
 
+# HOST REPAIRS (Phase 3): the build's startup repairs (POV / Umbrella / Idan Plus / AF3 / NOX patchers) run as their own
+# script, launched FIRST: nothing below (provisioning, the GUI wait, any sys.exit()) can delay or cancel them, and the
+# clock-bound POV language-invoker step is reached as early as it always was. Kodi runs only one service script per
+# add-on, so this is how the repairs get their own lifetime. host_repairs_service.py keeps a single-runner lock.
+xbmc.executebuiltin('RunScript(special://home/addons/{0}/host_repairs_service.py)'.format(CONFIG.ADDON_ID))
+
 # Don't run the script while video is playing :)
 profile_hooks.start_guard()
 gui_ready.check_for_video()

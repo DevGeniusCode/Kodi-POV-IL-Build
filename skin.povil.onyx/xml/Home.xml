@@ -2291,7 +2291,7 @@
 							<label>מנוע החיפוש</label>
 							<property name="povil_rtl">1</property>
 							<icon>special://home/addons/plugin.video.pov/resources/skins/Default/media/search.png</icon>
-							<onclick>RunScript(service.subtitles.kodipovilai,action=search_provider)</onclick>
+							<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=search_provider)</onclick>
 							<visible>System.HasAddon(service.subtitles.kodipovilai)</visible>
 						</item>
 						<item>
