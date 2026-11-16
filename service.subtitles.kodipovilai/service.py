@@ -476,7 +476,6 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_widget_crash_guard,
         _maybe_patch_umbrella_language,
         _maybe_add_tonight_entry,
-        _maybe_seed_recent_updates_tile,
         _maybe_fix_idanplus_youtube_id,
         _maybe_fix_idanplus_vod,
         _maybe_refresh_shared_sdh,

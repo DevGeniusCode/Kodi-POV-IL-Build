@@ -1166,7 +1166,7 @@ reintroduce them or references to them**:
 │   ├── povil_icons/                         # flat canonical icon set (source of truth)
 │   ├── resources/favourites_config.json     # tiles + per‑skin order + icon_base
 │   └── favourites_generator.py
-├── service.subtitles.kodipovilai/           # AI Hebrew subtitles (+ home shortcut writers: tonight, recent updates)
+├── service.subtitles.kodipovilai/           # AI Hebrew subtitles (+ home shortcut writer: tonight)
 ├── repository.{kodifitzwell,Fishenzon,otaku,jurialmunkey}/   # third‑party repos (for content addons)
 ├── skin.{fentastic,povil.nox,estuary}/      # build skins; they carry the Profiles UI in their own XML (§9.6)
 └── script.{fentastic.helper,module.autocompletion}/ , plugin.program.autocompletion/

@@ -17,21 +17,6 @@ def _module(name, path):
     return module
 
 
-class _ProfileFiles:
-    """Redirect only this local writer, never Kodi's global profile paths."""
-    def __init__(self, target):
-        self.target = target
-
-    def translatePath(self, path):
-        prefix = 'special://profile/'
-        if path.startswith(prefix):
-            return profile_store._inside(self.target, path[len(prefix):])
-        return xbmcvfs.translatePath(path)
-
-    def __getattr__(self, name):
-        return getattr(xbmcvfs, name)
-
-
 class _Connections:
     def __init__(self, target):
         self.services = {}
@@ -72,8 +57,3 @@ def prepare(master, profile):
     tonight = _module('tonight', os.path.join(base, 'tonight', 'entrypoints.py'))
     path = os.path.join(target, 'favourites.xml')
     tonight.ensure(profile=target)
-    recent = _module('recent', os.path.join(base, 'recent_updates_tile_patcher.py'))
-    recent.xbmcvfs = _ProfileFiles(target)
-    result = recent.ensure_patched()
-    if result not in ('seeded', 'already_present', 'user_removed', 'already_seen'):
-        raise ValueError('Profile update shortcut could not be prepared: ' + result)

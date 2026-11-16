@@ -189,8 +189,7 @@ def seed_fresh_home_shortcuts():
     base = os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai',
                         'resources', 'lib')
     for name, relative, entry in (
-            ('tonight', os.path.join('tonight', 'entrypoints.py'), 'ensure'),
-            ('recent', 'recent_updates_tile_patcher.py', 'ensure_patched')):
+            ('tonight', os.path.join('tonight', 'entrypoints.py'), 'ensure'),):
         spec = importlib.util.spec_from_file_location(
             'povil_fresh_' + name, os.path.join(base, relative))
         module = importlib.util.module_from_spec(spec)
