@@ -49,8 +49,6 @@
         <setting id="_pov_autoplay_default_v1" type="text" label="Marker: pov_steps" visible="false" default=""/>
         <setting id="_pov_autoplay_revert_v2" type="text" label="Marker: pov_steps" visible="false" default=""/>
         <setting id="_pov_resume_revert_v1" type="text" label="Marker: pov_steps" visible="false" default=""/>
-        <setting id="_pov_scraper_tune" type="text" label="Marker: pov_scraper_settings_patcher" visible="false" default=""/>
-        <setting id="_pov_seasons_view_v1" type="text" label="Marker: pov_seasons_view_seed" visible="false" default=""/>
         <setting id="_umb_mdbl_cursor_reset" type="text" label="Marker: umbrella_mdblist_sync_patcher" visible="false" default=""/>
         <setting id="_umb_watch_prompt_v1" type="text" label="Marker: umbrella_watch_prompt" visible="false" default=""/>
         <setting id="_umb_watch_source_v2" type="text" label="Marker: umbrella_watch_source" visible="false" default=""/>
@@ -60,7 +58,6 @@
         <setting id="_umbrella_coco_providers_v2" type="text" label="Marker: umbrella_setup_patcher" visible="false" default=""/>
         <setting id="_umbrella_coco_wired_v1" type="text" label="Marker: umbrella_setup_patcher" visible="false" default=""/>
         <setting id="_umbrella_defaults_v1" type="text" label="Marker: umbrella_setup_patcher" visible="false" default=""/>
-        <setting id="_update_nag_quiet_v1" type="text" label="Marker: update_nag_patcher" visible="false" default=""/>
         <setting id="af3_first_launch_dialog_done" type="bool" label="Marker: af3_first_launch" visible="false" default="false"/>
         <setting id="search_provider" type="text" label="Home search provider: pov or umbrella" visible="false" default="pov"/>
     </category>

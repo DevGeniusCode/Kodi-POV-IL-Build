@@ -6,7 +6,6 @@ Moved verbatim from service.subtitles.kodipovilai/service.py (Phase 3, step 3); 
 """
 import threading
 
-from resources.libs.host_repairs.flow.pov_steps import _skip_pov_patchers
 
 
 def _maybe_patch_mdblist_reauth():
@@ -188,25 +187,6 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
-    # Kodi's own "playback failed" after a deliberate back-out of the source
-    # list. It is a 20-second timer on consecutive unresolved plays, not a
-    # report about this playback -- see kodi_playlist_timeout_patcher.
-    try:
-        from resources.libs.host_repairs import kodi_playlist_timeout_patcher
-        st = kodi_playlist_timeout_patcher.ensure_patched()
-        if st in ('patched', 'created'):
-            kodi_utils.log(
-                'kodi_playlist_timeout_patcher: ' + st, level='INFO')
-        elif st in ('unmatched', 'bad_xml', 'write_failed', 'read_failed'):
-            kodi_utils.log(
-                'kodi_playlist_timeout_patcher: ' + st, level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'kodi_playlist_timeout_patcher failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
     # Keep Umbrella on whatever MDBList and Trakt authorisations POV currently
     # holds. POV owns the refreshing -- only its client_id can -- so this is
     # what carries a refreshed token across to Umbrella, and what covers a
@@ -345,10 +325,6 @@ def _start_service_mirror_keeper(monitor):
     except Exception:
         trakt_umbrella_mirror = None
     try:
-        from resources.libs.host_repairs import pov_seasons_view_seed
-    except Exception:
-        pov_seasons_view_seed = None
-    try:
         from resources.libs.host_repairs import umbrella_watch_prompt
     except Exception:
         umbrella_watch_prompt = None
@@ -367,33 +343,12 @@ def _start_service_mirror_keeper(monitor):
                         trakt_umbrella_mirror.mirror()
                     except Exception:
                         pass
-                # Same tick, and here because this is the only periodic hook
-                # we have: Kodi changes skin without a restart, and POV's
-                # seasons view id means a different layout in each skin.
-                #
-                # _skip_pov_patchers() is checked HERE, not only on the
-                # startup pass. This is the one job in this loop that writes
-                # inside POV's own profile, and the switch exists so somebody
-                # can rule this build out in one step -- a thread that carries
-                # on writing to POV ninety seconds later would make the switch
-                # a lie.
                 # Deliberately in the keeper and not in the startup steps:
                 # it can put a dialog on screen, and boot is already crowded
                 # with them. By the first tick the splash is long gone.
                 if umbrella_watch_prompt is not None:
                     try:
                         umbrella_watch_prompt.maybe_ask_async()
-                    except Exception:
-                        pass
-                if pov_seasons_view_seed is not None:
-                    try:
-                        # Inside the try, not in the `if`: this is the only
-                        # call in the loop body that sat outside one, and an
-                        # exception here would take the whole keeper thread
-                        # down -- both mirrors with it -- for the rest of the
-                        # session, through an outer catch that logs nothing.
-                        if not _skip_pov_patchers():
-                            pov_seasons_view_seed.ensure_seeded()
                     except Exception:
                         pass
                 if monitor.waitForAbort(60):

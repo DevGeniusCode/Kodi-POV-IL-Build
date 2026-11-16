@@ -233,7 +233,7 @@
     <setting id="search.enable.yearcheck" default="true">false</setting>
     <setting id="ignore_results_filter">true</setting>
     <setting id="search.finish.early" default="true">false</setting>
-    <setting id="scrapers.timeout.1">10</setting>
+    <setting id="scrapers.timeout.1">20</setting>
     <setting id="results.language_filter" default="true">false</setting>
     <setting id="results.language" default="true">English</setting>
     <setting id="results.sort_order_display">Quality, Size, Provider</setting>

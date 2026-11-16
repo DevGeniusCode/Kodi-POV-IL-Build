@@ -15,7 +15,7 @@ except ImportError:
 from resources.libs.host_repairs.flow.af3_steps import _maybe_patch_af3_home, _maybe_show_af3_first_launch_dialog
 from resources.libs.host_repairs.flow.common import _addon_version, _background_settle_seconds, _background_ui_busy
 from resources.libs.host_repairs.flow.idanplus_steps import _maybe_fix_idanplus_vod, _maybe_fix_idanplus_youtube_id, _maybe_patch_idanplus_channels
-from resources.libs.host_repairs.flow.pov_steps import _maybe_optimize_32bit_artwork, _maybe_quiet_update_nags, _maybe_repair_addon_settings_integrity, _maybe_seed_pov_seasons_view, _skip_pov_patchers
+from resources.libs.host_repairs.flow.pov_steps import _maybe_repair_addon_settings_integrity, _skip_pov_patchers
 from resources.libs.host_repairs.flow.tonight_steps import _maybe_add_tonight_entry
 from resources.libs.host_repairs.flow.umbrella_steps import _maybe_patch_mdblist_reauth, _maybe_patch_umbrella_language
 
@@ -163,15 +163,8 @@ def _run_build_startup_repairs():
         # them, so POV never shows its mismatch dialog. Do not move it down on
         # the strength of the old sentence.
         _maybe_patch_pov_language_invoker,
-        # Persist the optional core-upgrade reminder preference early; build
-        # updates and application compatibility checks use separate paths.
-        _maybe_quiet_update_nags,
-        # Cheap XML migration. It touches only the build's exact 9999 value,
-        # keeps every cached thumbnail, and affects Kodi after its next start.
-        _maybe_optimize_32bit_artwork,
         _maybe_patch_idanplus_channels,
         _maybe_patch_mdblist_reauth,
-        _maybe_seed_pov_seasons_view,
         # AF3's compact 32-bit rows read these local shortcut folders. Seed or
         # upgrade them before AF3 exposes the rows, so a fresh profile cannot
         # race the skin and momentarily render an empty personal/network/genre

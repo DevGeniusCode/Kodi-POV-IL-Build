@@ -9,6 +9,11 @@
 		<disableipv6>true</disableipv6>   <!-- Certain hardware/OS combinations have trouble with ipv6. Set "true" to disable -->
 	</network>
 	<scanirserver>false</scanirserver> <!-- Used to disable the regular connection attempts to the IR Server Suite when there is no remote to connect to. -->
-	<imageres>9999</imageres> <!-- Using <imageres>9999</imageres> will allow caching artwork at original size. -->
+	<!-- ======== WIZARD IL BAKED: artwork cache capped at 720 (was 9999, original size) ======== -->
+	<imageres>720</imageres>
+	<!-- ======== END WIZARD IL BAKED ======== -->
+	<!-- ======== WIZARD IL BAKED: playlisttimeout 0 (turns off the 20 s timer behind Kodi's "playback failed" after backing out of a source list; playlistretries still stops a runaway playlist) ======== -->
+	<playlisttimeout>0</playlisttimeout>
+	<!-- ======== END WIZARD IL BAKED ======== -->
 	<packagefoldersize>50</packagefoldersize> <!-- this example would keep up to 70MB of add-on packages. -->
 </advancedsettings>

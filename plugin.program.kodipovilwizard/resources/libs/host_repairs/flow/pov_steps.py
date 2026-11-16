@@ -92,26 +92,6 @@ def _maybe_repair_addon_settings_integrity():
             pass
 
 
-def _maybe_optimize_32bit_artwork():
-    """Undo only the build's original-size image policy on both architectures."""
-    try:
-        from resources.libs.host_repairs import kodi_32bit_artwork, kodi_utils
-        status = kodi_32bit_artwork.ensure_build_default()
-        if status in ('invalid_xml', 'wrong_root', 'unmatched',
-                      'invalid_result', 'write_failed', 'failed'):
-            kodi_utils.log(
-                'Build artwork optimisation needs attention: {0}'.format(
-                    status), level='WARNING')
-    except Exception as exc:
-        try:
-            from resources.libs.host_repairs import kodi_utils
-            kodi_utils.log(
-                'Build artwork optimisation unavailable: {0}'.format(exc),
-                level='WARNING')
-        except Exception:
-            pass
-
-
 # ---------------------------------------------------------------------------
 # One switch that stops this add-on touching plugin.video.pov at all.
 #
@@ -159,94 +139,6 @@ def _skip_pov_patchers():
         except Exception:
             pass
     return True
-
-
-def _maybe_patch_pov_scraper_settings():
-    """One-time tune of POV's scraper settings for the build: keep pre-release
-    (CAM/SCR/TELE) and 3D results ON (the build owner wants them), and turn the
-    default-ON provider.piratebay OFF (build owner's instruction, 2026-08-15 --
-    it had been turned on here for source counts). Applied once per marker
-    version, only where the value still differs, so a user who later changes
-    any of these keeps their choice."""
-    if _skip_pov_patchers():
-        return
-    try:
-        from resources.libs.host_repairs import pov_scraper_settings_patcher, kodi_utils
-    except Exception:
-        return
-    try:
-        status = pov_scraper_settings_patcher.ensure_patched()
-        if status == 'patched':
-            kodi_utils.log(
-                'pov_scraper_settings_patcher: pre-release/3D on, piratebay '
-                'off, and the scraper/debrid timeout at POV '
-                "6.08's own default", level='INFO')
-        elif status in ('already', 'no_pov', 'unchanged'):
-            pass
-        else:
-            kodi_utils.log(
-                'pov_scraper_settings_patcher: ' + status, level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'pov_scraper_settings_patcher failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-
-
-def _maybe_seed_pov_seasons_view():
-    """Open POV's season list in a view that draws a poster.
-
-    Reported as "per-season posters only work in NOX". They work everywhere;
-    the screen was a text list with no poster in the layout at all. Writes
-    POV's own views.db -- the same row POV's Set View writes -- once per skin,
-    over whatever is there, and then never again. See the module."""
-    if _skip_pov_patchers():
-        return
-    try:
-        from resources.libs.host_repairs import pov_seasons_view_seed, kodi_utils
-    except Exception:
-        return
-    try:
-        st = pov_seasons_view_seed.ensure_seeded()
-        if st == 'failed':
-            kodi_utils.log('pov_seasons_view_seed: failed', level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'pov_seasons_view_seed failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-
-
-def _maybe_quiet_update_nags():
-    """Quiet pinned add-on offers and the optional Kodi 21.2 reminder.
-
-    Both nag at every start about a version the build pins deliberately, and
-    neither offers a way to take it -- taking it would strip the patches that
-    make them work here. Settings only, once each, and only while the value
-    is still the one they shipped."""
-    try:
-        from resources.libs.host_repairs import update_nag_patcher, kodi_utils
-    except Exception:
-        return
-    try:
-        status = update_nag_patcher.ensure_quiet()
-        if status == 'patched':
-            kodi_utils.log(
-                'update_nag_patcher: self-update notifications switched off',
-                level='INFO')
-        elif status == 'write_failed':
-            kodi_utils.log('update_nag_patcher: ' + status, level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'update_nag_patcher run failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
 
 
 def _ensure_pov_enabled():

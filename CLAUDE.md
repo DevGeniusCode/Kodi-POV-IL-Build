@@ -19,7 +19,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 | `addons/`        | Add-on install / management (Umbrella, `debrid_notice`)                                |
 | `accounts_auth/` | Account Manager                                                                        |
 | `system/`        | Kodi version check, speed tests                                                        |
-| `host_repairs/`  | Runtime repairs of other add-ons and skins (34 patcher modules, flat on purpose), `flow/` (startup-repair pass + runner), `kodi_utils` (subset copy) |
+| `host_repairs/`  | Runtime repairs of other add-ons and skins (29 patcher modules, flat on purpose), `flow/` (startup-repair pass + runner), `kodi_utils` (subset copy) |
 | `tonight/`       | The Tonight home tile (shortcut writer, picker window logic)                           |
 
 - **Phase 1 COMPLETE (Nov 2026):** `startup.py` 848 → ~180 lines; `wizard.py` split into the folders above and deleted.
@@ -83,6 +83,10 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 - **LINE ENDINGS:** sources and docs use CRLF (a file that is LF stays LF).
 - **Output Mirroring:** For every single response you generate in this project, you MUST automatically write your full, exact textual response into a file named `output.txt` in the root directory. Overwrite the file completely each time (do not append).
 
+## 🔮 FUTURE ENHANCEMENTS
+
+- **Playlist Timeout UI setting:** the owner wants a user-facing setting (Wizard settings) for Kodi's `<playlisttimeout>`. Today `<playlisttimeout>0</playlisttimeout>` is pre-baked in `userdata/advancedsettings.xml` (WIZARD IL BAKED fence); the UI setting would replace that baked value. Not started.
+
 ## 📝 OPEN NOTES (reported, not fixed; each needs user approval)
 
 - **Onyx router latency.** Onyx home modes went from `default.py`'s fast-path into `Router.dispatch`; with
@@ -99,11 +103,9 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `skins/switcher.skin_mapping`; `skins/skin_settings.swap_us()` is not skin code.
 - `tonight/entrypoints.LEGACY_ICON` still names the subtitle add-on's icon (a string used to match old tiles);
   `service.subtitles.kodipovilai/default.py` has one now-unused `xbmcaddon` name (left to keep upstream merges clean).
-- **Phase 3 findings:** `pov_scraper_settings_patcher` writes `_pov_scraper_tune_state`, which no add-on declares (Kodi drops
-  it, so that marker never persists; behavior kept as it was); Wizard-side repair logs follow the Wizard's own `log_level`
+- **Phase 3 findings:** Wizard-side repair logs follow the Wizard's own `log_level`
   (undeclared, so INFO) and no longer the subtitle add-on's; `userdata/` changed (baselines moved, tiles state deleted), so
-  `config_version` in `userdata/config_policy.json` must be bumped when this is released (not done: no version bump per
-  step); two comments of retained subtitle settings still name moved keys, and the docstring of
+  `config_version` in `userdata/config_policy.json` was bumped to 2.0.7 in Phase 4 Step 3; two comments of retained subtitle settings still name moved keys, and the docstring of
   `service._maybe_default_builtin_engine` still says "Build-edition only ... SLIM_SERVICE" (both left for clean merges).
   `_maybe_seed_hebrew_subtitle_prefs` now also runs on build devices (it was standalone-only).
 - **Defects found (reported, not fixed):** `prepare_build_skin` has no handler (`profiles/build_skin.py:252` waits 60 s for AF3
