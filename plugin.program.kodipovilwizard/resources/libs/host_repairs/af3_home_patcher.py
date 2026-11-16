@@ -62,7 +62,7 @@ AF3_NODES = BASE_NODES + AF3_SKIN_ID + '/'
 # Our merge "baseline" sidecars live in OUR addon_data, NOT in the
 # skinvariables nodes folder, so skinvariables never sees/parses them.
 POV_BASELINE_DIR = ('special://profile/addon_data/'
-                    'service.subtitles.kodipovilai/widget_baselines/')
+                    'plugin.program.kodipovilwizard/widget_baselines/')
 AF3_FONT_XML = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/Font.xml'
 AF3_FONT_DIR = 'special://home/addons/' + AF3_SKIN_ID + '/fonts/'
 AF3_NOTO_FONT = AF3_FONT_DIR + 'NotoSans-Regular.ttf'

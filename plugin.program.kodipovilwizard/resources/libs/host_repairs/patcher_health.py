@@ -101,7 +101,7 @@ _HOST_RE = re.compile(
     r"(?m)^[A-Z][A-Z0-9_]*\s*=\s*'((?:plugin\.(?:video|program)"
     r"|skin|service\.subtitles)\.[A-Za-z0-9._]+)'")
 
-OURS = 'service.subtitles.kodipovilai'
+OURS = 'plugin.program.kodipovilwizard'
 
 # Read once per host, searched many times. A host tree is a few MB; re-reading
 # it per marker would turn a cheap check into a boot cost.

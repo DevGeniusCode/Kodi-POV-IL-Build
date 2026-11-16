@@ -146,7 +146,7 @@ def _is_resolvable():
 # saying "POV is off and somebody has to fix it". One writer per file removes
 # that whole class of problem; the healer simply reads both.
 CYCLE_PENDING_FILE = ('special://profile/addon_data/'
-                      'service.subtitles.kodipovilai/pov_cycle_pending.txt')
+                      'plugin.program.kodipovilwizard/pov_cycle_pending.txt')
 
 # A SECOND RECORD, ANSWERING A DIFFERENT QUESTION. The one above means "POV
 # is switched off RIGHT NOW" and exists so a process killed mid-cycle leaves
@@ -164,7 +164,7 @@ CYCLE_PENDING_FILE = ('special://profile/addon_data/'
 # forget": armed writes this, a cycle that actually ran clears it, and a start
 # that finds it arms again even though nothing was patched this time.
 CYCLE_OWED_FILE = ('special://profile/addon_data/'
-                   'service.subtitles.kodipovilai/pov_cycle_owed.txt')
+                   'plugin.program.kodipovilwizard/pov_cycle_owed.txt')
 
 
 def _cycle_pending_path():

@@ -60,7 +60,7 @@ except Exception:
     kodi_utils = None
 
 
-OUR_ADDON_ID = 'service.subtitles.kodipovilai'
+OUR_ADDON_ID = 'plugin.program.kodipovilwizard'
 ACCOUNT_MANAGER_ID = 'script.module.acctmgr'
 
 # id, profile settings path, last-good filename

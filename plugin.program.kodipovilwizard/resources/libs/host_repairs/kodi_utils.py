@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 """Subset of the subtitle add-on's kodi_utils that the moved build code uses (Phase 3).
 
-The definitions are AST-identical copies. ADDON_ID still names the SUBTITLE add-on, so get_setting / set_setting /
-addon_profile_path / log keep reading and writing that add-on's settings and profile folder until the settings
-move to the Wizard (Phase 3, step 5).
+The definitions are copies of the subtitle add-on's, with these deliberate differences (Phase 3, step 5): ADDON_ID is the
+WIZARD's id, so get_setting / set_setting / addon_profile_path / log work on the Wizard's own settings and profile folder;
+subs_get_setting / subs_get_bool are the only way the build code reads the SUBTITLE add-on's settings; notify() shows the
+Wizard's icon.
 """
 import os
 import threading
@@ -26,7 +27,8 @@ except ImportError:
     xbmcgui = None
 
 
-ADDON_ID = 'service.subtitles.kodipovilai'
+ADDON_ID = 'plugin.program.kodipovilwizard'
+SUBS_ADDON_ID = 'service.subtitles.kodipovilai'
 
 
 _ADDON = None
@@ -78,6 +80,21 @@ def get_setting(key, default=''):
 
 def get_bool(key, default=False):
     v = get_setting(key, '')
+    if v == '':
+        return default
+    return v.lower() == 'true'
+
+
+def subs_get_setting(key, default=''):
+    try:
+        v = xbmcaddon.Addon(SUBS_ADDON_ID).getSetting(key)
+        return v if v is not None else default
+    except Exception:
+        return default
+
+
+def subs_get_bool(key, default=False):
+    v = subs_get_setting(key, '')
     if v == '':
         return default
     return v.lower() == 'true'
@@ -153,7 +170,7 @@ def notify(msg, title=None, icon=None, time_ms=4000):
         if title is None:
             title = 'Kodi POV IL'
         if icon is None:
-            icon = xbmcvfs.translatePath('special://home/addons/' + ADDON_ID + '/icon.png')
+            icon = xbmcvfs.translatePath('special://home/addons/' + ADDON_ID + '/icon.jpg')
         # Force RTL paragraph direction. The previous version used
         # U+200F (RLM) as a prefix -- that's just a strong-RTL
         # invisible character that BIASES the BiDi algorithm but

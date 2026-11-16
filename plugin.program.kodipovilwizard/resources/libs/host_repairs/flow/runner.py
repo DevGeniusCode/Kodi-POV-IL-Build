@@ -49,7 +49,7 @@ def _run_build_flow(monitor):
     # the engine OFF are unaffected: DarkSubs stays enabled + patched as before.)
     try:
         from resources.libs.host_repairs import kodi_utils as _ku
-        _engine_on = _ku.get_bool('use_builtin_engine', False)
+        _engine_on = _ku.subs_get_bool('use_builtin_engine', False)
     except Exception:
         _engine_on = False
 

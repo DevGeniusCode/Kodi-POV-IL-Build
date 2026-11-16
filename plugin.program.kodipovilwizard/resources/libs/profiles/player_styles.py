@@ -72,7 +72,7 @@ def change_source():
     if not re.fullmatch(r'[1-9][0-9]*', tmdb):
         xbmcgui.Dialog().notification('החלפת מקור', 'אין מזהה תוכן מתאים להחלפת מקור')
         return
-    provider = xbmcaddon.Addon('service.subtitles.kodipovilai').getSetting('search_provider')
+    provider = xbmcaddon.Addon('plugin.program.kodipovilwizard').getSetting('search_provider')
     provider = 'umbrella' if provider == 'umbrella' and xbmc.getCondVisibility(
         'System.HasAddon(plugin.video.umbrella)') else 'pov'
     if provider == 'pov':
@@ -111,7 +111,7 @@ def change_source():
 
 
 def episodes():
-    provider = xbmcaddon.Addon('service.subtitles.kodipovilai').getSetting('search_provider')
+    provider = xbmcaddon.Addon('plugin.program.kodipovilwizard').getSetting('search_provider')
     if provider == 'umbrella' and xbmc.getCondVisibility('System.HasAddon(plugin.video.umbrella)'):
         path = 'plugin://plugin.video.umbrella/?action=shows_progress'
     else:

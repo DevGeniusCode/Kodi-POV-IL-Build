@@ -74,7 +74,7 @@ def _log(msg, level='INFO'):
         kodi_utils.log('af3_first_launch: ' + msg, level=level)
     except Exception:
         try:
-            xbmc.log('[service.subtitles.kodipovilai] '
+            xbmc.log('[plugin.program.kodipovilwizard] '
                      'af3_first_launch: ' + msg, level=xbmc.LOGINFO)
         except Exception:
             pass

@@ -305,7 +305,7 @@ def _wanted():
     if kodi_utils is None:
         return SAFE
     try:
-        return FAST if kodi_utils.get_bool(SETTING_FAST, False) is True \
+        return FAST if kodi_utils.subs_get_bool(SETTING_FAST, False) is True \
             else SAFE
     except Exception:
         return SAFE

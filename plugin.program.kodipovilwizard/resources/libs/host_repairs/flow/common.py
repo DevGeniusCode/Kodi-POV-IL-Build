@@ -13,7 +13,7 @@ except ImportError:
     xbmc = None
 
 
-ADDON_ID = 'service.subtitles.kodipovilai'
+ADDON_ID = 'plugin.program.kodipovilwizard'
 
 
 def _translate_path(path):

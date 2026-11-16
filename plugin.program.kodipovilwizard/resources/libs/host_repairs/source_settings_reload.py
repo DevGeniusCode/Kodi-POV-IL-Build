@@ -45,7 +45,7 @@ _ALLOWED = (UMBRELLA_ID, COCO_ID)
 _DISABLE_ORDER = (UMBRELLA_ID, COCO_ID)
 _ENABLE_ORDER = (COCO_ID, UMBRELLA_ID)
 _RECORD_SPECIAL = (
-    'special://profile/addon_data/service.subtitles.kodipovilai/'
+    'special://profile/addon_data/plugin.program.kodipovilwizard/'
     'source-settings-cycle.json')
 
 _pending = set()

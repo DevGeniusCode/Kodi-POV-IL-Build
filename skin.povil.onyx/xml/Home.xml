@@ -252,8 +252,8 @@
 				<onfocus>SetProperty(povil.tab,search,home)</onfocus>
 				<onfocus>SetProperty(povil.tab.search,1,home)</onfocus>
 				<onfocus>SetProperty(povil.focus,9016,home)</onfocus>
-				<onclick condition="String.IsEqual(Addon.SettingStr(service.subtitles.kodipovilai,search_provider),umbrella) + System.AddonIsEnabled(plugin.video.umbrella)">ActivateWindow(Videos,"plugin://plugin.video.umbrella/?action=tools_searchNavigator",return)</onclick>
-				<onclick condition="![String.IsEqual(Addon.SettingStr(service.subtitles.kodipovilai,search_provider),umbrella) + System.AddonIsEnabled(plugin.video.umbrella)]">ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.search&amp;name=%D7%97%D7%99%D7%A4%D7%95%D7%A9",return)</onclick>
+				<onclick condition="String.IsEqual(Addon.SettingStr(plugin.program.kodipovilwizard,search_provider),umbrella) + System.AddonIsEnabled(plugin.video.umbrella)">ActivateWindow(Videos,"plugin://plugin.video.umbrella/?action=tools_searchNavigator",return)</onclick>
+				<onclick condition="![String.IsEqual(Addon.SettingStr(plugin.program.kodipovilwizard,search_provider),umbrella) + System.AddonIsEnabled(plugin.video.umbrella)]">ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=navigator.search&amp;name=%D7%97%D7%99%D7%A4%D7%95%D7%A9",return)</onclick>
 				<onleft>9017</onleft>
 				<onright>9015</onright>
 				<ondown>9184</ondown>
@@ -2292,7 +2292,7 @@
 							<property name="povil_rtl">1</property>
 							<icon>special://home/addons/plugin.video.pov/resources/skins/Default/media/search.png</icon>
 							<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=search_provider)</onclick>
-							<visible>System.HasAddon(service.subtitles.kodipovilai)</visible>
+							<visible>System.HasAddon(plugin.program.kodipovilwizard)</visible>
 						</item>
 						<item>
 							<label>כתוביות</label>
