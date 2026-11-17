@@ -32,8 +32,8 @@ class _Connections:
     def is_service_active(self, service):
         if service.startswith('!'):
             return not self.is_service_active(service[1:])
-        if service == 'umbrella':
-            return bool(xbmc.getCondVisibility('System.HasAddon(plugin.video.umbrella)'))
+        if service in ('umbrella', 'otaku'):
+            return bool(xbmc.getCondVisibility('System.HasAddon(plugin.video.{0})'.format(service)))
         return bool(self.services.get(service))
 
 

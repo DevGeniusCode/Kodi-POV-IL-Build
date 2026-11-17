@@ -64,6 +64,14 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   tmdb_api, ...) do not exist in POV 6.11.03: inert leftovers of an older POV, left untouched (optional cleanup, needs approval).
   Log triage: `_reference_addons/log_digest.py` (temporary, never committed; the owner drops the full `kodi.log` there) condenses a log to
   its errors and repeats.
+  Optional add-ons (Phase 6): the Wizard's main menu has one **"תוספים וסקינים אופציונליים"** screen (`mode=optional`,
+  `addons/optional.py`) with Umbrella, Otaku (`addons/otaku.py`) and the on-demand skins (the Maintenance "Skin Manager" entry
+  moved there; `mode=skinmanager` stays routed). Otaku is no longer in `ModularUpdater.PROVISION_IDS` (fresh install and
+  `heal_missing_addons` leave it alone); its baked settings still seed. Launcher tiles of Umbrella / Otaku are gated in
+  `favourites_config.json` (`"condition": "umbrella" | "otaku"`, `pov_visibility_mgr`, which now also tracks both in
+  `_read_states` / the fingerprint and has the public `refresh_favourites()`); a new always-visible tile `optional_addons` opens the
+  screen. orderfavourites 1.4.8, NOX 1.0.22, `config_version` 2.0.11. The `skins/` + `addons/` rule: a new optional add-on is one row of
+  `optional.OPTIONAL_ADDONS`, one install module, one gated tile.
   Movies "Networks" (Phase 6): POV 6.11.03 has no watch-provider action, and the registry entry `pov_movie_networks_providers_fix`
   already turns `tmdb_movies_networks` into a `with_watch_providers` query (US, flatrate), so the ids 8 / 337 / 350 ... are provider ids on purpose.
   The movie menu reads the key `company` (`menus/movies.py` `tmdb_special_key_dict`), but the baked `navigator.db` row "סרטים - לפי רשת" still
@@ -183,13 +191,18 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   lists (they now pass `company=`); (11) **Patch Manager:** Maintenance -> מנהל טלאים: folders and counters, one toggle,
   a bulk switch and "reset", the General / Engine panel; confirm that `setSetting('patch_enabled_<id>')` persists (the ids are
   not declared in `settings.xml`) and that a toggle only runs its own patches; (12) **Skin Manager / skin policy:** a fresh
-  install installs only FENtastic (no NOX / Estuary / Onyx download, provisioning still completes); Maintenance -> מנהל סקינים
+  install installs only FENtastic (no NOX / Estuary / Onyx download, provisioning still completes); main menu -> תוספים וסקינים אופציונליים
   installs and switches NOX, Onyx, AF3 and Estuary (the build edition downloads over Kodi's stock one); a skin installed later
   gets its baked settings (AF3, Estuary) before its first load; no `addon_data/` of a not-installed skin appears (fresh
   install, new profile, child profile); the picker of the skins' power menus still works; Onyx needs its zip in
   `manifest.json` (CI) before it can be installed. (13) **Phase 6 fresh install:** it runs to completion (the `fresh_build_auto_install_done` setting is written, no
   "setup remains pending" line) with orderfavourites 1.4.7; no `Unknown addon id 'plugin.video.umbrella'` line without Umbrella; POV's
-  log shows no "failed to load value" for `results.xml_style` / `subtitles.subs_action`, and the sources results window opens.
+  log shows no "failed to load value" for `results.xml_style` / `subtitles.subs_action`, and the sources results window opens. (14) **Optional add-ons:** a fresh install has no Otaku, no Otaku / Umbrella tile and
+  no dead NOX Otaku button; main menu -> תוספים וסקינים אופציונליים lists Umbrella, Otaku and the skins; installing Otaku (a few
+  minutes) makes its status line replace the button and its tile appear without a restart (the tile opens it, it starts with the
+  baked settings and no setup screens); the optional add-ons tile opens the screen (`ActivateWindow(Programs, ...)` is
+  unverified in FENtastic / AF3); removing Otaku hides the tile at the next refresh and boot does not reinstall it; Umbrella follows
+  the same rules; movies networks tiles open provider lists.
 
 ## ARCHITECTURAL DECISION (Phase 5): no "replace" in the PatchEngine
 

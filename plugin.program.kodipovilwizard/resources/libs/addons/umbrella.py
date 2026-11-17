@@ -177,6 +177,8 @@ def install_umbrella_pilot():
             CONFIG.set_setting(UMBRELLA_AUTO_SETTING, UMBRELLA_AUTO_DONE)
         except Exception:
             pass
+        from resources.libs.addons import optional
+        optional.refresh_home_tiles()
         logging.log_notify(
             CONFIG.ADDONTITLE,
             '[COLOR {0}]Umbrella הותקן! זמין תחת תוספים -> הרחבות וידאו'

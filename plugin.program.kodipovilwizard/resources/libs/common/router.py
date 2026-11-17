@@ -174,6 +174,12 @@ class Router:
             elif action == 'install_umbrella':
                 from resources.libs.addons.umbrella import install_umbrella_pilot
                 install_umbrella_pilot()
+            elif action == 'install_otaku':
+                # An action, not a folder: release Kodi's directory busy dialog before the confirm / progress windows
+                if handle >= 0:
+                    xbmcplugin.endOfDirectory(handle, succeeded=False)
+                from resources.libs.addons.otaku import install_otaku
+                install_otaku()
             elif action == 'install_acctmgr':
                 from resources.libs.accounts_auth.acctmgr import install_acctmgr_pilot
                 install_acctmgr_pilot()
@@ -277,6 +283,12 @@ class Router:
 
         elif mode == 'developer':  # Developer  Menu
             menu.developer()
+            self._finish(handle)
+
+        # OPTIONAL ADD-ONS AND SKINS (resources/libs/addons/optional.py)
+        elif mode == 'optional':
+            from resources.libs.addons import optional
+            optional.show()
             self._finish(handle)
 
         # SKIN MANAGER (resources/libs/skins/skin_manager.py)

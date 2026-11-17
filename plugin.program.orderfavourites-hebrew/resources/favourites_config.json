@@ -116,7 +116,8 @@
     "otaku": {
       "name": "[B]אנימה[/B]",
       "icon": "Otaku.png",
-      "action": "RunAddon(\"plugin.video.otaku\")"
+      "action": "RunAddon(\"plugin.video.otaku\")",
+      "condition": "otaku"
     },
     "shows_genres": {
       "name": "[B]סדרות לפי ז'אנר[/B]",
@@ -177,6 +178,12 @@
       "name": "[B][COLOR yellow]אשף ההתקנה - Wizard[/COLOR][/B]",
       "icon": "wizard_pov_il.png",
       "action": "RunAddon(\"plugin.program.kodipovilwizard\")"
+    },
+    "optional_addons": {
+      "_note": "Opens the Wizard's optional add-ons and skins screen (Umbrella, Otaku, on-demand skins).",
+      "name": "[B][COLOR yellow]תוספים וסקינים אופציונליים[/COLOR][/B]",
+      "icon": "wizard_pov_il.png",
+      "action": "ActivateWindow(Programs,\"plugin://plugin.program.kodipovilwizard/?mode=optional\",return)"
     },
     "rd_status": {
       "name": "[B]סטטוס מנוי Real Debrid[/B]",
@@ -248,7 +255,7 @@
         "net_hulu",
         "net_cw",
         "wizard",
-        "fast_update",
+        "optional_addons",
         "rd_status",
         "torbox_status",
         "premiumize_status",
@@ -275,7 +282,7 @@
         "idanplus",
         "otaku",
         "wizard",
-        "fast_update",
+        "optional_addons",
         "send_log",
         "order_favourites"
       ],
@@ -291,9 +298,6 @@
         },
         "wizard": {
           "icon": "wizard.png"
-        },
-        "fast_update": {
-          "icon": "fast_update.png"
         }
       }
     }

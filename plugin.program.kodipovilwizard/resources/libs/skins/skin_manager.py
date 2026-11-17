@@ -1,4 +1,5 @@
-"""The Skin Manager (Maintenance menu): browse the build's skins, install one on demand, switch between installed skins.
+"""The Skin Manager: browse the build's skins, install one on demand, switch between installed skins (the rows are also part
+of the "optional add-ons and skins" screen, addons/optional.py).
 
     mode=skinmanager                 the list: every catalog skin with its state (active / installed / not installed)
     mode=skinaction&skin=<skin id>   what a tap on a row does: switch (installed), install then offer to switch (not installed)
@@ -31,6 +32,10 @@ def show():
     directory.add_file('הסקין הפעיל: [COLOR gold][B]{0}[/B][/COLOR]'.format(current.name if current else active_id),
                        themeit=CONFIG.THEME3)
     directory.add_separator()
+    add_rows(active_id)
+
+
+def add_rows(active_id):
     for skin in skin_catalog.SKINS:
         state = state_of(skin.id, active_id)
         if state == ACTIVE:

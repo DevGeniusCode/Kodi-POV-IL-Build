@@ -175,6 +175,7 @@
 						<label>סרטים באנגלית</label>
 						<icon>special://skin/extras/icons/kidseng.png</icon>
 						<onclick>ActivateWindow(10025,"plugin://plugin.video.otaku/",return)</onclick>
+						<visible>System.HasAddon(plugin.video.otaku)</visible>
 					</item>
 					<item>
 						<label>קטנטנים</label>

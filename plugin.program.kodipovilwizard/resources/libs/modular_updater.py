@@ -366,12 +366,11 @@ class ModularUpdater:
     # that are genuinely absent from the device go through Kodi's native
     # InstallAddon, and only after the custom GUI has closed.
     #
-    # Order matters: install the lean, reliable core content addons FIRST so the
-    # build is operational fast, and keep plugin.video.otaku DEAD LAST. Otaku
-    # pulls a large dependency tree and is known to spike background syncs / stall
-    # for up to ~60s on a fresh install; placing it last means a transient Otaku
-    # timeout can never block the core addons (POV, IdanPlus, YouTube, language
-    # pack) -- heal_missing_addons() simply (re)installs Otaku on the next launch.
+    # plugin.video.otaku (anime) is NOT in this list: it is an OPTIONAL add-on, installed on demand
+    # from the Wizard's "optional add-ons and skins" screen (addons/otaku.py), like Umbrella. Its
+    # baked settings (userdata/addon_data/plugin.video.otaku) are still seeded by the config pack,
+    # so it works out of the box when the user installs it. Keeping it out of this list also keeps
+    # heal_missing_addons() from putting it back after the user removed it.
     PROVISION_IDS = [
         'script.module.acctmgr',            # <- repository.709 (Account Manager)
         'plugin.video.pov',                 # <- repository.kodifitzwell (+ patched at runtime)
@@ -379,8 +378,6 @@ class ModularUpdater:
         'plugin.video.youtube',             # <- Kodi official repo
         'resource.language.he_il',          # <- Kodi official repo (Hebrew language pack)
         'script.xbmc.unpausejumpback',      # <- Kodi official repo (unpause jumpback)
-        'plugin.video.otaku',               # <- repository.otaku (+ context.otaku); LAST: heavy
-                                            #    + timeout-prone, must not block core install.
     ]
 
     CORE_PROVISION_IDS = (

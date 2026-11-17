@@ -77,7 +77,7 @@ Three classes of payload ship from CI:
 |------------------------|----------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Addon zips**         | Our private addons + the third‑party **repository** addons + skins                                                   | `manifest.json` → download + sha256 verify + extract to `special://home/addons`                                                                           |
 | **`config-<ver>.zip`** | The entire `userdata/` tree (settings, favourites, sources, skin settings, POV settings)                             | Applied by `config_apply.py` per `config_policy.json` — **always the final step**                                                                         |
-| **Content addons**     | `plugin.video.pov`, `plugin.video.idanplus`, `plugin.video.otaku`, `plugin.video.youtube`, `resource.language.he_il` | **Not vendored.** Installed at runtime by the **Headless Installer** from their own repos so they keep getting OTA updates from their original developers |
+| **Content addons**     | `plugin.video.pov`, `plugin.video.idanplus`, `plugin.video.youtube`, `resource.language.he_il` (+ the optional `plugin.video.otaku`) | **Not vendored.** Installed at runtime by the **Headless Installer** from their own repos so they keep getting OTA updates from their original developers |
 
 ### Synchronous, isolated installation
 
@@ -201,14 +201,18 @@ provisioning (Phase 2) without ever closing the custom installer window.
   non-intrusive Kodi status bar overlay (`xbmcgui.DialogProgressBG()`), backed by a micro‑watchdog that auto‑accepts *
   *only window `10100`** (the dependency confirmation dialog, control `11`).
 
-**Provision order** (`PROVISION_IDS`) is deliberate and ends with the heaviest:
+**Provision order** (`PROVISION_IDS`) is deliberate:
 
 ```
 plugin.video.pov  →  plugin.video.idanplus  →  plugin.video.youtube
-  →  resource.language.he_il  →  plugin.video.otaku   (LAST: heavy + timeout‑prone)
+  →  resource.language.he_il  →  script.xbmc.unpausejumpback
 ```
 
-Otaku is last so a transient Otaku stall can never block the core build; the boot loop re‑installs it next launch.
+`plugin.video.otaku` (anime) is **optional** and not in the list: it is installed on demand from the Wizard's main menu ->
+**תוספים וסקינים אופציונליים** (`addons/otaku.py`, headless from `repository.otaku`, which stays in the manifest), like Umbrella.
+Because it is not in `PROVISION_IDS`, the boot loop does not put it back after the user removed it. Its baked settings
+(`userdata/addon_data/plugin.video.otaku/settings.xml`, an unlisted file seeded only if absent) are still laid down by a fresh
+install, so it starts configured when the user installs it later.
 
 ### B. OTA & Self‑Healing
 
@@ -623,11 +627,17 @@ source‑hook patches live in the Wizard's patch registry ([§6](#6-runtime-cros
   one set last through `build_skin.activate`, and the one a new secondary profile starts in.
 - **Every other skin is on demand, like Umbrella** (`skins/skin_catalog.py`: `on_demand_ids()` = the catalog minus the default;
   `skin_catalog.SKINS` is the single list of skin ids, `build_skin` and `child_profiles` read it): Estuary
-  (the build edition), NOX, Onyx and Arctic Fuse 3 are downloaded only when the user installs them from the **Skin Manager**
-  (Maintenance -> מנהל סקינים) or picks them in *Switch Skin*; the updater still keeps an *installed* one current. NOX /
+  (the build edition), NOX, Onyx and Arctic Fuse 3 are downloaded only when the user installs them from the **optional add-ons and skins** screen
+  (Wizard main menu -> תוספים וסקינים אופציונליים, `addons/optional.py`, rows from `skin_manager.add_rows`) or picks them in *Switch Skin*; the updater still keeps an *installed* one current. NOX /
   Onyx / Estuary come from the verified modular manifest (`skin_packs.ensure_modular_skin`); AF3 goes through Kodi's
   native install from repository.jurialmunkey (`post_install_provisioning(ids=[...])`). The one-table catalog also feeds the
   picker, so a new skin is one line there.
+- **Optional add-ons (Umbrella, Otaku)** live on the same screen (`mode=optional`: an install button while the add-on is absent, a
+  status line once installed). Their **launcher tiles** are gated: `favourites_config.json` gives the `umbrella` (and its
+  `search_provider`) and `otaku` tiles `"condition"` values answered by `pov_visibility_mgr.is_service_active` (`System.HasAddon`),
+  so the tile shows only while the add-on is installed. An install ends with `pov_visibility_mgr.refresh_favourites()`; a removal is
+  noticed at the next snapshot (the add-on presence is part of the snapshot fingerprint and of `_read_states`). The tile
+  `optional_addons` (always shown) opens the screen. NOX hides its Otaku buttons while it is absent (`System.HasAddon`); Onyx did already.
 - **Nothing is seeded for a skin that is not installed.** `skin_catalog.blocks_seeding('addon_data/<skin>/...')` guards the
   config pack's auto-seed of unlisted files (`config_apply`), secondary-profile seeding (`profile_store.seed_profile`),
   `build_skin.prepare_layout` (`LAYOUT_DEFAULTS`) and `child_profiles.seed_skin_flags`; the default skin is never blocked.
@@ -1274,8 +1284,8 @@ source):
 | `skin.estuary`                                                   | skin          | Build edition of Estuary, on demand (Skin Manager)  |
 
 **Content addons (NOT in the manifest — provisioned headlessly):**
-`plugin.video.pov`, `plugin.video.idanplus`, `plugin.video.otaku`,
-`plugin.video.youtube`, `resource.language.he_il`.
+`plugin.video.pov`, `plugin.video.idanplus`, `plugin.video.youtube`, `resource.language.he_il`
+(and `plugin.video.otaku`, only when the user installs it from the optional add-ons screen).
 
 ---
 

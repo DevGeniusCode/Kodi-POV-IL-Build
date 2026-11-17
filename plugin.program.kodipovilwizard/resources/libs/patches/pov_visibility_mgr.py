@@ -52,6 +52,7 @@ except Exception:
 
 _LOG_PREFIX = '[POV Wizard][VisibilityMgr]'
 UMBRELLA_ID = 'plugin.video.umbrella'
+OTAKU_ID = 'plugin.video.otaku'
 
 # --------------------------------------------------------------------------
 # Credential sources. A service is "active" when ANY listed setting id holds a
@@ -129,6 +130,14 @@ def _log(msg, level=None):
 	except Exception:
 		pass
 
+def refresh_favourites():
+	"""Public entry for the Wizard: rebuild favourites.xml (and reload the skin) now, e.g. right after an
+	optional add-on was installed. Drops the memoized add-on checks first so the generator sees the new state."""
+	for _id in (UMBRELLA_ID, OTAKU_ID):
+		_mem.pop(_id, None)
+	_trigger_favourites_refresh()
+
+
 def _trigger_favourites_refresh():
 	"""Dynamically rebuilds favourites.xml and reloads the skin when a connection changes."""
 	if xbmc is None:
@@ -189,7 +198,11 @@ def _stat_token(addon_id):
 
 def _fingerprint():
 	parts = [_stat_token(addon_id) for addon_id, _ in _SOURCES]
-	return '' if all(p == '-' for p in parts) else '|'.join(parts)
+	if all(p == '-' for p in parts):
+		return ''
+	# installing / removing an optional add-on changes which launcher tiles are shown
+	parts += ['1' if _has_addon(i) else '0' for i in (UMBRELLA_ID, OTAKU_ID)]
+	return '|'.join(parts)
 
 def _profile_key():
 	try:
@@ -203,6 +216,9 @@ def _read_states():
 		'trakt': False, 'tmdb': False, 'mdblist': False,
 		'real_debrid': False, 'premiumize': False, 'alldebrid': False, 'torbox': False
 	}
+	# optional add-ons: not accounts, but a change here must refresh the favourites like one
+	states['umbrella'] = _has_addon(UMBRELLA_ID)
+	states['otaku'] = _has_addon(OTAKU_ID)
 	if xbmcaddon is None:
 		return states
 	sources = _SOURCES[:1] if STRICT_ACCTMGR else _SOURCES
@@ -289,16 +305,20 @@ def invalidate():
 			pass
 
 
-def _umbrella_installed():
-	mem = _mem.get('umbrella')
+def _has_addon(addon_id):
+	try:
+		return bool(xbmc.getCondVisibility('System.HasAddon(%s)' % addon_id))
+	except Exception:
+		return False
+
+
+def _addon_installed(addon_id):
+	mem = _mem.get(addon_id)
 	now = time.time()
 	if mem and (now - mem[0]) < _L1_TTL:
 		return mem[1]
-	try:
-		ok = bool(xbmc.getCondVisibility('System.HasAddon(%s)' % UMBRELLA_ID))
-	except Exception:
-		ok = False
-	_mem['umbrella'] = (now, ok)
+	ok = _has_addon(addon_id)
+	_mem[addon_id] = (now, ok)
 	return ok
 
 
@@ -318,7 +338,9 @@ def is_service_active(service):
 		return not (states.get('trakt') or states.get('tmdb') or states.get('mdblist'))
 
 	if svc == 'umbrella':
-		return _umbrella_installed()
+		return _addon_installed(UMBRELLA_ID)
+	if svc == 'otaku':
+		return _addon_installed(OTAKU_ID)
 	if svc in ('trakt', 'tmdb', 'mdblist', 'real_debrid', 'premiumize', 'alldebrid', 'torbox'):
 		return bool(_snapshot()['svc'].get(svc, False))
 	if svc:

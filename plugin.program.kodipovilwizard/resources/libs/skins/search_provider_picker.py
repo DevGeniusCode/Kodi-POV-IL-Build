@@ -30,7 +30,7 @@ def _handle_search_provider(_params):
             'מנוע החיפוש',
             'החיפוש עובד כרגע דרך POV.\n\n'
             'כדי לחפש דרך Umbrella צריך קודם להתקין אותו: '
-            'תוספים ← Kodi POV IL Wizard ← התקן Umbrella.')
+            'תוספים ← Kodi POV IL Wizard ← תוספים וסקינים אופציונליים ← Umbrella.')
         return
 
     options = []

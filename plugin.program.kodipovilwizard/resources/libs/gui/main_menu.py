@@ -56,8 +56,8 @@ class MainMenu:
                 # KODI-RD-IL BUILD SWITCH SKIN
                 directory.add_dir('החלף סקין בבילד', {'mode': 'install', 'action': 'build_switch_skin'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
                 ##############################################################################################
-                # KODI-POV-IL UMBRELLA PILOT (opt-in; see addons/umbrella.install_umbrella_pilot)
-                directory.add_dir('התקן Umbrella (ניסיוני)', {'mode': 'install', 'action': 'install_umbrella'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
+                # KODI-POV-IL OPTIONAL ADD-ONS AND SKINS (Umbrella, Otaku, on-demand skins; see addons/optional.py)
+                directory.add_dir('תוספים וסקינים אופציונליים', {'mode': 'optional'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
                 ##############################################################################################
                 # KODI-POV-IL ACCOUNT MANAGER PILOT (opt-in; see accounts_auth/acctmgr.install_acctmgr_pilot)
                 directory.add_dir('חיבור שירותים (Account Manager)', {'mode': 'run_acctmgr'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
