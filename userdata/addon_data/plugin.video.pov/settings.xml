@@ -224,11 +224,11 @@
     <setting id="load_action">1</setting>
     <setting id="volumecheck.enabled" default="true">false</setting>
     <setting id="volumecheck.percent">50</setting>
-    <setting id="subtitles.subs_action">2</setting>
+    <setting id="subtitles.subs_action">0</setting>
     <setting id="subtitles.language" default="true">English</setting>
     <setting id="subtitles.auto_enable">true</setting>
     <setting id="results.sort_order">1</setting>
-    <setting id="results.xml_style">List Contrast Default</setting>
+    <setting id="results.xml_style">0</setting>
     <setting id="torrent.display.uncached" default="true">false</setting>
     <setting id="search.enable.yearcheck" default="true">false</setting>
     <setting id="ignore_results_filter">true</setting>

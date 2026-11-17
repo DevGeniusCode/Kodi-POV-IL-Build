@@ -52,6 +52,18 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   (`skins/skin_manager.py`, Maintenance) browses / installs / switches skins from one catalog (`skins/skin_catalog.py`).
   (c) **Skin policy:** `skin.fentastic` is the default (`CONFIG.DEFAULT_BUILD_SKIN`, `uservar.py`) and the ONLY skin provisioned;
   Estuary (build edition), NOX, Onyx and AF3 are on demand. See the rule "SKINS ARE ON DEMAND" below.
+- **Phase 6 IN PROGRESS (Kodi testing, Nov 2026):** the first fresh-install log (Wizard 0.5.2) died in `fresh_install.finalize`: the Wizard
+  called `media.install_and_verify_global_media_assets()`, which `plugin.program.orderfavourites-hebrew` never defined (the add-on only had
+  `install_global_media_assets()`, whose return is the number of files written, 0 on a re-run). Fixed at the source, add-on 1.4.7
+  (the wrapper returns whether `userdata/favourites.xml` exists; the Wizard callers are unchanged). Same log: `umbrella_watch_prompt._reader`
+  built `xbmcaddon.Addon('plugin.video.umbrella')` bare every keeper tick, one `Unknown addon id` ERROR a minute on a device without the
+  optional Umbrella; it now asks through `addon_presence` like the two mirrors. Baked POV `settings.xml`: `results.xml_style` was
+  `List Contrast Default` and `subtitles.subs_action` was `2`, both invalid for POV 6.11.03 (enums `0..2` / `0..1`; POV indexes a dict with
+  the style, a probable `KeyError` when the results window opens); both are now `0` (List Default / Off: subtitles come from
+  `service.subtitles.kodipovilai`), `config_version` 2.0.9. The other 60 ids of that file (prowlarr, folder1-5, ed.*, imdb_*, fanart_*,
+  tmdb_api, ...) do not exist in POV 6.11.03: inert leftovers of an older POV, left untouched (optional cleanup, needs approval).
+  Log triage: `_reference_addons/log_digest.py` (temporary, never committed; the owner drops the full `kodi.log` there) condenses a log to
+  its errors and repeats.
 
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
@@ -169,7 +181,9 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   installs and switches NOX, Onyx, AF3 and Estuary (the build edition downloads over Kodi's stock one); a skin installed later
   gets its baked settings (AF3, Estuary) before its first load; no `addon_data/` of a not-installed skin appears (fresh
   install, new profile, child profile); the picker of the skins' power menus still works; Onyx needs its zip in
-  `manifest.json` (CI) before it can be installed.
+  `manifest.json` (CI) before it can be installed. (13) **Phase 6 fresh install:** it runs to completion (the `fresh_build_auto_install_done` setting is written, no
+  "setup remains pending" line) with orderfavourites 1.4.7; no `Unknown addon id 'plugin.video.umbrella'` line without Umbrella; POV's
+  log shows no "failed to load value" for `results.xml_style` / `subtitles.subs_action`, and the sources results window opens.
 
 ## ARCHITECTURAL DECISION (Phase 5): no "replace" in the PatchEngine
 
