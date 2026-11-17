@@ -3,15 +3,15 @@
   "name": "Kodi POV IL Build",
   "repo": "DevGeniusCode/Kodi-POV-IL-Build",
   "release_tag": "addons-latest",
-  "generated": "2026-11-17T15:53:28Z",
+  "generated": "2026-11-17T18:55:05Z",
   "manifest_url": "https://raw.githubusercontent.com/DevGeniusCode/Kodi-POV-IL-Build/main/manifest.json",
   "config": {
-    "config_version": "2.0.9",
-    "filename": "config-2.0.9.zip",
-    "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/config-2.0.9.zip",
-    "size": 36503,
-    "sha256": "95187b07795082e39fac8de5fb819b3f566cae5cff98412320c493356c5eb5f2",
-    "updated": "2026-11-17T15:53:28Z"
+    "config_version": "2.0.11",
+    "filename": "config-2.0.11.zip",
+    "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/config-2.0.11.zip",
+    "size": 36484,
+    "sha256": "397aa4f22f1085a48bd2d6f7bb4fdc8ee910d446844c67378fbaaa51773a45fd",
+    "updated": "2026-11-17T18:55:05Z"
   },
   "addons": {
     "plugin.program.autocompletion": {
@@ -32,20 +32,20 @@
       "type": "plugin",
       "filename": "plugin.program.kodipovilwizard-0.5.2.zip",
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.5.2.zip",
-      "size": 4527302,
-      "sha256": "171fb76d6dc74036a92d6cd22b3c5c225a284cd83a87acabd2aebf1f33cdbd78",
-      "updated": "2026-11-17T15:53:28Z"
+      "size": 4530589,
+      "sha256": "38c9220d3a69335eed9429fc4326b98d327fa041c63dbd4c49c9c8b58a39808b",
+      "updated": "2026-11-17T18:55:05Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
       "name": "מועדפים ואייקונים",
-      "version": "1.4.7",
+      "version": "1.4.8",
       "type": "plugin",
-      "filename": "plugin.program.orderfavourites-hebrew-1.4.7.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.7.zip",
-      "size": 23778050,
-      "sha256": "a980ce0588bcb69a54b7952a8d0d1991f208759758fcff23de8c003eabb7650d",
-      "updated": "2026-11-17T15:53:28Z"
+      "filename": "plugin.program.orderfavourites-hebrew-1.4.8.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.8.zip",
+      "size": 23778140,
+      "sha256": "c706a82c7952522c1b818362bc0b64eb98acf21b77104e1a16c85b2718f280bd",
+      "updated": "2026-11-17T18:55:05Z"
     },
     "repository.709": {
       "id": "repository.709",
@@ -160,13 +160,13 @@
     "skin.povil.nox": {
       "id": "skin.povil.nox",
       "name": "Kodi POV IL - NOX",
-      "version": "1.0.21",
+      "version": "1.0.22",
       "type": "skin",
-      "filename": "skin.povil.nox-1.0.21.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.povil.nox-1.0.21.zip",
-      "size": 24502478,
-      "sha256": "11c5d12f13569f8c2464ed128bf0377a0706ff5896ffde9dcefb4e3a46bae8b6",
-      "updated": "2026-11-17T15:53:28Z"
+      "filename": "skin.povil.nox-1.0.22.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.povil.nox-1.0.22.zip",
+      "size": 24502537,
+      "sha256": "3ba63f897bdc9e7827c1289bd0032d23f1db43a2316ceec075ffc2fc3b0fdd17",
+      "updated": "2026-11-17T18:55:05Z"
     },
     "skin.povil.onyx": {
       "id": "skin.povil.onyx",
