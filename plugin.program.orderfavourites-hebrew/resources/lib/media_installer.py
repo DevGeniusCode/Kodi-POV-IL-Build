@@ -149,3 +149,20 @@ def install_global_media_assets():
         _log('installed/updated {0} global media asset(s)'.format(written))
     _refresh_favourites(addon_path)
     return written
+
+
+def install_and_verify_global_media_assets():
+    """Run install_global_media_assets(), then report whether the favourites file exists.
+
+    Used by the Wizard's fresh install (and its home refresh), which needs a truthy
+    answer. install_global_media_assets() returns the number of files written, which
+    is 0 on a re-run, so it cannot serve as a success flag; this wrapper stays
+    idempotent and answers from the result on disk (special://userdata/favourites.xml).
+    """
+    install_global_media_assets()
+    if xbmcvfs is None:
+        return False
+    try:
+        return os.path.isfile(xbmcvfs.translatePath('special://userdata/favourites.xml'))
+    except Exception:
+        return False
