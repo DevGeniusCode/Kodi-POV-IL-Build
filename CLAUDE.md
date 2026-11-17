@@ -64,6 +64,12 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   tmdb_api, ...) do not exist in POV 6.11.03: inert leftovers of an older POV, left untouched (optional cleanup, needs approval).
   Log triage: `_reference_addons/log_digest.py` (temporary, never committed; the owner drops the full `kodi.log` there) condenses a log to
   its errors and repeats.
+  Movies "Networks" (Phase 6): POV 6.11.03 has no watch-provider action, and the registry entry `pov_movie_networks_providers_fix`
+  already turns `tmdb_movies_networks` into a `with_watch_providers` query (US, flatrate), so the ids 8 / 337 / 350 ... are provider ids on purpose.
+  The movie menu reads the key `company` (`menus/movies.py` `tmdb_special_key_dict`), but the baked `navigator.db` row "סרטים - לפי רשת" still
+  wrote `network_id` (NOX and Onyx already passed `company=`): POV returned an empty list and Kodi showed a failed directory. The 8 items
+  now use `company` (data-only edit, the other 11 rows byte-identical, `config_version` 2.0.10). Known side effect of the existing patch:
+  POV's extras window ("more from this studio" of a movie) calls the same function with a real company id and now gets provider results.
 
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
