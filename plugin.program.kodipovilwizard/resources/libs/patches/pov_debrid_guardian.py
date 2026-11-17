@@ -1,13 +1,6 @@
 # File: plugin.program.kodipovilwizard/resources/libs/patches/pov_debrid_guardian.py
 import xbmc
 
-def log_guard_active(provider):
-    """
-    Dummy hook entry point for the Unbound Guard logic.
-    Variable bindings happen in the hook layer natively.
-    """
-    pass
-
 def log_debrid_error(provider, response, path=""):
     """
     Safely evaluates debrid JSON responses for HTTP 200 "soft errors"
@@ -33,7 +26,8 @@ def log_debrid_error(provider, response, path=""):
                 msg = response.get('message', 'API error')
 
         if msg:
-            xbmc.log(f"KODI_POV_IL {provider} refused {path} -- {msg}", xbmc.LOGINFO)
+            where = f" {path}" if path else ""
+            xbmc.log(f"KODI_POV_IL {provider} refused{where} -- {msg}", xbmc.LOGINFO)
 
     except Exception as e:
         xbmc.log(f"Wizard DebridGuardian Parsing Exception: {str(e)}", xbmc.LOGWARNING)

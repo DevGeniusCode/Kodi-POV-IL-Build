@@ -18,12 +18,8 @@ FIXES vs. the legacy in-memory patcher this replaces
    items from this source" rather than aborting the merge entirely --
    e.g. if Trakt watchlist times out but favorites succeeds, the user
    still sees favorites instead of a blank tile with no signal at all.
-   This logging is self-contained (doesn't import pov_content_logger),
-   so it still works even if that module's patch didn't apply this
-   boot. The functions below are also on pov_content_logger's
-   TRACE_TARGETS list, so anything NOT caught here (e.g. a bug in the
-   merge/dedup logic itself) is still caught by that settrace hook
-   before POV's own untouched `except: pass` in run() swallows it.
+   Anything NOT caught here (e.g. a bug in the merge/dedup logic itself)
+   is swallowed by POV's own untouched `except: pass` in run().
 2. Real pagination: total_pages is the max across the merged sources,
    and self.new_page is only set following the same guard POV uses.
    Recent Trakt/MDBList views merge full cached native lists, order by

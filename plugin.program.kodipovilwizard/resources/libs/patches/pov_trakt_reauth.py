@@ -2,6 +2,8 @@
 
 import threading
 import time
+import traceback
+import xbmc
 import xbmcgui
 
 _AI_TRAKT_REFRESH_LOCK = 'pov_ai_trakt_refreshing'
@@ -108,6 +110,7 @@ def run(target_module):
             target_module.set_setting('trakt.refresh', refresh)
             target_module.set_setting('trakt.expires', str(created + lifetime))
         except Exception:
+            xbmc.log('Wizard Patch Error [pov_trakt_reauth] token refresh failed:\n' + traceback.format_exc(), xbmc.LOGERROR)
             return False
         finally:
             if window is not None:

@@ -23,6 +23,13 @@
 #   If the hook must still do something when the patch module fails (return a value,
 #   bail out), put that statement AFTER the helper call, at the same indent.
 # * A hook that needs no patch module (pure code substitution) stays a plain string.
+# * Indentation: the engine dedents a hook and re-indents it to the ANCHOR line. A hook that is
+#   `append_after` a `def` / `class` / `if` line (anchor ends with ":") must therefore start with a
+#   column-0 comment line ("# Preserve the native function body below."): the comment stops the dedent
+#   from stripping the body, which stays authored with its own absolute indentation. Without it the
+#   body lands at column 0 under the `def` and the engine's compile guard rejects the WHOLE host file.
+# * Hot paths (code that runs per item / per string / per cache write) get a plain inline hook or a
+#   one-time install at import, never an import-and-delegate block on every call.
 # * Identical hooks shared by several patches live in the _*_HOOK constants of
 #   patches_registry_utils.py (together with _build_patch_hook and the validator).
 # * Entries are never reordered; new ones are appended inside the banner of their domain
@@ -34,12 +41,12 @@
 
 try:
     from resources.libs.patches.patches_registry_utils import (
-        _build_patch_hook, _debrid_unbound_hook, _META_BLANK_GUARD_HOOK,
-        _GENRE_TRANSLATE_HOOK, _HTTP_LAZY_HOOK, GUARD_DIR, validate_registry)
+        _build_patch_hook, _TORRENT_ID_UNBOUND_HOOK, _META_BLANK_GUARD_HOOK,
+        _GENRE_TRANSLATE_HOOK, GUARD_DIR, PATCHES_DIR, validate_registry)
 except ImportError:  # run directly: python patches_config.py
     from patches_registry_utils import (
-        _build_patch_hook, _debrid_unbound_hook, _META_BLANK_GUARD_HOOK,
-        _GENRE_TRANSLATE_HOOK, _HTTP_LAZY_HOOK, GUARD_DIR, validate_registry)
+        _build_patch_hook, _TORRENT_ID_UNBOUND_HOOK, _META_BLANK_GUARD_HOOK,
+        _GENRE_TRANSLATE_HOOK, GUARD_DIR, PATCHES_DIR, validate_registry)
 
 
 PATCH_CONFIG = [
@@ -140,9 +147,9 @@ PATCH_CONFIG = [
             custom_logic="art['povil_logo'] = pov_logo_lang.for_ui(meta, clearlogo)"
         )
     },
-    # ==================================================================
-    # ================= DIAGNOSTICS: DIRECTORY LATENCY =================
-    # ==================================================================
+    # ======================================================================================
+    # ================= DIRECTORY CLOCK, SAVED-LIST REPLAY & ROUTE TIMING ==================
+    # ======================================================================================
     {
         "id": "pov_directory_clock",
         "name": "Directory entry latency clock",
@@ -162,9 +169,9 @@ PATCH_CONFIG = [
     },
     {
         "id": "pov_directory_latency",
-        "name": "Slow catalogue route measurements",
-        "description": "Installs the directory latency recorder into entry.py globals to measure slow catalogue routes. [NEEDS_MODULE_CHECK]",
-        "category": "diagnostics",
+        "name": "Saved-list replay and slow-route timing",
+        "description": "Wraps POV's routing() once: replays saved lists (pov_list_snapshot) and logs the timing of slow catalogue routes. Disabling it turns saved lists off.",
+        "category": "performance",
         "priority": "major",
         "addon_id": "plugin.video.pov",
         "enabled": True,
@@ -189,13 +196,14 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/router.py",
-        "marker": "# WIZARD_POV_SNAPSHOT_EARLY_v2",
-        "anchor": "__import__('entry').Router()()",
+        "marker": "# WIZARD_POV_SNAPSHOT_EARLY_v3",
+        "anchor": "from modules.entry import Router",
         "action": "prepend_before",
         "hook": _build_patch_hook(
             module_name="pov_list_snapshot",
             custom_logic=(
-                "if pov_list_snapshot.serve_early(sys.argv):\n"
+                # router.py imports no sys: reach it through __import__ (the helper's own convention).
+                "if pov_list_snapshot.serve_early(__import__('sys').argv):\n"
                 "\traise SystemExit"
             )
         )
@@ -209,13 +217,13 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/router.py",
-        "marker": "# WIZARD_POV_PLAY_GUARD_v2",
-        "anchor": "__import__('entry').Router()()",
+        "marker": "# WIZARD_POV_PLAY_GUARD_v3",
+        "anchor": "from modules.entry import Router",
         "action": "prepend_before",
         "hook": _build_patch_hook(
             module_name="pov_play_guard",
             custom_logic=(
-                "if pov_play_guard.duplicate(sys.argv):\n"
+                "if pov_play_guard.duplicate(__import__('sys').argv):\n"
                 "\traise SystemExit"
             )
         )
@@ -229,8 +237,8 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/router.py",
-        "marker": "# WIZARD_POV_PLAY_GUARD_END_v1",
-        "anchor": "__import__('entry').Router()()",
+        "marker": "# WIZARD_POV_PLAY_GUARD_END_v2",
+        "anchor": "Router()()",
         "action": "append_after",
         "hook": _build_patch_hook(
             module_name="pov_play_guard",
@@ -575,23 +583,18 @@ PATCH_CONFIG = [
     {
         "id": "pov_hebrew_interface",
         "name": "Persistent Hebrew POV interface",
-        "description": "Overrides POV string lookups with persistent Hebrew UI labels (pov_ui_labels). Review for overlap with strings.po. [NEEDS_MODULE_CHECK]",
+        "description": "Merges the Hebrew UI labels (pov_ui_labels.HEBREW_UI) into POV's embedded strings table once, at import. local_string() then finds them natively, at no per-call cost.",
         "category": "translation",
         "priority": "major",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/kodi_utils.py",
-        "marker": "# WIZARD_POV_HEBREW_INTERFACE_v1",
-        "anchor": "\ttry: _string = int(string)",
-        "action": "prepend_before",
+        "marker": "# WIZARD_POV_HEBREW_INTERFACE_v2",
+        "anchor": "from .strings_po import strings_po",
+        "action": "append_after",
         "hook": _build_patch_hook(
             module_name="pov_ui_labels",
-            indent="\t",
-            custom_logic=(
-                "_povil_hebrew_label = pov_ui_labels.hebrew_label(string)\n"
-                "if _povil_hebrew_label is not None:\n"
-                "\treturn _povil_hebrew_label"
-            )
+            custom_logic="strings_po = __import__('types').MappingProxyType({**strings_po, **pov_ui_labels.HEBREW_UI})"
         )
     },
     {
@@ -618,25 +621,17 @@ PATCH_CONFIG = [
     {
         "id": "pov_cache_empty_prevention",
         "name": "POV Empty Cache Prevention",
-        "description": "Prevents empty results from being written to the main cache; delegates to pov_cache_handler.",
+        "description": "Prevents an empty result from being written to the main cache (an empty row would be served for 24 h).",
         "category": "reliability",
         "priority": "major",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/caches/main_cache.py",
-        "marker": "# WIZARD_POV_CACHE_EMPTY_v1",
+        "marker": "# WIZARD_POV_CACHE_EMPTY_v2",
         "anchor": "\tmaincache.set(string, result, expiration)",
         "action": "prepend_before",
         "hook": (
-            # The import stays lazy (only paid for empty results) and an empty result is
-            # never cached, even when the patch module fails.
-            "\tif not result:\n"
-            + _build_patch_hook(
-                module_name="pov_cache_handler",
-                indent="\t\t",
-                custom_logic="pov_cache_handler.handle_empty(string)"
-            )
-            + "\t\treturn result\n"
+            "\tif not result: return result\n"
         )
     },
     {
@@ -851,49 +846,48 @@ PATCH_CONFIG = [
     {
         "id": "pov_tmdb_timeout_widen",
         "name": "POV TMDB Timeout Widen",
-        "description": "Widens the TMDB request timeout from 3.05s to 15.05s so per-item fetches survive slow/mobile networks.",
+        "description": "Widens the TMDB request timeout from POV's 5 s to 8 s so per-item fetches survive slow/mobile networks (POV derives list_timeout = timeout ** 2 = 64 s for non-GET calls).",
         "category": "reliability",
         "priority": "major",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/tmdb_api.py",
-        "marker": "# WIZARD_POV_TMDB_TIMEOUT_v2",
-        "anchor": "timeout = 3.05",
+        "marker": "# WIZARD_POV_TMDB_TIMEOUT_v3",
+        "anchor": "timeout = 5",
         "action": "append_after",
         "hook": (
-            "timeout = 15.05  # WIZARD: Widened for mobile per-item fetch reliability\n"
+            "timeout = 8  # WIZARD: Widened for mobile per-item fetch reliability\n"
         )
     },
     {
         "id": "pov_movie_networks_providers_fix",
         "name": "POV Movie Networks Providers Fix",
-        "description": "Rebuilds the TMDB movie networks discover endpoint to use streaming watch providers (US, flatrate) instead of production companies. [NEEDS_MODULE_CHECK]",
+        "description": "Rebuilds the TMDB movie networks discover endpoint to use streaming watch providers (US, flatrate) instead of production companies.",
         "category": "ux",
         "priority": "major",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/tmdb_api.py",
-        "marker": "# WIZARD_POV_MOVIE_NETWORKS_v5",
+        "marker": "# WIZARD_POV_MOVIE_NETWORKS_v6",
         "anchor": "\turl += '&sort_by=popularity.desc&certification_country=US&with_companies=%s' % network_id",
         "action": "append_after",
         "hook": (
             "\tendpoint = '/discover/movie?language=en-US&region=US&page=%s' % page_no\n"
             "\tendpoint += '&sort_by=popularity.desc&certification_country=US&with_watch_providers=%s&watch_region=US&with_watch_monetization_types=flatrate' % network_id\n"
-            "\turl = ((base_url if base_url.endswith('/3') else base_url + '/3') + endpoint\n"
-            "\t       if 'requests' in globals() else '/3' + endpoint)\n"
+            "\turl = '/3' + endpoint\n"
             "\tstring = 'tmdb_movie_providers_v5_US_%s_%s' % (network_id, page_no)\n"
         )
     },
     {
         "id": "pov_movie_meta_blank_guard",
         "name": "POV Movie Meta Blank Guard",
-        "description": "Skips persisting movie metadata to the cache and purges blank/poisoned cache rows via pov_meta_handler. [NEEDS_MODULE_CHECK]",
+        "description": "A blank movie metadata entry (transient TMDb failure) is returned but no longer cached for 2 days.",
         "category": "reliability",
         "priority": "major",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/metadata.py",
-        "marker": "# WIZARD_POV_MOVIE_META_GUARD_v3",
+        "marker": "# WIZARD_POV_MOVIE_META_GUARD_v4",
         "anchor": "\t\t\tmetacache_set('movie', id_type, meta, EXPIRES_2_DAYS)",
         "action": "prepend_before",
         "hook": _META_BLANK_GUARD_HOOK
@@ -901,13 +895,13 @@ PATCH_CONFIG = [
     {
         "id": "pov_tvshow_meta_blank_guard",
         "name": "POV TVShow Meta Blank Guard",
-        "description": "Skips persisting TV show metadata to the cache and purges blank/poisoned cache rows via pov_meta_handler. [NEEDS_MODULE_CHECK]",
+        "description": "A blank TV show metadata entry (transient TMDb failure) is returned but no longer cached for 2 days.",
         "category": "reliability",
         "priority": "major",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/metadata.py",
-        "marker": "# WIZARD_POV_TVSHOW_META_GUARD_v3",
+        "marker": "# WIZARD_POV_TVSHOW_META_GUARD_v4",
         "anchor": "\t\t\tmetacache_set('tvshow', id_type, meta, EXPIRES_2_DAYS)",
         "action": "prepend_before",
         "hook": _META_BLANK_GUARD_HOOK
@@ -1004,35 +998,11 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/caches/trakt_cache.py",
-        "marker": "# WIZARD_POV_TRAKT_EMPTY_CACHE_v3",
+        "marker": "# WIZARD_POV_TRAKT_EMPTY_CACHE_v4",
         "anchor": "dbcur.execute(TC_BASE_SET, (string, json.dumps(result)))",
         "action": "prepend_before",
-        "hook": _build_patch_hook(
-            module_name="pov_trakt_cache",
-            indent="\t",
-            custom_logic=(
-                "if pov_trakt_cache.is_empty_result(result, string):\n"
-                "\treturn result"
-            )
-        )
-    },
-    {
-        "id": "pov_trakt_table_clear_guard",
-        "name": "Trakt Cache Table Creation Guard",
-        "description": "Ensures trakt_data table exists before the clear loop, preventing silent deletion failures.",
-        "category": "reliability",
-        "priority": "major",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/caches/trakt_cache.py",
-        "marker": "# WIZARD_POV_TRAKT_TABLE_CLEAR_v3",
-        "anchor": "def clear_all_trakt_cache_data(refresh=True):",
-        "action": "append_after",
         "hook": (
-            "# WIZARD: Ensure trakt_data table exists before clearing cache\n"
-            "\ttry:\n"
-            "\t\tTraktCache().dbcur.execute('CREATE TABLE IF NOT EXISTS trakt_data (id TEXT UNIQUE, data TEXT)')\n"
-            "\texcept Exception: pass\n"
+            "if not result: return result\n"
         )
     },
     # =============================================================
@@ -1227,8 +1197,8 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/dialogs.py",
-        "marker": "# WIZARD_FAV_REFRESH_DIALOG_v3",
-        "anchor": "if refresh: container_refresh()",
+        "marker": "# WIZARD_FAV_REFRESH_DIALOG_v4",
+        "anchor": "if refresh: ku.container_refresh()",
         "action": "prepend_before",
         "hook": (
             "\trefresh = 'search' not in (__import__('xbmc').getInfoLabel('Container.FolderPath') or '').lower()\n"
@@ -1246,10 +1216,10 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/alldebrid_api.py",
-        "marker": "# WIZARD_POV_AD_UNBOUND_GUARD_v2",
+        "marker": "# WIZARD_POV_AD_UNBOUND_GUARD_v3",
         "anchor": "from modules.source_utils import supported_video_extensions",
         "action": "append_after",
-        "hook": _debrid_unbound_hook('alldebrid')
+        "hook": _TORRENT_ID_UNBOUND_HOOK
     },
     {
         "id": "pov_rd_unbound_guard",
@@ -1260,10 +1230,10 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/realdebrid_api.py",
-        "marker": "# WIZARD_POV_RD_UNBOUND_GUARD_v2",
+        "marker": "# WIZARD_POV_RD_UNBOUND_GUARD_v3",
         "anchor": "from modules.source_utils import supported_video_extensions",
         "action": "append_after",
-        "hook": _debrid_unbound_hook('realdebrid')
+        "hook": _TORRENT_ID_UNBOUND_HOOK
     },
     {
         "id": "pov_tb_unbound_guard",
@@ -1274,17 +1244,12 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/torbox_api.py",
-        "marker": "# WIZARD_POV_TB_UNBOUND_GUARD_v3",
+        "marker": "# WIZARD_POV_TB_UNBOUND_GUARD_v4",
         "anchor": "\t\tfrom modules.source_utils import supported_video_extensions",
         "action": "append_after",
         "hook": (
             "\t\tpath = None\n"
             "\t\ttorrent_id = None\n"
-            + _build_patch_hook(
-                module_name="pov_debrid_guardian",
-                indent="\t\t",
-                custom_logic="pov_debrid_guardian.log_guard_active('torbox')"
-            )
         )
     },
     {
@@ -1319,12 +1284,13 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/alldebrid_api.py",
-        "marker": "# WIZARD_POV_AD_ERROR_LOG_v2",
-        "anchor": "response = response.json() if 'json' in response.headers.get('Content-Type', '') else response",
+        "marker": "# WIZARD_POV_AD_ERROR_LOG_v3",
+        "anchor": "\t\tresponse = response.json()",
         "action": "append_after",
         "hook": _build_patch_hook(
             module_name="pov_debrid_guardian",
-            custom_logic="pov_debrid_guardian.log_debrid_error('alldebrid', response, locals().get('path', ''))"
+            indent="\t\t",
+            custom_logic="pov_debrid_guardian.log_debrid_error('alldebrid', response)"
         )
     },
     {
@@ -1354,12 +1320,19 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/premiumize_api.py",
-        "marker": "# WIZARD_POV_PM_ERROR_LOG_v2",
-        "anchor": "result = self._post(url, data)",
-        "action": "append_after",
+        "marker": "# WIZARD_POV_PM_ERROR_LOG_v3",
+        "anchor": "\t\t\treturn response.json()",
+        "action": "prepend_before",
+        # The helper's try block returns the parsed body itself, so the response is parsed once; when
+        # the helper fails (logged) execution falls through to the native `return response.json()`.
         "hook": _build_patch_hook(
             module_name="pov_debrid_guardian",
-            custom_logic="pov_debrid_guardian.log_debrid_error('premiumize', result, locals().get('url', ''))"
+            indent="\t\t\t",
+            custom_logic=(
+                "_povil_body = response.json()\n"
+                "pov_debrid_guardian.log_debrid_error('premiumize', _povil_body, response.url)\n"
+                "return _povil_body"
+            )
         )
     },
     # =================================================================================================
@@ -1453,24 +1426,6 @@ PATCH_CONFIG = [
             custom_logic="pov_source_remember.run_reorder(self, results)"
         )
     },
-    {
-        "id": "pov_legacy_scrapers",
-        "name": "Legacy Internal Scrapers Support",
-        "description": "Restores loading of 3rd-party scrapers from the old resources/lib/scrapers/ directory without import failures.",
-        "category": "compatibility",
-        "priority": "minor",
-        "addon_id": "plugin.video.pov",
-        "enabled": False,
-        "target_file": "resources/lib/modules/sources.py",
-        "marker": "# WIZARD_POV_LEGACY_SCRAPERS_v2",
-        "anchor": "for loader, module_name, is_pkg in pkgutil.iter_modules([source_path]):",
-        "action": "prepend_before",
-        "hook": _build_patch_hook(
-            module_name="pov_legacy_scrapers",
-            indent="\t\t",
-            custom_logic="pov_legacy_scrapers.run(self, source_path, append, prescrape)"
-        )
-    },
     # =============================================================================
     # ================= DEBRID RESOLVE: DIAGNOSTICS & ERROR GUARD =================
     # =============================================================================
@@ -1519,7 +1474,7 @@ PATCH_CONFIG = [
         )
     },
     # ======================================================================
-    # ================= TRAKT RE-AUTH & SHARED / LAZY HTTP =================
+    # ================= TRAKT RE-AUTH & SHARED HTTP SESSION ================
     # ======================================================================
     {
         "id": "pov_trakt_reauth_recovery",
@@ -1530,79 +1485,30 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/trakt_api.py",
-        "marker": "# WIZARD_POV_TRAKT_REAUTH_v3",
+        "marker": "# WIZARD_POV_TRAKT_REAUTH_v4",
         "anchor": "def trakt_sync_activities(force_update=False, init_callback=None, monitor=None):",
         "action": "prepend_before",
         "hook": _build_patch_hook(
             module_name="pov_trakt_reauth",
-            custom_logic="pov_trakt_reauth.run(sys.modules[__name__])"
+            custom_logic="pov_trakt_reauth.run(__import__('sys').modules[__name__])"
         )
     },
     {
-        "id": "pov_shared_http_tmdb",
-        "name": "Defer verified shared HTTP clients (TMDB)",
-        "description": "Installs the shared, verified HTTP session client for TMDB calls. [NEEDS_MODULE_CHECK]",
+        "id": "pov_shared_http",
+        "name": "Deferred shared HTTP session (all POV indexers)",
+        "description": "Installs the verified, lazily loaded shared HTTP session (pov_http_session) once, at the top of kodi_utils.py, before any indexer imports modules.session: TMDb, Trakt, MDBList and every debrid client share it and `requests` is imported only when a request is sent.",
         "category": "performance",
         "priority": "major",
         "addon_id": "plugin.video.pov",
         "enabled": True,
-        "target_file": "resources/lib/indexers/tmdb_api.py",
-        "marker": "# WIZARD_POV_SHARED_HTTP_TMDB_v2",
-        "anchor": "from session import session, HTTPAdapter, Retry",
-        "action": "prepend_before",
+        "target_file": "resources/lib/modules/kodi_utils.py",
+        "marker": "# WIZARD_POV_SHARED_HTTP_v1",
+        "anchor": "import xbmc, xbmcgui, xbmcplugin, xbmcvfs",
+        "action": "append_after",
         "hook": _build_patch_hook(
             module_name="pov_http_session",
-            custom_logic=(
-                # The legacy hook also bound xbmcaddon in the host module; kept to preserve behavior.
-                "import xbmcaddon\n"
-                "pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/session.py'), getattr(pov_http_session, 'pov_version', str)())"
-            )
+            custom_logic="pov_http_session.install(__import__('xbmcvfs').translatePath('special://home/addons/plugin.video.pov/resources/lib/modules/session.py'), name='modules.session')"
         )
-    },
-    {
-        "id": "pov_shared_http_trakt",
-        "name": "Defer verified shared HTTP clients (Trakt)",
-        "description": "Installs the shared, verified HTTP session client for Trakt calls.",
-        "category": "performance",
-        "priority": "major",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/indexers/trakt_api.py",
-        "marker": "# WIZARD_POV_SHARED_HTTP_TRAKT_v3",
-        "anchor": "from modules.session import session, HTTPAdapter, Retry",
-        "action": "prepend_before",
-        "hook": _build_patch_hook(
-            module_name="pov_http_session",
-            custom_logic="pov_http_session.install(xbmcvfs.translatePath('special://home/addons/plugin.video.pov/resources/lib/modules/session.py'), name='modules.session')"
-        )
-    },
-    {
-        "id": "pov_http_lazy_tmdb",
-        "name": "TMDb HTTP Lazy Import",
-        "description": "Defers requests module initialization on cold boot to speed up widgets. [NEEDS_MODULE_CHECK]",
-        "category": "performance",
-        "priority": "major",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/indexers/tmdb_api.py",
-        "marker": "# WIZARD_POV_HTTP_LAZY_TMDB_v2",
-        "anchor": "import requests",
-        "action": "prepend_before",
-        "hook": _HTTP_LAZY_HOOK
-    },
-    {
-        "id": "pov_http_lazy_trakt",
-        "name": "Trakt HTTP Lazy Import",
-        "description": "Defers requests module initialization on cold boot to speed up widgets. [NEEDS_MODULE_CHECK]",
-        "category": "performance",
-        "priority": "major",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/indexers/trakt_api.py",
-        "marker": "# WIZARD_POV_HTTP_LAZY_TRAKT_v2",
-        "anchor": "import requests",
-        "action": "prepend_before",
-        "hook": _HTTP_LAZY_HOOK
     },
     # =================================================================================
     # ================= SOURCE WINDOW: QUALITY LABEL & SUBTITLE MATCH =================
@@ -1704,17 +1610,13 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/settings.py",
-        "marker": "# WIZARD_POV_AIOSTREAMS_FIX_v4",
+        "marker": "# WIZARD_POV_AIOSTREAMS_FIX_v5",
         "anchor": "\tsettings.extend(item[1] for item in (",
         "action": "prepend_before",
         "hook": _build_patch_hook(
             module_name="pov_aiostreams_fix",
             indent="\t",
-            custom_logic=(
-                "settings = pov_aiostreams_fix.enforce_credentials(settings)\n"
-                "import pov_legacy_scrapers\n"
-                "settings = pov_legacy_scrapers.enabled_settings(settings)"
-            )
+            custom_logic="settings = pov_aiostreams_fix.enforce_credentials(settings)"
         )
     },
     # ===========================================
@@ -1723,19 +1625,20 @@ PATCH_CONFIG = [
     {
         "id": "mdblist_api_redact_and_reauth_prep",
         "name": "MDBList API Redact Log",
-        "description": "Redacts API keys in logs via exception class shadowing.",
+        "description": "Redacts the API key from the logged MDBList error and keeps the original exception for the 401 retry.",
         "category": "account_manager",
         "priority": "critical",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/mdblist_api.py",
-        "marker": "# WIZARD_POV_MDBL_REAUTH_PREP_v3",
+        "marker": "# WIZARD_POV_MDBL_REAUTH_PREP_v4",
         "anchor": "\t\tlogger('mdblist error', str(e))",
         "action": "prepend_before",
+        # `e` becomes the redacted TEXT (logger() only str()s it); the original exception stays in
+        # _povil_orig_e for mdblist_api_reauth_retry, which is appended after the logger line.
         "hook": (
             "\t\t_povil_orig_e = e\n"
-            "\t\timport re\n"
-            "\t\te = type('RedactedE', (Exception,), {'__str__': lambda s: re.sub(r'apikey=[^&\\\\s]+', 'apikey=***', str(_povil_orig_e)), 'response': getattr(_povil_orig_e, 'response', None)})()\n"
+            "\t\te = __import__('re').sub(r'apikey=[^&\\s]+', 'apikey=***', str(e))\n"
         )
     },
     {
@@ -1793,13 +1696,17 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/caches/mdbl_cache.py",
-        "marker": "# WIZARD_POV_MDBL_CACHE_READS_v1",
-        "anchor": "\tdbcur = MDBLCache().dbcur",
+        "marker": "# WIZARD_POV_MDBL_CACHE_READS_v2",
+        "anchor": "\twith MDBLCache() as mc:",
         "action": "prepend_before",
-        "hook": _build_patch_hook(
-            module_name="pov_mdblist_patch_logic",
-            indent="\t",
-            custom_logic="return pov_mdblist_patch_logic.cache_list(function, string, url)"
+        # cache_list() raises MDBListUnavailable for a failed read, and that exception must reach POV's callers
+        # (they show the notice instead of an empty list). A helper-wrapped call would log it and fall through
+        # to the native code, which re-fetches and caches the failed result. So only the IMPORT is guarded
+        # (the helper); the call itself is made outside the try block.
+        "hook": (
+            _build_patch_hook(module_name="pov_mdblist_patch_logic", indent="\t")
+            + "\tif 'pov_mdblist_patch_logic' in locals():\n"
+            "\t\treturn pov_mdblist_patch_logic.cache_list(function, string, url)\n"
         )
     },
     {
@@ -1903,22 +1810,6 @@ PATCH_CONFIG = [
         )
     },
     {
-        "id": "mdblist_activity_failed_read",
-        "name": "MDBList failed activity read",
-        "description": "Returns 'failed' when the MDBList activity read errors so sync logic does not continue on bad data.",
-        "category": "crash_guard",
-        "priority": "critical",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/indexers/mdblist_api.py",
-        "marker": "# WIZARD_POV_MDBL_ACTIVITY_READ_v2",
-        "anchor": "\t\tlogger('mdblist error', str(latest))",
-        "action": "append_after",
-        "hook": (
-            "\t\treturn 'failed'\n"
-        )
-    },
-    {
         "id": "mdblist_api_add_to_list_guard",
         "name": "MDBList Add to List Guard",
         "description": "Prevents crash on 404 when adding to list.",
@@ -1961,11 +1852,12 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/mdblist_api.py",
-        "marker": "# WIZARD_POV_MDBL_SYNC_GUARD_v3",
+        "marker": "# WIZARD_POV_MDBL_SYNC_GUARD_v4",
         "anchor": "\tcached = mdbl_cache.reset_activity(latest)",
         "action": "append_after",
+        # POV 6.11 validates `latest` itself; reset_activity() can still return None (its DB read failed).
         "hook": (
-            "\tif not isinstance(cached, dict) or not isinstance(latest, dict):\n"
+            "\tif not isinstance(cached, dict):\n"
             "\t\ttry:\n"
             "\t\t\tmdbl_cache.clear_all_mdbl_cache_data(refresh=False)\n"
             "\t\texcept Exception:\n"
@@ -2254,13 +2146,16 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/caches/watched_cache.py",
-        "marker": "# WIZARD_POV_INDEXED_NEXT_HISTORY_v2",
+        "marker": "# WIZARD_POV_INDEXED_NEXT_HISTORY_v3",
         "anchor": "def get_next_episodes(watched_indicators):",
         "action": "append_after",
-        "hook": _build_patch_hook(
-            module_name="pov_next_history",
-            indent="\t",
-            custom_logic="return pov_next_history.next_episodes(globals(), watched_indicators)"
+        "hook": (
+            "# Preserve the native function body below.\n"
+            + _build_patch_hook(
+                module_name="pov_next_history",
+                indent="\t",
+                custom_logic="return pov_next_history.next_episodes(globals(), watched_indicators)"
+            )
         )
     },
     # =======================================================
@@ -2314,13 +2209,16 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/caches/watched_cache.py",
-        "marker": "# WIZARD_POV_CONTINUE_EXCLUSIONS_v2",
+        "marker": "# WIZARD_POV_CONTINUE_EXCLUSIONS_v3",
         "anchor": "def get_dropped_info_tv(watched_indicators):",
         "action": "append_after",
-        "hook": _build_patch_hook(
-            module_name="pov_continue_watching",
-            indent="\t",
-            custom_logic="return pov_continue_watching.dropped_info(globals(), watched_indicators)"
+        "hook": (
+            "# Preserve the native function body below.\n"
+            + _build_patch_hook(
+                module_name="pov_continue_watching",
+                indent="\t",
+                custom_logic="return pov_continue_watching.dropped_info(globals(), watched_indicators)"
+            )
         )
     },
     {
@@ -2368,17 +2266,13 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/menus/episodes.py",
-        "marker": "# WIZARD_POV_EPISODE_FOCUSED_INFO_v1",
+        "marker": "# WIZARD_POV_EPISODE_FOCUSED_INFO_v2",
         "anchor": "\t\t\tself.append((url_params, listitem, False))",
         "action": "prepend_before",
         "hook": _build_patch_hook(
             module_name="pov_episode_info",
             indent="\t\t\t",
-            custom_logic=(
-                # The legacy hook also imported pov_continue_watching here; kept to preserve behavior.
-                "import pov_continue_watching\n"
-                "pov_episode_info.complete(listitem, meta, item, ep_name)"
-            )
+            custom_logic="pov_episode_info.complete(listitem, meta, item, ep_name)"
         )
     },
     {
@@ -2444,11 +2338,12 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/caches/watched_cache.py",
-        "marker": "# WIZARD_POV_CONTINUE_SEASON_PICKER_v2",
+        "marker": "# WIZARD_POV_CONTINUE_SEASON_PICKER_v3",
         "anchor": "def mark_as_watched_unwatched_season(params):",
         "action": "append_after",
         "hook": (
-            "\tif str(params.get('season')) == 'choose':\n"
+            "# Preserve the native function body below.\n"
+            + "\tif str(params.get('season')) == 'choose':\n"
             + _build_patch_hook(
                 module_name="pov_continue_watching",
                 indent="\t\t",
@@ -2528,15 +2423,18 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/indexers/trakt_api.py",
-        "marker": "# WIZARD_POV_TRAKT_CONTINUE_TOGGLE_v3",
+        "marker": "# WIZARD_POV_TRAKT_CONTINUE_TOGGLE_v4",
         "anchor": "def hide_unhide_trakt_items(action, mediatype, media_id, list_type):",
         "action": "append_after",
-        "hook": _build_patch_hook(
-            module_name="pov_continue_watching",
-            indent="\t",
-            custom_logic=(
-                "if mediatype in ('show', 'shows', 'tvshow') and list_type == 'dropped':\n"
-                "\treturn pov_continue_watching.remote_toggle(globals(), 'trakt', action, mediatype, media_id, list_type)"
+        "hook": (
+            "# Preserve the native function body below.\n"
+            + _build_patch_hook(
+                module_name="pov_continue_watching",
+                indent="\t",
+                custom_logic=(
+                    "if mediatype in ('show', 'shows', 'tvshow') and list_type == 'dropped':\n"
+                    "\treturn pov_continue_watching.remote_toggle(globals(), 'trakt', action, mediatype, media_id, list_type)"
+                )
             )
         )
     },
@@ -2586,6 +2484,76 @@ PATCH_CONFIG = [
                     "\treturn pov_continue_watching.remote_toggle(globals(), 'mdblist', action, mediatype, media_id, list_type)"
                 )
             )
+        )
+    },
+    # ==========================================================================================
+    # ================= IL RELEASE COUNTDOWN (FENTASTIC "ModernInfoChip" BADGE) =================
+    # ==========================================================================================
+    # The skin reads ListItem.Property(IL_release / IL_release_state / IL_release_days). These three
+    # entries feed it (il_release.py; il_fetcher.py is started by startup.py). They were lost in the
+    # merge 4e117cf7 (2026-11-07) and are restored here with the same ids.
+    {
+        "id": "wizard_il_release",
+        "name": "IL release countdown badge (movies)",
+        "description": "Sets the IL_release listitem properties (days until the movie reaches official VOD) read by the FENtastic info bar.",
+        "category": "ui",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/menus/movies.py",
+        "marker": "# WIZARD_IL_RELEASE_v3",
+        "anchor": "\t\t\tlistitem.setProperties(props)",
+        "action": "append_after",
+        # Runs once per movie row: after the first import il_release is found in sys.modules.
+        "hook": (
+            "try:\n"
+            "\t_il = __import__('sys').modules.get('il_release')\n"
+            "\tif _il is None:\n"
+            "\t\t_povil_dir = __import__('xbmcvfs').translatePath('%s')\n"
+            "\t\tif _povil_dir not in __import__('sys').path:\n"
+            "\t\t\t__import__('sys').path.append(_povil_dir)\n"
+            "\t\timport il_release as _il\n"
+            "\t_il.apply_release_property(imdb_id, listitem, meta_get('premiered'), meta_get('year'), meta_get('il_dates'))\n"
+            "except Exception:\n"
+            "\t__import__('xbmc').log('Wizard Patch Error [il_release]:\\n' + __import__('traceback').format_exc(), __import__('xbmc').LOGERROR)\n"
+        ) % PATCHES_DIR
+    },
+    {
+        "id": "wizard_il_dates_extract",
+        "name": "IL release dates: read TMDb release_dates",
+        "description": "Extracts the per-type release dates POV already downloads (no extra request) for the IL release badge.",
+        "category": "ui",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/indexers/metadata.py",
+        "marker": "# WIZARD_IL_DATES_EXTRACT_v2",
+        "anchor": "\t\tpremiered = parser.get_text('release_date')",
+        "action": "append_after",
+        "hook": _build_patch_hook(
+            module_name="il_release",
+            indent="\t\t",
+            custom_logic="_il_dates = il_release.extract_dates(data)"
+        )
+    },
+    {
+        "id": "wizard_il_dates_store",
+        "name": "IL release dates: keep them in the movie meta",
+        "description": "Stores the extracted release dates in the cached movie meta (meta['il_dates']).",
+        "category": "ui",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/indexers/metadata.py",
+        "marker": "# WIZARD_IL_DATES_STORE_v2",
+        "anchor": "\t\t\t'mpaa': parser.get_mpaa('release_dates', user_info['mpaa_region']),",
+        "action": "append_after",
+        # locals().get(): a failed extract (logged by its helper) leaves _il_dates unbound.
+        "hook": (
+            "'il_dates': locals().get('_il_dates'),\n"
         )
     }
 ]

@@ -2,19 +2,12 @@
 
 import xbmc
 from urllib.parse import quote_plus
-from indexers.tmdb_api import base_url, get_tmdb, EXPIRES_4_HOURS
+from indexers.tmdb_api import get_tmdb, EXPIRES_4_HOURS
 from caches.main_cache import cache_object
 
 def _build_url(endpoint):
-    """
-    Safely builds the TMDB API URL.
-    Handles POV >= 6.08 updates where '/3' was removed from the core base_url.
-    """
-    import indexers.tmdb_api as tmdb
-    if hasattr(tmdb, 'get_tmdb') and 'requests' not in tmdb.__dict__:
-        return '/3' + endpoint
-    api_base = base_url if base_url.endswith('/3') else f"{base_url}/3"
-    return f"{api_base}{endpoint}"
+    """POV >= 6.08: get_tmdb() takes the path only and expects the '/3' prefix (base_url has none)."""
+    return '/3' + endpoint
 
 def tmdb_search_multi(query, page_no=1):
     """Fetches combined search results (Movies & TV), utilizing POV's native cache."""

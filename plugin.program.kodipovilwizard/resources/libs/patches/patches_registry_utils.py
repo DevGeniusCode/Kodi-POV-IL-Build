@@ -3,7 +3,7 @@
 # Registry utilities for patches_config.py (Phase 4: moved out so the registry file holds entries only).
 #
 #   _build_patch_hook(...)  builds every hook that calls a logic module (see "Writing a hook" in patches_config.py)
-#   _*_HOOK constants       hooks shared by several patches
+#   _*_HOOK constants       hooks shared by several patches (plain strings: they run on hot paths)
 #   validate_registry(...)  schema / compile / module-exists checks, run by `python patches_config.py`
 #
 # The helper code below is moved verbatim from patches_config.py; the only change is that
@@ -53,35 +53,22 @@ def _build_patch_hook(module_name, custom_logic='', indent='', fail_closed=False
 
     return ''.join((indent + line if line else '') + '\n' for line in lines)
 
-def _debrid_unbound_hook(provider):
-    """Module-level torrent_id default plus the guard-active log line for a debrid API module."""
-    return "torrent_id = None\n" + _build_patch_hook(
-        module_name="pov_debrid_guardian",
-        custom_logic="pov_debrid_guardian.log_guard_active('%s')" % provider
-    )
-
 
 # Hooks shared by several patches (identical code, different targets).
 
+# AllDebrid / RealDebrid parse_magnet_pack: the upstream `except` reads torrent_id before it is bound.
+_TORRENT_ID_UNBOUND_HOOK = "torrent_id = None\n"
+
+# movie_meta / tvshow_meta: a blank entry (transient TMDb failure) is returned but not cached for 2 days.
 _META_BLANK_GUARD_HOOK = (
-    "\t\t\t# WIZARD: Bypass cache persistence and purge poisoned DB rows\n"
-    + _build_patch_hook(
-        module_name="pov_meta_handler",
-        indent="\t\t\t",
-        custom_logic="pov_meta_handler.clear_blank_meta()"
-    )
-    + "\t\t\treturn meta\n"
+    "\t\t\t# WIZARD: a blank entry is returned but never persisted to the cache\n"
+    "\t\t\treturn meta\n"
 )
 
 _GENRE_TRANSLATE_HOOK = _build_patch_hook(
     module_name="pov_translations",
     indent="\t\t",
     custom_logic="genre_list = pov_translations.translate_genres(genre_list)"
-)
-
-_HTTP_LAZY_HOOK = _build_patch_hook(
-    module_name="pov_http_lazy",
-    custom_logic="pov_http_lazy.run()"
 )
 
 
@@ -117,7 +104,11 @@ def _compile_hook(hook):
     base = '\t\t\t'
     src += [base + '\t' * i + 'if True:' for i in range(depth)]
     src += [base + line for line in lines]
-    compile('\n'.join(src) + '\n', '<hook>', 'exec')
+    try:
+        compile('\n'.join(src) + '\n', '<hook>', 'exec')
+    except SyntaxError:
+        # A hook that continues a dict literal ("'key': value,") is only valid inside braces.
+        compile('\n'.join(['_ = {'] + lines + ['}']) + '\n', '<hook>', 'exec')
 
 
 def validate_registry(patch_config, patches_dir=None):

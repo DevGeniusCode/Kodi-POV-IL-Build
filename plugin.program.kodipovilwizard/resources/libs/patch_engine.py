@@ -473,8 +473,33 @@ class PatchEngine(object):
             except Exception as err:
                 self._stats['failed'] += len(patch_list)
                 logging.log(
-                    "[PatchEngine] Failed writing {0}: {1}".format(target_path, err),
+                    "[PatchEngine] Failed writing {0}: {1}{2}; none of its {3} patch(es) were "
+                    "written: {4}".format(
+                        target_path, err, self._blame(content, err, patch_list, target_file),
+                        len(patch_list), ', '.join(p['id'] for p in patch_list)),
                     level=xbmc.LOGERROR)
+
+    @staticmethod
+    def _blame(content, error, patch_list, target_file):
+        """Names the patch whose injected block holds the line a SyntaxError points at, so a
+        rejected file can be traced to one patch from the Kodi log (diagnostic only)."""
+        try:
+            lineno = getattr(error, 'lineno', None)
+            if not isinstance(lineno, int):
+                return ''
+            begin_tag, end_tag = _tags_for(target_file)
+            lines = content.splitlines()
+            for patch in patch_list:
+                begin, end = begin_tag.format(id=patch['id']), end_tag.format(id=patch['id'])
+                first = next((i for i, ln in enumerate(lines, 1) if begin in ln), None)
+                if first is None:
+                    continue
+                last = next((i for i in range(first, len(lines) + 1) if end in lines[i - 1]), first)
+                if first <= lineno <= last:
+                    return " (line {0} is inside patch '{1}')".format(lineno, patch['id'])
+        except Exception:
+            pass
+        return ''
 
     # ------------------------------------------------------------------
     # Single-patch application

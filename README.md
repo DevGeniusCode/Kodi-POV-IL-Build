@@ -377,6 +377,12 @@ operations by target files, and executes atomic, additive injections in a single
    already emits tabs for its own structure; the `indent` argument and the lines of `custom_logic` must follow the same
    rule. The engine dedents each hook and re-indents it to the anchor line's own indentation, so only the relative
    tabs inside the block matter; `indent` documents the depth.
+   **Exception:** a hook that is `append_after` a `def` / `class` / `if` line (the anchor ends with `:`) must start
+   with a column-0 comment (`# Preserve the native function body below.`). The comment stops the dedent from
+   stripping the body, which keeps its own absolute indentation; without it the body lands at column 0 under the
+   `def`, the patched file no longer compiles and the engine's compile guard rejects EVERY patch of that file (the
+   Kodi log then reads `Failed writing <file>: ... (line N is inside patch '<id>'); none of its K patch(es) were
+   written: ...`).
 5. **Versioned Markers & Anti-Collision**
    Every injected hook is uniquely identified by a versioned marker prefixed with `# WIZARD_` (e.g.,
    `# WIZARD_POV_FEATURE_NAME_v2`). The engine uses the base string identifier to prevent duplicate injections,
@@ -406,7 +412,8 @@ Each patch configuration is declared as a structured Python dictionary within th
 (`patches_config.py`). New patches are appended to the registry; existing patches are never reordered, so branches stay
 diffable. The registry file holds entries only, grouped under large banner comments (one per domain: navigator, MDBList,
 continue watching, parental control, …); `_build_patch_hook`, the shared `_*_HOOK` constants and `validate_registry` live in
-`patches/patches_registry_utils.py`.
+`patches/patches_registry_utils.py`. The registry currently holds 127 entries (119 for `plugin.video.pov`, 5 for
+`plugin.video.umbrella`, 3 for `plugin.video.idanplus`).
 
 ```python
 {
@@ -526,9 +533,10 @@ Add a short Python comment next to the `"hook"` key stating why it stays raw.
 
 #### Shared hooks
 
-Identical hooks used by several patches are defined once as `_*_HOOK` constants (or a small factory such as
-`_debrid_unbound_hook(provider)`) above `PATCH_CONFIG`, and referenced from each patch. Do not copy a hook between
-patches.
+Identical hooks used by several patches are defined once as `_*_HOOK` constants (for example
+`_TORRENT_ID_UNBOUND_HOOK`) in `patches_registry_utils.py`, and referenced from each patch. Do not copy a hook between
+patches. Hooks that run on a hot path (per item, per string, per cache write) are plain strings; behaviour that is
+needed on every call is installed once at import instead (see the Hebrew labels and the shared HTTP session).
 
 ---
 
@@ -1160,7 +1168,7 @@ reintroduce them or references to them**:
 │       │   ├── {modular_updater,headless_installer,config_apply,fresh_install,patch_engine,downloader,extract,db}.py
 │       │   ├── boot/ provisioning/ build/ packs/ skins/ addons/ accounts_auth/ system/ host_repairs/   # domain folders (Phase 1 / 3)
 │       │   ├── common/ gui/                 # CONFIG, logging, router, tools · Wizard menus and windows
-│       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py) & decoupled logic modules
+│       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 127 entries) & 43 decoupled logic modules
 │       │   └── profiles/                    # the Profiles feature (§9); hooks.py is its only engine‑facing surface (+ build_skin, profile_bootstrap)
 │       ├── skins/Default/1080i/             # Wizard windows: Profiles.xml + shared ChildHome.xml / ProfileLogin.xml templates
 │       └── media/profile-ui/                # picker / child‑home / login artwork
