@@ -42,6 +42,11 @@ except Exception:
     kodi_utils = None
 
 try:
+    from resources.libs.host_repairs import addon_presence
+except Exception:
+    addon_presence = None
+
+try:
     from resources.libs.host_repairs import addon_settings_safe
 except Exception:
     addon_settings_safe = None
@@ -94,11 +99,15 @@ def _remember(answer):
 
 
 def _reader(addon_id):
+    # Asked through addon_presence, not by construction: Umbrella is optional and
+    # a bare xbmcaddon.Addon() on a device without it writes "EXCEPTION: Unknown
+    # addon id" at ERROR level (before raising) on every keeper tick, i.e. once a
+    # minute. Same pattern as the MDBList / Trakt mirrors.
     if xbmcaddon is None:
         return lambda _k: None
-    try:
-        addon = xbmcaddon.Addon(addon_id)
-    except Exception:
+    addon = (addon_presence.addon(addon_id)
+             if addon_presence is not None else None)
+    if addon is None:
         return lambda _k: None
 
     def _get(key):
