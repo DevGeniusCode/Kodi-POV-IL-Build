@@ -1,3 +1,6 @@
+1.0.21
+- Movie networks tiles (Apple TV+, Disney+, Netflix; main menu) pass company= instead of network_id=, which POV 6.11.03 reads; the Wizard no longer rewrites them at runtime.
+
 1.0.20
 - The player's season-episodes button is back for Israeli VOD (Kan 11, Keshet 12, Reshet 13 through Idan Plus): its list now comes from Idan Plus's saved season (the episodes Idan Plus listed for that season), and an episode picked there plays through Idan Plus. POV's list stays for every episode with a TMDb id.
 

@@ -1,0 +1,7 @@
+<settings version="2">
+    <setting id="provider.comet">true</setting>
+    <setting id="provider.mediafusion">true</setting>
+    <setting id="provider.knaben">true</setting>
+    <setting id="provider.torrentgalaxy">true</setting>
+    <setting id="provider.1337x">true</setting>
+</settings>

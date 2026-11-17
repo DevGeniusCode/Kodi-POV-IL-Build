@@ -1,3 +1,11 @@
+0.5.1
+- Patch registry reworked (Phase 4-5): 147 entries (117 POV, 13 Umbrella, 12 Idan Plus, 5 Arctic Fuse 3). The Idan Plus and most Umbrella runtime patchers became registry entries (XML hooks, and `optional` entries that skip an add-on that is not installed); dead POV patches and 6 orphaned logic modules deleted; the PatchEngine names the patch whose block breaks compile. Three Umbrella / AF3 patchers stay runtime patchers by design (the engine has no "replace" action).
+- POV 6.11.03: the whole Hebrew .po is merged into POV's strings table (275 of 278 strings), lost behaviour restored (broken hooks, Trakt names, favourites dialog, MDBList cache, IL release hooks), one shared HTTP session install point.
+- Settings baked into userdata (config_version 2.0.8): Umbrella (Hebrew API language, CocoScrapers as external provider) and CocoScrapers; skin settings and POV navigator.db (now JSON) pre-baked, replacing runtime host repairs.
+- Movie "networks" tiles pass company= (POV 6.11.03): baked into the NOX and Onyx skins, so the pov_network_id_fix patch is gone.
+- Arctic Fuse 3 3.5.2 / script.skinvariables 2.3.2: typed search rewritten (four POV tokens added to skinvariables-multisearch-paths.json); the discover-grid patch is dropped for good, AF3's own TMDbHelper discover runs natively; touch cleanup and plot autoscroll are registry XML entries.
+- Wizard changelog catches up: 0.5.0 had no entry.
+
 0.4.95
 - player_season_episodes: the skins' season-episodes list for an Idan Plus episode on screen -- its season as Idan Plus saved it when the season was listed (seasons.json, through Idan Plus's own watch_store), no request; an episode picked there plays through Idan Plus with the channel's quality. Allowed in a child profile.
 

@@ -1,3 +1,6 @@
+[B]Kodi POV IL - Onyx 1.0.9[/B]
+- Movie networks tiles (Disney+, Netflix) pass company= instead of network_id=, which POV 6.11.03 reads; the Wizard no longer rewrites them at runtime.
+
 [B]Kodi POV IL - Onyx 1.0.8[/B]
 - Israeli tab (field report: every Keshet show took a second and a half to fill, each time again; Kan 11 showed nothing): a show the Wizard fetched before carries its details itself (povil_rtl, from the Wizard's index) and shows them at once -- POVIL_HeroDetailsKey then names nothing; for the others the Wizard answers for the show and its two neighbours on each side (label 9806, POVIL_HeroDetailsNear, slots povil.details.1. ... .4.), so a step to a neighbour is instant; timer povil_details_warm reads Kan's list when the tab opens. (1.0.7's notes: Kan's picture is asked 1280 wide.)
 

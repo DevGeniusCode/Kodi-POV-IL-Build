@@ -467,7 +467,7 @@
 				<texturenofocus border="24" colordiffuse="24FFFFFF">povil/pill48.png</texturenofocus>
 				<texturefocus border="24" colordiffuse="povil_gold">povil/pill48.png</texturefocus>
 				<label>דיסני+</label>
-				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_networks&amp;network_id=337&amp;name=%D7%93%D7%99%D7%A1%D7%A0%D7%99%2B",return)</onclick>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_networks&amp;company=337&amp;name=%D7%93%D7%99%D7%A1%D7%A0%D7%99%2B",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
 				<onfocus>SetProperty(povil.focus,9113,home)</onfocus>
 				<onup>9010</onup>
@@ -481,7 +481,7 @@
 				<texturenofocus border="24" colordiffuse="24FFFFFF">povil/pill48.png</texturenofocus>
 				<texturefocus border="24" colordiffuse="povil_gold">povil/pill48.png</texturefocus>
 				<label>נטפליקס</label>
-				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_networks&amp;network_id=8&amp;name=%D7%A0%D7%98%D7%A4%D7%9C%D7%99%D7%A7%D7%A1",return)</onclick>
+				<onclick>ActivateWindow(Videos,"plugin://plugin.video.pov/?mode=build_movie_list&amp;action=tmdb_movies_networks&amp;company=8&amp;name=%D7%A0%D7%98%D7%A4%D7%9C%D7%99%D7%A7%D7%A1",return)</onclick>
 				<onfocus>SetProperty(povil.tab,movies,home)</onfocus>
 				<onfocus>SetProperty(povil.focus,9112,home)</onfocus>
 				<onup>9010</onup>

@@ -41,11 +41,11 @@
 
 try:
     from resources.libs.patches.patches_registry_utils import (
-        _build_patch_hook, _TORRENT_ID_UNBOUND_HOOK, _META_BLANK_GUARD_HOOK,
+        _build_patch_hook, _spaces, _TORRENT_ID_UNBOUND_HOOK, _META_BLANK_GUARD_HOOK,
         _GENRE_TRANSLATE_HOOK, GUARD_DIR, PATCHES_DIR, validate_registry)
 except ImportError:  # run directly: python patches_config.py
     from patches_registry_utils import (
-        _build_patch_hook, _TORRENT_ID_UNBOUND_HOOK, _META_BLANK_GUARD_HOOK,
+        _build_patch_hook, _spaces, _TORRENT_ID_UNBOUND_HOOK, _META_BLANK_GUARD_HOOK,
         _GENRE_TRANSLATE_HOOK, GUARD_DIR, PATCHES_DIR, validate_registry)
 
 
@@ -297,13 +297,13 @@ PATCH_CONFIG = [
         "addon_id": "plugin.video.idanplus",
         "enabled": True,
         "target_file": "default.py",
-        "marker": "# WIZARD_IDANPLUS_SNAPSHOT_v2",
+        "marker": "# WIZARD_IDANPLUS_SNAPSHOT_v3",
         "anchor": "from resources.main import route",
         "action": "prepend_before",
         "hook": _build_patch_hook(
             module_name="pov_list_snapshot",
             custom_logic=(
-                "if pov_list_snapshot.idanplus(sys.argv):\n"
+                "if pov_list_snapshot.idanplus(__import__('sys').argv):\n"
                 "\traise SystemExit"
             )
         )
@@ -378,7 +378,7 @@ PATCH_CONFIG = [
         "enabled": True,
         "target_file": "resources/lib/modules/control.py",
         "marker": "# WIZARD_UMBRELLA_PROFILE_META_v2",
-        "anchor": "\t\t\tinfo_tag.setMpaa(meta_get('mpaa'))",
+        "anchor": "\t\t\tinfo_tag.setMpaa(meta_get('mpaa') or '')",
         "action": "append_after",
         "hook": _build_patch_hook(
             module_name="profile_age_guard",
@@ -583,18 +583,18 @@ PATCH_CONFIG = [
     {
         "id": "pov_hebrew_interface",
         "name": "Persistent Hebrew POV interface",
-        "description": "Merges the Hebrew UI labels (pov_ui_labels.HEBREW_UI) into POV's embedded strings table once, at import. local_string() then finds them natively, at no per-call cost.",
+        "description": "Merges the Wizard's Hebrew .po (every string whose English text still matches POV's) and the curated labels in pov_ui_labels.HEBREW_UI (they win) into POV's embedded strings table once, at import. POV 6.11 never reads a .po itself.",
         "category": "translation",
         "priority": "major",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "target_file": "resources/lib/modules/kodi_utils.py",
-        "marker": "# WIZARD_POV_HEBREW_INTERFACE_v2",
+        "marker": "# WIZARD_POV_HEBREW_INTERFACE_v3",
         "anchor": "from .strings_po import strings_po",
         "action": "append_after",
         "hook": _build_patch_hook(
             module_name="pov_ui_labels",
-            custom_logic="strings_po = __import__('types').MappingProxyType({**strings_po, **pov_ui_labels.HEBREW_UI})"
+            custom_logic="strings_po = __import__('types').MappingProxyType(pov_ui_labels.merge(strings_po))"
         )
     },
     {
@@ -1075,22 +1075,6 @@ PATCH_CONFIG = [
         )
     },
     {
-        "id": "pov_network_id_fix",
-        "name": "POV Movie Streaming Tile Fix",
-        "description": "Shadows tmdb_movies_networks mapping to prevent Kodi hanging on streaming tiles.",
-        "category": "ux",
-        "priority": "minor",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/menus/movies.py",
-        "marker": "# WIZARD_POV_NETWORK_ID_FIX_v3",
-        "anchor": "\ttmdb_special_key_dict = {'tmdb_movies_networks': 'company', 'tmdb_movies_year': 'year', 'tmdb_moviesanime_year': 'year'}",
-        "action": "append_after",
-        "hook": (
-            "\ttmdb_special_key_dict['tmdb_movies_networks'] = 'network_id'\n"
-        )
-    },
-    {
         "id": "wizard_pov_my_lists_movies",
         "name": "My Lists Dispatch Hook (Movies)",
         "description": "Dispatches 'My Lists' population for movie menus via pov_my_lists.",
@@ -1567,23 +1551,6 @@ PATCH_CONFIG = [
     # ================================================================
     # ================= NAVIGATOR CACHE & AIOSTREAMS =================
     # ================================================================
-    {
-        "id": "pov_navigator_read_fix",
-        "name": "POV Navigator DB Parse Interceptor",
-        "description": "Applies pov_nav_read_fix to the navigator cache to intercept navigator DB parsing. [NEEDS_MODULE_CHECK]",
-        "category": "reliability",
-        "priority": "major",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/caches/navigator_cache.py",
-        "marker": "# WIZARD_POV_NAV_READ_FIX_v2",
-        "anchor": "navigator_cache = NavigatorCache()",
-        "action": "append_after",
-        "hook": _build_patch_hook(
-            module_name="pov_nav_read_fix",
-            custom_logic="pov_nav_read_fix.run(navigator_cache)"
-        )
-    },
     {
         "id": "pov_animated_networks",
         "name": "Animated Networks Icons Toggle",
@@ -2081,11 +2048,11 @@ PATCH_CONFIG = [
     {
         "id": "pov_watched_lazy_mock",
         "name": "Lazy Import Watch Cache (Mock Setup)",
-        "description": "Mocks heavy provider modules in the watched cache so they can be imported lazily.",
+        "description": "DISABLED pending a 32-bit device measurement. Mocks heavy provider modules in the watched cache so they can be imported lazily.",
         "category": "performance",
         "priority": "major",
         "addon_id": "plugin.video.pov",
-        "enabled": True,
+        "enabled": False,
         "target_file": "resources/lib/caches/watched_cache.py",
         "marker": "# WIZARD_POV_WATCHED_LAZY_MOCK_v3",
         "anchor": "from caches.mdbl_cache import clear_mdbl_collection_watchlist_data",
@@ -2098,11 +2065,11 @@ PATCH_CONFIG = [
     {
         "id": "pov_watched_lazy_proxy",
         "name": "Lazy Import Watch Cache (Proxy Shadows)",
-        "description": "Applies lazy proxies for provider functions in the watched cache globals.",
+        "description": "DISABLED pending a 32-bit device measurement. Applies lazy proxies for provider functions in the watched cache globals.",
         "category": "performance",
         "priority": "major",
         "addon_id": "plugin.video.pov",
-        "enabled": True,
+        "enabled": False,
         "target_file": "resources/lib/caches/watched_cache.py",
         "marker": "# WIZARD_POV_WATCHED_LAZY_PROXY_v3",
         "anchor": "from indexers.trakt_api import trakt_get_hidden_items, trakt_official_status, trakt_progress, trakt_watched_unwatched",
@@ -2554,6 +2521,451 @@ PATCH_CONFIG = [
         # locals().get(): a failed extract (logged by its helper) leaves _il_dates unbound.
         "hook": (
             "'il_dates': locals().get('_il_dates'),\n"
+        )
+    },
+    # ======================================================================================================
+    # ================= IDAN PLUS: CHANNELS, YOUTUBE ID & KAN / i24NEWS VOD (formerly runtime patchers) ====
+    # ======================================================================================================
+    {
+        "id": "idanplus_channels_items_guard",
+        "name": "Idan Plus: items() tolerates a non-dict",
+        "description": "A corrupt displayChannels.json is read as a list; items() then crashes. Hands a non-dict back unchanged.",
+        "category": "crash_guard",
+        "priority": "major",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/common.py",
+        "marker": "# WIZARD_IDANPLUS_ITEMS_GUARD_v1",
+        "anchor": "def items(d):",
+        "action": "append_after",
+        "hook": (
+            "# Preserve the native function body below.\n"
+            "\tif not isinstance(d, dict):\n"
+            "\t\treturn d\n"
+        )
+    },
+    {
+        "id": "idanplus_display_channels_guard",
+        "name": "Idan Plus: corrupt displayChannels.json is dropped and rebuilt",
+        "description": "ReadList() returns [] on any read error, which crashes every channel read. A non-dict result removes the file and returns {} so Idan Plus rebuilds it from the remote list.",
+        "category": "crash_guard",
+        "priority": "major",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/common.py",
+        "marker": "# WIZARD_IDANPLUS_DISPLAY_CHANNELS_v1",
+        "anchor": "\treturn ReadList(displayChannelsFile)",
+        "action": "prepend_before",
+        "hook": (
+            "\t_povil_channels = ReadList(displayChannelsFile)\n"
+            "\tif isinstance(_povil_channels, dict): return _povil_channels\n"
+            "\ttry: os.remove(displayChannelsFile)\n"
+            "\texcept Exception: pass\n"
+            "\treturn {}\n"
+        )
+    },
+    {
+        "id": "idanplus_youtube_id",
+        "name": "Idan Plus: Kan YouTube links resolve",
+        "description": "GetYouTube takes the id from the URL path ('watch'); when that is not a YouTube id, read it from the v= parameter.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/common.py",
+        "marker": "# WIZARD_IDANPLUS_YOUTUBE_ID_v1",
+        "anchor": "\treturn '{0}/play/?video_id={1}'.format(youtubePlugin, video_id)",
+        "action": "prepend_before",
+        "hook": (
+            "\tif not re.match(r'^[0-9A-Za-z_-]{11}$', video_id or ''): video_id = (re.findall(r'[?&]v=([0-9A-Za-z_-]{11})', url) or [video_id])[0]\n"
+        )
+    },
+    {
+        "id": "idanplus_vod_kan_mirror",
+        "name": "Idan Plus: Kan pages through the mobile-API host",
+        "description": "Cloudflare answers 403 to Kodi on www.kan.org.il; the same site answers on mobapi.kan.org.il. Also percent-encodes the Referer (a Hebrew 'season' crashes `requests`). TO CHECK ON A DEVICE: Idan Plus 4.0.3 says 'Fix Kan11-VODs'.",
+        "category": "reliability",
+        "priority": "major",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/common.py",
+        "marker": "# WIZARD_IDANPLUS_VOD_MIRROR_v1",
+        "anchor": "\tbrowseReferer = referer or home",
+        "action": "append_after",
+        "hook": _build_patch_hook(
+            module_name="idanplus_vod",
+            indent="\t",
+            custom_logic=(
+                "browseReferer = idanplus_vod.kan_ascii(browseReferer)\n"
+                "_povil_page = idanplus_vod.kan_mirror(url, ua, responseMethod)\n"
+                "if _povil_page is not None:\n"
+                "\treturn _povil_page"
+            )
+        )
+    },
+    {
+        "id": "idanplus_vod_kan_titles",
+        "name": "Idan Plus: Kan episodes without a title use the analytics title",
+        "description": "Kan's mobile feed leaves some episode titles empty; fall back to extensions.analyticsCustomProperties.episode_title.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/kan.py",
+        "marker": "# WIZARD_IDANPLUS_VOD_TITLES_v1",
+        "anchor": "    season_filter = int(season_filter) if season_filter else None",
+        "action": "append_after",
+        "hook": (
+            "entries = [dict(e, title=e.get('title') or ((e.get('extensions') or {}).get('analyticsCustomProperties') or {}).get('episode_title') or '') for e in entries]\n"
+        )
+    },
+    {
+        "id": "idanplus_vod_kan_episodes",
+        "name": "Idan Plus: Kan's new episode cards",
+        "description": "Kan moved its player: episode pages list their episodes as 'cr-item' cards; parse those.",
+        "category": "reliability",
+        "priority": "major",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/kan.py",
+        "marker": "# WIZARD_IDANPLUS_VOD_EPISODES_v1",
+        "anchor": "    body = re.compile('<main id=\"main\"(.*?)</main>', re.S).findall(text)",
+        "action": "prepend_before",
+        "hook": _spaces(_build_patch_hook(
+            module_name="idanplus_vod",
+            indent="\t",
+            custom_logic=(
+                "if idanplus_vod.kan_cr_items(globals(), locals()):\n"
+                "\treturn"
+            )
+        ))
+    },
+    {
+        "id": "idanplus_vod_kan_archive",
+        "name": "Idan Plus: Kan archive lobby program tiles",
+        "description": "The archive lobby no longer has 'vod-section' blocks; list its program tiles.",
+        "category": "reliability",
+        "priority": "major",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/kan.py",
+        "marker": "# WIZARD_IDANPLUS_VOD_ARCHIVE_v1",
+        # Two lines (the blank line before it too): the series line alone also occurs in an earlier function.
+        "anchor": "    \n    series = re.compile('<div class=\"vod-section(.*?)<div class=\"section-content\">', re.S).findall(matches[0])",
+        "action": "prepend_before",
+        "hook": _spaces(_build_patch_hook(
+            module_name="idanplus_vod",
+            indent="\t",
+            custom_logic=(
+                "if idanplus_vod.kan_program_tiles(globals(), locals()):\n"
+                "\treturn"
+            )
+        ))
+    },
+    {
+        "id": "idanplus_vod_i24_shows",
+        "name": "Idan Plus: i24NEWS English shows",
+        "description": "i24NEWS English came up empty; list the Univtec catalog.",
+        "category": "reliability",
+        "priority": "minor",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/i24news.py",
+        "marker": "# WIZARD_IDANPLUS_VOD_I24_SHOWS_v1",
+        "anchor": "    \"\"\"Display Hebrew TV shows from the current i24NEWS website API.\"\"\"",
+        "action": "append_after",
+        "hook": _spaces(_build_patch_hook(
+            module_name="idanplus_vod",
+            indent="\t",
+            custom_logic=(
+                "if language == 'en':\n"
+                "\treturn idanplus_vod.i24_english_shows(globals())"
+            )
+        ))
+    },
+    {
+        "id": "idanplus_vod_i24_catalog",
+        "name": "Idan Plus: i24NEWS English catalog",
+        "description": "Shows the Univtec catalog for English as it already does for Hebrew.",
+        "category": "reliability",
+        "priority": "minor",
+        "addon_id": "plugin.video.idanplus",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/i24news.py",
+        "marker": "# WIZARD_IDANPLUS_VOD_I24_CATALOG_v1",
+        "anchor": "    if language == 'he' and ShowCatalogUnivtec(language):",
+        "action": "prepend_before",
+        "hook": (
+            "if language == 'en' and ShowCatalogUnivtec(language): return\n"
+        )
+    },
+    # ============================================================================================
+    # ================= UMBRELLA: SOURCE FLOW, HEBREW MATCH BADGE & MDBLIST (formerly runtime) ====
+    # ============================================================================================
+    {
+        "id": "umbrella_prewarm",
+        "name": "Umbrella: warm the Hebrew subtitle match at the start of the scrape",
+        "description": "Fires he_sub_match's background warm when the scrape starts, so the match % shows on the first visit to a title.",
+        "category": "performance",
+        "priority": "minor",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/modules/sources.py",
+        "marker": "# WIZARD_UMBRELLA_PREWARM_v1",
+        "anchor": "\t\t\tcontent = 'movie' if tvshowtitle is None else 'episode'",
+        "action": "prepend_before",
+        "hook": _build_patch_hook(
+            module_name="umbrella_he_match",
+            indent="\t\t\t",
+            custom_logic="umbrella_he_match.prewarm(self.meta)"
+        )
+    },
+    {
+        "id": "umbrella_source_name",
+        "name": "Umbrella: publish the picked release name for the subtitle matcher",
+        "description": "Umbrella publishes nothing, and an opaque CDN url scores every subtitle 0%. Publishes the picked source's name and url on Window(10000).",
+        "category": "ux",
+        "priority": "major",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/modules/sources.py",
+        "marker": "# WIZARD_UMBRELLA_SOURCE_NAME_v1",
+        "anchor": "\t\t\t\t\tif not self.url: continue",
+        "action": "append_after",
+        "hook": _build_patch_hook(
+            module_name="umbrella_he_match",
+            indent="\t\t\t\t\t",
+            custom_logic="umbrella_he_match.publish_source(resolve_items[i], self.url)"
+        )
+    },
+    {
+        "id": "umbrella_match_setup",
+        "name": "Umbrella: Hebrew subtitle match, once per source window",
+        "description": "Loads the available Hebrew release names for the title once per window (he_sub_match).",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/windows/source_results.py",
+        "marker": "# WIZARD_UMBRELLA_MATCH_SETUP_v1",
+        "anchor": "\t\t\tfor count, item in enumerate(self.results, 1):",
+        "action": "prepend_before",
+        "hook": (
+            "_sm_pfx = lambda _n: ''\n"
+            + _build_patch_hook(
+                module_name="umbrella_he_match",
+                custom_logic="_sm_pfx = umbrella_he_match.prefixer(self.meta)"
+            )
+        )
+    },
+    {
+        "id": "umbrella_match_row",
+        "name": "Umbrella: Hebrew subtitle match badge on every source row",
+        "description": "Prefixes the coloured badge to the size_label property, which is the first token of the info line in every layout.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/windows/source_results.py",
+        "marker": "# WIZARD_UMBRELLA_MATCH_ROW_v1",
+        "anchor": "listitem.setProperty('umbrella.size_label', size_label)",
+        "action": "append_after",
+        "hook": (
+            "if '_sm_pfx' in locals():\n"
+            "\tlistitem.setProperty('umbrella.size_label', _sm_pfx(item.get('name') or '') + size_label)\n"
+        )
+    },
+    {
+        "id": "umbrella_mdbl_sync_activities",
+        "name": "Umbrella: MDBList watched-sync needs usable activities",
+        "description": "Stops the watched sync when the activities read is empty or malformed, so the cursor is not advanced on a failed read.",
+        "category": "reliability",
+        "priority": "major",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/modules/mdblist.py",
+        "marker": "# WIZARD_UMBRELLA_MDBL_ACTIVITIES_v1",
+        "anchor": "\t\t# A new cursor key forces one complete snapshot on upgrade. Legacy builds",
+        "action": "prepend_before",
+        "hook": (
+            "activities = _activities_dict(activities)\n"
+            "if not activities or not (getServerTime(activities) or getWatchedActivity(activities)): return\n"
+        )
+    },
+    {
+        "id": "umbrella_mdbl_sync_page",
+        "name": "Umbrella: MDBList watched-sync needs a real page",
+        "description": "A failed or malformed page (no 'pagination') must not advance the sync cursor: the next run asks for the same window again.",
+        "category": "reliability",
+        "priority": "major",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/modules/mdblist.py",
+        "marker": "# WIZARD_UMBRELLA_MDBL_PAGE_v1",
+        "anchor": "\t\t\t# Do not advance the cursor when the request failed; the next service",
+        "action": "prepend_before",
+        "hook": (
+            "if not isinstance(data, dict) or 'pagination' not in data: return\n"
+        )
+    },
+    {
+        "id": "umbrella_mdbl_token_adopt",
+        "name": "Umbrella: adopt the MDBList token POV refreshed",
+        "description": "Umbrella reads the token once at import. A 401 is usually a newer token in settings (POV refreshes and the Wizard mirrors it): adopt it and retry.",
+        "category": "account_manager",
+        "priority": "major",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/modules/mdblist.py",
+        "marker": "# WIZARD_UMBRELLA_MDBL_TOKEN_v1",
+        "anchor": "\t\trefresh_token = getSetting('mdblist.refresh.token')",
+        "action": "prepend_before",
+        "hook": (
+            "# Somebody else may already have refreshed this account: in this build POV owns the\n"
+            "# refreshing, with the client id the refresh token was issued to. The header was read at\n"
+            "# import, so a newer token in settings is the ordinary reason for a 401.\n"
+            "_povil_token = getSetting('mdblist.token')\n"
+            "if _povil_token and session.headers.get('Authorization') != 'Bearer %s' % _povil_token:\n"
+            "\tsession.headers.update({'Authorization': 'Bearer %s' % _povil_token})\n"
+            "\treturn True\n"
+        )
+    },
+    {
+        "id": "umbrella_mdbl_token_quiet",
+        "name": "Umbrella: no 're-authenticate in settings' dialog for MDBList",
+        "description": "MDBList is connected in POV in this build, not in Umbrella, and POV refreshes and retries on its own 401. Logs instead of showing the dialog (the native dialog line becomes unreachable).",
+        "category": "account_manager",
+        "priority": "minor",
+        "addon_id": "plugin.video.umbrella",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/modules/mdblist.py",
+        "marker": "# WIZARD_UMBRELLA_MDBL_QUIET_v1",
+        "anchor": "\t\t\tcontrol.notification(title='MDBList', message='MDBList session expired",
+        "action": "prepend_before",
+        "hook": (
+            "log_utils.log('MDBList 401 and no usable token here; POV owns the refresh', level=log_utils.LOGDEBUG)\n"
+            "return None\n"
+        )
+    },
+    # ===================================================================================================
+    # ================= ARCTIC FUSE 3: TOUCH CLEANUP & PLOT AUTOSCROLL (formerly af3_home_patcher) =======
+    # ===================================================================================================
+    {
+        "id": "af3_touch_cleanup_videoinfo",
+        "name": "AF3: clear the home info state when the video info dialog closes",
+        "description": "Touch navigation: closing the dialog must clear the Home properties it set (InfoPanel, SubGroup, TMDbHelper context menu / widget container, CurrentID), or the next tap lands in a stale state.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "skin.arctic.fuse.3",
+        "enabled": True,
+        "optional": True,
+        "target_file": "1080i/DialogVideoInfo.xml",
+        "marker": "# WIZARD_AF3_TOUCH_VIDEOINFO_v1",
+        "anchor": "<window",
+        "action": "append_after",
+        "hook": (
+            "<onunload>ClearProperty(InfoPanel.FullSwitch,Home)</onunload>\n"
+            "<onunload>ClearProperty(SubGroup.IsVisible,Home)</onunload>\n"
+            "<onunload>ClearProperty(TMDbHelper.ContextMenu,Home)</onunload>\n"
+            "<onunload>ClearProperty(TMDbHelper.WidgetContainer,Home)</onunload>\n"
+            "<onunload>ClearProperty(CurrentID)</onunload>\n"
+        )
+    },
+    {
+        "id": "af3_touch_cleanup_contextmenu",
+        "name": "AF3: clear the home info state when the context menu closes",
+        "description": "Touch navigation: closing the dialog must clear the Home properties it set (InfoPanel, SubGroup, TMDbHelper context menu / widget container, CurrentID), or the next tap lands in a stale state.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "skin.arctic.fuse.3",
+        "enabled": True,
+        "optional": True,
+        "target_file": "1080i/DialogContextMenu.xml",
+        "marker": "# WIZARD_AF3_TOUCH_CONTEXTMENU_v1",
+        "anchor": "<window",
+        "action": "append_after",
+        "hook": (
+            "<onunload>ClearProperty(InfoPanel.FullSwitch,Home)</onunload>\n"
+            "<onunload>ClearProperty(SubGroup.IsVisible,Home)</onunload>\n"
+            "<onunload>ClearProperty(TMDbHelper.ContextMenu,Home)</onunload>\n"
+            "<onunload>ClearProperty(TMDbHelper.WidgetContainer,Home)</onunload>\n"
+            "<onunload>ClearProperty(CurrentID)</onunload>\n"
+        )
+    },
+    {
+        "id": "af3_touch_cleanup_infooptions",
+        "name": "AF3: clear the home info state when the info options closes",
+        "description": "Touch navigation: closing the dialog must clear the Home properties it set (InfoPanel, SubGroup, TMDbHelper context menu / widget container, CurrentID), or the next tap lands in a stale state.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "skin.arctic.fuse.3",
+        "enabled": True,
+        "optional": True,
+        "target_file": "1080i/Custom_1172_Dialog_InfoOptions.xml",
+        "marker": "# WIZARD_AF3_TOUCH_INFOOPTIONS_v1",
+        "anchor": "<window",
+        "action": "append_after",
+        "hook": (
+            "<onunload>ClearProperty(InfoPanel.FullSwitch,Home)</onunload>\n"
+            "<onunload>ClearProperty(SubGroup.IsVisible,Home)</onunload>\n"
+            "<onunload>ClearProperty(TMDbHelper.ContextMenu,Home)</onunload>\n"
+            "<onunload>ClearProperty(TMDbHelper.WidgetContainer,Home)</onunload>\n"
+            "<onunload>ClearProperty(CurrentID)</onunload>\n"
+        )
+    },
+    {
+        "id": "af3_touch_cleanup_tmdbhelper",
+        "name": "AF3: clear the home info state when the TMDbHelper window closes",
+        "description": "Touch navigation: closing the dialog must clear the Home properties it set (InfoPanel, SubGroup, TMDbHelper context menu / widget container, CurrentID), or the next tap lands in a stale state.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "skin.arctic.fuse.3",
+        "enabled": True,
+        "optional": True,
+        "target_file": "1080i/Custom_1190_TMDbHelper.xml",
+        "marker": "# WIZARD_AF3_TOUCH_TMDBHELPER_v1",
+        "anchor": "<window",
+        "action": "append_after",
+        "hook": (
+            "<onunload>ClearProperty(InfoPanel.FullSwitch,Home)</onunload>\n"
+            "<onunload>ClearProperty(SubGroup.IsVisible,Home)</onunload>\n"
+            "<onunload>ClearProperty(TMDbHelper.ContextMenu,Home)</onunload>\n"
+            "<onunload>ClearProperty(TMDbHelper.WidgetContainer,Home)</onunload>\n"
+            "<onunload>ClearProperty(CurrentID)</onunload>\n"
+        )
+    },
+    {
+        "id": "af3_plot_autoscroll",
+        "name": "AF3: the plot on the info screen scrolls on its own",
+        "description": "Autoscroll (2 s delay, 8 s per pass, 5 s repeat) for the main plot text, in line with the other skins.",
+        "category": "ui",
+        "priority": "minor",
+        "addon_id": "skin.arctic.fuse.3",
+        "enabled": True,
+        "optional": True,
+        "target_file": "1080i/Includes_Info.xml",
+        "marker": "# WIZARD_AF3_PLOT_AUTOSCROLL_v1",
+        "anchor": "<font>font_main_plot</font>",
+        "action": "prepend_before",
+        "hook": (
+            "<autoscroll delay=\"2000\" time=\"8000\" repeat=\"5000\">true</autoscroll>\n"
         )
     }
 ]

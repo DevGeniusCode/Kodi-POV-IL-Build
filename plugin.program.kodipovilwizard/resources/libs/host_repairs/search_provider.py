@@ -25,9 +25,10 @@
 #     (Movie search / TV search / Movie people / TV people).
 #
 #   Arctic Fuse 3 -- the query is TYPED IN THE SKIN and each of four result
-#     rows is a plugin path built by the skin's shortcut generator from
-#     search_path.xml. Switching provider means swapping four path prefixes,
-#     written by af3_search_pov_patcher. Umbrella has a term-driven action
+#     rows is a plugin path that script.skinvariables resolves through the
+#     skin's shortcuts/skinvariables-multisearch-paths.json. Switching
+#     provider means swapping four path prefixes, written by
+#     af3_search_pov_patcher. Umbrella has a term-driven action
 #     for all four, so AF3 keeps all four rows on either provider.
 #
 # Both patchers run on every Kodi startup already, so the choice survives a
@@ -64,9 +65,8 @@ HUB_ONCLICK = dict(
     for key, path in HUB_PATH.items())
 
 # --- AF3's four typed-search rows -----------------------------------------
-# In search_path.xml '&' is written double-escaped as '&amp;amp;': the value
-# is XML text that the skin's generator parses a second time. Each prefix
-# ends where the encoded query is appended.
+# Each prefix ends where the encoded query is appended ("{query}", added by
+# af3_search_pov_patcher; the file is plain JSON, so '&' is not escaped).
 #
 # Umbrella's person search goes through actorSearchMovies, which turns the
 # typed name into an IMDb name-search URL and lists the people it finds --
@@ -75,24 +75,24 @@ HUB_ONCLICK = dict(
 AF3_PREFIXES = {
     POV: {
         'Movies': ('plugin://plugin.video.pov/?mode=build_movie_list'
-                   '&amp;amp;action=tmdb_movies_search&amp;amp;query='),
+                   '&action=tmdb_movies_search&query='),
         'Tv': ('plugin://plugin.video.pov/?mode=build_tvshow_list'
-               '&amp;amp;action=tmdb_tv_search&amp;amp;query='),
+               '&action=tmdb_tv_search&query='),
         'People': ('plugin://plugin.video.pov/?mode=person_search'
-                   '&amp;amp;query='),
+                   '&query='),
         'Collections': ('plugin://plugin.video.pov/?mode=build_movie_list'
-                        '&amp;amp;action=tmdb_movies_search_collections'
-                        '&amp;amp;query='),
+                        '&action=tmdb_movies_search_collections'
+                        '&query='),
     },
     UMBRELLA: {
         'Movies': ('plugin://plugin.video.umbrella/?action=movieSearchterm'
-                   '&amp;amp;name='),
+                   '&name='),
         'Tv': ('plugin://plugin.video.umbrella/?action=tvSearchterm'
-               '&amp;amp;name='),
+               '&name='),
         'People': ('plugin://plugin.video.umbrella/?action=actorSearchMovies'
-                   '&amp;amp;name='),
+                   '&name='),
         'Collections': ('plugin://plugin.video.umbrella/'
-                        '?action=collections_Searchterm&amp;amp;name='),
+                        '?action=collections_Searchterm&name='),
     },
 }
 

@@ -1,39 +1,27 @@
 # MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
 # SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
-# Repoint Arctic Fuse 3's Search/Discover rows at POV instead of
-# TMDbHelper, so typed search returns POV results (Hebrew, and they play
-# through POV's own source scraping) -- matching the home widgets.
+# Repoint Arctic Fuse 3's typed search rows at POV (or Umbrella, see search_provider) instead of the library and
+# TMDbHelper, so a typed search returns Hebrew results that play through the add-on's own source scraping.
 #
-# WHY a skin-file patch (not just a node): AF3's search rows are generated
-# from the `searchwidgets` skinvariables node, but each row's PATH is
-# resolved through skin.arctic.fuse.3/shortcuts/generator/data/setup/
-# search_path.xml -- three rule-sets keyed on the row's `path` token:
-#   * widget_path           -> the plugin path PREFIX (before the query)
-#   * widget_path_end        -> the path SUFFIX (after the query)
-#   * widget_search_variable -> which encoded-query var to append
-# A raw POV plugin path placed directly in the node would hit the
-# catch-all rule, which appends the UNENCODED query (Path_SearchTerm).
-# POV reads its query via parse_qsl(sys.argv[2][1:]) -- a single URL
-# decode -- so an unencoded Hebrew/multi-word query would be mis-parsed.
-# We therefore add proper rules for two POV tokens so the generator
-# appends Path_SearchTerm_SingleEncoded (exactly one level of encoding,
-# which parse_qsl then decodes back to the real query).
+# HOW AF3 3.5 SEARCHES (rewritten in Phase 5; the old design edited shortcuts/generator/data/setup/search_path.xml, a
+# file AF3 3.5 no longer has). The skin's search window runs script.skinvariables' run_multisearch. The script searches
+# the rows of the `searchwidgets` shortcut node with the typed text, resolving each row's `path` TOKEN through
 #
-# This patcher:
-#   1. Adds, idempotently, rules for DefaultSearch-POVMovies and
-#      DefaultSearch-POVTv into all three rule-sets of search_path.xml
-#      (prefix = POV search path ending in &query=, suffix = empty,
-#      encode var = Path_SearchTerm_SingleEncoded). The node rows then
-#      use those tokens. Re-applied every startup so a skin update that
-#      ships a fresh search_path.xml gets re-patched.
-#   2. The matching node (skinvariables-shortcut-searchwidgets.json) is
-#      written separately by af3_home_patcher's FILES dict.
+#     skin.arctic.fuse.3/shortcuts/skinvariables-multisearch-paths.json      {"DefaultSearch-Movies": "videodb://...{query}"}
 #
-# Marker-gated, idempotent, atomic write. Safe no-op if AF3/the file is
-# absent or its shape changed.
+# `{query}` is the url-encoded text (`{query_double}` is the double-encoded one TMDbHelper wants). POV reads its query
+# through parse_qsl, a single decode, so `{query}` is exactly right.
+#
+# Our searchwidgets node (written by af3_home_patcher) has four rows whose tokens are DefaultSearch-POVMovies / POVTv /
+# POVPeople / POVCollections. This patcher adds those four tokens to the skin's paths file, pointed at the chosen
+# provider. Nothing else in the file is touched, an AF3 update that ships a fresh file is re-patched on the next start,
+# and a file that already holds the right four values is left alone (no write).
+#
+# Statuses: 'patched' | 'already_patched' | 'no_af3' | 'no_file' | 'unmatched' (not a JSON object) | 'read_failed'
+#           | 'write_failed'.
 
+import json
 import os
-import re
 
 try:
     import xbmcvfs
@@ -47,94 +35,24 @@ except Exception:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-SEARCH_PATH_REL = ('addons/' + AF3_SKIN_ID +
-                   '/shortcuts/generator/data/setup/search_path.xml')
+PATHS_REL = ('addons/' + AF3_SKIN_ID + '/shortcuts/skinvariables-multisearch-paths.json')
 
-_MARKER_BASE = '<!-- AI_SUBS_POV_SEARCH_v3_rollback'
-
-
-def _marker(provider):
-    """The marker carries the PROVIDER, so choosing a different search add-on
-    makes the already-patched check miss and the rules get re-injected. A
-    marker that ignored the provider would leave AF3 searching whatever it was
-    first patched with, for ever."""
-    return '{0}_{1} -->'.format(_MARKER_BASE, provider)
-
-
-def _any_marker_re():
-    import re as _re
-    return _re.compile(_re.escape(_MARKER_BASE) + r'[^>]*-->\n?')
-
-
-# Kept for the modules that import it by name; the POV spelling is the one
-# every device carries today.
-MARKER = _marker('pov')
-# Older markers: our #207 v1 marker plus any Codex search markers. When any
-# of these (or a Codex artifact below) is present we STRIP everything and
-# re-inject ONLY the #207 rules, forcing a device stuck on a Codex build
-# back to the PR #207 target. This is the "restore to #207 even for
-# existing users" guarantee.
-OLD_MARKERS = (
-    '<!-- AI_SUBS_POV_SEARCH_v1 -->',
-    '<!-- AI_SUBS_POV_SEARCH_v2 -->',
-    '<!-- AI_SUBS_POV_SEARCH_v3 -->',
-    # v2_rollback shipped movie+tv only; bumping to v3_rollback re-injects the
-    # added People (actor/director) + Collections search rows for everyone.
-    '<!-- AI_SUBS_POV_SEARCH_v2_rollback -->',
+# The tokens the searchwidgets node rows use, keyed by the row names of search_provider.AF3_PREFIXES.
+TOKENS = (
+    ('DefaultSearch-POVMovies', 'Movies'),
+    ('DefaultSearch-POVTv', 'Tv'),
+    ('DefaultSearch-POVPeople', 'People'),
+    ('DefaultSearch-POVCollections', 'Collections'),
 )
 
-# Any of these in the file means a Codex build wrote combined-search /
-# POVDiscover rules we must strip before re-injecting the #207 set.
-_CODEX_ARTIFACTS = (
-    'DefaultSearch-POVDiscover',
-    'ai_pov_combined_search',
-)
-
-# Matches ANY of our injected POV rule blocks (POVMovies, POVTv, and
-# Codex's POVDiscover) in any of the four rule-sets, regardless of value,
-# so we can strip them all and re-inject only the #207 set. The blocks are
-# written by _rule() at a fixed 8/12-space indent.
-_POV_RULE_RE = re.compile(
-    r'        <rule>\n'
-    r'            <condition>\{item_path\}=='
-    r'DefaultSearch-POV(?:Discover|Movies|Tv|People|Collections)</condition>\n'
-    r'            <value>.*?</value>\n'
-    r'        </rule>\n',
-    re.DOTALL)
-
-# Search path prefixes (the generator appends the encoded query, then our
-# empty suffix). Note: in search_path.xml, '&' is written as the
-# double-escaped '&amp;amp;' because the value is XML text that the
-# generator later parses again. We mirror the existing TMDb rows exactly.
-#
-# Which add-on they point at is the user's choice; search_provider owns the
-# table for both providers and the fallback when Umbrella is not installed.
-# POV's four are repeated here as the fallback for the (impossible in the
-# build, possible in a standalone install) case where that module is absent.
+# POV's four, repeated as the fallback for the (impossible in the build, possible in a standalone install) case where
+# search_provider is absent.
 _POV_FALLBACK = {
-    'Movies': ('plugin://plugin.video.pov/?mode=build_movie_list'
-               '&amp;amp;action=tmdb_movies_search&amp;amp;query='),
-    'Tv': ('plugin://plugin.video.pov/?mode=build_tvshow_list'
-           '&amp;amp;action=tmdb_tv_search&amp;amp;query='),
-    # People search (actors AND directors): POV's router does
-    # person_search(params['query']) (entry.py mode=person_search).
-    'People': ('plugin://plugin.video.pov/?mode=person_search'
-               '&amp;amp;query='),
-    # Movie collections: same shape as movie search, action=..._collections
-    # (menus/movies.py handles tmdb_movies_search_collections).
-    'Collections': ('plugin://plugin.video.pov/?mode=build_movie_list'
-                    '&amp;amp;action=tmdb_movies_search_collections'
-                    '&amp;amp;query='),
+    'Movies': 'plugin://plugin.video.pov/?mode=build_movie_list&action=tmdb_movies_search&query=',
+    'Tv': 'plugin://plugin.video.pov/?mode=build_tvshow_list&action=tmdb_tv_search&query=',
+    'People': 'plugin://plugin.video.pov/?mode=person_search&query=',
+    'Collections': ('plugin://plugin.video.pov/?mode=build_movie_list&action=tmdb_movies_search_collections&query='),
 }
-
-
-def _provider_and_prefixes():
-    """(provider name, {row: path prefix}) for the chosen search add-on."""
-    try:
-        from resources.libs.host_repairs import search_provider
-        return search_provider.current(), search_provider.af3_prefixes()
-    except Exception:
-        return 'pov', _POV_FALLBACK
 
 
 def _log(msg, level='INFO'):
@@ -146,147 +64,62 @@ def _log(msg, level='INFO'):
         pass
 
 
-def _search_path_file():
+def _prefixes():
+    try:
+        from resources.libs.host_repairs import search_provider
+        return search_provider.current(), search_provider.af3_prefixes()
+    except Exception:
+        return 'pov', _POV_FALLBACK
+
+
+def _paths_file():
     if xbmcvfs is None:
         return ''
     try:
         base = xbmcvfs.translatePath('special://home/')
     except Exception:
         return ''
-    p = os.path.join(base, *SEARCH_PATH_REL.split('/'))
-    return p if os.path.isfile(p) else ''
-
-
-def _rule(token, value):
-    """One generator rule block (matches the file's 12-space indent)."""
-    return (
-        '        <rule>\n'
-        '            <condition>{{item_path}}=={0}</condition>\n'
-        '            <value>{1}</value>\n'
-        '        </rule>\n'.format(token, value))
-
-
-def _inject_after(text, rules_open, blocks):
-    """Insert `blocks` (str) right after the line `rules_open` (e.g.
-    '<rules name="widget_path">'). Returns new text, or None if the
-    anchor isn't found exactly once."""
-    idx = text.find(rules_open)
-    if idx == -1 or text.find(rules_open, idx + 1) != -1:
-        return None
-    # insert after the end of that line
-    eol = text.find('\n', idx)
-    if eol == -1:
-        return None
-    return text[:eol + 1] + blocks + text[eol + 1:]
+    return os.path.join(base, *PATHS_REL.split('/'))
 
 
 def ensure_patched():
-    """Returns 'patched' | 'already_patched' | 'no_af3' | 'no_file'
-    | 'unmatched' | 'read_failed' | 'write_failed'."""
-    path = _search_path_file()
+    path = _paths_file()
     if not path:
-        # distinguish "AF3 not installed" from "file missing"
-        if xbmcvfs is None:
-            return 'no_af3'
+        return 'no_af3'
+    if not os.path.isfile(path):
         try:
-            af3 = xbmcvfs.translatePath(
-                'special://home/addons/' + AF3_SKIN_ID + '/addon.xml')
+            addon_xml = xbmcvfs.translatePath('special://home/addons/' + AF3_SKIN_ID + '/addon.xml')
         except Exception:
             return 'no_af3'
-        return 'no_file' if os.path.isfile(af3) else 'no_af3'
-
+        return 'no_file' if os.path.isfile(addon_xml) else 'no_af3'
     try:
-        with open(path, 'r', encoding='utf-8') as f:
-            text = f.read()
-    except Exception as e:
-        _log('read failed: {0}'.format(e), level='WARNING')
+        with open(path, 'r', encoding='utf-8-sig') as handle:
+            data = json.load(handle)
+    except Exception as err:
+        _log('read failed: {0}'.format(err), level='WARNING')
         return 'read_failed'
+    if not isinstance(data, dict):
+        _log('multisearch paths file is not a JSON object; leaving it alone', level='WARNING')
+        return 'unmatched'
 
-    provider, prefixes = _provider_and_prefixes()
-    marker = _marker(provider)
-
-    # Already exactly at the target for THIS provider (its marker, no stale
-    # marker and no Codex artifact to clean up) -> nothing to do.
-    has_old = any(m in text for m in OLD_MARKERS)
-    has_codex = any(a in text for a in _CODEX_ARTIFACTS)
-    if marker in text and not has_old and not has_codex:
+    provider, prefixes = _prefixes()
+    wanted = {token: prefixes[row] + '{query}' for token, row in TOKENS}
+    if all(data.get(token) == value for token, value in wanted.items()):
         return 'already_patched'
+    data.update(wanted)
 
-    # Strip ALL of our prior POV rule blocks (POVMovies/POVTv AND Codex's
-    # POVDiscover) from every rule-set, and drop every marker we've ever
-    # stamped -- including the other provider's, and the un-suffixed one every
-    # device carries today -- returning the file to a clean stock state before
-    # we re-inject below.
-    text = _POV_RULE_RE.sub('', text)
-    text = _any_marker_re().sub('', text)
-    for m in OLD_MARKERS:
-        text = text.replace(m + '\n', '').replace(m, '')
-
-    # Build the per-rule-set injections (movies, tv, people, collections).
-    # The TOKENS keep their historical DefaultSearch-POV* spelling whatever the
-    # provider is: they are opaque keys shared with the searchwidgets node
-    # written by af3_home_patcher, and renaming them would break every row.
-    path_rules = (
-        _rule('DefaultSearch-POVMovies', prefixes['Movies'])
-        + _rule('DefaultSearch-POVTv', prefixes['Tv'])
-        + _rule('DefaultSearch-POVPeople', prefixes['People'])
-        + _rule('DefaultSearch-POVCollections', prefixes['Collections']))
-    # suffix empty for all
-    end_rules = (
-        _rule('DefaultSearch-POVMovies', '')
-        + _rule('DefaultSearch-POVTv', '')
-        + _rule('DefaultSearch-POVPeople', '')
-        + _rule('DefaultSearch-POVCollections', ''))
-    # single-encoded query (POV decodes once via parse_qsl)
-    var_rules = (
-        _rule('DefaultSearch-POVMovies', 'Path_SearchTerm_SingleEncoded')
-        + _rule('DefaultSearch-POVTv', 'Path_SearchTerm_SingleEncoded')
-        + _rule('DefaultSearch-POVPeople', 'Path_SearchTerm_SingleEncoded')
-        + _rule('DefaultSearch-POVCollections', 'Path_SearchTerm_SingleEncoded'))
-    # target: videos for all
-    target_rules = (
-        _rule('DefaultSearch-POVMovies', 'videos')
-        + _rule('DefaultSearch-POVTv', 'videos')
-        + _rule('DefaultSearch-POVPeople', 'videos')
-        + _rule('DefaultSearch-POVCollections', 'videos'))
-
-    new_text = text
-    for rules_open, blocks in (
-            ('<rules name="widget_path">', path_rules),
-            ('<rules name="widget_path_end">', end_rules),
-            ('<rules name="widget_target">', target_rules),
-            ('<rules name="widget_search_variable">', var_rules)):
-        res = _inject_after(new_text, rules_open, blocks)
-        if res is None:
-            _log('rule-set anchor not found/ambiguous: {0} -- AF3 may '
-                 'have changed search_path.xml; leaving it alone'.format(
-                     rules_open), level='WARNING')
-            return 'unmatched'
-        new_text = res
-
-    # Drop a marker comment right after the root open tag so re-runs skip.
-    # The file starts with the <shortcuts>/<paths> root; put the marker on
-    # its own line at the very top after the first '>'.
-    first_gt = new_text.find('>')
-    if first_gt != -1:
-        new_text = (new_text[:first_gt + 1] + '\n' + marker
-                    + new_text[first_gt + 1:])
-    else:
-        new_text = marker + '\n' + new_text
-
-    tmp_path = path + '.aitmp'
+    tmp = path + '.povil-tmp'
     try:
-        with open(tmp_path, 'w', encoding='utf-8') as f:
-            f.write(new_text)
-        os.replace(tmp_path, path)
-    except OSError as e:
+        with open(tmp, 'w', encoding='utf-8', newline='\n') as handle:
+            json.dump(data, handle, indent=4, ensure_ascii=False)
+            handle.write('\n')
+        os.replace(tmp, path)
+    except OSError as err:
         try:
-            os.remove(tmp_path)
+            os.remove(tmp)
         except OSError:
             pass
-        _log('write failed: {0}'.format(e), level='WARNING')
+        _log('write failed: {0}'.format(err), level='WARNING')
         return 'write_failed'
-
-    _log('added {0} movie/tv/people/collections search rules to '
-         'search_path.xml'.format(provider), 'INFO')
+    _log('added the {0} search tokens to skinvariables-multisearch-paths.json'.format(provider))
     return 'patched'

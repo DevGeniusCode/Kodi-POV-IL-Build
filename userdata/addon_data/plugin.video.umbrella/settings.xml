@@ -1,0 +1,12 @@
+<settings version="2">
+    <setting id="api.language">Hebrew</setting>
+    <setting id="useLanguageforOriginal">false</setting>
+    <setting id="trakt.useLanguage">false</setting>
+    <setting id="sources.retryall">true</setting>
+    <setting id="scrapers.timeout">45</setting>
+    <setting id="imdb.Showmeta.check">true</setting>
+    <setting id="imdb.Showtitle.check">true</setting>
+    <setting id="provider.external.enabled">true</setting>
+    <setting id="external_provider.module">script.module.cocoscrapers</setting>
+    <setting id="external_provider.name">cocoscrapers</setting>
+</settings>

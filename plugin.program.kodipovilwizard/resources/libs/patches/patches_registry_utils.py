@@ -54,6 +54,11 @@ def _build_patch_hook(module_name, custom_logic='', indent='', fail_closed=False
     return ''.join((indent + line if line else '') + '\n' for line in lines)
 
 
+def _spaces(hook):
+    """A hook for a host file indented with 4 SPACES (a hook mixing tabs into such a file is a TabError)."""
+    return hook.replace('\t', '    ')
+
+
 # Hooks shared by several patches (identical code, different targets).
 
 # AllDebrid / RealDebrid parse_magnet_pack: the upstream `except` reads torrent_id before it is bound.
@@ -87,7 +92,8 @@ _CATEGORIES = {
 _PRIORITIES = {'critical', 'major', 'minor'}
 _ACTIONS = {'prepend_before', 'append_after'}
 # Imports in a hook that do not come from PATCHES_DIR.
-_NON_PATCH_MODULES = {'sys', 'time', 're', 'threading', 'traceback', 'xbmc', 'xbmcvfs', 'xbmcaddon'}
+_NON_PATCH_MODULES = {'sys', 'time', 're', 'threading', 'traceback', 'xbmc', 'xbmcvfs', 'xbmcaddon',
+                      'profile_age_guard'}   # lives in profiles/ (GUARD_DIR), not in the patches directory
 
 
 def _compile_hook(hook):
@@ -145,9 +151,15 @@ def validate_registry(patch_config, patches_dir=None):
             problems.append('%s: hook must be a string ending in a newline' % pid)
             continue
         try:
-            _compile_hook(hook)
+            if str(patch['target_file']).lower().endswith('.xml'):
+                import xml.etree.ElementTree as ET
+                ET.fromstring('<root>%s</root>' % hook)      # an XML hook must be well-formed on its own
+            else:
+                _compile_hook(hook)
         except SyntaxError as exc:
             problems.append('%s: hook does not compile (%s, line %s)' % (pid, exc.msg, exc.lineno))
+        except Exception as exc:
+            problems.append('%s: hook is not well-formed XML (%s)' % (pid, exc))
         if patches_dir:
             names = set(re.findall(r'(?:^|;)\s*(?:from|import)\s+(\w+)', hook, re.M)) - _NON_PATCH_MODULES
             for name in sorted(names):

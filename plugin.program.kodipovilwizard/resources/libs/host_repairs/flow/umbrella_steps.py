@@ -3,122 +3,36 @@
 """Umbrella / MDBList / Trakt repair steps and the service-mirror keeper.
 
 Moved verbatim from service.subtitles.kodipovilai/service.py (Phase 3, step 3); only the import prefix differs.
+
+Phase 5: the source patches of Umbrella (prewarm, source name, subtitle match, MDBList token and sync) are registry entries
+now, and its settings (API language, content filters, External Provider, CocoScrapers providers, defaults) are baked into
+userdata. What stays here is data that is rebuilt after an Umbrella update, the two token mirrors, and the two edits the
+registry cannot express (the Hebrew-search URL fix and the personal-list order).
 """
 import threading
 
 
-
-def _maybe_patch_mdblist_reauth():
-    """Let an expired MDBList token heal itself instead of being reconnected.
-
-    POV refreshes only on a clock check and treats a 401 as just another
-    network error, so a token the server stops accepting is permanent: every
-    call fails, the sync monitor backs off half an hour, and the account has
-    to be authorised again by hand. Umbrella then compounds it with a dialog
-    telling the user to re-authenticate in a screen this build does not use.
-
-    Trakt has the identical defect in the file next door, and a field log
-    showed it failing in the same breath as the MDBList one recovered, so it
-    gets the same treatment. See the modules."""
-    # The switch guards the POV half ONLY. Written as an early return over
-    # both halves first, which silently took Umbrella's fix down with it --
-    # the switch's own text promises to stop changes to plugin.video.pov and
-    # says nothing about any other add-on, and turning it on to isolate a POV
-    # problem must not change Umbrella's behaviour as a side effect.
-
+def _maybe_patch_umbrella():
+    """Hebrew menu strings, the Account Manager label mirror, the POV -> Umbrella authorisation mirrors and the two
+    runtime source edits for Umbrella (the opt-in pilot add-on). Instant no-op for everyone who never installed it."""
     try:
-        from resources.libs.host_repairs import umbrella_mdblist_token_patcher, kodi_utils
-        st = umbrella_mdblist_token_patcher.ensure_patched()
-        if st in ('unmatched', 'compile_failed', 'write_failed'):
-            kodi_utils.log(
-                'umbrella_mdblist_token_patcher: ' + st, level='WARNING')
-    except Exception as e:
-        try:
-            # Re-imported: if the import above is what raised, `kodi_utils` is
-            # unbound here and the handler would raise instead of logging.
-            from resources.libs.host_repairs import kodi_utils
-            kodi_utils.log(
-                'umbrella_mdblist_token_patcher failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-    try:
-        from resources.libs.host_repairs import umbrella_mdblist_sync_patcher, kodi_utils
-        st = umbrella_mdblist_sync_patcher.ensure_patched()
-        if st in ('unmatched', 'compile_failed', 'write_failed',
-                  'revert_failed'):
-            kodi_utils.log(
-                'umbrella_mdblist_sync_patcher: ' + st, level='WARNING')
-    except Exception as e:
-        try:
-            from resources.libs.host_repairs import kodi_utils
-            kodi_utils.log(
-                'umbrella_mdblist_sync_patcher failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-
-
-def _maybe_patch_umbrella_language():
-    """Umbrella (the opt-in pilot addon) ships its strings only in the
-    LEGACY language layout (resources/language/English/), so on a
-    Hebrew-interface Kodi every settings label resolves to an empty
-    string -- blank categories, blank labels. Mirror the English po into
-    the modern resource.language.en_gb folder Kodi actually looks for.
-    Additive-only and self-healing: an Umbrella self-update replaces the
-    addon folder, and this re-applies on the next startup. Instant no-op
-    for everyone who never installed the pilot."""
-    try:
-        from resources.libs.host_repairs import umbrella_language_patcher, kodi_utils
+        from resources.libs.host_repairs import kodi_utils
     except Exception:
         return
+    # Hebrew for the menus themselves. Additive: we create the he_il folder Umbrella does not ship, so their updates keep
+    # applying and a string we did not translate simply falls back to English. An Umbrella update replaces the add-on
+    # folder and takes the file with it, so this re-runs at every start.
     try:
-        status = umbrella_language_patcher.ensure_patched()
-        if status == 'patched':
+        from resources.libs.host_repairs import umbrella_hebrew_ui_patcher
+        if umbrella_hebrew_ui_patcher.ensure_patched() == 'patched':
             kodi_utils.log(
-                'umbrella_language_patcher: modern en_gb strings installed',
-                level='INFO')
-        elif status in ('read_failed', 'write_failed'):
-            kodi_utils.log(
-                'umbrella_language_patcher: ' + status, level='WARNING')
-        # Hebrew for the menus themselves. Additive: we create the he_il
-        # folder Umbrella does not ship, so their updates keep applying and a
-        # string we did not translate simply falls back to English.
-        try:
-            from resources.libs.host_repairs import umbrella_hebrew_ui_patcher
-            if umbrella_hebrew_ui_patcher.ensure_patched() == 'patched':
-                kodi_utils.log(
-                    'umbrella_hebrew_ui_patcher: Hebrew menu strings '
-                    'installed', level='INFO')
-        except Exception:
-            pass
-        # ORDER IS LOAD-BEARING: the metadata language must move BEFORE the
-        # content filters are re-evaluated. api.language drives both, and
-        # Hebrew with the filters still on asks for titles ORIGINALLY MADE in
-        # Hebrew -- which empties every list.
-        lang = umbrella_language_patcher.ensure_api_language()
-        if lang == 'patched':
-            kodi_utils.log(
-                'umbrella_language_patcher: metadata language set to Hebrew',
-                level='INFO')
-        # Second, unrelated half: Umbrella's two language CONTENT FILTERS
-        # empty every list when its API language is not English.
-        filt = umbrella_language_patcher.ensure_content_filters_sane()
-        if filt == 'patched':
-            kodi_utils.log(
-                'umbrella_language_patcher: language content filters cleared',
-                level='INFO')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'umbrella_language_patcher run failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-    # Account Manager Lite (the other opt-in pilot) trips over the same
-    # locale-folder fallback, and the labels it loses are Authorize,
-    # Username, Password and API Key -- the controls a user has to press to
-    # connect an account. No-op for anyone who never installed it.
+                'umbrella_hebrew_ui_patcher: Hebrew menu strings '
+                'installed', level='INFO')
+    except Exception:
+        pass
+    # Account Manager Lite (the other opt-in pilot) trips over the same locale-folder fallback, and the labels it loses
+    # are Authorize, Username, Password and API Key -- the controls a user has to press to connect an account.
+    # No-op for anyone who never installed it.
     try:
         from resources.libs.host_repairs import legacy_lang_mirror
         if legacy_lang_mirror.mirror('script.module.acctmgr') == 'patched':
@@ -127,77 +41,14 @@ def _maybe_patch_umbrella_language():
                 level='INFO')
     except Exception:
         pass
-    # Wiring + subtitle-matching hook for the same optional add-on.
-    try:
-        from resources.libs.host_repairs import umbrella_setup_patcher
-        prov = umbrella_setup_patcher.ensure_external_provider()
-        if prov == 'patched':
-            kodi_utils.log(
-                'umbrella_setup_patcher: CocoScrapers wired as the external '
-                'provider', level='INFO')
-        elif prov == 'repaired':
-            kodi_utils.log(
-                'umbrella_setup_patcher: incomplete CocoScrapers wiring '
-                'repaired', level='WARNING')
-        cps = umbrella_setup_patcher.ensure_coco_providers()
-        if cps == 'patched':
-            kodi_utils.log(
-                'umbrella_setup_patcher: extra CocoScrapers providers enabled',
-                level='INFO')
-        dfl = umbrella_setup_patcher.ensure_umbrella_defaults()
-        if dfl == 'patched':
-            kodi_utils.log(
-                'umbrella_setup_patcher: Umbrella defaults applied',
-                level='INFO')
-        hook = umbrella_setup_patcher.ensure_source_name_published()
-        if hook == 'patched':
-            kodi_utils.log(
-                'umbrella_setup_patcher: picked-source release name is now '
-                'published for subtitle matching', level='INFO')
-        elif hook in ('unmatched', 'compile_failed', 'write_failed'):
-            kodi_utils.log(
-                'umbrella_setup_patcher: ' + hook, level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'umbrella_setup_patcher run failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-    # The Hebrew-subtitle match badge in Umbrella's OWN source window -- the
-    # same brain (he_sub_match) that already feeds POV's, so a title warmed
-    # from one add-on shows its badge immediately in the other. Separate from
-    # the block above because it patches a different Umbrella file and must
-    # not be lost if the wiring above raises.
-    try:
-        from resources.libs.host_repairs import umbrella_subtitle_match_patcher
-        st = umbrella_subtitle_match_patcher.ensure_patched()
-        if st == 'patched':
-            kodi_utils.log(
-                'umbrella_subtitle_match_patcher: Hebrew match % added to '
-                "Umbrella's source window", level='INFO')
-        elif st in ('unmatched', 'compile_failed', 'write_failed',
-                    'read_failed'):
-            kodi_utils.log(
-                'umbrella_subtitle_match_patcher: ' + st, level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'umbrella_subtitle_match_patcher failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-    # Keep Umbrella on whatever MDBList and Trakt authorisations POV currently
-    # holds. POV owns the refreshing -- only its client_id can -- so this is
-    # what carries a refreshed token across to Umbrella, and what covers a
-    # user who authorised before this existed.
+    # Keep Umbrella on whatever MDBList and Trakt authorisations POV currently holds. POV owns the refreshing -- only its
+    # client_id can -- so this is what carries a refreshed token across to Umbrella, and what covers a user who
+    # authorised before this existed.
     #
-    # MDBLIST FIRST, AND THE ORDER IS LOAD-BEARING. Both mirrors claim the
-    # same two Umbrella settings (indicators.alt / scrobble.source) and the
-    # claim is one-shot per key, so whichever runs first while they are still
-    # at the shipped Local wins permanently. This build prefers MDBList, and
-    # the keeper loop in _start_service_mirror_keeper runs them in this same
-    # order for the same reason -- if you change one, change both.
+    # MDBLIST FIRST, AND THE ORDER IS LOAD-BEARING. Both mirrors claim the same two Umbrella settings
+    # (indicators.alt / scrobble.source) and the claim is one-shot per key, so whichever runs first while they are still at
+    # the shipped Local wins permanently. This build prefers MDBList, and the keeper loop in _start_service_mirror_keeper
+    # runs them in this same order for the same reason -- if you change one, change both.
     try:
         from resources.libs.host_repairs import mdblist_umbrella_mirror
         st = mdblist_umbrella_mirror.mirror()
@@ -230,9 +81,9 @@ def _maybe_patch_umbrella_language():
                 'trakt_umbrella_mirror failed: {0}'.format(e), level='WARNING')
         except Exception:
             pass
-    # Searching Umbrella in Hebrew found nothing: the percent-encoded query
-    # made Umbrella's own api_key substitution raise, so the request was
-    # never sent. See umbrella_tmdb_apikey_patcher for the full account.
+    # Searching Umbrella in Hebrew found nothing: the percent-encoded query made Umbrella's own api_key substitution raise,
+    # so the request was never sent. See umbrella_tmdb_apikey_patcher for the full account. It REPLACES six call sites, so
+    # it cannot be a registry hook.
     try:
         from resources.libs.host_repairs import umbrella_tmdb_apikey_patcher
         st = umbrella_tmdb_apikey_patcher.ensure_patched()
@@ -252,35 +103,12 @@ def _maybe_patch_umbrella_language():
         except Exception:
             pass
     try:
-        from resources.libs.host_repairs import umbrella_setup_patcher
-        st = umbrella_setup_patcher.ensure_personal_list_order()
+        from resources.libs.host_repairs import umbrella_list_order_patcher
+        st = umbrella_list_order_patcher.ensure_personal_list_order()
         if st in ('patched', 'unmatched', 'write_failed'):
             kodi_utils.log('umbrella personal list order: ' + st)
     except Exception as e:
         kodi_utils.log('umbrella personal list order failed: ' + str(e), level='WARNING')
-
-    # Two source-flow repairs: fire the Hebrew-availability warm at the START
-    # of the scrape so the badge is there on the FIRST entry rather than the
-    # second, and stop Kodi announcing "playback failed" when the user simply
-    # backed out of the source list.
-    try:
-        from resources.libs.host_repairs import umbrella_source_ux_patcher
-        st = umbrella_source_ux_patcher.ensure_patched()
-        if st == 'patched':
-            kodi_utils.log(
-                'umbrella_source_ux_patcher: applied (its own line says what)',
-                level='INFO')
-        elif st in ('unmatched', 'compile_failed', 'write_failed',
-                    'read_failed'):
-            kodi_utils.log(
-                'umbrella_source_ux_patcher: ' + st, level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'umbrella_source_ux_patcher failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
 
 
 # The auto-on-play machinery (state, the on-play search/apply flow, and the

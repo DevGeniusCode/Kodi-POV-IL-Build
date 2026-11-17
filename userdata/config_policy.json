@@ -1,5 +1,5 @@
 {
-  "config_version": "2.0.7",
+  "config_version": "2.0.8",
   "_comment": "Declarative policy for how the wizard applies the shipped build-config (userdata/) onto a device. Bump config_version whenever ANY file in userdata/ changes -- that is what makes the wizard detect and apply the new config. 'fresh' is used on a clean/first install, 'update' on an existing device. Modes: replace (overwrite whole file), merge_id (per <setting id=...>, build value wins, other user settings untouched), merge_name (per <source><name>, add build's, keep user's), seed_if_absent (write only if the file does not already exist).",
   "files": [
     {
@@ -62,6 +62,20 @@
       "dest": "userdata/advancedsettings.xml",
       "fresh": "replace",
       "update": "replace"
+    },
+    {
+      "src": "addon_data/plugin.video.umbrella/settings.xml",
+      "dest": "userdata/addon_data/plugin.video.umbrella/settings.xml",
+      "fresh": "replace",
+      "update": "seed_if_absent",
+      "_note": "Umbrella is installed on demand. API language Hebrew (+ both language content filters off), retry-all, 45 s ceiling, IMDb titles for shows, CocoScrapers as the external provider. Replaces the Phase-5-deleted umbrella_setup / umbrella_language patchers."
+    },
+    {
+      "src": "addon_data/script.module.cocoscrapers/settings.xml",
+      "dest": "userdata/addon_data/script.module.cocoscrapers/settings.xml",
+      "fresh": "replace",
+      "update": "seed_if_absent",
+      "_note": "The five CocoScrapers providers that cost nothing to enable (comet, mediafusion, knaben, torrentgalaxy, 1337x)."
     },
     {
       "src": "addon_data/plugin.video.pov/navigator.db",

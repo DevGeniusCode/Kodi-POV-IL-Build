@@ -368,7 +368,7 @@ def _list_marks(path, action):
 # POV caches a parameterised list under action_<value>_<page>
 # (tmdb_movies_genres_28_1, tmdb_tv_year_2024_1, tmdb_tv_networks_213_1):
 # each genre/year/network is its own list, so browsing one leaves the others.
-LIST_PARAMS = ('genre_id', 'year', 'network_id', 'collection_id', 'tmdb_id', 'company_id', 'key_id')
+LIST_PARAMS = ('genre_id', 'year', 'network_id', 'company', 'collection_id', 'tmdb_id', 'company_id', 'key_id')
 
 
 def _list_rows(path, action, params):

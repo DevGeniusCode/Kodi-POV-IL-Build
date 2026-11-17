@@ -412,8 +412,8 @@ Each patch configuration is declared as a structured Python dictionary within th
 (`patches_config.py`). New patches are appended to the registry; existing patches are never reordered, so branches stay
 diffable. The registry file holds entries only, grouped under large banner comments (one per domain: navigator, MDBList,
 continue watching, parental control, …); `_build_patch_hook`, the shared `_*_HOOK` constants and `validate_registry` live in
-`patches/patches_registry_utils.py`. The registry currently holds 127 entries (119 for `plugin.video.pov`, 5 for
-`plugin.video.umbrella`, 3 for `plugin.video.idanplus`).
+`patches/patches_registry_utils.py`. The registry currently holds 147 entries (117 for `plugin.video.pov`, 13 for
+`plugin.video.umbrella`, 12 for `plugin.video.idanplus`, 5 for `skin.arctic.fuse.3`).
 
 ```python
 {
@@ -1168,7 +1168,7 @@ reintroduce them or references to them**:
 │       │   ├── {modular_updater,headless_installer,config_apply,fresh_install,patch_engine,downloader,extract,db}.py
 │       │   ├── boot/ provisioning/ build/ packs/ skins/ addons/ accounts_auth/ system/ host_repairs/   # domain folders (Phase 1 / 3)
 │       │   ├── common/ gui/                 # CONFIG, logging, router, tools · Wizard menus and windows
-│       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 127 entries) & 43 decoupled logic modules
+│       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 147 entries) & 46 decoupled logic modules
 │       │   └── profiles/                    # the Profiles feature (§9); hooks.py is its only engine‑facing surface (+ build_skin, profile_bootstrap)
 │       ├── skins/Default/1080i/             # Wizard windows: Profiles.xml + shared ChildHome.xml / ProfileLogin.xml templates
 │       └── media/profile-ui/                # picker / child‑home / login artwork
@@ -1198,7 +1198,7 @@ one or two files. Every new folder lives inside `plugin.program.kodipovilwizard/
 | `addons/`        | `umbrella`, `debrid_notice`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |
 | `accounts_auth/` | `acctmgr`                                                                                  | Account Manager Lite: pilot install and install-for-everyone                                                                                                                                  |
 | `system/`        | `kodi_version`, `speedtest`                                                                | The official-Kodi release check (Android / Windows) and the network speed tests                                                                                                               |
-| `host_repairs/`  | 29 patcher / repair modules (flat), `kodi_utils`, `media_assets/`, and `flow/` (`startup_pass`, `*_steps`, `runner`) | Runtime repairs of other add-ons and skins moved out of the subtitle add-on (Phase 3): the POV, Umbrella / MDBList / Trakt, Idan Plus, Arctic Fuse 3, NOX and Kodi patchers, the repair-state audit (`patcher_health`) and the startup-repair pass. Not the source-hook engine: that stays in `patches/`. Its settings, state files and log prefix are the Wizard's (`settings.xml`, `addon_data/`); it reads only `use_builtin_engine` and `pov_fast_navigation` from the subtitle add-on (`kodi_utils.subs_get_*`). |
+| `host_repairs/`  | 20 patcher / repair modules (flat), `kodi_utils`, `media_assets/`, and `flow/` (`startup_pass`, `*_steps`, `runner`) | Runtime repairs of other add-ons and skins moved out of the subtitle add-on (Phase 3): the POV, Umbrella / MDBList / Trakt, Idan Plus, Arctic Fuse 3, NOX and Kodi patchers, the repair-state audit (`patcher_health`) and the startup-repair pass. Not the source-hook engine: that stays in `patches/`. Its settings, state files and log prefix are the Wizard's (`settings.xml`, `addon_data/`); it reads only `use_builtin_engine` and `pov_fast_navigation` from the subtitle add-on (`kodi_utils.subs_get_*`). |
 | `tonight/`       | `ui`, `entrypoints`, `hub`, `engine`, `catalog`, `providers`, `history`, `storage`, `taste`, `discovery`, `experience` | The "Tonight" home tile: the one-time favourites shortcut (`entrypoints.ensure`, called by `fresh_install`, `profile_home` and the repair runner) and the picker window (`script.moransubs.tonight.xml`, `resources/media/tonight.png`), served by `Router.dispatch` `mode=tonight`; its state lives under the Wizard's `addon_data/tonight/`. |
 
 `default.py` and `startup.py` stay at the add-on root because `addon.xml` names them. `default.py` is a generic entry

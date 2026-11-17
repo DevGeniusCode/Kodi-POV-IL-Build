@@ -67,7 +67,6 @@ AF3_FONT_XML = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/Font.xml'
 AF3_FONT_DIR = 'special://home/addons/' + AF3_SKIN_ID + '/fonts/'
 AF3_NOTO_FONT = AF3_FONT_DIR + 'NotoSans-Regular.ttf'
 AF3_XML_DIR = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/'
-AF3_INFO_XML = AF3_XML_DIR + 'Includes_Info.xml'
 AF3_HEBREW_PO = (
     'special://home/addons/' + AF3_SKIN_ID +
     '/language/resource.language.he_il/strings.po')
@@ -599,24 +598,18 @@ POWER_MENU = [
 
 
 # Search rows -> POV. The `path` tokens (DefaultSearch-POVMovies/POVTv)
-# are resolved by search_path.xml, into which af3_search_pov_patcher
-# injects matching rules (POV search path + single-encoded query). This
+# are resolved through the skin's skinvariables-multisearch-paths.json, to
+# which af3_search_pov_patcher adds matching entries (POV search path + single-encoded query). This
 # replaces AF3's default Movies/TVShows(library) + TMDb rows so typed
 # search returns POV results in Hebrew that play through POV scrapers.
-# Search rows -> POV. NOTE the explicit 'guid' on each item: AF3's
-# script.skinvariables generator assigns a RANDOM guid to any node item
-# that lacks one (node.py assign_guid -> f'guid-{random:08x}'), and it
-# generates the selector buttons (container 601) and the result rows from
-# SEPARATE template passes. Because we rewrite this node on every boot, the
-# selector and the rows ended up with DIFFERENT random guids -- and each
-# row's visibility is gated on
-#   String.IsEqual(Container(601).ListItem.Property(guid), <row guid>)
-# so the focused selector button's guid never matched the row's guid and
-# the result tiles stayed permanently invisible (blank), while Discover --
-# hardcoded with the literal guid 'discover' on both sides -- worked. We
-# pin a STABLE explicit guid per item (assign_guid keeps item.get('guid')),
-# so the selector button and its row always share the same guid and the
-# rows render. The guids just need to be unique + stable; these are.
+# Search rows -> POV. The explicit 'guid' on each item is the row's stable identity for AF3's shortcut editor
+# (script.skinvariables' assign_guid keeps an item's own guid and gives a RANDOM one to an item that lacks one, and we
+# rewrite this node, so a random guid would change on every boot and the editor would lose track of the row).
+# The multisearch window of script.skinvariables 2.3.2 does not read the guid at all: it fills lists 501 to 510 from the
+# rows' label / icon / path / target / widget_style (the old selector-vs-row guid match of AF3 3.4 is gone).
+#
+# The skin's built-in DISCOVER sources (TMDbHelper `info=discover`, movies + tv, genre / decade filters) are listed before
+# these rows and are left running natively (owner decision, CLAUDE.md "Architectural decision: AF3 discover").
 SEARCH_WIDGETS = [
     {
         'guid': 'pov-search-movies',
@@ -659,22 +652,6 @@ FILES = {
     'skinvariables-shortcut-powermenu.json': POWER_MENU,
     'skinvariables-shortcut-searchwidgets.json': SEARCH_WIDGETS,
 }
-
-TOUCH_CLEANUP_FILES = (
-    'DialogVideoInfo.xml',
-    'DialogContextMenu.xml',
-    'Custom_1172_Dialog_InfoOptions.xml',
-    'Custom_1190_TMDbHelper.xml',
-)
-
-TOUCH_CLEANUP_BLOCK = '''    <!-- POV_AF3_TOUCH_CLEANUP_v1 -->
-    <onunload>ClearProperty(InfoPanel.FullSwitch,Home)</onunload>
-    <onunload>ClearProperty(SubGroup.IsVisible,Home)</onunload>
-    <onunload>ClearProperty(TMDbHelper.ContextMenu,Home)</onunload>
-    <onunload>ClearProperty(TMDbHelper.WidgetContainer,Home)</onunload>
-    <onunload>ClearProperty(CurrentID)</onunload>
-'''
-
 
 def _translate(path):
     return xbmcvfs.translatePath(path) if xbmcvfs else path
@@ -1007,69 +984,7 @@ def _patch_hebrew_language():
         return False
 
 
-def _patch_touch_cleanup_xml():
-    changed = False
-    for filename in TOUCH_CLEANUP_FILES:
-        path = AF3_XML_DIR + filename
-        if not _exists(path):
-            continue
-        try:
-            text = _read(path)
-        except Exception:
-            continue
-        if 'POV_AF3_TOUCH_CLEANUP_v1' in text:
-            continue
-        if '<window' not in text:
-            continue
-        marker = text.find('>', text.find('<window'))
-        if marker < 0:
-            continue
-        new_text = text[:marker + 1] + '\n' + TOUCH_CLEANUP_BLOCK + text[marker + 1:]
-        try:
-            _write(path, new_text)
-            changed = True
-        except Exception:
-            pass
-    return changed
-
-
-def _patch_info_plot_autoscroll_xml():
-    # v1 set time=26000 (a 26-second crawl -- far slower than other skins).
-    # v2 speeds it up to match the others. Revert any prior version of OUR
-    # autoscroll line, then (re)apply the current one, so existing installs that
-    # already have the slow v1 get the faster value.
-    if not _exists(AF3_INFO_XML):
-        return False
-    try:
-        text = _read(AF3_INFO_XML)
-    except Exception:
-        return False
-    if 'POV_AF3_PLOT_AUTOSCROLL_v2' in text:
-        return False  # already at the faster value
-    import re as _re
-    # Strip any earlier version of our marker + autoscroll line.
-    text = _re.sub(
-        r'[ \t]*<!-- POV_AF3_PLOT_AUTOSCROLL_v\d+ -->\n'
-        r'[ \t]*<autoscroll[^\n]*</autoscroll>\n', '', text)
-    needle = (
-        '                <height>$PARAM[height]</height>\n'
-        '                <left>40</left>\n'
-        '                <font>font_main_plot</font>\n'
-        '                <nested />')
-    repl = (
-        '                <height>$PARAM[height]</height>\n'
-        '                <left>40</left>\n'
-        '                <font>font_main_plot</font>\n'
-        '                <!-- POV_AF3_PLOT_AUTOSCROLL_v2 -->\n'
-        '                <autoscroll delay="2000" time="8000" repeat="5000">true</autoscroll>\n'
-        '                <nested />')
-    if needle not in text:
-        return False
-    try:
-        _write(AF3_INFO_XML, text.replace(needle, repl, 1))
-        return True
-    except Exception:
-        return False
+# The touch-cleanup <onunload> blocks and the plot autoscroll line are registry entries now (af3_touch_cleanup_*, af3_plot_autoscroll).
 
 
 def _enable_touch_input():
@@ -1131,11 +1046,8 @@ def _set_af3_runtime_defaults():
         'Skin.SetBool(Widgets.EnableShowMore)',
         'ClearProperty(InfoPanel.FullSwitch,Home)',
         'ClearProperty(SubGroup.IsVisible,Home)',
-        # NOTE: the Discover grid is repointed to POV by patching
-        # Custom_1105_Search.xml's onload directly (af3_discover_pov_
-        # patcher) -- a deterministic file edit, not a Home-property seed.
-        # The earlier SetProperty seed here was unreliable: it sat behind
-        # the _is_af3_active() gate and raced the window's own onload.
+        # NOTE: no Discover seeding here. AF3 3.5 builds the discover sources inside script.skinvariables
+        # (TMDbHelper `info=discover`); nothing in the skin files to repoint, and they run natively.
     ]
     for command in commands:
         try:
@@ -1482,30 +1394,21 @@ def ensure_patched():
             changed = _write_if_changed(filename, data) or changed
     changed = _patch_font_xml() or changed
     changed = _patch_hebrew_language() or changed
-    changed = _patch_touch_cleanup_xml() or changed
-    changed = _patch_info_plot_autoscroll_xml() or changed
-    # Inject POV search rules into search_path.xml BEFORE the rebuild, so
-    # buildtemplate regenerates the search includes with our POV rows
-    # resolving to real POV search paths. Must precede _rebuild_af3_
-    # shortcuts (below). Best-effort; never blocks the rest.
+    # Point the typed-search tokens of the searchwidgets node at POV / Umbrella in the skin's
+    # skinvariables-multisearch-paths.json (AF3 3.5: read live by the multisearch script, no rebuild needed).
+    # The old discover-grid patch is retired: AF3 3.5 builds that grid itself through script.skinvariables.
     try:
         from resources.libs.host_repairs import af3_search_pov_patcher
         st = af3_search_pov_patcher.ensure_patched()
         if st == 'patched':
             changed = True
-    except Exception:
-        pass
-    # Repoint the DISCOVER GRID (window 1105) from TMDbHelper to POV by
-    # patching Custom_1105_Search.xml's onload + stripping the TMDbHelper
-    # with_text_query suffix in Includes_Search.xml. Deterministic file
-    # edit (no Home-property race). Also before the rebuild.
-    try:
-        from resources.libs.host_repairs import af3_discover_pov_patcher
-        st2 = af3_discover_pov_patcher.ensure_patched()
-        if isinstance(st2, str) and '=patched' in st2:
-            changed = True
-    except Exception:
-        pass
+        elif st not in ('already_patched', 'no_af3'):
+            xbmc.log('af3_search_pov_patcher: ' + st, xbmc.LOGWARNING)    # this module has no _log(): see _seed_af3_empty_submenus
+    except Exception as err:
+        try:
+            xbmc.log('af3_search_pov_patcher failed: {0}'.format(err), xbmc.LOGWARNING)
+        except Exception:
+            pass
     if _is_af3_active():
         _set_af3_runtime_defaults()
         _seed_af3_spotlight_once()

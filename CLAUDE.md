@@ -19,7 +19,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 | `addons/`        | Add-on install / management (Umbrella, `debrid_notice`)                                |
 | `accounts_auth/` | Account Manager                                                                        |
 | `system/`        | Kodi version check, speed tests                                                        |
-| `host_repairs/`  | Runtime repairs of other add-ons and skins (29 patcher modules, flat on purpose), `flow/` (startup-repair pass + runner), `kodi_utils` (subset copy) |
+| `host_repairs/`  | Runtime repairs of other add-ons and skins (20 patcher / repair modules, flat on purpose), `flow/` (startup-repair pass + runner), `kodi_utils` (subset copy) |
 | `tonight/`       | The Tonight home tile (shortcut writer, picker window logic)                           |
 
 - **Phase 1 COMPLETE (Nov 2026):** `startup.py` 848 → ~180 lines; `wizard.py` split into the folders above and deleted.
@@ -29,6 +29,23 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   its service starts under the stubs with no Wizard on disk; zero Wizard references in its code). All host repairs (44 patcher
   modules + the startup-repair runner), the build's settings and state, Tonight, the search-provider picker, the debrid-notice
   dialog and every `build_mode` block were migrated to the Wizard. It talks to the Wizard only through the boundary below.
+- **Phase 4 COMPLETE (Nov 2026):** the patch registry was modernized and trimmed (helpers split into `patches_registry_utils.py`;
+  XML support in the engine; skin and userdata settings pre-baked into XML / DB; dead host repairs and 4 obsolete patches
+  deleted; 3 orphaned patches revived). The registry stands at 130 entries (122 POV, 5 Umbrella, 3 Idan Plus). Carry-overs
+  are listed in the Phase 4 section below.
+- **Phase 5 IN PROGRESS:** Step 0 docs housekeeping, Step 1 POV patch audit (reference: `_reference_addons/plugin.video.pov`
+  6.11.03) and its approved changes (P0 restore lost behaviour, P1 delete dead entries / modules, P2 simplify, the whole Hebrew
+  `.po` merged into POV's strings table, P3 decisions) are done. Step 2 (Category C: the 17 runtime patchers of Umbrella, Idan
+  Plus and AF3, reference Umbrella 6.8.02, Idan Plus 4.0.6, AF3 3.5.2) is applied: Idan Plus (3) and Umbrella (5 of its 10) became
+  registry entries, Umbrella's settings are baked into `userdata` (`config_version` 2.0.8), the AF3 search patcher was rewritten
+  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 147 entries (117
+  POV, 13 Umbrella, 12 Idan Plus, 5 AF3). Runtime patchers that remain because the registry cannot express them (they REPLACE
+  lines or need function-scoped anchors): `umbrella_tmdb_apikey`, `umbrella_list_order`, `af3_dialog_subtitles`, `af3_home`
+  (data seeding, font) and the data copies `umbrella_hebrew_ui`, `umbrella_watch_*` (see "Architectural decision" below). The AF3
+  discover-grid patcher is retired without replacement; AF3 3.5.2 + script.skinvariables 2.3.2 were re-evaluated (reference:
+  `script.skinvariables-nexus`) and its native TMDbHelper discover runs untouched (see "Architectural decision: AF3 discover" below).
+  OPEN: the MDBList pagination pair and `pov_mdblist_patch_logic` stay until checked against the live API; the lazy
+  `watched_cache` pair is disabled pending a 32-bit measurement.
 
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
@@ -41,8 +58,12 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `common/` and `gui/`.
 - **USE `CONFIG` FOR GLOBALS:** build-wide values come from the `CONFIG` singleton (`resources.libs.common.config`, fed by
   `uservar.py`); never copy one into a module-level constant (`startup.py` updates `CONFIG` in memory at boot).
-- **SILENT TRAP:** NEVER modify `patches/`, `patches_config.py` or `patch_engine.py` before Phase 4 (calling `PatchEngine`
-  is fine). The Phase 1 exception is closed.
+- **PATCH REGISTRY (Phase 5):** `patches/`, `patches_config.py`, `patches_registry_utils.py` and `patch_engine.py` change ONLY for
+  findings the user approved from the Phase 5 audit, each as its own clearly labelled change. Verify every change in the
+  scratchpad against the reference POV (real `PatchEngine` on a copy of `_reference_addons/plugin.video.pov`: every entry
+  applies once or is a known drop, every patched file compiles, no new pyflakes message, a second run is a no-op, an old-registry
+  state upgrades to the same bytes, apart from the blocks of deleted entries). The build is clean-install: a deleted registry
+  entry is simply removed (no grace period, no orphan scrub); only a device that already applied it keeps the stale block.
 - **PATH-PINNED (never move or rename):** `patches/`, `profiles/profile_age_guard.py` (stdlib-only; host add-ons import it by
   bare name), `profiles/profile_bootstrap.py` (skins' `Home.xml`), `default.py` / `startup.py` (`addon.xml`), every router
   `mode=` name, and every string in the subtitle boundary below.
@@ -118,16 +139,54 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 - **Check at the final Kodi test:** (1) the host-repair runner starts when the Wizard's service starts (`start="startup"`), not at
   the old login timing: after a profile switch exactly one runner must be alive and repairs must apply to the new profile;
   (2) the POV invoker guard still wins its race (its log line says how far ahead of POV it wrote); (3) `patcher_health`
-  lists 16 patchers; (4) the `RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=…)` callers work (Onyx search item,
+  lists its 3 remaining marker patchers (`af3_dialog_subtitles`, `umbrella_tmdb_apikey`, `umbrella_watch_prompt`) and a `PatchEngine` pass
+  reports no `failed` / `anchor_missing`; (4) the `RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=…)` callers work (Onyx search item,
   favourites "מנוע החיפוש" / "הגדרת התראות מנוי", AF3 tools); the Tonight window opens and keeps its state under the
   Wizard's `addon_data`; the restored debrid dialog writes POV's `*.expires` settings; (5) the Wizard's Maintenance settings show the POV toggle, and the
-  Onyx search item follows the Wizard's `search_provider`.
+  Onyx search item follows the Wizard's `search_provider`; (6) **Kan VOD:** play Kan 11 VOD with `idanplus_vod_*` disabled and
+  enabled (Idan Plus 4.0.3 says "Fix Kan11-VODs"): keep only what is still needed; (7) the Hebrew `.po` merge: look at POV's
+  dialogs and menus in Hebrew (RTL, `[B]` markup, the tmdb / trakt / mdblist list managers); (8) AF3 typed search returns POV
+  results through `skinvariables-multisearch-paths.json` (script.skinvariables 2.3.2, the version AF3 3.5.2 requires) with all
+  four rows (movies, shows, people, collections), and the native TMDbHelper "Discover" section (genre / decade filters) still
+  works and is no longer repointed to POV; (9) Umbrella first launch keeps the baked settings (Hebrew API
+  language, CocoScrapers as external provider); (10) the movie "networks" tiles of NOX / Onyx / the shortcut folder open their
+  lists (they now pass `company=`).
 
-## PHASE 4 (FROZEN until the user starts it)
+## ARCHITECTURAL DECISION (Phase 5): no "replace" in the PatchEngine
 
-Optimize `patches_config.py`; decide which `host_repairs/` modules could become registry entries; run the invoker-mismatch
-investigation (Open Notes); move the `pov_fast_navigation` declaration out of the
-subtitle add-on (it stays there only because the Wizard's `pov_language_invoker_guard` reads and writes it by the add-on id;
-`patches/pov_invoker_safe.py` was deleted in Step 4). Phases 1-3 are complete.
+`patch_engine.py` stays additive: its only actions are `prepend_before` / `append_after`, each block is fenced by markers and is
+removed byte for byte. The owner decided NOT to add a "replace" action: replacing or overwriting upstream code breaks the safe
+reversibility of the registry. Anything that needs a line REPLACED, or an anchor that is not unique in the file, stays a
+**runtime patcher** in `host_repairs/` (marker-gated, `compile()`-checked, atomic, with its own `revert()`), or becomes a data
+change (baked `userdata`, skin XML) when the goal allows it. Do not propose engine "replace" / "regex" / "scoped anchor" actions again.
+
+The three runtime patchers that stay for this reason (reference Umbrella 6.8.02, AF3 3.5.2):
+
+| Patcher | Why the registry cannot express it | Non-destructive alternative, if one is ever wanted |
+|---|---|---|
+| `umbrella_tmdb_apikey` | rewrites the `<url> % self.API_key` call sites of `indexers/tmdb.py` (6 variable sites) into a helper call | insert-only: `prepend_before` an escape line (`url = url.replace('%', '%%').replace('%%s', '%s')`) at each site that can carry user text (`tmdb_list`, line 186 first); needs every site checked, the escaped `url` must not feed a later `%`; unverified |
+| `umbrella_list_order` | sort calls go into about a dozen functions of `menus/movies.py` / `menus/tvshows.py` whose anchor LINES repeat (function-scoped through the AST), and `modules/favourites.py` needs `SELECT * FROM %s` replaced by `... ORDER BY rowid DESC` | none: the anchors are not unique, so an additive entry cannot place them |
+| `af3_dialog_subtitles` | swaps `$INFO[Player.FileName]` for `$VAR[ai_subs_header_label]` inside an include `<param name="label">` | append a second `<param name="label">` after the stock one; depends on how Kodi resolves a duplicated include param (not verified, needs a Kodi test), so it stays a patcher |
+
+## ARCHITECTURAL DECISION (Phase 5): AF3 discover and search (AF3 3.5.2, script.skinvariables 2.3.2)
+
+- In 2.3.2 the multisearch window is built by `script.skinvariables` (`run_multisearch`). Its two TMDbHelper "Discover" sources
+  (movies, tv; `multisearch/discover.py`) are Python classes inside that add-on, listed BEFORE the `searchwidgets` rows. There is
+  no skin XML to repoint any more (`Custom_1105_Search.xml` is a 4-line launcher), so repointing them to POV would mean editing
+  another add-on's Python (a replace-style patch): not done.
+- **Owner decision: drop the discover patch entirely and let the native TMDbHelper discover run** (its genre / decade filtering
+  is wanted). Nothing replaces it: no skin setting is baked (`HomeSwitcher.Search.DisableDiscover` stays at AF3's default, off)
+  and nothing patches script.skinvariables. Discover results are TMDbHelper items and play through TMDbHelper's players.
+- Typed search stays `host_repairs/af3_search_pov_patcher` (4 tokens `DefaultSearch-POVMovies / POVTv / POVPeople / POVCollections`
+  added to the skin's `skinvariables-multisearch-paths.json`, value = provider path + `{query}`; the window url-encodes `{query}`
+  once, POV reads it through `parse_qsl`) and the 4 rows of `af3_home_patcher.SEARCH_WIDGETS`.
+
+## PHASE 4 (COMPLETE, Nov 2026): scope and carry-overs
+
+Phase 4 optimized `patches_config.py` and trimmed `host_repairs/` (Steps 1-4, see the STATUS bullet). Items of its original
+scope that were not carried out stay open and go on with Phase 5: the invoker-mismatch investigation (Open Notes); moving the
+`pov_fast_navigation` declaration out of the subtitle add-on (it stays there only because the Wizard's
+`pov_language_invoker_guard` reads and writes it by the add-on id; `patches/pov_invoker_safe.py` was deleted in Step 4); the
+registry validator's `profile_age_guard.py` misreport. Phases 1-4 are complete.
 
 - **COMMIT COMMAND:** At the end of every step, provide a ready-to-copy Git commit snippet (using `git add -A && git commit -m "..."`) inside a bash code block, with a clear, concise summary of what changed in that step.

@@ -172,7 +172,7 @@
 											<!-- סרטים -->
 					<item>
 						<label>Apple TV</label>
-						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_movies_networks&amp;iconImage=network_appletvplus&amp;mode=build_movie_list&amp;name=Apple%20TV&amp;network_id=350&quot;,return)</onclick>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_movies_networks&amp;iconImage=network_appletvplus&amp;mode=build_movie_list&amp;name=Apple%20TV&amp;company=350&quot;,return)</onclick>
 						<thumb>icons/sidemenu/tv.png</thumb>
 						<property name="id">custom3</property>
 						<visible>String.IsEqual(Container(9000).ListItem.Property(id),movies)</visible>
@@ -180,7 +180,7 @@
 					</item>
 					<item>
 						<label>דיסני פלוס</label>
-						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_movies_networks&amp;iconImage=network_disney&amp;mode=build_movie_list&amp;name=%d7%93%d7%99%d7%a1%d7%a0%d7%99%20%d7%a4%d7%9c%d7%95%d7%a1&amp;network_id=337&quot;,return)</onclick>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_movies_networks&amp;iconImage=network_disney&amp;mode=build_movie_list&amp;name=%d7%93%d7%99%d7%a1%d7%a0%d7%99%20%d7%a4%d7%9c%d7%95%d7%a1&amp;company=337&quot;,return)</onclick>
 						<thumb>icons/sidemenu/favourites.png</thumb>
 						<property name="id">favorites</property>
 						<visible>String.IsEqual(Container(9000).ListItem.Property(id),movies)</visible>
@@ -188,7 +188,7 @@
 
 					<item>
 						<label>נטפליקס</label>
-						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_movies_networks&amp;iconImage=network_netflix&amp;mode=build_movie_list&amp;name=%d7%a0%d7%98%d7%a4%d7%9c%d7%99%d7%a7%d7%a1&amp;network_id=8&quot;,return)</onclick>
+						<onclick>ActivateWindow(10025,&quot;plugin://plugin.video.pov/?action=tmdb_movies_networks&amp;iconImage=network_netflix&amp;mode=build_movie_list&amp;name=%d7%a0%d7%98%d7%a4%d7%9c%d7%99%d7%a7%d7%a1&amp;company=8&quot;,return)</onclick>
 						<thumb>icons/sidemenu/movies.png</thumb>
 						<property name="id">movies</property>
 						<visible>String.IsEqual(Container(9000).ListItem.Property(id),movies)</visible>

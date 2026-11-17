@@ -354,6 +354,7 @@ class PatchEngine(object):
                 'action': action,
                 'hook': entry['hook'],
                 'enabled': is_enabled,
+                'optional': bool(entry.get('optional')),
             }
         except Exception as err:
             logging.log('[PatchEngine] Error normalizing patch entry #{0}: {1}'.format(idx, err),
@@ -396,10 +397,12 @@ class PatchEngine(object):
                 level=xbmc.LOGWARNING)
             # Optional hosts need no repair until they are installed. A file
             # missing inside an installed host still fails the integrity pass.
+            # The main add-on is never optional; a skin or add-on installed on demand may flag its entries so.
+            optional = 0 if addon_id == DEFAULT_ADDON_ID else sum(1 for p in patch_list if p.get('optional'))
             if addon_id == 'plugin.video.umbrella':
-                self._stats['optional_absent'] = self._stats.get('optional_absent', 0) + len(patch_list)
-            else:
-                self._stats['missing'] += len(patch_list)
+                optional = len(patch_list)
+            self._stats['optional_absent'] = self._stats.get('optional_absent', 0) + optional
+            self._stats['missing'] += len(patch_list) - optional
             return
 
         if not os.path.isfile(target_path):
@@ -462,7 +465,8 @@ class PatchEngine(object):
         if content != original_content:
             try:
                 if target_path.endswith('.py'):
-                    compile(content, target_path, 'exec')
+                    # A UTF-8 BOM is fine for Python's importer but not for compile() on a str (Idan Plus kan.py has one)
+                    compile(content.lstrip('\ufeff'), target_path, 'exec')
                 elif _is_xml_target(target_path) and _xml_wellformed(original_content)                         and not _xml_wellformed(content):
                     # never leave a skin file that Kodi cannot parse
                     raise ValueError('patched XML is not well-formed')
@@ -521,6 +525,8 @@ class PatchEngine(object):
         'skipped_current', 'applied', 'upgraded', 'anchor_missing'."""
         block_regex = self._existing_block_regex(patch['id'], patch['target_file'])
         existing_match = block_regex.search(content)
+        if '\n' in patch['anchor'] and newline != '\n':
+            patch = dict(patch, anchor=patch['anchor'].replace('\n', newline))
 
         # ACTIVE SCRUBBING: If disabled, ensure it is completely removed.
         if not patch['enabled']:
