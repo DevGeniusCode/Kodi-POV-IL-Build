@@ -3,15 +3,15 @@
   "name": "Kodi POV IL Build",
   "repo": "DevGeniusCode/Kodi-POV-IL-Build",
   "release_tag": "addons-latest",
-  "generated": "2026-11-17T13:03:48Z",
+  "generated": "2026-11-17T15:52:21Z",
   "manifest_url": "https://raw.githubusercontent.com/DevGeniusCode/Kodi-POV-IL-Build/main/manifest.json",
   "config": {
-    "config_version": "2.0.8",
-    "filename": "config-2.0.8.zip",
-    "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/config-2.0.8.zip",
-    "size": 36522,
-    "sha256": "acab85f328c87ef5b248ea068f23336440821c9696ba0dc7756f71679afecb4c",
-    "updated": "2026-11-17T13:03:48Z"
+    "config_version": "2.0.9",
+    "filename": "config-2.0.9.zip",
+    "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/config-2.0.9.zip",
+    "size": 36503,
+    "sha256": "95187b07795082e39fac8de5fb819b3f566cae5cff98412320c493356c5eb5f2",
+    "updated": "2026-11-17T15:52:21Z"
   },
   "addons": {
     "plugin.program.autocompletion": {
@@ -32,20 +32,20 @@
       "type": "plugin",
       "filename": "plugin.program.kodipovilwizard-0.5.2.zip",
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.5.2.zip",
-      "size": 4527128,
-      "sha256": "90953121f75538f57108852ed60a8b121469768347253ebe4fa4e5d76e1f5df7",
-      "updated": "2026-11-17T13:03:48Z"
+      "size": 4527302,
+      "sha256": "171fb76d6dc74036a92d6cd22b3c5c225a284cd83a87acabd2aebf1f33cdbd78",
+      "updated": "2026-11-17T15:52:21Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
       "name": "מועדפים ואייקונים",
-      "version": "1.4.6",
+      "version": "1.4.7",
       "type": "plugin",
-      "filename": "plugin.program.orderfavourites-hebrew-1.4.6.zip",
-      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.6.zip",
-      "size": 23777848,
-      "sha256": "d1fd61df51731755441a6872af09f61cc6e4a651405eb3bf9366e2c5fe9c3250",
-      "updated": "2026-11-17T13:03:48Z"
+      "filename": "plugin.program.orderfavourites-hebrew-1.4.7.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.7.zip",
+      "size": 23778050,
+      "sha256": "a980ce0588bcb69a54b7952a8d0d1991f208759758fcff23de8c003eabb7650d",
+      "updated": "2026-11-17T15:52:21Z"
     },
     "repository.709": {
       "id": "repository.709",
