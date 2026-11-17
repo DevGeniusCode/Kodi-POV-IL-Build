@@ -164,7 +164,7 @@ provisioning (Phase 2) without ever closing the custom installer window.
 **1. Manifest Phase (Local Addons & Repositories)** — `ModularUpdater.execute_updates()`:
 
 - Diffs local vs manifest versions (`run_update_check`) and only touches addons **already installed** unless
-  `install_missing` or `fresh` is set (ensuring unselected on‑demand skins are ignored).
+  `install_missing` or `fresh` is set (and never an on‑demand skin: only the default skin is provisioned, see [§8](#8-skins--the-quick-update--force-close-ux)).
 - Per addon: download → **strictly verify sha256** (enforced for manifest items) →
   `extract.all(zip, CONFIG.ADDONS, ignore=True)` → SQLite database registration in `Addons??.db` → `UpdateLocalAddons`.
 - Runs via the rich `install_manager` UI featuring parallel bounded downloads and real-time extraction progress tracks.
@@ -560,12 +560,24 @@ It is never executed inside Kodi.
 |--------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `PatchEngine().run()`                            | Full pass over every enabled patch: repairs, reports stats. A patched file must compile before it is written.                                                                          |
 | `PatchEngine().run(category='parental_control')` | The same, restricted to one `category`. Entries are selected **before** schema validation, so unrelated malformed or drifted patches neither block nor are touched by the run.       |
+| `PatchEngine().run(addon_id='plugin.video.umbrella')` / `run(only_ids=[...])` | The same, restricted to one host add-on and / or a set of patch ids (the filters combine; `only_ids=[]` selects nothing). The Patch Manager runs one toggle with `only_ids=[id]` and a bulk switch with the folder's ids, so an Umbrella toggle never walks POV's 117 entries. |
 | `PatchEngine.all_applied(stats)`                 | True only if every selected patch is present and current (`applied`, `upgraded`, `skipped_current`, or `optional_absent`). False for a failed, missing, unanchored or disabled patch, and for an empty selection. |
 | `PatchEngine().run_if_changed()`                 | Boot fast path after a write-free full verification; any changed host file, schema, config, override or install path falls back to a full pass. Scheduling information only.       |
 
 Stats keys: `selected`, `applied`, `upgraded`, `skipped_current`, `removed`, `skipped_disabled`, `optional_absent`,
 `missing`, `anchor_missing`, `failed`, `malformed`. The engine treats only `plugin.video.umbrella` as an optional host
 (absent = `optional_absent`); any other absent host counts as `missing`.
+
+### 🧰 Patch Manager (Maintenance -> מנהל טלאים)
+
+`gui/patch_manager.py` shows the registry as folders: one per host add-on (POV, מטריה, עידן פלוס, Arctic Fuse 3; the name table
+is `ADDON_LABELS`, an add-on the table does not know shows its id) with an "active / total" counter, then, for a group of
+more than 25 patches (POV), one folder per functional `category` (`CATEGORY_LABELS`, Hebrew), then the patches
+(`[ON]` / `[OFF]`, a tap flips one). Each patch list and category list starts with a bulk row (enable / disable the whole
+folder, with a confirm). The **כללי / מנוע** folder holds the `_pov_patching_off` switch, "run the engine now" (stats
+dialog), the patcher-health report, and "reset all preferences". The user's choice is the Wizard setting
+`patch_enabled_<patch id>` (`"true"` / `"false"`; empty = the registry's `enabled`), the same key the engine reads. Routes:
+`patchmanager` (`addon`, `cat`), `togglepatch`, `patchbulk`, `patchengine` (`op`).
 
 ### 🔁 Lifecycle & Upstream Updates
 
@@ -606,15 +618,23 @@ source‑hook patches live in the Wizard's patch registry ([§6](#6-runtime-cros
 
 **Skins** ship in the manifest; how they are installed depends on the flow:
 
-- **`skin.fentastic`, `skin.povil.nox`, `skin.estuary`** are repository skins and carry the Profiles UI in their own
-  XML ([§9.6](#96-skin-integration--xml-patching-strategy)). On a fresh install the activated skin is the
-  `lookandfeel.skin` value of the config pack (fallback `skin.povil.nox`), set last through `build_skin.activate`;
-  secondary profiles start in `skin.povil.nox`.
-- **`skin.povil.nox`** (large) is provisioned on a fresh install and is *on‑demand* afterwards (`ON_DEMAND_SKINS`: the
-  updater never force‑installs it on an existing device). **`skin.arctic.fuse.3`** (AF3) is installed only through the
-  wizard's *Switch Skin* flow (`post_install_provisioning(ids=[...])`, headless‑first) and is the only skin patched at
-  runtime.
-- **`skin.estuary`** — kept as the safe fallback skin.
+- **The default skin is `skin.fentastic`** (`DEFAULT_BUILD_SKIN` in `uservar.py`, read as `CONFIG.DEFAULT_BUILD_SKIN`; the
+  config pack's `lookandfeel.skin` agrees). It is the only skin a fresh install or the background updater downloads, the
+  one set last through `build_skin.activate`, and the one a new secondary profile starts in.
+- **Every other skin is on demand, like Umbrella** (`skins/skin_catalog.py`: `on_demand_ids()` = the catalog minus the default;
+  `skin_catalog.SKINS` is the single list of skin ids, `build_skin` and `child_profiles` read it): Estuary
+  (the build edition), NOX, Onyx and Arctic Fuse 3 are downloaded only when the user installs them from the **Skin Manager**
+  (Maintenance -> מנהל סקינים) or picks them in *Switch Skin*; the updater still keeps an *installed* one current. NOX /
+  Onyx / Estuary come from the verified modular manifest (`skin_packs.ensure_modular_skin`); AF3 goes through Kodi's
+  native install from repository.jurialmunkey (`post_install_provisioning(ids=[...])`). The one-table catalog also feeds the
+  picker, so a new skin is one line there.
+- **Nothing is seeded for a skin that is not installed.** `skin_catalog.blocks_seeding('addon_data/<skin>/...')` guards the
+  config pack's auto-seed of unlisted files (`config_apply`), secondary-profile seeding (`profile_store.seed_profile`),
+  `build_skin.prepare_layout` (`LAYOUT_DEFAULTS`) and `child_profiles.seed_skin_flags`; the default skin is never blocked.
+  A skin that ships baked settings gets them from `build_skin.switch` (it seeds before activating). The runtime repairs and
+  the registry already skip an absent skin (`no_af3`, `optional` entries).
+- Skins carry the Profiles UI in their own XML ([§9.6](#96-skin-integration--xml-patching-strategy)); **`skin.arctic.fuse.3`**
+  is the only skin patched at runtime.
 
 **Skin switching is live.** `build_skin.switch()` enables the skin and its dependencies, activates it through Kodi's
 settings API, accepts Kodi's own retention question with the scoped confirmer, and refreshes the home — no restart.
@@ -794,7 +814,7 @@ Properties that make it safe to call repeatedly:
 - `write_missing()` creates a file only if absent (hard-link or exclusive create) and validates the path before and
   after creating directories (symlink-safe). A user's file is never replaced.
 - An interrupted seed resumes; the receipts below record what is complete.
-- A new profile starts in `skin.povil.nox` (`profile_store.DEFAULT_SKIN`); when the master prepares it
+- A new profile starts in the default skin (`skin_catalog.default_skin()`, `skin.fentastic`); when the master prepares it
   (`prepare_login=True`) the skin is written into the inactive profile's `guisettings.xml` before Kodi reads it.
 - Seed failures raise one of `profile_store.SEED_ERRORS` (plus `config_apply.PackUnavailable` in `build_profiles`), which
   callers treat as "defer and retry".
@@ -1194,7 +1214,7 @@ one or two files. Every new folder lives inside `plugin.program.kodipovilwizard/
 | `provisioning/`  | `banner`, `auto_install`, `ota`                                                            | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, and the start-up OTA pass (`run_startup_ota`)                                                   |
 | `build/`         | `wizard_actions`                                                                           | The `Wizard` class: fresh / normal install, GUI fix, theme, quick update, restart, force-close                                                                                                |
 | `packs/`         | `pack_installer`                                                                           | The shared on-demand zip-pack engine (`_ensure_packs_installed`, pack registration / version helpers, `NOX_PACK_BASE_URL`)                                                                    |
-| `skins/`         | `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`, `skin_settings`, `fentastic_manager`, `onyx_home/` (`favourites_row`, `pvr_row`, `hero_details`), `search_provider_picker` | On-demand skins (NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch; `skin_settings`: the `lookandfeel.*` JSON-RPC helpers (`switch_to_skin`, `skin_to_default`, `look_and_feel_data`); `fentastic_manager`: FENtastic helper data / skin XMLs kept across a wipe and the home-widget layout a quick update leaves alone; `onyx_home/`: the Onyx home's favourites / live TV rows and its hero details. |
+| `skins/`         | `skin_catalog`, `skin_manager`, `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`, `skin_settings`, `fentastic_manager`, `onyx_home/` (`favourites_row`, `pvr_row`, `hero_details`), `search_provider_picker` | The skin catalog (default skin, on-demand rule, seeding guard), the Skin Manager menu (browse / install / switch), on-demand skins (Estuary / NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch; `skin_settings`: the `lookandfeel.*` JSON-RPC helpers (`switch_to_skin`, `skin_to_default`, `look_and_feel_data`); `fentastic_manager`: FENtastic helper data / skin XMLs kept across a wipe and the home-widget layout a quick update leaves alone; `onyx_home/`: the Onyx home's favourites / live TV rows and its hero details. |
 | `addons/`        | `umbrella`, `debrid_notice`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |
 | `accounts_auth/` | `acctmgr`                                                                                  | Account Manager Lite: pilot install and install-for-everyone                                                                                                                                  |
 | `system/`        | `kodi_version`, `speedtest`                                                                | The official-Kodi release check (Android / Windows) and the network speed tests                                                                                                               |
@@ -1248,9 +1268,10 @@ source):
 | `repository.Fishenzon`                                           | repository    | Source for `plugin.video.idanplus`                  |
 | `repository.otaku`                                               | repository    | Source for `plugin.video.otaku` (+ `context.otaku`) |
 | `repository.jurialmunkey`                                        | repository    | Source for Arctic Fuse 3 + helpers                  |
-| `skin.fentastic`                                                 | skin          | Build skin                                          |
-| `skin.povil.nox`                                                 | skin          | Build skin (large; on‑demand after a fresh install) |
-| `skin.estuary`                                                   | skin          | Fallback skin                                       |
+| `skin.fentastic`                                                 | skin          | Default build skin (the only one provisioned)       |
+| `skin.povil.nox`                                                 | skin          | Build skin, on demand (Skin Manager)                |
+| `skin.povil.onyx`                                                | skin          | Build skin, on demand (Skin Manager)                |
+| `skin.estuary`                                                   | skin          | Build edition of Estuary, on demand (Skin Manager)  |
 
 **Content addons (NOT in the manifest — provisioned headlessly):**
 `plugin.video.pov`, `plugin.video.idanplus`, `plugin.video.otaku`,

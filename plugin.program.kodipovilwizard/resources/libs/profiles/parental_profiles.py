@@ -77,7 +77,8 @@ def set_child(master, target, age):
     if skin is None:
         skin = ET.SubElement(gui.getroot(), 'setting', {'id': 'lookandfeel.skin'})
     if key not in data['children']:
-        skin.text = 'skin.povil.nox'
+        from resources.libs.skins import skin_catalog
+        skin.text = skin_catalog.default_skin()
     skin.attrib.pop('default', None)
     atomic_write(os.path.join(path, 'guisettings.xml'), ET.tostring(gui.getroot(), encoding='utf-8', xml_declaration=True))
     atomic_write(os.path.join(path, 'kodipovil.profile_gui_defaults.xml'),

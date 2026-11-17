@@ -115,7 +115,8 @@ def prepare_first_login():
     receipt = os.path.join(active, 'kodipovil.profile_addons_ready')
     if os.path.isfile(receipt):
         return True
-    required = (WIZARD, 'plugin.video.pov', 'skin.povil.nox',
+    from resources.libs.skins import skin_catalog
+    required = (WIZARD, 'plugin.video.pov', skin_catalog.default_skin(),
                 'script.fentastic.helper', 'service.subtitles.kodipovilai',
                 'plugin.program.orderfavourites-hebrew')
     addons = xbmcvfs.translatePath('special://home/addons/')

@@ -1,3 +1,10 @@
+0.5.2
+- Patch Manager (Maintenance -> מנהל טלאים): the patch list is now folders -- one per add-on (POV, מטריה, עידן פלוס, Arctic Fuse 3) with an active / total counter, POV split into Hebrew category folders -- with bulk enable / disable per folder and a "כללי / מנוע" panel (the POV-patching switch, run the engine now, health report, reset preferences). Moved out of the Developer Menu. PatchEngine.run takes addon_id / only_ids, so a toggle runs only its own patches.
+- Skin Manager (Maintenance -> מנהל סקינים): browse the build's skins, install one on demand and switch between installed skins; the Switch Skin picker of the skins' power menus shares the same flow and marks skins that download on demand.
+- Skins: FENtastic is the default and the only skin a fresh install or the background updater downloads. Estuary (build edition), NOX, Onyx and Arctic Fuse 3 are installed on demand, like Umbrella; an installed one is still kept up to date. New profiles and child profiles start in FENtastic. One skin catalog (skins/skin_catalog.py) replaces the repeated skin lists.
+- Nothing is seeded for a skin that is not installed (config pack, secondary profiles, layout defaults, child-profile flags); a skin's baked settings (Arctic Fuse 3, Estuary) are seeded just before its first switch.
+- Removed the unused ensure_onyx_installed.
+
 0.5.1
 - Patch registry reworked (Phase 4-5): 147 entries (117 POV, 13 Umbrella, 12 Idan Plus, 5 Arctic Fuse 3). The Idan Plus and most Umbrella runtime patchers became registry entries (XML hooks, and `optional` entries that skip an add-on that is not installed); dead POV patches and 6 orphaned logic modules deleted; the PatchEngine names the patch whose block breaks compile. Three Umbrella / AF3 patchers stay runtime patchers by design (the engine has no "replace" action).
 - POV 6.11.03: the whole Hebrew .po is merged into POV's strings table (275 of 278 strings), lost behaviour restored (broken hooks, Trakt names, favourites dialog, MDBList cache, IL release hooks), one shared HTTP session install point.

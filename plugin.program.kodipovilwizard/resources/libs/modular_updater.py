@@ -9,14 +9,14 @@ from resources.libs.common.config import CONFIG
 from resources.libs.common import logging
 from resources.libs.common import tools
 from resources.libs import db
+from resources.libs.skins import skin_catalog
 from resources.libs import config_apply
 from resources.libs.headless_installer import HeadlessInstaller, BINARY_PREFIXES
 
 
 class ModularUpdater:
-    # On-demand skins are installed by Fresh Install / Switch Skin only, never
-    # by the background updater.
-    ON_DEMAND_SKINS = frozenset(('skin.povil.nox', 'skin.povil.onyx'))
+    # Only the default skin (skins/skin_catalog.py) is provisioned. Every other skin is installed on demand by the Skin
+    # Manager / Switch Skin, never by a fresh install or the background updater (an installed one is still updated).
 
     def __init__(self, background=False):
         self.background = background
@@ -192,7 +192,7 @@ class ModularUpdater:
             if not local_ver:
                 # Only update what is ALREADY installed, unless install_missing
                 # is set (fresh install). On-demand skins are never force-installed.
-                if addon_id in self.ON_DEMAND_SKINS and not getattr(self, 'fresh', False):
+                if addon_id in skin_catalog.on_demand_ids():
                     continue
                 if install_missing:
                     update_queue.append(mod)
@@ -554,12 +554,14 @@ class ModularUpdater:
         for addon_id, mod in (manifest.get('addons') or {}).items():
             expected = mod.get('version')
             actual = self.get_local_version(addon_id)
+            if not actual and addon_id in skin_catalog.on_demand_ids():
+                continue  # on demand: not installed is the normal state
             if (not expected or not actual or
                     self._version_tuple(actual) < self._version_tuple(expected)):
                 missing.append('{0} ({1}, expected {2})'.format(
                     addon_id, actual or 'missing', expected or 'unspecified'))
 
-        for addon_id in list(self.CORE_PROVISION_IDS) + ['skin.povil.nox', 'script.fentastic.helper']:
+        for addon_id in list(self.CORE_PROVISION_IDS) + [skin_catalog.default_skin(), 'script.fentastic.helper']:
             try:
                 enabled = xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id))
             except Exception:
@@ -786,7 +788,7 @@ class ModularUpdater:
             for _ in range(20):
                 if self._fresh_install_complete(manifest):
                     break
-                core = list(self.CORE_PROVISION_IDS) + ['skin.povil.nox', 'script.fentastic.helper']
+                core = list(self.CORE_PROVISION_IDS) + [skin_catalog.default_skin(), 'script.fentastic.helper']
                 for addon_id in core:
                     if not xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
                         self._enable_addon(addon_id)

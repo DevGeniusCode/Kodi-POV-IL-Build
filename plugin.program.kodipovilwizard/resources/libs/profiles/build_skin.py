@@ -1,7 +1,7 @@
 """Activate a complete build skin through Kodi's live settings API.
 
 Engine-facing (used by fresh_install and the skin switcher, no Profiles
-knowledge): SKINS, rpc, enable_skin, confirm_requested_skin, activate,
+knowledge): rpc, enable_skin, confirm_requested_skin, activate,
 persist_live_settings, close_switch_menu, wait_dialogs.
 
 Profiles-facing: prepare_active_skin_defaults, prepare_layout, refresh_home and
@@ -19,11 +19,11 @@ import xbmc
 import xbmcvfs
 import xbmcgui
 
-SKINS = ('skin.estuary', 'skin.fentastic', 'skin.povil.nox', 'skin.arctic.fuse.3', 'skin.povil.onyx')
 # Seeded into the active profile when absent (the master receives them with
 # its config pack; secondary profiles through profile_store.seed_profile).
 LAYOUT_DEFAULTS = ('addon_data/script.fentastic.helper/cpath_cache.db',
                    'addon_data/skin.fentastic/settings.xml',
+                   'addon_data/skin.estuary/settings.xml',
                    'addon_data/skin.arctic.fuse.3/settings.xml')
 _confirm_lock = threading.Lock()
 
@@ -99,7 +99,8 @@ def enable_skin(ident, visiting=None):
 
 def confirm_requested_skin(target):
     """Accept the exact native retention question only during our own request."""
-    if target not in SKINS:
+    from resources.libs.skins import skin_catalog
+    if skin_catalog.find(target) is None:
         return False
     # The observer thread and activate()'s own loop both call this; only one
     # may inspect and click the dialog at a time.
@@ -153,7 +154,8 @@ def persist_live_settings():
 
 
 def activate(target):
-    if target not in SKINS or not enable_skin(target):
+    from resources.libs.skins import skin_catalog
+    if skin_catalog.find(target) is None or not enable_skin(target):
         return False
     monitor = xbmc.Monitor()
     if monitor.abortRequested():
@@ -230,6 +232,7 @@ def prepare_layout():
     """Seed shipped layout only when absent; use the active profile's paths."""
     from resources.libs import config_apply
     from resources.libs.profiles import af3_skin, profile_store
+    from resources.libs.skins import skin_catalog
     profile = xbmcvfs.translatePath('special://profile/')
     # Arctic Fuse is installed on demand and is not shipped with profile UI.
     af3_skin.patch()
@@ -237,7 +240,8 @@ def prepare_layout():
     try:
         with config_apply.open_verified_pack() as pack:
             for name in LAYOUT_DEFAULTS:
-                if name in pack:
+                # Never seed a skin that is not installed (it is seeded here once the skin is installed and switched to)
+                if name in pack and not skin_catalog.blocks_seeding(name):
                     profile_store.write_missing(profile, name, pack.read(name))
     except config_apply.PackUnavailable:
         # Only the heal-if-deleted seeding is skipped: the master got these
@@ -287,8 +291,9 @@ def switch(target):
         from resources.libs.profiles import af3_skin, child_profiles
         child_profiles.seed_skin_flags(xbmcvfs.translatePath('special://profile/'))
         af3_skin.patch()
-    # FENtastic's helper starts at skin activation. Seed its layout first.
-    if target == 'skin.fentastic':
+    # FENtastic's helper starts at skin activation, and a skin that ships baked settings must find them at its first
+    # load (it is not seeded while it is not installed). Seed its layout first.
+    if 'addon_data/{0}/settings.xml'.format(target) in LAYOUT_DEFAULTS:
         if not prepare_layout():
             return False
     if not activate(target):

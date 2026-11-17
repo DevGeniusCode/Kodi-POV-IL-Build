@@ -12,7 +12,6 @@ import xbmcgui
 
 from resources.libs.profiles import profile_age_guard
 
-SKINS = ('skin.povil.nox', 'skin.estuary', 'skin.fentastic', 'skin.arctic.fuse.3', 'skin.povil.onyx')
 # Kodi's native settings controls are generated from negative IDs (-180).
 # Positive IDs belong to dialog chrome/templates, not the editable settings.
 NATIVE_SETTING_CONTROLS = range(-180, -160)
@@ -38,7 +37,10 @@ def write_xml(path, root):
 
 def seed_skin_flags(profile):
     """Inactive profile only; retain every unrelated skin preference."""
-    for ident in SKINS:
+    from resources.libs.skins import skin_catalog
+    for ident in skin_catalog.ids():
+        if skin_catalog.blocks_seeding('addon_data/' + ident + '/settings.xml'):
+            continue  # a skin that is not installed gets nothing seeded (sync_active covers it once it is)
         path = os.path.join(profile, 'addon_data', ident, 'settings.xml')
         try:
             root = ET.parse(path).getroot() if os.path.isfile(path) else ET.Element('settings')

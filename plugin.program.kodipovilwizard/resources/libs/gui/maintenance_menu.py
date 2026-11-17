@@ -30,6 +30,8 @@ from resources.libs.common.config import CONFIG
 class MaintenanceMenu:
 
     def get_listing(self):
+        directory.add_dir('[B]מנהל סקינים[/B]', {'mode': 'skinmanager'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
+        directory.add_dir('[B]מנהל טלאים[/B]', {'mode': 'patchmanager'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
         directory.add_dir('[B]Cleaning Tools[/B]', {'mode': 'maint', 'name': 'clean'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
         directory.add_dir('[B]Addon Tools[/B]', {'mode': 'maint', 'name': 'addon'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
         directory.add_dir('[B]Logging Tools[/B]', {'mode': 'maint', 'name': 'logging'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)

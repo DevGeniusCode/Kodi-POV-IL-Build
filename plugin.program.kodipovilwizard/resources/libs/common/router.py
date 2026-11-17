@@ -1,5 +1,4 @@
 import xbmc
-import xbmcaddon
 import xbmcgui
 import xbmcplugin
 
@@ -280,33 +279,36 @@ class Router:
             menu.developer()
             self._finish(handle)
 
-        # PATCH MANAGER
+        # SKIN MANAGER (resources/libs/skins/skin_manager.py)
+        elif mode == 'skinmanager':
+            from resources.libs.skins import skin_manager
+            skin_manager.show()
+            self._finish(handle)
+
+        elif mode == 'skinaction':
+            from resources.libs.skins import skin_manager
+            # An action, not a folder: release Kodi's directory busy dialog before the confirm / progress windows
+            if handle >= 0:
+                xbmcplugin.endOfDirectory(handle, succeeded=False)
+            skin_manager.act(self.params.get('skin', ''))
+
+        # PATCH MANAGER (resources/libs/gui/patch_manager.py)
         elif mode == 'patchmanager':
-            menu.patch_manager_menu()
+            from resources.libs.gui import patch_manager
+            patch_manager.show(self.params)
             self._finish(handle)
 
         elif mode == 'togglepatch':
-            patch_id = name
-            addon_obj = xbmcaddon.Addon()
-            current = addon_obj.getSetting('patch_enabled_' + patch_id)
+            from resources.libs.gui import patch_manager
+            patch_manager.toggle(name)
 
-            # Fall back to patches_config.py defaults if setting has never been manually toggled
-            if not current:
-                try:
-                    from resources.libs.patches.patches_config import PATCH_CONFIG
-                    default_state = next((p.get('enabled', True) for p in PATCH_CONFIG if p.get('id') == patch_id), True)
-                except Exception:
-                    default_state = True
-                current = 'true' if default_state else 'false'
+        elif mode == 'patchbulk':
+            from resources.libs.gui import patch_manager
+            patch_manager.bulk(self.params)
 
-            new_state = 'false' if current == 'true' else 'true'
-            addon_obj.setSetting('patch_enabled_' + patch_id, new_state)
-
-            # Execute PatchEngine to immediately scrub/apply the toggled patch
-            from resources.libs.patch_engine import PatchEngine
-            PatchEngine().run()
-
-            xbmc.executebuiltin('Container.Refresh()')
+        elif mode == 'patchengine':
+            from resources.libs.gui import patch_manager
+            patch_manager.engine_action(self.params)
 
         # MAINTENANCE FUNCTIONS
         elif mode == 'kodi17fix':  # Misc Maintenance -> Kodi 17 Fix

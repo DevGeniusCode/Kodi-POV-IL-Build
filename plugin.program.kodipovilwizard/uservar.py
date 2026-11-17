@@ -39,6 +39,9 @@ UPDATECHECK = 0
 APKFILE = 'http://'
 
 #########################################################
+# KODI-POV-IL - DEFAULT BUILD SKIN. The only skin a fresh install / the background updater downloads and the one a new
+# profile starts in; every other build skin is installed on demand from the Skin Manager (skins/skin_catalog.py).
+DEFAULT_BUILD_SKIN = 'skin.fentastic'
 # KODI-RD-IL - BUILD SKIN SWITCH
 BUILD_SKIN_SWITCH_IMAGE_URL = 'https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/wizard/assets/build_menu_screenshots/pov_il_splash.jpg'
 # KODI-POV-IL - MODULAR UPDATER (Phase 2/3, manifest-based; replaces the

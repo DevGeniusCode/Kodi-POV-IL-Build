@@ -288,6 +288,9 @@ def seed_profile(master, profile, archive, prepare_login=False, *, verified=Fals
                        name == 'addon_data/script.fentastic.helper/cpath_cache.db' or
                        (name.startswith('addon_data/') and name.endswith('/settings.xml')))
             if allowed:
+                from resources.libs.skins import skin_catalog
+                if skin_catalog.blocks_seeding(name):
+                    continue  # never seed data for a skin that is not installed
                 content = zf.read(name)
                 if name == 'favourites.xml':
                     favourites = ET.fromstring(content)
@@ -328,7 +331,8 @@ def seed_profile(master, profile, archive, prepare_login=False, *, verified=Fals
             row = root.find("setting[@id='lookandfeel.skin']")
             if row is None:
                 row = ET.SubElement(root, 'setting', {'id': 'lookandfeel.skin'})
-            row.text = 'skin.povil.nox'
+            from resources.libs.skins import skin_catalog
+            row.text = skin_catalog.default_skin()
             row.attrib.pop('default', None)
             fd, temporary = tempfile.mkstemp(prefix='.profile-', dir=target)
             try:

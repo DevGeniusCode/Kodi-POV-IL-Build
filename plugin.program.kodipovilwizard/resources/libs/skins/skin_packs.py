@@ -48,10 +48,6 @@ NOX_PACKS = [
         'addon_ids': ['skin.povil.nox'],
     },
 ]
-# Onyx (skin.povil.onyx) is optional too: installed from the modular manifest
-# only when the user picks it from Switch Skin.
-ONYX_SKIN_VERSION = '1.0.0'
-
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
 
@@ -84,13 +80,24 @@ def ensure_arctic_fuse_3_installed():
     return xbmc.getCondVisibility('System.HasAddon({0})'.format(AF3_SKIN_ID))
 
 
+def ensure_skin_installed(skin_id):
+    """Install any catalog skin on demand (no-op when present); True once it is installed AND enabled.
+
+    The Skin Manager and Switch Skin call this: Arctic Fuse 3 goes through Kodi's native install, every other skin through
+    the verified modular manifest. A skin that is not in the catalog is refused.
+    """
+    from resources.libs.skins import skin_catalog
+    skin = skin_catalog.find(skin_id)
+    if skin is None:
+        return False
+    if skin.id == AF3_SKIN_ID:
+        return ensure_arctic_fuse_3_installed()
+    return ensure_modular_skin(skin.id, skin.floor, skin.name)
+
+
 def ensure_nox_installed():
     """Use the verified modular skin, never the obsolete static pack."""
     return ensure_modular_skin('skin.povil.nox', NOX_SKIN_VERSION, 'NOX')
-
-
-def ensure_onyx_installed():
-    return ensure_modular_skin('skin.povil.onyx', ONYX_SKIN_VERSION, 'Onyx')
 
 
 def ensure_modular_skin(ident, floor, tag):

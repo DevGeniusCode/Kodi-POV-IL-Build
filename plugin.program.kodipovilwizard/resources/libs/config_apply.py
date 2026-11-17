@@ -812,7 +812,10 @@ def apply_config_pack(manifest, fresh=False, background=True, progress=None):
         dest_rel_userdata = 'userdata/' + dest_rel
         dest_path = _home_path(dest_rel_userdata)
 
-        if not os.path.exists(dest_path):
+        from resources.libs.skins import skin_catalog
+        if skin_catalog.blocks_seeding(dest_rel):
+            logging.log("[config_apply] unlisted file not seeded (its skin is not installed): {0}".format(dest_rel))
+        elif not os.path.exists(dest_path):
             try:
                 original_files.setdefault(dest_path, None)
                 os.makedirs(os.path.dirname(dest_path), exist_ok=True)

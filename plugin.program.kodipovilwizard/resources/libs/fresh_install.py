@@ -90,7 +90,7 @@ def _rpc(method, params):
 
 def _accept_initial_skin_confirmation():
     from resources.libs.profiles.build_skin import confirm_requested_skin
-    return confirm_requested_skin('skin.povil.nox')
+    return confirm_requested_skin(CONFIG.DEFAULT_BUILD_SKIN)
 
 
 def apply_live_defaults(defaults_path=None):
@@ -101,7 +101,7 @@ def apply_live_defaults(defaults_path=None):
     reverted skin is not reported as a successfully activated build.
     """
     root = ET.parse(defaults_path or os.path.join(CONFIG.USERDATA, 'kodipovil.fresh_gui_defaults.xml')).getroot()
-    target_skin = root.findtext("setting[@id='lookandfeel.skin']", 'skin.povil.nox')
+    target_skin = root.findtext("setting[@id='lookandfeel.skin']", CONFIG.DEFAULT_BUILD_SKIN)
     monitor = xbmc.Monitor()
     for setting in root.findall('setting'):
         key = setting.get('id', '')
@@ -197,7 +197,7 @@ def finalize():
     if not ModularUpdater.is_provisioned():
         return False
     required = tuple(ModularUpdater.CORE_PROVISION_IDS) + (
-        'skin.povil.nox', 'script.fentastic.helper',
+        CONFIG.DEFAULT_BUILD_SKIN, 'script.fentastic.helper',
         'plugin.program.orderfavourites-hebrew', 'service.subtitles.kodipovilai')
     db.addon_database(list(required), 1, True)
     xbmc.executebuiltin('UpdateLocalAddons')

@@ -46,12 +46,25 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `script.skinvariables-nexus`) and its native TMDbHelper discover runs untouched (see "Architectural decision: AF3 discover" below).
   OPEN: the MDBList pagination pair and `pov_mdblist_patch_logic` stay until checked against the live API; the lazy
   `watched_cache` pair is disabled pending a 32-bit measurement.
+- **Phase 5, Step 3 (UI; owner-approved):** (a) the **Patch Manager** is now categorized (`gui/patch_manager.py`: add-on folders ->
+  category folders for groups over 25 -> patches, bulk switches, a "General / Engine" panel) and lives in Maintenance (Hebrew
+  labels); `PatchEngine.run` takes `addon_id` / `only_ids` so a toggle runs only its own patches. (b) the **Skin Manager**
+  (`skins/skin_manager.py`, Maintenance) browses / installs / switches skins from one catalog (`skins/skin_catalog.py`).
+  (c) **Skin policy:** `skin.fentastic` is the default (`CONFIG.DEFAULT_BUILD_SKIN`, `uservar.py`) and the ONLY skin provisioned;
+  Estuary (build edition), NOX, Onyx and AF3 are on demand. See the rule "SKINS ARE ON DEMAND" below.
 
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
 - **STRUCTURAL REFACTORING ONLY:** NO bug fixing, NO logic optimization. A fix is made only when the user explicitly
   approves it, as its own clearly labelled change; report every bug you find instead of fixing it silently.
 - **THE `libs/` DIRECTORY RULE:** domain folders live INSIDE the Wizard's `resources/libs/`, never at the root level.
+- **SKINS ARE ON DEMAND (owner rule, Phase 5):** only `CONFIG.DEFAULT_BUILD_SKIN` (`skin.fentastic`) is downloaded by a fresh
+  install or the background updater (`skin_catalog.on_demand_ids()` is everything else, an INSTALLED on-demand skin is still
+  updated). The Wizard must never manage, patch or seed data for a skin that is not installed: seeding of
+  `addon_data/<skin>/` goes through `skin_catalog.blocks_seeding` (config pack auto-seed, profile seeding,
+  `build_skin.prepare_layout`, `child_profiles.seed_skin_flags`); runtime repairs gate on the skin's `addon.xml` and registry
+  entries of a skin are `optional`. A new code path that touches a skin must follow the same rule. Skin ids come from
+  `skin_catalog.SKINS` (the single list: `build_skin`, `child_profiles` and the switcher read it).
 - **NO SHIMS (clean-install build):** move the code, update every import / caller to the new path, delete the old one.
 - **NO EMPTY `__init__.py` IN SUBFOLDERS:** folders under `resources/libs/` are Python 3 namespace packages
   (`xbmc.python` 3.0.0). Keep only `resources/__init__.py`, `resources/libs/__init__.py` and the pre-existing ones in
@@ -121,8 +134,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   rest of the repair bundle. Until then it stays FIRST in the pass.
 - **Known, kept as-is until Phase 4 gets to it:** the registry validator misreports
   `profile_age_guard.py` as missing when given the patches dir (it lives in `profiles/`); dead code `boot/gui_ready.stop_if_duplicate`, `build/wizard_actions.wizard()`, the dormant
-  first-boot stabilizer; skin IDs hard-coded in `profiles/build_skin.SKINS`, `profiles/child_profiles.SKINS`,
-  `skins/switcher.skin_mapping`; `skins/skin_settings.swap_us()` is not skin code.
+  first-boot stabilizer; `skins/skin_settings.swap_us()` is not skin code.
 - `tonight/entrypoints.LEGACY_ICON` still names the subtitle add-on's icon (a string used to match old tiles);
   `service.subtitles.kodipovilai/default.py` has one now-unused `xbmcaddon` name (left to keep upstream merges clean).
 - **Phase 3 findings:** Wizard-side repair logs follow the Wizard's own `log_level`
@@ -150,7 +162,14 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   four rows (movies, shows, people, collections), and the native TMDbHelper "Discover" section (genre / decade filters) still
   works and is no longer repointed to POV; (9) Umbrella first launch keeps the baked settings (Hebrew API
   language, CocoScrapers as external provider); (10) the movie "networks" tiles of NOX / Onyx / the shortcut folder open their
-  lists (they now pass `company=`).
+  lists (they now pass `company=`); (11) **Patch Manager:** Maintenance -> מנהל טלאים: folders and counters, one toggle,
+  a bulk switch and "reset", the General / Engine panel; confirm that `setSetting('patch_enabled_<id>')` persists (the ids are
+  not declared in `settings.xml`) and that a toggle only runs its own patches; (12) **Skin Manager / skin policy:** a fresh
+  install installs only FENtastic (no NOX / Estuary / Onyx download, provisioning still completes); Maintenance -> מנהל סקינים
+  installs and switches NOX, Onyx, AF3 and Estuary (the build edition downloads over Kodi's stock one); a skin installed later
+  gets its baked settings (AF3, Estuary) before its first load; no `addon_data/` of a not-installed skin appears (fresh
+  install, new profile, child profile); the picker of the skins' power menus still works; Onyx needs its zip in
+  `manifest.json` (CI) before it can be installed.
 
 ## ARCHITECTURAL DECISION (Phase 5): no "replace" in the PatchEngine
 

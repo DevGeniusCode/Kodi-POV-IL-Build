@@ -117,17 +117,29 @@ class PatchEngine(object):
     # Public entry point
     # ------------------------------------------------------------------
     @staticmethod
-    def _select(raw_list, category):
-        """Entries of one category, or all of them for the default 'all'.
+    def _select(raw_list, category, addon_id=None, only_ids=None):
+        """Entries of one category / one host add-on / a set of ids, or all of them by default.
 
-        Selection happens BEFORE schema validation, so a scoped run is judged
-        only on its own entries: an unrelated malformed entry can neither
-        block it nor be counted against it.
+        The filters combine (all must match). ``only_ids`` is checked with ``is not None``: an empty
+        collection selects nothing. Selection happens BEFORE schema validation, so a scoped run is
+        judged only on its own entries: an unrelated malformed entry can neither block it nor be
+        counted against it.
         """
-        if category in (None, 'all'):
+        if category in (None, 'all') and not addon_id and only_ids is None:
             return raw_list
-        return [entry for entry in (raw_list or [])
-                if isinstance(entry, dict) and entry.get('category') == category]
+        wanted = frozenset(only_ids) if only_ids is not None else None
+        selected = []
+        for entry in (raw_list or []):
+            if not isinstance(entry, dict):
+                continue
+            if category not in (None, 'all') and entry.get('category') != category:
+                continue
+            if addon_id and (entry.get('addon_id') or DEFAULT_ADDON_ID) != addon_id:
+                continue
+            if wanted is not None and entry.get('id') not in wanted:
+                continue
+            selected.append(entry)
+        return selected
 
     @staticmethod
     def all_applied(stats):
@@ -143,15 +155,17 @@ class PatchEngine(object):
                       ('applied', 'upgraded', 'skipped_current', 'optional_absent'))
         return selected > 0 and healthy == selected and not stats.get('malformed', 0)
 
-    def run(self, _normalized=None, category='all'):
-        """Apply every configured patch (or only those of ``category``).
+    def run(self, _normalized=None, category='all', addon_id=None, only_ids=None):
+        """Apply every configured patch (or only those of ``category`` / ``addon_id`` / ``only_ids``).
 
         Returns the internal stats dict. Guaranteed not to raise. ``_normalized``
-        (pre-validated patches, used by run_if_changed) bypasses the category.
+        (pre-validated patches, used by run_if_changed) bypasses the selection.
+        The Patch Manager scopes a toggle to the entries it changed.
         """
         try:
             patches = (_normalized if _normalized is not None else
-                       self._normalize_patches(self._select(self._raw_config, category)))
+                       self._normalize_patches(
+                           self._select(self._raw_config, category, addon_id, only_ids)))
             self._stats['selected'] = len(patches)
             if not patches:
                 logging.log('[PatchEngine] No valid patches configured; nothing to do.',

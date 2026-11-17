@@ -116,6 +116,8 @@ class Config:
         self.NOTIFICATION = getattr(uservar, 'NOTIFICATION', '')
         
         #########################################################################################################
+        # KODI-POV-IL - the default build skin (skins/skin_catalog.py)
+        self.DEFAULT_BUILD_SKIN = getattr(uservar, 'DEFAULT_BUILD_SKIN', 'skin.fentastic')
         # KODI-RD-IL - BUILD SKIN SWITCH
         self.BUILD_SKIN_SWITCH_IMAGE_URL = getattr(uservar, 'BUILD_SKIN_SWITCH_IMAGE_URL', '')
         # KODI-POV-IL - MODULAR UPDATER (manifest-based). getattr keeps an old

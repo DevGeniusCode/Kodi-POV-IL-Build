@@ -51,7 +51,8 @@ def prepare(master, profile):
     generator.STATE_PATH = os.path.join(target, 'addon_data',
         'plugin.program.orderfavourites-hebrew', 'favourites_state.json')
     generator._VIS_MGR = _Connections(target)
-    if generator.generate_favourites_xml('skin.povil.nox', merge=True, write=True) is None:
+    from resources.libs.skins import skin_catalog
+    if generator.generate_favourites_xml(skin_catalog.default_skin(), merge=True, write=True) is None:
         raise ValueError('Profile favourites could not be prepared')
     from resources.libs.tonight import entrypoints as tonight
     path = os.path.join(target, 'favourites.xml')
