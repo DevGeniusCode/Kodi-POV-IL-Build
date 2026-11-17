@@ -38,7 +38,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `.po` merged into POV's strings table, P3 decisions) are done. Step 2 (Category C: the 17 runtime patchers of Umbrella, Idan
   Plus and AF3, reference Umbrella 6.8.02, Idan Plus 4.0.6, AF3 3.5.2) is applied: Idan Plus (3) and Umbrella (5 of its 10) became
   registry entries, Umbrella's settings are baked into `userdata` (`config_version` 2.0.8), the AF3 search patcher was rewritten
-  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 147 entries (117
+  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 149 entries (119
   POV, 13 Umbrella, 12 Idan Plus, 5 AF3). Runtime patchers that remain because the registry cannot express them (they REPLACE
   lines or need function-scoped anchors): `umbrella_tmdb_apikey`, `umbrella_list_order`, `af3_dialog_subtitles`, `af3_home`
   (data seeding, font) and the data copies `umbrella_hebrew_ui`, `umbrella_watch_*` (see "Architectural decision" below). The AF3
@@ -78,6 +78,9 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   wrote `network_id` (NOX and Onyx already passed `company=`): POV returned an empty list and Kodi showed a failed directory. The 8 items
   now use `company` (data-only edit, the other 11 rows byte-identical, `config_version` 2.0.10). Known side effect of the existing patch:
   POV's extras window ("more from this studio" of a movie) calls the same function with a real company id and now gets provider results.
+  POV context menu (Phase 6): the list-manager entries (Trakt, MDBList, TMDb lists; "ניהול רשימות") of movie and show cards are hidden for a service
+  that is not connected (registry `pov_cm_hide_unconnected_movies` / `_tvshows`: an insert after `self.cm_sort = settings.context_menu_sort()` that sets the
+  sort key of the entry to 0 when `trakt.token` / `mdblist.token` / `tmdb.token` is empty; POV drops keys of 0). Episode cards already gate theirs on `watched_indicators`.
 
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
@@ -202,7 +205,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   minutes) makes its status line replace the button and its tile appear without a restart (the tile opens it, it starts with the
   baked settings and no setup screens); the optional add-ons tile opens the screen (`ActivateWindow(Programs, ...)` is
   unverified in FENtastic / AF3); removing Otaku hides the tile at the next refresh and boot does not reinstall it; Umbrella follows
-  the same rules; movies networks tiles open provider lists.
+  the same rules; movies networks tiles open provider lists. (15) **POV context menu:** with no Trakt / MDBList / TMDb connected, a movie and a show card show no list-manager entry; connecting one makes its entry appear at the next list.
 
 ## ARCHITECTURAL DECISION (Phase 5): no "replace" in the PatchEngine
 

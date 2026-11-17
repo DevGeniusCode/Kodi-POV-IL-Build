@@ -2967,6 +2967,52 @@ PATCH_CONFIG = [
         "hook": (
             "<autoscroll delay=\"2000\" time=\"8000\" repeat=\"5000\">true</autoscroll>\n"
         )
+    },
+
+    # =====================================================================
+    # ================= POV CONTEXT MENU: LIST MANAGERS ===================
+    # =====================================================================
+    {
+        "id": "pov_cm_hide_unconnected_movies",
+        "name": "Movie context menu: hide list managers of unconnected services",
+        "description": "The list-manager entries of the context menu (Trakt, MDBList, TMDb lists) are hidden for a service that is not connected: the menu shows only what can work. POV drops every entry whose sort key is 0.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/movies.py",
+        "marker": "# WIZARD_POV_CM_HIDE_UNCONNECTED_MOVIES_v1",
+        "anchor": "\t\tself.cm_sort = settings.context_menu_sort()",
+        "action": "append_after",
+        "hook": (
+            "try:\n"
+            "\tself.cm_sort = dict(self.cm_sort, **{_k: 0 for _k, _s in "
+            "(('trakt', 'trakt.token'), ('mdblist', 'mdblist.token'), ('tmdblist', 'tmdb.token')) "
+            "if not kodi_utils.get_setting(_s)})\n"
+            "except Exception:\n"
+            "\tpass\n"
+        )
+    },
+    {
+        "id": "pov_cm_hide_unconnected_tvshows",
+        "name": "Show context menu: hide list managers of unconnected services",
+        "description": "The list-manager entries of the context menu (Trakt, MDBList, TMDb lists) are hidden for a service that is not connected: the menu shows only what can work. POV drops every entry whose sort key is 0.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/menus/tvshows.py",
+        "marker": "# WIZARD_POV_CM_HIDE_UNCONNECTED_TVSHOWS_v1",
+        "anchor": "\t\tself.cm_sort = settings.context_menu_sort()",
+        "action": "append_after",
+        "hook": (
+            "try:\n"
+            "\tself.cm_sort = dict(self.cm_sort, **{_k: 0 for _k, _s in "
+            "(('trakt', 'trakt.token'), ('mdblist', 'mdblist.token'), ('tmdblist', 'tmdb.token')) "
+            "if not kodi_utils.get_setting(_s)})\n"
+            "except Exception:\n"
+            "\tpass\n"
+        )
     }
 ]
 
