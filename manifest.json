@@ -3,7 +3,7 @@
   "name": "Kodi POV IL Build",
   "repo": "DevGeniusCode/Kodi-POV-IL-Build",
   "release_tag": "addons-latest",
-  "generated": "2026-11-17T12:58:16Z",
+  "generated": "2026-11-17T13:03:48Z",
   "manifest_url": "https://raw.githubusercontent.com/DevGeniusCode/Kodi-POV-IL-Build/main/manifest.json",
   "config": {
     "config_version": "2.0.8",
@@ -11,7 +11,7 @@
     "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/config-2.0.8.zip",
     "size": 36522,
     "sha256": "acab85f328c87ef5b248ea068f23336440821c9696ba0dc7756f71679afecb4c",
-    "updated": "2026-11-17T12:58:16Z"
+    "updated": "2026-11-17T13:03:48Z"
   },
   "addons": {
     "plugin.program.autocompletion": {
@@ -23,7 +23,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.autocompletion-2.1.4.zip",
       "size": 21598,
       "sha256": "63d0a996522995f6eff07bec3c428b7548f5c5e72b1ec8ba7c463d083677bc24",
-      "updated": "2026-11-17T12:58:16Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "plugin.program.kodipovilwizard": {
       "id": "plugin.program.kodipovilwizard",
@@ -34,7 +34,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.5.2.zip",
       "size": 4527128,
       "sha256": "90953121f75538f57108852ed60a8b121469768347253ebe4fa4e5d76e1f5df7",
-      "updated": "2026-11-17T12:58:16Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
@@ -45,7 +45,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.orderfavourites-hebrew-1.4.6.zip",
       "size": 23777848,
       "sha256": "d1fd61df51731755441a6872af09f61cc6e4a651405eb3bf9366e2c5fe9c3250",
-      "updated": "2026-11-17T12:58:16Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "repository.709": {
       "id": "repository.709",
@@ -56,7 +56,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/repository.709-1.0.2.zip",
       "size": 707098,
       "sha256": "2b33b75724c803ed5bca2e78c4082a9af4f845ef916ad7e6c56634c597c2e64c",
-      "updated": "2026-10-09T20:07:58Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "repository.Fishenzon": {
       "id": "repository.Fishenzon",
@@ -67,7 +67,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/repository.Fishenzon-1.0.3.zip",
       "size": 19175,
       "sha256": "18a47fdc9cc7ef3b13f40d99e607a93ef4d57a46198e0d6c6091bd77c401e244",
-      "updated": "2026-10-09T20:07:58Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "repository.jurialmunkey": {
       "id": "repository.jurialmunkey",
@@ -78,7 +78,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/repository.jurialmunkey-3.4.zip",
       "size": 7217,
       "sha256": "88af3e286666e1a15e435cc5e3b7fe2dc8ca5455690e20693f46aba74207f31a",
-      "updated": "2026-10-09T20:07:58Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "repository.kodifitzwell": {
       "id": "repository.kodifitzwell",
@@ -89,7 +89,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/repository.kodifitzwell-0.0.1.zip",
       "size": 13214,
       "sha256": "d0b3ad9f76918718aaea387e2593a05607086d9bbed0d843c89ecdcde43d83ac",
-      "updated": "2026-10-09T20:07:58Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "repository.otaku": {
       "id": "repository.otaku",
@@ -100,7 +100,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/repository.otaku-1.0.zip",
       "size": 453823,
       "sha256": "ae9ffdb5dc44ce540b75ddf0f40ef6bf9079c0b8cae61060152261b5e652262f",
-      "updated": "2026-10-09T20:07:58Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "script.fentastic.helper": {
       "id": "script.fentastic.helper",
@@ -111,7 +111,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/script.fentastic.helper-0.6.20a.zip",
       "size": 18907,
       "sha256": "c17a361921d72635ecb6cfea477042680883520af3a25498d64623cc53711af9",
-      "updated": "2026-10-09T20:07:58Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "script.module.autocompletion": {
       "id": "script.module.autocompletion",
@@ -122,7 +122,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/script.module.autocompletion-2.1.2.zip",
       "size": 175596,
       "sha256": "2dc8cf82a006546f30fd87d7a41bd1a7a293a2481da769a03ac43936701cec1b",
-      "updated": "2026-10-09T20:07:58Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "service.subtitles.kodipovilai": {
       "id": "service.subtitles.kodipovilai",
@@ -133,7 +133,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/service.subtitles.kodipovilai-0.3.74.zip",
       "size": 1418201,
       "sha256": "c4fa82cb52b3d7786f4818d9e86db63c4397e6634c6ba966ddc81f0a8314dcad",
-      "updated": "2026-11-17T12:58:16Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "skin.estuary": {
       "id": "skin.estuary",
@@ -144,7 +144,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.estuary-4.0.8.zip",
       "size": 6686092,
       "sha256": "9278487146653be0feb3ebf4874e5538e422fe7449331f6d53b860b98b862993",
-      "updated": "2026-11-17T12:58:16Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "skin.fentastic": {
       "id": "skin.fentastic",
@@ -155,7 +155,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.fentastic-1.0.32.zip",
       "size": 20863976,
       "sha256": "4c508283b28aac3bdd8725f4dc136546c5409b6906096b5104f79ca7173834ea",
-      "updated": "2026-11-17T12:58:16Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "skin.povil.nox": {
       "id": "skin.povil.nox",
@@ -166,7 +166,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.povil.nox-1.0.21.zip",
       "size": 24502478,
       "sha256": "11c5d12f13569f8c2464ed128bf0377a0706ff5896ffde9dcefb4e3a46bae8b6",
-      "updated": "2026-11-17T12:58:16Z"
+      "updated": "2026-11-17T13:03:48Z"
     },
     "skin.povil.onyx": {
       "id": "skin.povil.onyx",
@@ -177,7 +177,7 @@
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/skin.povil.onyx-1.0.9.zip",
       "size": 2818552,
       "sha256": "a4f44f3001b73f36aa55bbc35608a94651bdab23ca6e558dc02e3e966f07e231",
-      "updated": "2026-11-17T12:58:16Z"
+      "updated": "2026-11-17T13:03:48Z"
     }
   }
 }
