@@ -1,8 +1,8 @@
 """Otaku (anime): an OPTIONAL add-on, installed on demand from the Wizard's optional add-ons screen.
 
-Not provisioned by a fresh install (modular_updater.PROVISION_IDS no longer lists it). Its baked settings
+Not provisioned by a fresh install (provisioner.PROVISION_IDS does not list it). Its baked settings
 (userdata/addon_data/plugin.video.otaku) are seeded by the config pack either way, so it starts configured.
-Resolved headlessly from repository.otaku (kept in the manifest) like the other content add-ons.
+Installed through Kodi's native InstallAddon from repository.povil.upstream (the developer's own index).
 """
 import xbmc
 import xbmcgui
@@ -32,9 +32,11 @@ def install_otaku():
                 nolabel='[B][COLOR red]ביטול[/COLOR][/B]',
                 yeslabel='[B][COLOR springgreen]התקן[/COLOR][/B]'):
             return False
-        from resources.libs.modular_updater import ModularUpdater
+        from resources.libs.gui import install_progress
+        from resources.libs.provisioning import provisioner
         # Longer timeout than the content-add-on default: Otaku pulls a large dependency tree.
-        ModularUpdater(background=False).post_install_provisioning(per_addon_timeout=240, ids=[OTAKU_ID])
+        with install_progress.window('מתקין את Otaku') as view:
+            provisioner.provision(ids=[OTAKU_ID], per_addon_timeout=240, view=view)
     except Exception as err:
         logging.log('[Otaku] install failed: {0}'.format(err), level=xbmc.LOGERROR)
     if not is_installed():

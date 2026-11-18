@@ -121,9 +121,10 @@ class Config:
         # KODI-POV-IL - LOCAL ARTWORK (works offline)
         self.SKINS_BG = getattr(uservar, 'SKINS_BG', '') or self.ADDON_FANART
         self.BUILD_SKIN_SWITCH_IMAGE = getattr(uservar, 'BUILD_SKIN_SWITCH_IMAGE', '') or self.ADDON_ICON
-        # KODI-POV-IL - MODULAR UPDATER (manifest-based). getattr keeps an old
-        # uservar.py (without MANIFEST_URL) from crashing config init.
-        self.MANIFEST_URL = getattr(uservar, 'MANIFEST_URL', 'http://')
+        # KODI-POV-IL - the repository site (GitHub Pages): our index, the repository zips and config/config.json.
+        # getattr keeps an old uservar.py (without REPO_BASE_URL) from crashing config init.
+        self.REPO_BASE_URL = getattr(uservar, 'REPO_BASE_URL', 'http://').rstrip('/')
+        self.CONFIG_INFO_URL = self.REPO_BASE_URL + '/config/config.json'
         #########################################################################################################
         
         self.HEADERTYPE = getattr(uservar, 'HEADERTYPE', 'Text')

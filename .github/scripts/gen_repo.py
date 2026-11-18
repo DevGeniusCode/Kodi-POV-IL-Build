@@ -10,12 +10,15 @@ Output layout (``--out``)::
     index.html                          landing page + links Kodi's "install from zip" browser can follow
     .nojekyll
     addons.xml                          every add-on's addon.xml, wrapped in <addons>
-    addons.xml.md5                      hex md5 of addons.xml (the repository <checksum>)
+    addons.xml.sha256                   hex sha256 of addons.xml (verified by Kodi: <checksum verify="sha256">)
+    addons.xml.md5                      hex md5 of addons.xml (for older tools; Kodi does not need it)
     repository.povil-latest.zip         stable-name copies for install instructions
     plugin.program.kodipovilwizard-latest.zip
     zips/<id>/<id>-<version>.zip        the <datadir>: Kodi downloads exactly this path
+    zips/<id>/<id>-<version>.zip.sha256 verified by Kodi per zip (<hashes>sha256</hashes> in repository.povil)
     zips/<id>/icon.*, fanart.*, ...     artwork declared in <assets> (Kodi shows it in the repo browser)
     zips/<id>/changelog-<version>.txt
+    upstream/<name>/addons.xml (+ .sha256)  a FILTERED copy of a third-party index (see FILTERED_UPSTREAMS); no zip is stored
     config/config-<cfgver>.zip          the userdata/ pack, applied by the Wizard (NOT an add-on)
     config/config.json                  {config_version, file, url, size, sha256} -- the Wizard's only state input
 
@@ -38,6 +41,8 @@ import posixpath
 import re
 import shutil
 import sys
+import time
+import urllib.request
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -46,25 +51,30 @@ import build_addons  # noqa: E402
 import build_config  # noqa: E402
 from kodi_addons import Addon, discover_addons  # noqa: E402
 
-# Third-party repository add-ons that still live in this repo as folders. They are NOT published: the aggregating
-# repository.povil (Phase 2) replaces them. Delete this set together with the folders (Phase 3).
-THIRD_PARTY_REPOS = frozenset({
-    "repository.709",
-    "repository.Fishenzon",
-    "repository.cocoscrapers",
-    "repository.jurialmunkey",
-    "repository.kodifitzwell",
-    "repository.otaku",
-    "repository.umbrella",
-})
-
-# Copied to <site>/<id>-latest.zip so install instructions can use a name that never changes.
-STABLE_ALIASES = ("repository.povil", "plugin.program.kodipovilwizard")
+# Copied to <site>/<id>-latest.zip (+ .sha256) so install instructions and the Wizard's first-run bootstrap can use a name that
+# never changes. All of them MUST exist in the repo: the build fails otherwise.
+STABLE_ALIASES = ("repository.povil", "repository.povil.upstream", "plugin.program.kodipovilwizard")
 
 # Files Kodi looks for next to the zips when <assets> does not name them.
 DEFAULT_ASSETS = ("icon.png", "fanart.jpg")
 
 VIRTUAL_PREFIXES = ("xbmc.", "kodi.")
+
+# Third-party indexes that carry add-ons we need next to ids of OURS (Kodi installs the highest version of an id, so such an
+# index would replace our forks). At build time the index is fetched, reduced to the add-ons in "keep", and published under
+# upstream/<name>/addons.xml; repository.povil.upstream points its <info>/<checksum> there and its <datadir> at the third
+# party's own zip server. Nothing of theirs is stored in this repository or on our site except those few <addon> entries.
+#   zaxxon709: Account Manager Lite. Its index also lists skin.fentastic 100.x and script.fentastic.helper 100.x.
+FILTERED_UPSTREAMS = (
+    {
+        "name": "zaxxon709",
+        "index": "https://raw.githubusercontent.com/Zaxxon709/zaxxon/main/zips/addons.xml",
+        "datadir": "https://raw.githubusercontent.com/Zaxxon709/zaxxon/main/zips/",
+        "keep": ("script.module.acctmgr", "script.module.acctvwr"),
+    },
+)
+FETCH_TRIES = 3
+FETCH_TIMEOUT = 20
 BIG_FILE_WARN = 90 * 1024 * 1024
 SITE_WARN = 800 * 1024 * 1024            # GitHub Pages hard limit is 1 GB
 
@@ -164,12 +174,136 @@ def external_imports(addons: list[Addon]) -> dict[str, list[str]]:
     return dict(sorted(wanted.items()))
 
 
+def _repository_dirs(addon: Addon) -> list[ET.Element]:
+    root = ET.parse(os.path.join(addon.path, "addon.xml")).getroot()
+    return root.findall("./extension[@point='xbmc.addon.repository']/dir")
+
+
+def check_repositories(addons: list[Addon], base_url: str) -> None:
+    """The two repository add-ons must keep their roles.
+
+    repository.povil describes THIS site, exactly the way gen_repo.py publishes it, and has no other <dir>: Kodi fails a whole
+    repository when any one <dir> fails, so nothing we do not control may live in it. repository.povil.upstream holds the
+    third-party indexes and must never point back at this site.
+    """
+    by_id = {a.id: a for a in addons}
+    own, upstream = by_id.get("repository.povil"), by_id.get("repository.povil.upstream")
+    if own is not None:
+        dirs = _repository_dirs(own)
+        if len(dirs) != 1:
+            raise RepoError(f"repository.povil must have exactly one <dir> (has {len(dirs)}); "
+                            "third-party indexes belong to repository.povil.upstream")
+        if base_url:
+            want = base_url.lower() + "/"
+            d = dirs[0]
+            chk = d.find("checksum")
+            problems = []
+            if (d.findtext("info") or "").strip().lower() != want + "addons.xml":
+                problems.append("<info> must be " + want + "addons.xml")
+            if chk is None or (chk.text or "").strip().lower() != want + "addons.xml.sha256" or chk.get("verify") != "sha256":
+                problems.append('<checksum verify="sha256"> must be ' + want + "addons.xml.sha256")
+            if (d.findtext("datadir") or "").strip().lower() != want + "zips/":
+                problems.append("<datadir> must be " + want + "zips/")
+            if (d.findtext("hashes") or "").strip().lower() != "sha256":
+                problems.append("<hashes>sha256</hashes> is missing")
+            if problems:
+                raise RepoError("repository.povil's <dir>: " + "; ".join(problems))
+    if upstream is not None and base_url:
+        own, allowed = base_url.lower() + "/", base_url.lower() + "/upstream/"
+        dirs = _repository_dirs(upstream)
+        for d in dirs:
+            info = (d.findtext("info") or "").strip().lower()
+            if info.startswith(own) and not info.startswith(allowed):
+                raise RepoError("repository.povil.upstream has a <dir> that points at our own index; that belongs in repository.povil")
+        for spec in FILTERED_UPSTREAMS:
+            want = f"{base_url}/upstream/{spec['name']}/addons.xml".lower()
+            match = [d for d in dirs if (d.findtext("info") or "").strip().lower() == want]
+            if len(match) != 1:
+                raise RepoError(f"repository.povil.upstream must have exactly one <dir> whose <info> is {want}")
+            d = match[0]
+            chk = d.find("checksum")
+            problems = []
+            if chk is None or (chk.text or "").strip().lower() != want + ".sha256" or chk.get("verify") != "sha256":
+                problems.append('<checksum verify="sha256"> must be ' + want + ".sha256")
+            if (d.findtext("datadir") or "").strip() != spec["datadir"]:
+                problems.append("<datadir> must be " + spec["datadir"])
+            if problems:
+                raise RepoError(f"repository.povil.upstream's <dir> for {spec['name']}: " + "; ".join(problems))
+
+
+def _fetch(url: str, tries: int = FETCH_TRIES) -> bytes | None:
+    """The body of url, or None after `tries` failed attempts (never raises)."""
+    for attempt in range(tries):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "kodi-povil-gen-repo"})
+            with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT) as resp:
+                return resp.read()
+        except Exception as exc:  # noqa: BLE001 - any network error means "try again, then fall back"
+            print(f"  note: fetching {url} failed ({str(exc)[:70]}), attempt {attempt + 1}/{tries}", file=sys.stderr)
+            time.sleep(1 + attempt)
+    return None
+
+
+def filter_index(raw: bytes, keep: tuple[str, ...]) -> str:
+    """An addons.xml document reduced to the <addon> entries named in `keep` (in that order). Raises RepoError if one is missing."""
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise RepoError(f"index is not valid XML: {exc}")
+    found = {el.get("id"): el for el in root.findall("addon") if el.get("id") in keep}
+    missing = [k for k in keep if k not in found]
+    if missing:
+        raise RepoError(f"index does not list {', '.join(missing)}")
+    body = "\n".join(ET.tostring(found[k], encoding="unicode").strip() for k in keep)
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<addons>\n' + body + "\n</addons>\n"
+
+
+EMPTY_INDEX = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<addons />\n'
+
+
+def write_filtered_upstreams(out_dir: str, base_url: str) -> list[tuple[str, str]]:
+    """Publish upstream/<name>/addons.xml (+ .sha256, .md5) for every FILTERED_UPSTREAMS entry. Returns [(name, source)].
+
+    A temporary outage of the third party must not break our build, so the sources are tried in this order:
+      1. "upstream": the third party's live index;
+      2. "cache": the filtered copy already published on our site (the previous deploy);
+      3. "empty": an index with no add-ons (first deploy only; the add-ons are simply not offered until the next run).
+    """
+    results = []
+    for spec in FILTERED_UPSTREAMS:
+        name = spec["name"]
+        text, source = None, "empty"
+        candidates = [("upstream", spec["index"])]
+        if base_url:
+            candidates.append(("cache", f"{base_url}/upstream/{name}/addons.xml"))
+        for label, url in candidates:
+            raw = _fetch(url, tries=FETCH_TRIES if label == "upstream" else 2)
+            if raw is None:
+                continue
+            try:
+                text, source = filter_index(raw, spec["keep"]), label
+                break
+            except RepoError as exc:
+                print(f"  warn: {label} index of {name} is unusable ({exc})", file=sys.stderr)
+        if text is None:
+            text = EMPTY_INDEX
+            print(f"  warn: no usable index for {name}; publishing an EMPTY one (its add-ons are not offered until a later deploy)",
+                  file=sys.stderr)
+        target = os.path.join(out_dir, "upstream", name, "addons.xml")
+        _write_text(target, text)
+        _write_text(target + ".sha256", _sha256(target))
+        _write_text(target + ".md5", _md5(target))
+        results.append((name, source))
+    return results
+
+
 # --------------------------------------------------------------------------- build steps
 def build_addon_files(addon: Addon, zips_dir: str) -> str:
     """Zip + artwork + changelog of one add-on into <zips_dir>/<id>/. Returns the zip path."""
     target = os.path.join(zips_dir, addon.id)
     os.makedirs(target, exist_ok=True)
     zip_path = build_addons.build_zip(addon, out_dir=target)
+    _write_text(zip_path + ".sha256", _sha256(zip_path))
 
     for rel in asset_paths(addon):
         src = os.path.join(addon.path, *rel.split("/"))
@@ -192,6 +326,7 @@ def write_index(out_dir: str, addons: list[Addon]) -> None:
     _write_text(os.path.join(out_dir, "addons.xml"), "\n".join(parts) + "\n")
     # Kodi trims whitespace; the bare hex digest is the most compatible form.
     _write_text(os.path.join(out_dir, "addons.xml.md5"), _md5(os.path.join(out_dir, "addons.xml")))
+    _write_text(os.path.join(out_dir, "addons.xml.sha256"), _sha256(os.path.join(out_dir, "addons.xml")))
 
 
 def write_config(out_dir: str, base_url: str) -> dict:
@@ -217,11 +352,12 @@ def write_aliases(out_dir: str, addons: list[Addon]) -> list[str]:
     for addon_id in STABLE_ALIASES:
         addon = by_id.get(addon_id)
         if addon is None:
-            print(f"  note: {addon_id} is not in the repo yet -- no stable alias written")
-            continue
+            raise RepoError(f"{addon_id} is not in the repo; the site needs it (install path and first-run bootstrap)")
         src = os.path.join(out_dir, "zips", addon_id, addon.zip_name)
         name = f"{addon_id}-latest.zip"
-        shutil.copyfile(src, os.path.join(out_dir, name))
+        dst = os.path.join(out_dir, name)
+        shutil.copyfile(src, dst)
+        _write_text(dst + ".sha256", _sha256(dst))
         made.append(name)
     return made
 
@@ -245,7 +381,7 @@ def write_landing(out_dir: str, base_url: str, aliases: list[str]) -> None:
     <li>Add-ons &rarr; Install from zip file &rarr; choose the source &rarr; <b>repository.povil-latest.zip</b></li>
     <li>Add-ons &rarr; Install from repository &rarr; the POV IL repository &rarr; the Wizard</li>
   </ol>
-  <p>Or install <b>plugin.program.kodipovilwizard-latest.zip</b> directly: it installs the repository on first start.</p>
+  <p>Or install <b>plugin.program.kodipovilwizard-latest.zip</b> directly: it installs both repositories on first start.</p>
   <ul>
 {links}
   </ul>
@@ -279,11 +415,24 @@ def verify(out_dir: str, addons: list[Addon]) -> list[str]:
     except (OSError, IndexError) as exc:
         problems.append(f"addons.xml.md5 unreadable: {exc}")
 
+    try:
+        with open(os.path.join(out_dir, "addons.xml.sha256"), "r", encoding="ascii") as fh:
+            if fh.read().strip().split()[0] != _sha256(index_path):
+                problems.append("addons.xml.sha256 does not match addons.xml")
+    except (OSError, IndexError) as exc:
+        problems.append(f"addons.xml.sha256 unreadable: {exc}")
+
     for addon in addons:
         zip_path = os.path.join(out_dir, "zips", addon.id, addon.zip_name)
         if not os.path.isfile(zip_path):
             problems.append(f"{addon.id}: missing {addon.id}/{addon.zip_name}")
             continue
+        try:
+            with open(zip_path + ".sha256", "r", encoding="ascii") as fh:
+                if fh.read().strip().split()[0] != _sha256(zip_path):
+                    problems.append(f"{addon.id}: {addon.zip_name}.sha256 does not match the zip")
+        except (OSError, IndexError) as exc:
+            problems.append(f"{addon.id}: {addon.zip_name}.sha256 unreadable: {exc}")
         try:
             with zipfile.ZipFile(zip_path) as zf:
                 bad = zf.testzip()
@@ -301,6 +450,16 @@ def verify(out_dir: str, addons: list[Addon]) -> list[str]:
                         problems.append(f"{addon.id}: zip addon.xml says {inner.get('id')} {inner.get('version')}")
         except (zipfile.BadZipFile, ET.ParseError) as exc:
             problems.append(f"{addon.id}: zip unreadable: {exc}")
+
+    for spec in FILTERED_UPSTREAMS:
+        target = os.path.join(out_dir, "upstream", spec["name"], "addons.xml")
+        try:
+            ET.parse(target)
+            with open(target + ".sha256", "r", encoding="ascii") as fh:
+                if fh.read().strip().split()[0] != _sha256(target):
+                    problems.append(f"upstream/{spec['name']}/addons.xml.sha256 does not match")
+        except (OSError, ET.ParseError, IndexError) as exc:
+            problems.append(f"upstream/{spec['name']}/addons.xml unusable: {exc}")
 
     if not os.path.isfile(os.path.join(out_dir, "config", "config.json")):
         problems.append("config/config.json missing")
@@ -326,7 +485,7 @@ def main() -> int:
     parser.add_argument("--base-url", default=os.environ.get("BASE_URL", ""),
                         help="public site URL, e.g. https://owner.github.io/repo (used in config.json / index.html)")
     parser.add_argument("--exclude", action="append", default=[], metavar="ID",
-                        help="add-on id to leave out (repeatable); the third-party repository add-ons are always left out")
+                        help="add-on id to leave out (repeatable)")
     args = parser.parse_args()
 
     out_dir = os.path.abspath(args.out)
@@ -334,7 +493,7 @@ def main() -> int:
     if not base_url:
         print("  note: no --base-url given; config.json will carry url=null", file=sys.stderr)
 
-    excluded = set(THIRD_PARTY_REPOS) | set(args.exclude)
+    excluded = set(args.exclude)
     addons = [a for a in discover_addons() if a.id not in excluded]
 
     # Strictness that Kodi itself would punish silently at install time.
@@ -349,6 +508,8 @@ def main() -> int:
             print(f"  warn: {addon.id} version '{addon.version}' is not purely numeric; "
                   f"Kodi's comparison of letter suffixes is unverified", file=sys.stderr)
 
+    check_repositories(addons, base_url)
+
     if os.path.isdir(out_dir):
         shutil.rmtree(out_dir)
     os.makedirs(out_dir)
@@ -359,6 +520,7 @@ def main() -> int:
         build_addon_files(addon, zips_dir)
 
     write_index(out_dir, addons)
+    filtered = write_filtered_upstreams(out_dir, base_url)
     cfg = write_config(out_dir, base_url)
     aliases = write_aliases(out_dir, addons)
     write_landing(out_dir, base_url, aliases)
@@ -372,6 +534,8 @@ def main() -> int:
 
     total, big = _site_size(out_dir)
     print(f"\nOK: {len(addons)} add-ons, config {cfg['config_version']}, site {total / 1e6:.1f} MB")
+    for name, source in filtered:
+        print(f"  filtered upstream index {name}: {source}" + ("" if source == "upstream" else "   <-- NOT the live upstream"))
     for size, rel in big:
         print(f"  warn: {rel} is {size / 1e6:.1f} MB")
     if total > SITE_WARN:

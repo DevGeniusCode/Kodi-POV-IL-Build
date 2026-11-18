@@ -72,7 +72,7 @@ def check_build(name, ret, release_id=None):
     # KODI-POV-IL - build.txt is RETIRED. The build is no longer described by a
     # remote OpenWizard-style text file and there is NO monolithic build / gui
     # ("quickfix") zip any more: the full install and all updates go through
-    # ModularUpdater (manifest.json). This shim keeps the remaining legacy
+    # Kodi repositories (repository.povil) + config.json. This shim keeps the remaining legacy
     # callers working by returning safe, static per-field values:
     #   - 'version' -> the canonical build version (BUILDVERSION_DEFAULT)
     #   - 'kodi'    -> the RUNNING Kodi major, so the build() version-mismatch
@@ -125,7 +125,7 @@ def check_theme(name, theme, ret):
 
 def check_wizard(ret):
     # KODI-POV-IL - the wizard no longer self-updates from build.txt; it is
-    # updated like any other addon through ModularUpdater (manifest.json).
+    # updated like any other addon by Kodi (repository.povil).
     # Returning False keeps the legacy AUTOUPDATE menu / update.wizard_update()
     # callers as safe no-ops.
     return False
@@ -133,7 +133,7 @@ def check_wizard(ret):
 
 def check_build_update():
     # KODI-POV-IL - RETIRED. The legacy build.txt full-build update check is
-    # gone; addon + config updates are handled by ModularUpdater (manifest.json)
+    # gone; add-on updates are Kodi's (repository.povil), the config pack is provisioning/provisioner.py
     # on every startup. Kept as a no-op so any stray caller is harmless.
     return
 

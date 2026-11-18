@@ -36,7 +36,7 @@ from resources.libs.boot import language_sync
 from resources.libs.boot import maintenance_pass
 from resources.libs.boot import notifications
 from resources.libs.provisioning import auto_install
-from resources.libs.provisioning import ota
+from resources.libs.provisioning import build_sync
 
 
 # HOST REPAIRS (Phase 3): the build's startup repairs (POV / Umbrella / Idan Plus / AF3 / NOX patchers) run as their own
@@ -123,21 +123,20 @@ notifications.first_launch_skin_notice()
 build_check.autoset_buildname_for_apk()
 
 ######################################
-# KODI-POV-IL - MODULAR OTA UPDATE + STRICT MANIFEST ENFORCEMENT.
-# Polls manifest.json and updates addons whose version moved (silent background;
-# only a Wizard or active-skin update forces a restart). Then heal_missing_addons
-# does the bulletproof part: it physically verifies System.HasAddon(id) for EVERY
-# required addon in the manifest + every content addon, and silently installs any
-# that are missing -- e.g. a YouTube that timed out during a previous provisioning
-# pass and was skipped. This is what makes a half-provisioned build self-complete
-# on the very next launch instead of staying broken.
+# KODI-POV-IL - REPOSITORY SYNC + HEALING.
+# Kodi updates the add-ons itself (repository.povil / repository.povil.upstream). This pass makes sure
+# both repositories are installed, asks Kodi to check them, applies a newer config pack, and then
+# heals: it verifies System.HasAddon(id) for EVERY add-on the build needs and installs any that are
+# missing through Kodi's native InstallAddon -- e.g. a YouTube that timed out during a previous
+# provisioning pass. This is what makes a half-provisioned build self-complete on the very next
+# launch instead of staying broken.
 if CONFIG.get_setting('buildname'):
     maintenance_pass.run_startup_maintenance()
 
-    ota.run_startup_ota()
-    # Repair installed add-ons even when the manifest server is unavailable or
-    # the updater raises. An upstream POV update can erase these hooks while
-    # the network is down; patching must not depend on OTA success.
+    build_sync.run_startup_sync()
+    # Repair installed add-ons even when the repository site is unavailable or
+    # the sync raises. An upstream POV update can erase these hooks while
+    # the network is down; patching must not depend on the sync succeeding.
     try:
         from resources.libs.patch_engine import PatchEngine
         PatchEngine().run_if_changed()

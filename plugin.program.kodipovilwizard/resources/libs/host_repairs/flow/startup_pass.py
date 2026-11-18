@@ -137,7 +137,7 @@ def _run_build_startup_repairs():
         # reload the profile. They disagree after any POV self-update: POV
         # ships addon.xml with the flag ON, ours is the setting that says OFF,
         # and POV is not in our quickfix at all -- it updates itself from
-        # repository.kodifitzwell, so its own addon.xml comes back.
+        # repository.povil.upstream (kodifitzwell), so its own addon.xml comes back.
         #
         # Measured on a reporter's device (2026-08-17):
         #     21:00:39.430  our repair pass starts

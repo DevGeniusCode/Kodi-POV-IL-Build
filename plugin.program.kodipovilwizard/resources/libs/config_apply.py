@@ -2,8 +2,8 @@
 
 Option 3 of the modular build design. The build's identity -- active skin,
 locale, subtitle config, the FENtastic look, favourites, sources, advanced
-settings -- ships as a versioned ``config-<version>.zip`` listed in
-manifest.json (see .github/scripts/build_config.py + gen_manifest.py). This
+settings -- ships as a versioned ``config-<version>.zip`` described by
+config/config.json on the repository site (see .github/scripts/build_config.py + gen_repo.py). This
 module downloads that pack, verifies its sha256, and applies each file per the
 bundled ``config_policy.json``:
 
@@ -45,12 +45,12 @@ function behaves exactly as before.
 
 RETAINED VERIFIED PACK
 ----------------------
-After a successful apply, the zip whose sha256 matched the manifest is kept in
+After a successful apply, the zip whose sha256 matched config.json is kept in
 the MASTER profile's wizard ``addon_data/config_pack/`` together with a small
 receipt (version + sha256). Secondary profiles are seeded from that copy
 through ``open_verified_pack()``; they never read the master's accounts and the
 Wizard ships no config bundle. The copy is re-hashed on every open, and a pack
-the manifest did not provide a sha256 for is never retained.
+config.json carries no sha256 for is never retained.
 """
 
 import os
@@ -243,7 +243,7 @@ def _retained_dir():
 
 
 def _retain_verified_pack(zip_path, version, sha256):
-    """Keep a copy of a pack that was just verified against the manifest.
+    """Keep a copy of a pack that was just verified against config.json.
 
     The zip is replaced before the receipt; a crash in between leaves a zip
     that no longer matches the old receipt, which _verified() rejects.
@@ -278,12 +278,44 @@ def verified_pack_path():
     return found[0] if found else None
 
 
-def ensure_verified_pack(manifest=None):
+def load_config_info():
+    """Fetch config/config.json from the repository site: {config_version, url, sha256, size, ...}.
+
+    None when it cannot be read or is incomplete (a pack without a sha256 is never applied)."""
+    import xbmc
+    from resources.libs.common.config import CONFIG
+    from resources.libs.common import logging
+    try:
+        from urllib.request import Request, ProxyHandler, build_opener
+        request = Request(CONFIG.CONFIG_INFO_URL, headers={'User-Agent': getattr(CONFIG, 'USER_AGENT', 'Kodi POV IL')})
+        opener = build_opener(ProxyHandler({}))
+        with opener.open(request, timeout=8) as response:
+            payload = response.read(64 * 1024 + 1)
+        if len(payload) > 64 * 1024:
+            raise ValueError('config.json exceeds 64 KiB')
+        info = json.loads(payload)
+        if (not isinstance(info, dict) or not info.get('config_version') or
+                not info.get('url') or not info.get('sha256')):
+            raise ValueError('config.json is incomplete')
+        return info
+    except Exception as exc:
+        logging.log('[config_apply] config.json fetch failed: {0}'.format(exc), level=xbmc.LOGERROR)
+        return None
+
+
+def config_pending(info):
+    """True when the published config version is not the one applied on this device."""
+    from resources.libs.common.config import CONFIG
+    version = (info or {}).get('config_version')
+    return bool(version) and CONFIG.get_setting('config_applied_version') != version
+
+
+def ensure_verified_pack(info=None):
     """Return the retained pack path, downloading it once when it is absent.
 
     Used when the pack was never retained (for example the config version was
     already applied before this device could retain it). Nothing is applied to
-    userdata. A manifest without a sha256 yields None: an unverifiable pack is
+    userdata. A config.json without a sha256 yields None: an unverifiable pack is
     never trusted for profile seeding.
     """
     from resources.libs.common.config import CONFIG
@@ -293,13 +325,11 @@ def ensure_verified_pack(manifest=None):
     existing = verified_pack_path()
     if existing:
         return existing
-    if manifest is None:
-        from resources.libs.modular_updater import ModularUpdater
-        manifest = ModularUpdater(background=True)._load_manifest()
-    cfg = (manifest or {}).get('config') or {}
-    version, url, want = cfg.get('config_version'), cfg.get('zip'), cfg.get('sha256')
+    if info is None:
+        info = load_config_info()
+    version, url, want = (info or {}).get('config_version'), (info or {}).get('url'), (info or {}).get('sha256')
     if not (version and url and want):
-        logging.log('[config_apply] no verifiable config pack in manifest', level=xbmc.LOGWARNING)
+        logging.log('[config_apply] no verifiable config pack published', level=xbmc.LOGWARNING)
         return None
     tools.ensure_folders(CONFIG.PACKAGES)
     zip_path = os.path.join(CONFIG.PACKAGES, 'build_config_profiles.zip')
@@ -367,7 +397,7 @@ class VerifiedPack(object):
         return _gui_defaults(self._policy, self.read(relative))
 
 
-def open_verified_pack(fetch=False, manifest=None):
+def open_verified_pack(fetch=False, info=None):
     """Context manager over the retained pack; raises PackUnavailable if none.
 
     ``fetch=True`` downloads and verifies the pack first when it is absent.
@@ -375,7 +405,7 @@ def open_verified_pack(fetch=False, manifest=None):
     """
     found = _verified()
     if found is None and fetch:
-        ensure_verified_pack(manifest)
+        ensure_verified_pack(info)
         found = _verified()
     if found is None:
         raise PackUnavailable('no hash-verified config pack is retained')
@@ -653,8 +683,36 @@ def _saved_active_skin(userdata):
     return None
 
 
-def apply_config_pack(manifest, fresh=False, background=True, progress=None):
-    """Download + verify + apply the config pack described by manifest['config'].
+WAIT_TIMEOUT_FRESH = 60       # seconds; a fresh install has finished its installs, this only lets Kodi settle
+WAIT_TIMEOUT_UPDATE = 120     # seconds; an update may be unpacking a large skin
+
+
+def pack_target_addon_ids(policy_files, work_dir):
+    """Ids of the add-ons whose userdata this pack writes: addon_data/<id>/ in the policy destinations and in the pack itself."""
+    ids = set()
+    for spec in policy_files:
+        parts = str(spec.get('dest', '')).replace('\\', '/').split('/')
+        if len(parts) >= 4 and parts[0] == 'userdata' and parts[1] == 'addon_data':
+            ids.add(parts[2])
+    try:
+        ids.update(name for name in os.listdir(os.path.join(work_dir, 'addon_data'))
+                   if os.path.isdir(os.path.join(work_dir, 'addon_data', name)))
+    except OSError:
+        pass
+    return sorted(ids)
+
+
+def _native_installs_settled(target_ids, fresh, grace):
+    """True when Kodi is not installing / updating any of the target add-ons (waits, bounded). See apply_config_pack."""
+    if not target_ids:
+        return True
+    from resources.libs.provisioning import addon_state
+    return addon_state.wait_until_settled(
+        target_ids, timeout=WAIT_TIMEOUT_FRESH if fresh else WAIT_TIMEOUT_UPDATE, grace=0 if fresh else grace)
+
+
+def apply_config_pack(info, fresh=False, background=True, progress=None, wait_grace=0):
+    """Download + verify + apply the config pack described by `info` (the parsed config/config.json).
 
     Returns a dict: {'applied': bool, 'skin_touched': bool, 'version': str}.
     On an existing device the pack is applied only when its config_version
@@ -665,6 +723,12 @@ def apply_config_pack(manifest, fresh=False, background=True, progress=None):
     (download -> verify -> extract -> apply policy files -> seed unlisted files ->
     finish). The caller is expected to call ``progress.complete('config')`` when
     this returns, which also covers the early-return paths below.
+
+    Before anything is written the pack WAITS (bounded) for Kodi to finish installing or updating the add-ons whose settings it
+    carries: a native install / update replaces the add-on folder and could otherwise reset what was just written. On an
+    existing device a wait that times out DEFERS the pack (result['deferred'] = True, nothing written, the version stays
+    unapplied so the next start retries); on a fresh install it proceeds anyway. ``wait_grace`` (seconds) additionally holds
+    the apply back while Kodi announces an update it has not started yet (right after UpdateAddonRepos).
     """
     import xbmc
     from resources.libs.common.config import CONFIG
@@ -674,12 +738,12 @@ def apply_config_pack(manifest, fresh=False, background=True, progress=None):
     report = _ConfigProgress(progress)
 
     result = {'applied': False, 'skin_touched': False, 'version': None}
-    cfg = (manifest or {}).get('config') or {}
+    cfg = info or {}
     version = cfg.get('config_version')
-    url = cfg.get('zip')
+    url = cfg.get('url')
     want_sha = cfg.get('sha256')
     if not version or not url:
-        logging.log("[config_apply] manifest has no usable config block; nothing to do", level=xbmc.LOGINFO)
+        logging.log("[config_apply] config.json has no usable pack; nothing to do", level=xbmc.LOGINFO)
         return result
     result['version'] = version
 
@@ -743,6 +807,14 @@ def apply_config_pack(manifest, fresh=False, background=True, progress=None):
         logging.log('[config_apply] preflight failed: {0}'.format(exc),
                     level=xbmc.LOGERROR)
         result['failed_files'] = [spec.get('dest') for spec in policy_files]
+        shutil.rmtree(work_dir, ignore_errors=True)
+        tools.remove_file(zip_path)
+        return result
+
+    if not _native_installs_settled(pack_target_addon_ids(policy_files, work_dir), fresh, wait_grace) and not fresh:
+        logging.log('[config_apply] Kodi is still installing / updating an add-on of config {0}; deferred'.format(version),
+                    level=xbmc.LOGWARNING)
+        result['deferred'] = True
         shutil.rmtree(work_dir, ignore_errors=True)
         tools.remove_file(zip_path)
         return result

@@ -17,14 +17,14 @@
             <posx>0</posx><posy>22</posy><width>1200</width><height>44</height>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFFFD200</textcolor>
-            <label>[B]מתקין את הבילד[/B]</label>
+            <label>[B]$INFO[Window.Property(Header)][/B]</label>
         </control>
         <control type="label" id="201">
             <description>subheader</description>
             <posx>0</posx><posy>62</posy><width>1200</width><height>24</height>
             <font>font10</font><align>center</align><aligny>center</aligny>
             <textcolor>FF9A9A9A</textcolor>
-            <label>הורדות במקביל · התקנה אחת בכל פעם</label>
+            <label>$INFO[Window.Property(Stage)]</label>
         </control>
         <!-- ROW 0 -->
         <control type="group" id="1000">
@@ -778,10 +778,12 @@
                 <animation effect="fade" start="0" end="100" time="220">VisibleChange</animation>
             </control>
         </control>
-        <!-- OVERALL PROGRESS: drawn by install_manager.py from the shared ProvisionProgress
+        <!-- OVERALL PROGRESS: drawn by gui/install_progress.py from the shared ProvisionProgress
              tracker (same value as the top-right banner). ids: 502 track, 500 fill, 501 label.
              The fill is an image whose WIDTH is set from Python (same technique as the per-row
-             bars); keep its max width (1160) in sync with OVERALL_BAR_WIDTH in install_manager.py. -->
+             bars); keep its max width (1160) in sync with OVERALL_BAR_WIDTH in install_progress.py.
+             Rows (16): base = 1000 + i * 10 -> +1 loader, +2 glyph, +3 name, +4 status, +5 bar track, +6 bar fill.
+             Header (Window.Property Header) and the stage line (Window.Property Stage) are set from Python. -->
         <control type="image" id="502">
             <description>overall progress track</description>
             <posx>20</posx><posy>806</posy><width>1160</width><height>10</height>
@@ -789,7 +791,7 @@
             <colordiffuse>30FFFFFF</colordiffuse>
         </control>
         <control type="image" id="500">
-            <description>overall progress fill (width set by install_manager.py)</description>
+            <description>overall progress fill (width set by install_progress.py)</description>
             <posx>20</posx><posy>806</posy><width>1</width><height>10</height>
             <texture border="0">Background/white.png</texture>
             <colordiffuse>FFFFD200</colordiffuse>

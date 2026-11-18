@@ -12,16 +12,16 @@ from collections import namedtuple
 
 from resources.libs.common.config import CONFIG
 
-Skin = namedtuple('Skin', 'id name blurb source floor')
+Skin = namedtuple('Skin', 'id name blurb source')
 
-# source: 'manifest' = a verified zip of the build's modular manifest; 'repository' = Kodi's native InstallAddon from a
-# third-party repository (Arctic Fuse 3 and its dependencies). floor: the lowest manifest version the build accepts.
+# source: 'povil' = served by our own repository (repository.povil); 'upstream' = from the developer's index in
+# repository.povil.upstream (Arctic Fuse 3 and its dependencies). Either way Kodi installs and updates it natively.
 SKINS = (
-    Skin('skin.fentastic', 'FENtastic', 'יפהפה', 'manifest', '0'),
-    Skin('skin.estuary', 'Estuary', 'מראה פשוט עם כפתורים', 'manifest', '0'),
-    Skin('skin.arctic.fuse.3', 'Arctic Fuse 3', 'מודרני (ניסיוני)', 'repository', '0'),
-    Skin('skin.povil.nox', 'NOX', 'עברית מלאה (ניסיוני)', 'manifest', '1.0.17'),
-    Skin('skin.povil.onyx', 'Onyx', 'יוקרתי, מימין לשמאל (ניסיוני)', 'manifest', '1.0.0'),
+    Skin('skin.fentastic', 'FENtastic', 'יפהפה', 'povil'),
+    Skin('skin.estuary', 'Estuary', 'מראה פשוט עם כפתורים', 'povil'),
+    Skin('skin.arctic.fuse.3', 'Arctic Fuse 3', 'מודרני (ניסיוני)', 'upstream'),
+    Skin('skin.povil.nox', 'NOX', 'עברית מלאה (ניסיוני)', 'povil'),
+    Skin('skin.povil.onyx', 'Onyx', 'יוקרתי, מימין לשמאל (ניסיוני)', 'povil'),
 )
 
 

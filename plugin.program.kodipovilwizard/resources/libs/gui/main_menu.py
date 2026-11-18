@@ -33,9 +33,8 @@ class MainMenu:
         errors = int(logging.error_checking(count=True))
         errorsfound = str(errors) + ' Error(s) Found' if errors > 0 else 'None Found'
 
-        # KODI-POV-IL - the wizard self-updates through ModularUpdater
-        # (manifest.json) now, not the retired build.txt, so just show the
-        # current version (the startup OTA pass bumps it when a new one ships).
+        # KODI-POV-IL - Kodi updates the wizard itself (repository.povil) now, not the
+        # retired build.txt, so just show the current version.
         directory.add_file('{0} [v{1}]'.format(CONFIG.ADDONTITLE, CONFIG.ADDON_VERSION), themeit=CONFIG.THEME2)
         directory.add_file('מי צופה? — פרופילים', {'mode': 'profiles'}, icon=CONFIG.ICONSETTINGS, themeit=CONFIG.THEME1)
         if len(CONFIG.BUILDNAME) > 0:

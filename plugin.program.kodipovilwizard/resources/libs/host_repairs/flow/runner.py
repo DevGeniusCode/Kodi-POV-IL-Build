@@ -16,7 +16,7 @@ except ImportError:
     xbmc = None
 
 from resources.libs.host_repairs.flow.af3_steps import _maybe_patch_af3_dialog_subtitles, _maybe_patch_hub_search, _maybe_restore_af3_font_early
-from resources.libs.host_repairs.flow.pov_update_watch import POLL_SECONDS, PovUpdateWatch
+from resources.libs.host_repairs.flow.addon_update_watch import POLL_SECONDS, AddonUpdateWatch
 from resources.libs.host_repairs.flow.pov_steps import _maybe_default_pov_autoplay, _maybe_revert_pov_always_resume, _maybe_revert_pov_autoplay
 from resources.libs.host_repairs.flow.skin_steps import _maybe_default_fentastic_player, _maybe_default_nox_poster_rating, _maybe_enable_osd_autoclose, _point_subtitle_button
 from resources.libs.host_repairs.flow.startup_pass import _run_build_startup_repairs
@@ -192,8 +192,9 @@ def main():
     try:
         _run_build_flow(monitor)
         # The service-mirror keeper (and the other helper threads) are daemons: stay alive until Kodi shuts down.
-        # Meanwhile a POV self-update (it wipes the patches and resets addon.xml) is repaired within seconds.
-        watch = PovUpdateWatch()
+        # Meanwhile an install or update of any patched add-on (POV, Umbrella, Idan Plus, Arctic Fuse 3: Kodi replaces its
+        # files and wipes the patches) is repaired within seconds of Kodi finishing unpacking it.
+        watch = AddonUpdateWatch()
         while not monitor.abortRequested():
             if monitor.waitForAbort(POLL_SECONDS):
                 break

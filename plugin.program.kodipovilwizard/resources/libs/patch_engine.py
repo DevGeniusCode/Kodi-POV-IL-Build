@@ -284,7 +284,7 @@ class PatchEngine(object):
         import of PatchEngine).
 
         PATH VERIFICATION (repo convention audit): every first-party import
-        in this codebase -- startup.py, wizard.py, modular_updater.py, etc.
+        in this codebase -- startup.py, wizard.py, provisioner.py, etc.
         -- resolves through the plural package `resources.libs` (there is
         no `resources.lib`, singular, anywhere in this addon's own Python
         package tree). This import below is therefore correct as written.

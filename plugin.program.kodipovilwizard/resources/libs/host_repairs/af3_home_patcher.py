@@ -703,7 +703,7 @@ def _request_ce_skin_upgrade():
     # specific skin version (6.3.2.9) and a specific script.module.jurialmunkey
     # (>= 0.2.35). This function force-reinstalled those packs whenever the
     # on-disk versions didn't match the bundled ones. AF3 is now installed
-    # NATIVELY from repository.jurialmunkey: the skin and all its dependencies
+    # NATIVELY from jurialmunkey's index (repository.povil.upstream): the skin and all its dependencies
     # are resolved at mutually-compatible upstream versions and keep updating
     # from their own repos via Kodi's normal addon updater. There is no bundled
     # version to pin to and nothing for the wizard to force, so this is a no-op.

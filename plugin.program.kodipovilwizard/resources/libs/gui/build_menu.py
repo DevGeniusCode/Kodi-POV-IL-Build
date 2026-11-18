@@ -92,8 +92,8 @@ class BuildMenu:
 
     def view_build(self, name):
         # KODI-POV-IL - single modular build view. The "Full Install" button runs
-        # ModularUpdater.run_fresh_install() (no monolithic zip / no wipe); the
-        # update button runs the manifest-based quick_update. Themes + the old
+        # provisioner.run_fresh_install() (no monolithic zip / no wipe); the
+        # update button runs quick_update (repositories + config pack). Themes + the old
         # build.txt scraping are gone.
         version = check.check_build(name, 'version')
         icon = check.check_build(name, 'icon')

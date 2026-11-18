@@ -20,36 +20,28 @@ def begin():
         fh.write('1\n')
 
 
-def provision(attempts=3, progress=None):
+def provision(attempts=3, progress=None, view=None):
     """Resume only missing work on both manual and automatic installation.
 
     Keep a small local diagnostic with addon IDs, never request URLs/accounts.
-    Completion still requires the updater's verified provisioning marker.
+    Completion still requires the verified provisioning marker.
     """
-    from resources.libs.modular_updater import ModularUpdater
+    from resources.libs.provisioning import provisioner
     monitor = xbmc.Monitor()
     issues = []
     for attempt in range(attempts):
         if monitor.abortRequested():
             break
-        updater = ModularUpdater(background=False)
-        updater.provision_progress = progress
 
         try:
-            if updater.run_fresh_install() and updater.is_provisioned():
+            ok, issues = provisioner.run_fresh_install(progress, view)
+            if ok and provisioner.is_provisioned():
                 try:
                     os.remove(os.path.join(CONFIG.USERDATA, 'kodipovil.install_failure.json'))
                 except OSError:
                     pass
                 return True, []
-            issues = list(getattr(updater, 'last_install_issues', []))
-            if not issues:
-                manifest = getattr(updater, '_manifest', None)
-                if manifest:
-                    updater._fresh_install_complete(manifest)
-                    issues = list(getattr(updater, 'last_install_issues', []))
-                else:
-                    issues = ['manifest unavailable']
+            issues = list(issues)
         except Exception as exc:
             logging.log('[Fresh install] provisioning attempt failed: {}'.format(exc),
                         level=xbmc.LOGERROR)
@@ -71,8 +63,8 @@ def provision(attempts=3, progress=None):
 
 def failure_message(issues):
     """Explain failed prerequisites instead of prescribing reinstall loops."""
-    if 'manifest unavailable' in issues:
-        detail = 'לא ניתן להוריד את מידע ההתקנה. בדוק את החיבור לרשת.'
+    if 'repositories' in issues or 'config unavailable' in issues:
+        detail = 'לא ניתן להתחבר למאגרי הבילד. בדוק את החיבור לרשת.'
     else:
         detail = 'רכיבים שלא הושלמו:\n' + '\n'.join(issues[:6])
     return ('ההתקנה לא הושלמה.\n' + detail +
@@ -191,12 +183,12 @@ def seed_fresh_home_shortcuts():
 
 def finalize():
     """Return success only after media, patches and the live home are ready."""
-    from resources.libs.modular_updater import ModularUpdater
+    from resources.libs.provisioning import addon_state, provisioner
     from resources.libs.patch_engine import PatchEngine
     from resources.libs import db
-    if not ModularUpdater.is_provisioned():
+    if not provisioner.is_provisioned():
         return False
-    required = tuple(ModularUpdater.CORE_PROVISION_IDS) + (
+    required = tuple(provisioner.CORE_PROVISION_IDS) + (
         CONFIG.DEFAULT_BUILD_SKIN, 'script.fentastic.helper',
         'plugin.program.orderfavourites-hebrew', 'service.subtitles.kodipovilai')
     db.addon_database(list(required), 1, True)
@@ -208,7 +200,7 @@ def finalize():
         if not missing:
             break
         for aid in missing:
-            ModularUpdater._enable_addon(aid)
+            addon_state.enable_addon(aid)
         if monitor.waitForAbort(1):
             return False
     else:

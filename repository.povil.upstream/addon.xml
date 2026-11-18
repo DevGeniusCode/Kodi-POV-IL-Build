@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Kodi POV IL upstream repository: the third-party indexes the build takes its content add-ons from.
+
+  Several <dir> blocks; Kodi merges every block that matches its version into one add-on list, so InstallAddon(<id>) and <import>
+  resolution work for POV, Idan Plus, Umbrella and the rest straight from here.
+
+  KODI BEHAVIOUR THAT SHAPES THIS FILE (xbmc/addons/Repository.cpp):
+    * Every <dir> needs a <checksum>: a <dir> without one is never fetched.
+    * If ANY <dir> fails (checksum or index unreachable) the WHOLE repository update fails. That is why this repository is
+      separate from repository.povil: our own add-ons never depend on these servers.
+      .github/workflows/upstream-health.yml checks every URL below daily.
+    * The checksum is only VERIFIED when <checksum verify="..."> is set. It is NOT set on any block that points at a server we
+      do not control: a stale checksum there would fail the whole repository (Fishenzon's addons.xml.md5 is stale today). The
+      one block that points at OUR site (upstream/zaxxon709, below) sets verify="sha256": we write that checksum ourselves.
+    * Version ranges compare against the Kodi add-on API version: omega starts at 20.90.0 (Omega alpha); Piers and later are
+      covered by open-ended ranges. Dead per-version indexes (jurialmunkey leia / matrix) are left out.
+    * Same id in several <dir>s: the highest version wins. NEVER add an index that carries an id of ours (skin.fentastic,
+      script.fentastic.helper, script.module.acctmgr, ...): .github/scripts/check_upstreams.py fails on such a collision.
+
+  LEFT OUT ON PURPOSE:
+    * Zaxxon709's own index as a whole: it carries skin.fentastic 100.0.35b and script.fentastic.helper 100.6.29b, which would
+      replace our forks. Block 7 below uses a CI-FILTERED copy of it instead (gen_repo.py, FILTERED_UPSTREAMS).
+    * kodiyashimaru (second kodifitzwell mirror): its index is empty.
+-->
+<addon id="repository.povil.upstream" name="Kodi POV IL Upstream Repository" version="1.0.0" provider-name="DevGeniusCode">
+    <extension point="xbmc.addon.repository" name="Kodi POV IL Upstream Repository">
+
+        <!-- 1. POV (plugin.video.pov, script.module.magneto): kodifitzwell. -->
+        <dir minversion="19.0.0">
+            <info compressed="false">https://kodifitzwell.github.io/repo/packages/addons.xml</info>
+            <checksum>https://kodifitzwell.github.io/repo/packages/addons.xml.md5</checksum>
+            <datadir zip="true">https://kodifitzwell.github.io/repo/</datadir>
+        </dir>
+
+        <!-- 2. Idan Plus (plugin.video.idanplus, script.module.myresolver): Fishenzon. -->
+        <dir>
+            <info compressed="false">https://raw.githubusercontent.com/fishenzon/repo/master/addons.xml</info>
+            <checksum>https://raw.githubusercontent.com/fishenzon/repo/master/addons.xml.md5</checksum>
+            <datadir zip="true">https://raw.githubusercontent.com/fishenzon/repo/master/zips/</datadir>
+        </dir>
+
+        <!-- 3. Umbrella (plugin.video.umbrella): one index per Kodi generation, as upstream publishes them.
+             Their index also carries a plugin.video.youtube copy; if it is newer than Kodi's own, it wins. -->
+        <dir minversion="20.90.0">
+            <info compressed="false">https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/omega/zips/addons.xml</info>
+            <checksum>https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/omega/zips/addons.xml.md5</checksum>
+            <datadir zip="true">https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/omega/zips/</datadir>
+        </dir>
+        <dir minversion="19.8.0" maxversion="20.89.0">
+            <info compressed="false">https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/nexus/zips/addons.xml</info>
+            <checksum>https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/nexus/zips/addons.xml.md5</checksum>
+            <datadir zip="true">https://raw.githubusercontent.com/umbrellaplug/umbrellaplug.github.io/master/nexus/zips/</datadir>
+        </dir>
+
+        <!-- 4. CocoScrapers (script.module.cocoscrapers). -->
+        <dir minversion="19.0.0">
+            <info compressed="false">https://raw.githubusercontent.com/not-coco-joe/repository.cocoscrapers/master/zips/addons.xml</info>
+            <checksum>https://raw.githubusercontent.com/not-coco-joe/repository.cocoscrapers/master/zips/addons.xml.md5</checksum>
+            <datadir zip="true">https://raw.githubusercontent.com/not-coco-joe/repository.cocoscrapers/master/zips/</datadir>
+        </dir>
+
+        <!-- 5. Otaku (plugin.video.otaku, context.otaku). -->
+        <dir>
+            <info compressed="false">https://raw.githubusercontent.com/Goldenfreddy0703/repository.otaku/master/repo/zips/addons.xml</info>
+            <checksum>https://raw.githubusercontent.com/Goldenfreddy0703/repository.otaku/master/repo/zips/addons.xml.md5</checksum>
+            <datadir zip="true">https://raw.githubusercontent.com/Goldenfreddy0703/repository.otaku/master/repo/zips/</datadir>
+        </dir>
+
+        <!-- 6. jurialmunkey (Arctic Fuse 3, script.skinvariables, TMDbHelper): nexusrepo and omega, as upstream. -->
+        <dir minversion="19.9.1" maxversion="20.9.0">
+            <info compressed="false">https://raw.githubusercontent.com/jurialmunkey/repository.jurialmunkey/master/nexusrepo/zips/addons.xml</info>
+            <checksum>https://raw.githubusercontent.com/jurialmunkey/repository.jurialmunkey/master/nexusrepo/zips/addons.xml.md5</checksum>
+            <datadir zip="true">https://raw.githubusercontent.com/jurialmunkey/repository.jurialmunkey/master/nexusrepo/zips/</datadir>
+        </dir>
+        <dir minversion="20.9.1">
+            <info compressed="false">https://raw.githubusercontent.com/jurialmunkey/repository.jurialmunkey/master/omega/zips/addons.xml</info>
+            <checksum>https://raw.githubusercontent.com/jurialmunkey/repository.jurialmunkey/master/omega/zips/addons.xml.md5</checksum>
+            <datadir zip="true">https://raw.githubusercontent.com/jurialmunkey/repository.jurialmunkey/master/omega/zips/</datadir>
+        </dir>
+
+        <!-- 7. Account Manager (script.module.acctmgr, script.module.acctvwr): Zaxxon709.
+             <info>/<checksum> point at OUR filtered copy of their index (only those two add-ons; gen_repo.py fetches their index at
+             build time and, when their server is down, republishes the copy of the previous deploy). <datadir> points straight at
+             THEIR zip server, so Kodi downloads the zips from them and none of their code is stored by us. -->
+        <dir>
+            <info compressed="false">https://devgeniuscode.github.io/Kodi-POV-IL-Build/upstream/zaxxon709/addons.xml</info>
+            <checksum verify="sha256">https://devgeniuscode.github.io/Kodi-POV-IL-Build/upstream/zaxxon709/addons.xml.sha256</checksum>
+            <datadir zip="true">https://raw.githubusercontent.com/Zaxxon709/zaxxon/main/zips/</datadir>
+        </dir>
+
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en_GB">Kodi POV IL upstream repository</summary>
+        <summary lang="he_IL">מאגר המקור של Kodi POV IL</summary>
+        <description lang="en_GB">Gives Kodi access to the content add-ons of the build (POV, Idan Plus, Account Manager, Umbrella, Otaku, Arctic Fuse 3 ...) from their developers.</description>
+        <description lang="he_IL">נותן ל-Kodi גישה לתוספי התוכן של הבילד (POV, עידן פלוס, Umbrella, Otaku, Arctic Fuse 3 ...) ישירות מהמפתחים שלהם.</description>
+        <platform>all</platform>
+        <assets>
+            <icon>icon.jpg</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>

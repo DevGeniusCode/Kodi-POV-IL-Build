@@ -85,8 +85,8 @@ def _switch(skin, confirm):
         if not yes_pressed:
             return False
 
-    # Skins other than the default are installed ON DEMAND, the first time they are picked: Arctic Fuse 3 natively from
-    # repository.jurialmunkey (Kodi resolves the skin + all its deps), the others from the modular manifest.
+    # Skins other than the default are installed ON DEMAND, the first time they are picked, through Kodi's native install:
+    # Arctic Fuse 3 from jurialmunkey's index (Kodi resolves the skin + all its deps), the others from repository.povil.
     # Idempotent: a no-op once present.
     if not ensure_skin_installed(skin.id):
         logging.log_notify(

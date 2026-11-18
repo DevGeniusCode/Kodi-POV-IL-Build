@@ -1,5 +1,5 @@
 {
-  "config_version": "2.0.12",
+  "config_version": "2.0.13",
   "_comment": "Declarative policy for how the wizard applies the shipped build-config (userdata/) onto a device. Bump config_version whenever ANY file in userdata/ changes -- that is what makes the wizard detect and apply the new config. 'fresh' is used on a clean/first install, 'update' on an existing device. Modes: replace (overwrite whole file), merge_id (per <setting id=...>, build value wins, other user settings untouched), merge_name (per <source><name>, add build's, keep user's), seed_if_absent (write only if the file does not already exist).",
   "files": [
     {

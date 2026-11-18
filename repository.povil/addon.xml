@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Kodi POV IL repository: OUR add-ons only (Wizard, skins, subtitles, favourites, helpers, Account Manager).
+
+  Deliberately a single <dir>. Kodi fails the WHOLE update of a repository add-on when any one of its <dir> blocks fails
+  (xbmc/addons/Repository.cpp), so everything we do not control lives in repository.povil.upstream: a dead upstream server can
+  never stop our own add-ons from updating.
+
+  <checksum verify="sha256"> makes Kodi check the index, <hashes>sha256</hashes> makes it check every zip against <zip>.sha256
+  (both written by .github/scripts/gen_repo.py).
+
+  The optional import below names the upstream repository. NOTE: Kodi does NOT install optional imports by itself. The
+  Wizard installs repository.povil.upstream at first start; a user who installed only this repository finds it listed in
+  "Install from repository" -> "Kodi POV IL Repository" -> "Add-on repository".
+-->
+<addon id="repository.povil" name="Kodi POV IL Repository" version="1.0.0" provider-name="DevGeniusCode">
+    <requires>
+        <import addon="repository.povil.upstream" optional="true"/>
+    </requires>
+    <extension point="xbmc.addon.repository" name="Kodi POV IL Repository">
+        <dir>
+            <info compressed="false">https://devgeniuscode.github.io/Kodi-POV-IL-Build/addons.xml</info>
+            <checksum verify="sha256">https://devgeniuscode.github.io/Kodi-POV-IL-Build/addons.xml.sha256</checksum>
+            <datadir zip="true">https://devgeniuscode.github.io/Kodi-POV-IL-Build/zips/</datadir>
+            <hashes>sha256</hashes>
+        </dir>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en_GB">Kodi POV IL repository</summary>
+        <summary lang="he_IL">מאגר Kodi POV IL</summary>
+        <description lang="en_GB">Updates the Kodi POV IL Wizard, skins, subtitles and Account Manager.</description>
+        <description lang="he_IL">מעדכן את אשף Kodi POV IL, הסקינים, הכתוביות ומנהל החשבונות.</description>
+        <platform>all</platform>
+        <assets>
+            <icon>icon.jpg</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>

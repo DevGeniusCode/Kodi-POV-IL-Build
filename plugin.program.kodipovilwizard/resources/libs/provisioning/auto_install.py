@@ -23,7 +23,7 @@ def fresh_build_auto_install_if_needed():
     after the WHOLE sequence completes.
     """
     from resources.libs import fresh_install
-    from resources.libs.modular_updater import ModularUpdater
+    from resources.libs.provisioning import provisioner
 
     # 1. The updater writes .provisioned before startup finishes the build flags,
     # media assets and first-boot setup. If Kodi dies in that interval, finish
@@ -56,11 +56,12 @@ def fresh_build_auto_install_if_needed():
             return False
 
     # Persistent "please wait" banner for the whole provisioning, driven by the
-    # shared ProvisionProgress tracker so it moves in lockstep with the
-    # install window's overall bar (same monotonic 0..99 value). It stays at the
+    # shared ProvisionProgress tracker (one monotonic 0..99 value). It stays at the
     # top of Kodi, surviving every dialog/popup, until setup ends or we bail to
     # resume next launch. Keep BOTH references alive.
     progress, wait_banner = _make_provisioning_progress()
+    from resources.libs.gui import install_progress
+    view = install_progress.open_window(progress)
     try:
         tools.ensure_folders(CONFIG.PACKAGES)
         logging.log(
@@ -73,7 +74,7 @@ def fresh_build_auto_install_if_needed():
         else:
             # A transient repository/download failure can recover while the
             # installer remains open; don't require several manual restarts.
-            ready, issues = fresh_install.provision(progress=progress)
+            ready, issues = fresh_install.provision(progress=progress, view=view)
             if not ready:
                 _close_progress(progress, wait_banner)
                 xbmcgui.Dialog().ok(CONFIG.ADDONTITLE, fresh_install.failure_message(issues))
@@ -89,7 +90,7 @@ def fresh_build_auto_install_if_needed():
                 "will resume next launch.", level=xbmc.LOGERROR)
             _close_progress(progress, wait_banner)
             return False
-        if not ModularUpdater.is_provisioned():
+        if not provisioner.is_provisioned():
             logging.log(
                 "[Fresh Build Auto Install] provisioning did not complete (marker "
                 "absent); will resume next launch.", level=xbmc.LOGWARNING)
@@ -99,7 +100,10 @@ def fresh_build_auto_install_if_needed():
         # Everything from here is the 'finalize' slice of the progress bar
         # (media assets, runtime patching, live defaults, home verification).
         _progress_call(progress, 'begin_indeterminate', 'finalize')
+        provisioner.set_stage(progress, view, provisioner.STAGE_FINALIZE)
+        provisioner.mark_step(view, provisioner.FINALIZE_ROW, 'active')
         completed = fresh_install.finalize()
+        provisioner.mark_step(view, provisioner.FINALIZE_ROW, 'done' if completed else 'failed')
         if completed:
             _progress_call(progress, 'complete', 'finalize')
         _close_progress(progress, wait_banner)
@@ -111,3 +115,5 @@ def fresh_build_auto_install_if_needed():
         )
         _close_progress(progress, wait_banner)
         return False
+    finally:
+        install_progress.close_window(view)

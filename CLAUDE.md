@@ -88,19 +88,19 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   modular updater) are gone, and with the Umbrella switch the whole `packs/` engine (`pack_installer`) is deleted. The baked `userdata/favourites.xml` is generated from
   `favourites_config.json` (default skin, no service connected) and its policy is `fresh: replace` / `update: seed_if_absent`; CI step
   `.github/scripts/check_favourites.py` fails on drift, `--write` regenerates it. `config_version` 2.0.12.
-  Umbrella from its official repositories (Phase 6): `repository.umbrella` (2.2.6; its `<dir>` blocks are listed omega first because the headless installer indexes the
+  Umbrella from its official repositories (Phase 6; the manifest / `ensure_repositories` mechanics below are SUPERSEDED by Phase 7): `repository.umbrella` (2.2.6; its `<dir>` blocks are listed omega first because the headless installer indexes the
   first usable block) and `repository.cocoscrapers` (1.0.1) are add-on folders of this repo, so the manifest ships them (a fresh install has them, like `repository.otaku`);
   `addons/umbrella.py` `ensure_repositories()` installs them from the manifest on a device that predates them, then `post_install_provisioning(ids=[umbrella, cocoscrapers])`
   resolves both from the developers' indexes (current versions: 6.8.02 / 1.0.45 at the time of the switch, the old pack had 6.7.85 / 1.0.39). The pack URL, the
   auto-install-for-everyone function (no callers) and the `umbrella_auto` setting are gone.
-  Skin Manager installs (Phase 6): `skin_packs.ensure_modular_skin` (NOX, Onyx, Estuary) called two `ModularUpdater` methods that no longer exist, so every install failed;
+  Skin Manager installs (Phase 6; superseded by Phase 7, every skin now installs natively through `skin_packs.ensure_repository_skin`): `skin_packs.ensure_modular_skin` (NOX, Onyx, Estuary) called two `ModularUpdater` methods that no longer exist, so every install failed;
   it now runs `HeadlessInstaller.install_jobs([manifest entry])` (sha256-checked) + `_register_and_enable` + `build_skin.enable_skin`.
   First-boot stall (Phase 6, found in a Shield log): the start-up `kodi_version_update_check()` showed a blocking `dialog.ok` on every boot for a device on an older Kodi (a 39 s
   stall of the startup thread). The automatic check now runs in a daemon thread and shows a non-modal notification once per newer version (hidden setting `kodi_update_notified`);
   the menu's "check now" (`kodi_version_update_check_manual=true`) keeps its dialogs and runs inline.
   POV invoker popup (Phase 6): registry `pov_invoker_mismatch_silent` (`prepend_before` `if refresh and kodi_utils.confirm_dialog(...)` in POV's `entry.py`
   sets `refresh = False`): POV still rewrites addon.xml from the setting but no longer asks, in English, for a profile reload (the value applies at the next
-  start). A POV update erases that patch too, so `host_repairs/flow/pov_update_watch.py` (the runner's idle loop, every 8 s) stamps POV's addon.xml
+  start). A POV update erases that patch too, so `host_repairs/flow/addon_update_watch.py` (Phase 7: renamed, now for every patched add-on; the runner's idle loop, every 8 s) stamps POV's addon.xml
   (version, mtime); on a change it waits until the stamp is stable, then runs `_maybe_patch_pov_language_invoker` and `PatchEngine().run(addon_id='plugin.video.pov')`
   (it stands down when POV patching is off). A narrow window remains: POV's own check can run before the watcher re-patches, and then shows its dialog once.
   Hebrew titles keep the title, not an English logo (Phase 6): `pov_logo_for_ui` (marker v3) now calls `pov_logo_lang.apply(art, meta, clearlogo)` in POV's
@@ -117,6 +117,45 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   and `check.check_build` use `CONFIG.BUILD_SKIN_SWITCH_IMAGE` (`profile-ui/logo.png`); the remote `BUILD_SKIN_SWITCH_IMAGE_URL` is gone. (`addon.xml` now declares
   `<fanart>fanart.jpg</fanart>`, the file that exists; it used to name a missing `fanart.png`.)
 
+- **Phase 7 IN PROGRESS (repository migration, Nov 2026; owner-approved HARD CUT: no users, no backward compatibility):** the build is
+  now served as two standard Kodi repositories on GitHub Pages and **Kodi installs and updates every add-on**.
+  `.github/scripts/gen_repo.py` (`deploy-repo.yml`, the WHOLE site on every run, `actions/deploy-pages`) writes `addons.xml` +
+  `.sha256`/`.md5`, `zips/<id>/<id>-<ver>.zip` + `.sha256`, `<id>-latest.zip` + `.sha256`, `index.html` and `config/config.json` +
+  the userdata zip; `check_upstreams.py` (`upstream-health.yml`, daily) watches the third-party indexes. `repository.povil` = OUR
+  index, exactly ONE `<dir>` (`verify="sha256"`, `<hashes>sha256</hashes>`); `repository.povil.upstream` = the third-party `<dir>`s
+  (kodifitzwell, Fishenzon, Umbrella nexus/omega, CocoScrapers, Otaku, jurialmunkey nexusrepo/omega). Kodi source facts
+  (`xbmc/addons/Repository.cpp`): a failing `<dir>` fails the WHOLE repository (hence the split); a `<dir>` without `<checksum>` is
+  never fetched; a checksum is verified only with `verify=`; the highest version of an id wins across `<dir>`s.
+  The Wizard keeps STATE only (`resources/libs/provisioning/`): `provisioner.py` (id lists, `.provisioned` marker, `install_native`
+  = Kodi's `InstallAddon` + the dependency-dialog confirmer, `provision`, `run_fresh_install`, `run_update_check`,
+  `heal_missing_addons`), `repo_bootstrap.py` (first run: installs both repository add-ons from the site's `-latest.zip`,
+  sha256-checked; the ONLY place the Wizard extracts an add-on zip), `addon_state.py`, `build_sync.py` (start-up pass);
+  `config_apply` reads `config/config.json` (`load_config_info`, `config_pending`; `apply_config_pack(info, ...)`). The Wizard does
+  NOT `<import>` `repository.povil` (a standalone zip would fail on the missing dependency); `repository.povil` carries an
+  `optional="true"` import of the upstream repository, which Kodi does NOT auto-install, so the Wizard installs it.
+  DELETED: `ModularUpdater`, `HeadlessInstaller`, `gui/install_manager.py` (the downloader window), `manifest.json`, the release / manifest
+  CI (`build-and-release.yml`, `gen_manifest.py`, `list_changed.py`), the 7 third-party `repository.*` folders and `THIRD_PARTY_REPOS`.
+  NO THIRD-PARTY CODE IS STORED HERE (owner rule): Account Manager (`script.module.acctmgr` 1.2.1a, `script.module.acctvwr` 1.1.6a) comes from
+  Zaxxon709 through `FILTERED_UPSTREAMS` in `gen_repo.py`: the build fetches their index (retries; falls back to the copy of the previous deploy
+  read from our own site; then to an empty index), keeps only those two `<addon>`s and publishes `upstream/zaxxon709/addons.xml` + `.sha256`;
+  `repository.povil.upstream` points `<info>` / `<checksum verify="sha256">` there and `<datadir>` at THEIR zip server (their index also lists
+  `skin.fentastic 100.0.35b` / `script.fentastic.helper 100.6.29b`, which would replace our forks). `script.fentastic.helper` is 0.6.21.
+  Install UX (Phase 7): `gui/install_progress.py` + `DialogInstallProgress.xml` (the old branded panel, restored as a pure view): stage line,
+  one row per step (repos, add-ons by Hebrew name, settings, final touches), status texts, a creeping bar for the add-on being installed and the
+  overall 0-100% bar (the `ProvisionProgress` value, same as the banner); the provisioner reports through `plan / item_state / item_progress /
+  set_stage` (every call guarded, a window that cannot load returns `None`). Kodi's `InstallAddon` builtin is MODAL and shows its own Yes/No
+  ("install X?") and progress dialogs, which sit on top; the confirmer accepts window 10100 only. Progress phases are `repos / content / config /
+  finalize`. Phase 7 step 4 (done): `addon_update_watch` covers POV, Umbrella, Idan Plus and Arctic Fuse 3 (detect by `addon.xml` stamp, settle =
+  whole folder + `addon.xml` stable and no Kodi install dialog, repair under one lock, ReloadSkin for an active AF3; stands down during a clean
+  reinstall and a fresh install); `config_apply` waits for Kodi's installs of the add-ons it writes to (`addon_state.wait_until_settled`; a timeout
+  defers the pack on an existing device); baked `userdata/sources.xml` now holds one source, our Pages URL; `config_version` 2.0.13;
+  `skin_catalog.Skin.floor` removed (`source` is now `povil` / `upstream`). NOT tested in Kodi: native `InstallAddon` right after the bootstrap (the
+  index may not be loaded; `install_native` retries once after `UpdateAddonRepos`), the stacking of Kodi's modal install dialog over our window,
+  `System.AddonUpdateCount` as a "pending updates" signal (the label may not exist: it then reads 0), Kodi's comparison of `1.2.1a`-style versions,
+  `<hashes>` / `verify` on Kodi 20, the Pages deployment. Verified mechanically: stub import of every `resources/` module (172 of 173, only
+  `pov_combined_discover`), pyflakes (one old message), 76 behaviour checks (bootstrap, provisioner, window plan, settle-wait, config deferral,
+  update watcher) against a local copy of the generated site.
+
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
 - **STRUCTURAL REFACTORING ONLY:** NO bug fixing, NO logic optimization. A fix is made only when the user explicitly
@@ -129,6 +168,12 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `build_skin.prepare_layout`, `child_profiles.seed_skin_flags`); runtime repairs gate on the skin's `addon.xml` and registry
   entries of a skin are `optional`. A new code path that touches a skin must follow the same rule. Skin ids come from
   `skin_catalog.SKINS` (the single list: `build_skin`, `child_profiles` and the switcher read it).
+- **REPOSITORIES (Phase 7):** `repository.povil` keeps ONE `<dir>` (ours); every third-party `<dir>` lives in
+  `repository.povil.upstream` and carries NO `verify=`. Never add an upstream index that carries an id of ours (Kodi installs the
+  highest version). The Wizard never extracts an add-on zip itself (only `repo_bootstrap.py`, for the two repositories, after a
+  sha256 check) and never `<import>`s `repository.povil`. NO third-party code or zip is stored in this repository or on our site (use
+  `FILTERED_UPSTREAMS` for an index that carries ids of ours). A new third-party add-on = a `<dir>` there + `check_upstreams.REQUIRED`.
+  Versions only go up and stay purely numeric (Kodi never downgrades). `gen_repo.py` / `check_upstreams.py` enforce most of this.
 - **NO SHIMS (clean-install build):** move the code, update every import / caller to the new path, delete the old one.
 - **NO EMPTY `__init__.py` IN SUBFOLDERS:** folders under `resources/libs/` are Python 3 namespace packages
   (`xbmc.python` 3.0.0). Keep only `resources/__init__.py`, `resources/libs/__init__.py` and the pre-existing ones in
@@ -175,7 +220,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `symtable` for undefined names and new unused imports; fresh-interpreter import of every module under `resources/`;
   cross-module API scan (names exist, signatures fit); repo-wide grep of callers (skins, `userdata/`, other add-ons) for old
   paths and strings; behavior tests under the stubs for any new code. Compare each against the snapshot. Baselines: Wizard
-  198 of 199 modules import (only `patches/pov_combined_discover`, needs POV's `indexers`); subtitle add-on: with
+  171 of 172 `resources/` modules import (Phase 7 stub harness) (only `patches/pov_combined_discover`, needs POV's `indexers`); subtitle add-on: with
   `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, only `subs_engine/sources/telegram_impl` fails (missing `telegram_api`).
 - **WORKFLOW:** stop after each step; the user reviews and commits. No version bump or changelog per step.
 - **LINE ENDINGS:** sources and docs use CRLF (a file that is LF stays LF).
@@ -243,7 +288,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   the same rules; movies networks tiles open provider lists. (15) **POV context menu:** with no Trakt / MDBList / TMDb connected, a movie and a show card show no list-manager entry; connecting one makes its entry appear at the next list.
   (16) **Local artwork:** the optional add-ons and Skin Manager screens show the dark `skins_bg.jpg` with no network, and the "existing skins" notice shows the local logo (check
   whether FENtastic / AF3 honour the `fanart` art of a plugin list). (17) **POV update:** update POV while Kodi runs (or replace its folder with an older build): within about 10 s
-  the log shows `pov_update_watch: ...` and the PatchEngine pass, `addon.xml` holds the build's `reuselanguageinvoker`, and no English "SETTING/XML mismatch" question appears
+  the log shows `addon_update_watch: ...` and the PatchEngine pass, `addon.xml` holds the build's `reuselanguageinvoker`, and no English "SETTING/XML mismatch" question appears
   (it can still appear once if POV's own check wins the race); after a restart the profile is not reloaded. (18) **Hebrew titles:** a Hebrew title whose only logo is English
   shows the title text in FENtastic, NOX, AF3, Estuary and Onyx (home widgets and lists). (19) **Clean reinstall:** run it offline (nothing is deleted, Hebrew message), then
   online with and without the keep options: Kodi closes, the next start provisions the build, the kept data is still there, `kodipovil.provisioned` is rewritten and the home

@@ -41,16 +41,16 @@ def _acctmgr_was_removed():
 def ensure_acctmgr_installed():
     """Install Account Manager ON DEMAND via Kodi's native InstallAddon.
 
-    Replaces the legacy static monolithic zip extraction. Once the target repository
-    is available, this will safely download and resolve dependencies for
-    script.module.acctmgr through Kodi's internal provisioning system.
+    script.module.acctmgr (and script.module.acctvwr, which it imports) come from Zaxxon709 through
+    our filtered index in repository.povil.upstream, so Kodi resolves them from there.
     """
     if xbmc.getCondVisibility('System.HasAddon(script.module.acctmgr)'):
         return True
     try:
-        from resources.libs.modular_updater import ModularUpdater
-        ModularUpdater(background=False).post_install_provisioning(
-            per_addon_timeout=60, ids=['script.module.acctmgr'])
+        from resources.libs.gui import install_progress
+        from resources.libs.provisioning import provisioner
+        with install_progress.window('מתקין את מנהל החשבונות') as view:
+            provisioner.provision(ids=['script.module.acctmgr'], per_addon_timeout=60, view=view)
     except Exception as err:
         logging.log('[Account Manager] native install failed: {0}'.format(err), level=xbmc.LOGERROR)
     return xbmc.getCondVisibility('System.HasAddon(script.module.acctmgr)')

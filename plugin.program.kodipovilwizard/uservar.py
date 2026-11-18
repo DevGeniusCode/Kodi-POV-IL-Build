@@ -28,10 +28,10 @@ BUILDNAME_DEFAULT = 'Kodi POV IL - FENtastic'
 # anything to do with a monolithic build zip -- those are gone.)
 BUILDVERSION_DEFAULT = '0.1.45'
 EXCLUDES = [ADDON_ID]
-# KODI-POV-IL - build.txt / BUILDFILE has been DELETED. The build is now
-# described entirely by manifest.json (MANIFEST_URL, below); the full install and
-# all updates go through ModularUpdater. There is no monolithic build / quickfix
-# zip and no remote build descriptor any more.
+# KODI-POV-IL - build.txt / BUILDFILE has been DELETED. The build is now served by two Kodi repositories
+# (repository.povil, repository.povil.upstream) plus config/config.json on the same site (REPO_BASE_URL, below);
+# Kodi installs and updates the add-ons natively. There is no monolithic build / quickfix zip and no
+# remote build descriptor any more.
 # How often you would like it to check for build updates in days
 # 0 being every startup of kodi
 UPDATECHECK = 0
@@ -46,11 +46,12 @@ DEFAULT_BUILD_SKIN = 'skin.fentastic'
 # picture of the "existing skins" notice
 SKINS_BG = os.path.join(ART, 'skins_bg.jpg')
 BUILD_SKIN_SWITCH_IMAGE = os.path.join(ART, 'profile-ui', 'logo.png')
-# KODI-POV-IL - MODULAR UPDATER (Phase 2/3, manifest-based; replaces the
-# legacy text-file quick_update). Raw manifest.json produced by the new
-# Monorepo CI pipeline. The wizard polls this on startup and updates only
-# the addons whose version moved.
-MANIFEST_URL = 'https://raw.githubusercontent.com/DevGeniusCode/Kodi-POV-IL-Build/main/manifest.json'
+# KODI-POV-IL - the repository site, built and deployed to GitHub Pages by .github/workflows/deploy-repo.yml:
+#   <REPO_BASE_URL>/addons.xml, /zips/<id>/<id>-<ver>.zip   the Kodi repository (repository.povil)
+#   <REPO_BASE_URL>/<id>-latest.zip (+ .sha256)              the Wizard's first-run bootstrap of the two repository add-ons
+#   <REPO_BASE_URL>/config/config.json (+ the config zip)    the userdata pack the Wizard applies
+# Keep it in step with the <dir> of repository.povil/addon.xml (gen_repo.py fails the build when they differ).
+REPO_BASE_URL = 'https://devgeniuscode.github.io/Kodi-POV-IL-Build'
 
 #########################################################
 

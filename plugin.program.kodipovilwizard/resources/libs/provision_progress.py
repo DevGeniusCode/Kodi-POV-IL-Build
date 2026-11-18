@@ -6,16 +6,13 @@ Install it at: resources/libs/provision_progress.py
 This module is PURELY a progress model plus the (single) writer of the top
 banner. It never installs anything and never opens a dialog of its own:
 
-  * install_manager (the DialogModularInstall window) and ModularUpdater only
-    REPORT numbers into it (set_fraction / complete / begin_indeterminate).
+  * provisioning/provisioner.py only REPORTS numbers into it (set_fraction /
+    complete / begin_indeterminate).
   * The banner (a DialogProgressBG created by provisioning/banner.py) is written ONLY from
     this module's ticker thread, so there is exactly one banner writer.
-  * The custom window READS percent() to draw its own overall bar, so the
-    window and the banner can never disagree.
 
 Phase weights are reserved up-front, so a phase whose size is not yet known
-(content addons are only discovered after dependency resolution) cannot make
-the overall percentage jump backwards. Phases without measurable progress
+cannot make the overall percentage jump backwards. Phases without measurable progress
 "creep" asymptotically toward CREEP_CAP of their slice. The value is
 monotonic and capped at BANNER_CAP (99) so the banner can never auto-complete
 and close before Kodi's force-close.
@@ -29,12 +26,10 @@ from resources.libs.common import logging
 
 # (name, relative weight) -- in execution order.
 PHASES = (
-    ('manifest', 40),   # Phase 1: manifest addons (download + extract)
-    ('resolve', 5),     # dependency resolution (indeterminate)
-    ('content', 30),    # Phase 2: 3rd-party content + dependencies
-    ('native', 5),      # rare post-GUI native install of binary addons
-    ('config', 12),     # build-config pack (indeterminate)
-    ('finalize', 8),    # media installer + PatchEngine (indeterminate)
+    ('repos', 5),       # repository bootstrap (indeterminate)
+    ('content', 65),    # every add-on of the build, installed by Kodi (one step per add-on)
+    ('config', 15),     # build-config pack (real progress)
+    ('finalize', 15),   # media installer + PatchEngine (indeterminate)
 )
 BANNER_CAP = 99         # never hit 100 -> banner can't auto-complete/close
 CREEP_CAP = 0.90        # indeterminate phases stop at 90% of their slice

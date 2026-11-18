@@ -123,10 +123,10 @@ def installed_build_check():
             # KODI-POV-IL - the build skin was reset to a stock Kodi skin. The
             # legacy monolithic "GuiFix" zip recovery is gone; instead force the
             # modular updater to RE-APPLY the build-config pack on the next OTA
-            # pass (it re-seeds the build skin + look) by clearing the
+            # start (it re-seeds the build skin + look) by clearing the
             # applied-config marker. Silent and non-destructive.
             logging.log("[Build Installed Check] Build skin reset to {0}; clearing "
-                        "config marker so ModularUpdater re-applies the build config."
+                        "config marker so the next start re-applies the build config."
                         .format(CONFIG.SKIN), level=xbmc.LOGWARNING)
             CONFIG.set_setting('config_applied_version', '')
     else:

@@ -27,15 +27,14 @@ from resources.libs.common.config import CONFIG
 
 
 def wizard_update():
-    # KODI-POV-IL - the wizard is updated like any other addon through
-    # ModularUpdater (manifest.json); the legacy build.txt self-update is gone.
-    # The 'wizardupdate' menu mode now just runs a manifest update check.
+    # KODI-POV-IL - the wizard is updated by Kodi like any other add-on (repository.povil); the legacy
+    # build.txt self-update is gone. The 'wizardupdate' menu mode now just runs the update check.
     from resources.libs.common import logging
     try:
-        from resources.libs.modular_updater import ModularUpdater
-        ModularUpdater(background=False).run_update_check()
+        from resources.libs.provisioning import provisioner
+        provisioner.run_update_check(background=False)
     except Exception as err:
-        logging.log("[Wizard Update] modular update failed: {0}".format(err), level=xbmc.LOGERROR)
+        logging.log("[Wizard Update] update check failed: {0}".format(err), level=xbmc.LOGERROR)
 
 
 def addon_updates(do=None):

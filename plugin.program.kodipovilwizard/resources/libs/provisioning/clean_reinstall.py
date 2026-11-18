@@ -2,13 +2,14 @@
 
 Wipes Kodi's home (install.wipe(), the same engine as Fresh Start) and lets the build provision itself again at the next
 start: fresh_install.begin() writes the "install started" marker, startup.py finds no `kodipovil.provisioned` marker and runs
-the whole modular install (manifest, add-ons, config pack, finalize).
+the whole install (repositories, add-ons through Kodi's native InstallAddon, config pack, finalize).
 
 Order, and why:
   1. master profile only (the markers live in the active profile's userdata; the child-profile gate of the router already
      keeps a kids profile out) and nothing playing;
-  2. PRE-FLIGHT before anything is deleted: the manifest loads and every file the new install downloads answers. A device
-     that is offline would otherwise be left with no add-ons and no way to install them;
+  2. PRE-FLIGHT before anything is deleted: config.json loads and every file the Wizard itself downloads answers (our index,
+     both repository zips, the config pack). A device that is offline would otherwise be left with no add-ons and no way to
+     install them. (The wipe removes the repository add-ons too; the next start bootstraps them again.);
   3. the user picks what to keep, then confirms twice;
   4. QUIESCE: the POV update watcher stands down (BUSY_PROPERTY), Kodi's add-on auto-update is switched off by install.wipe()
      (it restores it afterwards), and the skin is left alone on purpose (install.wipe() -> skin_to_default is a documented
@@ -70,25 +71,21 @@ def _reachable(url):
         return False
 
 
-def preflight_targets(manifest):
-    """(files the new install downloads as (label, url), problems found in the manifest itself).
+def preflight_targets(info):
+    """(files the new install downloads as (label, url), problems found in config.json itself).
 
-    A fresh install takes every manifest add-on except the on-demand skins and the Wizard itself (which this flow keeps),
-    then the config pack, which must carry a checksum because the pack is verified before it is applied.
+    The Wizard downloads our index, both repository zips (the wipe removes them; the next start bootstraps them again) and the
+    config pack, which must carry a checksum because the pack is verified before it is applied. The add-ons themselves are
+    installed by Kodi from the repositories (the upstream-health workflow watches the third-party indexes).
     """
-    from resources.libs.skins import skin_catalog
-    targets, problems = [], []
-    skip = set(skin_catalog.on_demand_ids()) | {WIZARD_ID}
-    for addon_id, entry in sorted((manifest.get('addons') or {}).items()):
-        if addon_id in skip:
-            continue
-        if not isinstance(entry, dict) or not entry.get('zip') or not entry.get('sha256'):
-            problems.append(addon_id)
-        else:
-            targets.append((addon_id, entry['zip']))
-    config = manifest.get('config') or {}
-    if config.get('zip') and config.get('sha256'):
-        targets.append(('config', config['zip']))
+    from resources.libs.provisioning import repo_bootstrap
+    base = CONFIG.REPO_BASE_URL
+    targets = [('addons.xml', base + '/addons.xml')]
+    for addon_id in repo_bootstrap.REPOSITORY_IDS:
+        targets.append((addon_id, '{0}/{1}-latest.zip'.format(base, addon_id)))
+    problems = []
+    if info.get('url') and info.get('sha256'):
+        targets.append(('config', info['url']))
     else:
         problems.append('config')
     return targets, problems
@@ -96,13 +93,13 @@ def preflight_targets(manifest):
 
 def preflight():
     """'' when everything the new install needs can be reached, else the reason (Hebrew), before anything is deleted."""
-    from resources.libs.modular_updater import ModularUpdater
-    manifest = ModularUpdater(background=True)._load_manifest()
-    if not manifest:
+    from resources.libs import config_apply
+    info = config_apply.load_config_info()
+    if not info:
         return 'לא ניתן להגיע לשרת העדכונים של הבילד. יש לבדוק את החיבור לאינטרנט ולנסות שוב.'
-    targets, problems = preflight_targets(manifest)
+    targets, problems = preflight_targets(info)
     if problems:
-        return 'רשימת הרכיבים של הבילד אינה שלמה: {0}'.format(', '.join(problems))
+        return 'מידע ההתקנה של הבילד אינו שלם: {0}'.format(', '.join(problems))
     progress = xbmcgui.DialogProgress()
     progress.create(CONFIG.ADDONTITLE, 'בודק שכל הרכיבים זמינים להורדה...')
     try:

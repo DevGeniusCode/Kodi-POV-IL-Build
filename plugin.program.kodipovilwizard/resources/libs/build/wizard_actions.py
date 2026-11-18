@@ -53,11 +53,11 @@ class Wizard:
         # KODI-POV-IL - FULL INSTALL, now fully MODULAR.
         # The legacy path downloaded a monolithic build zip from build.txt, ran
         # install.wipe(), and extracted it over special://home. ALL of that is
-        # gone. A "Full Install" is now a foreground ModularUpdater fresh install:
-        # every addon in manifest.json + the build-config pack, with the content
-        # addons provisioned via Kodi's native InstallAddon. No wipe, no
-        # monolithic zip, no build.txt -- and it is guarded by the same
-        # .provisioned marker, so an interrupted run resumes on the next launch.
+        # gone. A "Full Install" is now a foreground fresh install (provisioning/provisioner):
+        # the repositories, every add-on of the build through Kodi's native InstallAddon,
+        # and the build-config pack. No wipe, no monolithic zip, no build.txt -- and it
+        # is guarded by the same .provisioned marker, so an interrupted run resumes on
+        # the next launch.
         if not over:
             if not self.dialog.yesno(
                     CONFIG.ADDONTITLE,
@@ -74,20 +74,23 @@ class Wizard:
         build_name = CONFIG.BUILDNAME_DEFAULT
         build_version = CONFIG.BUILDVERSION_DEFAULT
 
-        from resources.libs.modular_updater import ModularUpdater
+        from resources.libs.provisioning import provisioner
         logging.log("[Build] Full modular install of {0} v{1}".format(build_name, build_version),
                     level=xbmc.LOGINFO)
 
         # A user-triggered Full Install starts clean: drop the marker so the whole
         # fresh sequence runs (and so an interrupted run is resumable).
-        ModularUpdater.clear_provisioned()
+        provisioner.clear_provisioned()
         from resources.libs import fresh_install
         fresh_install.begin()
 
+        from resources.libs.gui import install_progress
+        view = install_progress.open_window()
         try:
-            completed, issues = fresh_install.provision()
+            completed, issues = fresh_install.provision(view=view)
         except Exception as err:
             logging.log("[Build] Modular fresh install failed: {0}".format(err), level=xbmc.LOGERROR)
+            install_progress.close_window(view, False)
             self.dialog.ok(CONFIG.ADDONTITLE,
                            "[COLOR {0}]התקנת הבילד נכשלה. נסה שוב.[/COLOR]".format(CONFIG.COLOR2))
             return
@@ -98,21 +101,28 @@ class Wizard:
         # must have written the .provisioned marker (ran end-to-end). Otherwise do
         # NOT flip the build to installed -- startup resumes it next launch.
         engine_present = os.path.exists(os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai'))
-        if not completed or not engine_present or not ModularUpdater.is_provisioned():
+        if not completed or not engine_present or not provisioner.is_provisioned():
             logging.log("[Build] Full install did not complete (engine={0}, marker={1}); "
-                        "will resume next launch.".format(engine_present, ModularUpdater.is_provisioned()),
+                        "will resume next launch.".format(engine_present, provisioner.is_provisioned()),
                         level=xbmc.LOGERROR)
+            install_progress.close_window(view, False)
             self.dialog.ok(CONFIG.ADDONTITLE, fresh_install.failure_message(issues))
             return
 
+        provisioner.set_stage(None, view, provisioner.STAGE_FINALIZE)
+        provisioner.mark_step(view, provisioner.FINALIZE_ROW, 'active')
         try:
             if not fresh_install.finalize():
+                install_progress.close_window(view, False)
                 self.dialog.ok(CONFIG.ADDONTITLE, 'ההתקנה ממתינה להשלמה. אשר את הסקין או נסה שוב.')
                 return
         except Exception as err:
             logging.log('[Build] finalization failed: {0}'.format(err), level=xbmc.LOGERROR)
+            install_progress.close_window(view, False)
             self.dialog.ok(CONFIG.ADDONTITLE, 'ההתקנה לא הושלמה. ניתן לנסות שוב בלי למחוק הגדרות.')
             return
+        provisioner.mark_step(view, provisioner.FINALIZE_ROW, 'done')
+        install_progress.close_window(view, True)
         db.addon_database(CONFIG.ADDON_ID, 1)
         self.dialog.notification(CONFIG.ADDONTITLE, 'הבילד הותקן ומוכן לשימוש')
 
@@ -131,8 +141,8 @@ class Wizard:
     #####################################################
     # KODI-RD-IL
     def quick_update(self, name, auto_quick_update="false"):
-        # KODI-POV-IL - "Quick Update" (עדכון מהיר) -- REWIRED for the modular
-        # (manifest.json) architecture.
+        # KODI-POV-IL - "Quick Update" (עדכון מהיר) -- REWIRED for the repository
+        # architecture.
         #
         # LEGACY (removed): this used to read the `gui` field of the old
         # monolithic build.txt, download a single "quickfix" build zip
@@ -143,17 +153,17 @@ class Wizard:
         # OVERWRITE the live modular wizard + addons and undo the whole
         # migration on the user's device.
         #
-        # NOW: "Quick Update" is a thin, safe wrapper around ModularUpdater. It
-        # diffs the live manifest.json and updates ONLY the addons whose version
-        # actually moved -- no monolithic zip, no full reinstall, no wipe.
-        # ModularUpdater.execute_updates handles any required restart / skin
-        # reload itself, so we deliberately do NOT force-close Kodi here.
+        # NOW: "Quick Update" is a thin, safe wrapper around provisioner.run_update_check.
+        # It makes sure the repositories are installed, asks Kodi to check them (Kodi
+        # installs the add-on updates itself) and applies a newer config pack -- no
+        # monolithic zip, no full reinstall, no wipe. We deliberately do NOT
+        # force-close Kodi here.
         auto = True if auto_quick_update == "true" else False
 
         try:
-            from resources.libs.modular_updater import ModularUpdater
+            from resources.libs.provisioning import provisioner
         except Exception as err:
-            logging.log("[quick_update] ModularUpdater import failed: {0}".format(err),
+            logging.log("[quick_update] provisioner import failed: {0}".format(err),
                         level=xbmc.LOGERROR)
             return False
 
@@ -161,8 +171,8 @@ class Wizard:
                     level=xbmc.LOGINFO)
         try:
             # auto path -> silent background pass; manual menu click -> foreground
-            # (shows the install-manager progress UI + an "up to date" dialog).
-            result = ModularUpdater(background=auto).run_update_check()
+            # (shows a result dialog).
+            result = provisioner.run_update_check(background=auto)
 
             # KODI-POV-IL - Engine v2 Runtime Patching. Runs once the update
             # check has finished (whether or not it found anything new) so

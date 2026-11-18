@@ -1,6 +1,6 @@
 # Kodi‑POV‑IL Build — Developer & AI Agent Bible
 
-> A modular, manifest‑driven Hebrew Kodi build centered on the **POV** video addon,
+> A modular, repository‑driven Hebrew Kodi build centered on the **POV** video addon,
 > the **FENtastic** skin, and an in‑house **AI Hebrew‑subtitles** service.
 > This document is the canonical reference for humans **and** AI agents working on
 > the repository. Read it fully before changing installation, config, asset, or
@@ -11,10 +11,10 @@
 ## Table of Contents
 
 1. [Project Overview & Architecture](#1-project-overview--architecture)
-2. [CI/CD & the Manifest Pipeline](#2-cicd--the-manifest-pipeline)
+2. [CI/CD & the Repository Pipeline](#2-cicd--the-repository-pipeline)
 3. [The Installation Engine](#3-the-installation-engine)
-    - [A. Modular Updater & Headless Installer](#a-modular-updater--headless-installer-headless_installerpy)
-    - [B. OTA & Self‑Healing](#b-ota--self-healing)
+    - [A. Repositories, Native Provisioning & the First‑Run Bootstrap](#a-repositories-native-provisioning--the-first-run-bootstrap)
+    - [B. Install, Updates & Self‑Healing](#b-install-updates--self-healing)
 4. [Build‑Config System (`config_policy.json`)](#4-build-config-system-config_policyjson)
 5. [Assets & Dynamic Media Management](#5-assets--dynamic-media-management)
 6. [Runtime Cross‑Addon Patching](#6-runtime-cross-addon-patching)
@@ -48,54 +48,69 @@ any single corrupt/oversized file failed the whole install, updates meant
 re‑downloading hundreds of MB, and user data (Debrid logins, Trakt auth, custom
 favourites) was casually destroyed.
 
-The current architecture is **modular and manifest‑driven**. Every addon is an **independent, versioned zip**; the build
-state is described by a single
-`manifest.json`; and the device is *hydrated* and *updated* per‑addon, at the
-value/setting level, **without wiping anything**.
+The current architecture is **repository‑driven**. Our add-ons are served by two standard **Kodi repositories** hosted on
+GitHub Pages; **Kodi itself installs and updates them** (and resolves their `<import>` dependencies). The Wizard no longer
+downloads, extracts or dependency-resolves add-ons. It manages only what a Kodi repository cannot: the `userdata/` config
+pack, first-run provisioning, healing, and the runtime patches of other add-ons.
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│  GitHub (source of truth)                                              │
-│    repo folders ──CI──► dist/*.zip ──► Release "addons-latest"         │
-│                                  └────► manifest.json  (versions,sha)  │
-│                                  └────► config-<ver>.zip  (userdata/)  │
-└───────────────────────────────┬──────────────────────────────────────┘
-                                 │  HTTPS (manifest.json + zips)
-                                 ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  Device: plugin.program.kodipovilwizard                               │
-│    ModularUpdater ── diff versions ── download+sha+extract ── DB reg   │
-│    HeadlessInstaller ── resolve deps from repos ── silent zip extract  │
-│    config_apply ── merge userdata per config_policy.json (LAST)        │
-│    startup.py ── .provisioned marker ── heal_missing_addons (boot loop)│
-└──────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│  GitHub (source of truth) ── CI: .github/scripts/gen_repo.py ──► GitHub Pages │
+│    addons.xml (+ .sha256)         zips/<id>/<id>-<ver>.zip (+ .sha256)         │
+│    <id>-latest.zip (+ .sha256)    config/config.json + config-<ver>.zip        │
+└───────────┬─────────────────────────────────────────────┬─────────────────┘
+            │ repository.povil   (our add-ons)              │ config/config.json
+            │ repository.povil.upstream (3rd-party indexes) │ (the userdata pack)
+            ▼                                               ▼
+┌───────────────────────────────┐        ┌────────────────────────────────────┐
+│ Kodi (native)                 │        │ Wizard: plugin.program.kodipovilwizard │
+│  installs + updates add-ons,  │◄───────│  repository bootstrap (first run),     │
+│  resolves <import>s, verifies │ Install│  InstallAddon for the build's add-ons, │
+│  index and zips with sha256   │ Addon  │  config pack, healing, PatchEngine     │
+└───────────────────────────────┘        └────────────────────────────────────┘
 ```
 
-Three classes of payload ship from CI:
+Three classes of payload:
 
-| Payload                | What                                                                                                                 | How the device consumes it                                                                                                                                |
-|------------------------|----------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Addon zips**         | Our private addons + the third‑party **repository** addons + skins                                                   | `manifest.json` → download + sha256 verify + extract to `special://home/addons`                                                                           |
-| **`config-<ver>.zip`** | The entire `userdata/` tree (settings, favourites, sources, skin settings, POV settings)                             | Applied by `config_apply.py` per `config_policy.json` — **always the final step**                                                                         |
-| **Content addons**     | `plugin.video.pov`, `plugin.video.idanplus`, `plugin.video.youtube`, `resource.language.he_il` (+ the optional `plugin.video.otaku`) | **Not vendored.** Installed at runtime by the **Headless Installer** from their own repos so they keep getting OTA updates from their original developers |
+| Payload                         | What                                                                                                                  | How the device gets it                                                                                                                                  |
+|---------------------------------|-----------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Our add-ons**                 | Wizard, skins, subtitles, favourites, helpers, the two repository add-ons                                             | `repository.povil` (our own `<dir>`, index + every zip verified with sha256 by Kodi); Kodi installs and updates them                                      |
+| **Third-party content add-ons** | `plugin.video.pov`, `plugin.video.idanplus`, `plugin.video.youtube`, `resource.language.he_il`, Account Manager (`script.module.acctmgr` + `acctvwr`), optional Umbrella / Otaku / Arctic Fuse 3 | `repository.povil.upstream` aggregates the developers' own indexes (it is separate on purpose, see below); the Wizard asks Kodi to install them, and they keep updating from their developers. **No third-party code is stored in this repository or on our site.** |
+| **`config-<ver>.zip`**          | The `userdata/` tree (settings, favourites, sources, skin settings, POV settings)                                     | Not an add-on. `config/config.json` names it; `config_apply.py` applies it per `config_policy.json` — **always the final step** of a fresh install        |
 
-### Synchronous, isolated installation
+### Two install paths
 
-Installation is a **sequential queue**, not a parallel free‑for‑all:
+1. **Repository first:** add the site URL as a source, install `repository.povil` from it (zip), then install the Wizard from
+   the repository. The Wizard's first start installs `repository.povil.upstream` (Kodi does **not** install an `optional="true"`
+   `<import>`, so the Wizard does it).
+2. **Standalone Wizard zip:** install `plugin.program.kodipovilwizard-latest.zip`. The first start installs **both** repository
+   add-ons from the site's `<id>-latest.zip` (each verified against `<id>-latest.zip.sha256`; `provisioning/repo_bootstrap.py`).
+   The Wizard does **not** `<import>` the repository, because a zip installed without it would fail on the missing dependency.
 
-- **Downloads** can run concurrently (the foreground install‑manager UI streams up
-  to a few at once), but **extraction + DB registration happen one addon at a
-  time**, in dependency order (deps before dependents).
-- Dependency resolution is handled **gracefully and headlessly** (see
-  [§3.A](#a-modular-updater--headless-installer-headless_installerpy)). When the
-  native installer must be used as a last resort, it is wrapped in an **isolated
-  micro‑watchdog** that touches **only** the dependency‑confirmation dialog — never
-  the rest of the UI.
-- The default unit of install is a **raw zip extraction** into
-  `special://home/addons` followed by `UpdateLocalAddons`, mirroring exactly how
-  Kodi itself lays an addon down on disk.
+Either way the build then provisions itself exactly as before (banner, fresh-install resume, `.provisioned` marker).
 
-### Critical invariant: `config.zip` is ALWAYS last
+### Why two repository add-ons
+
+Kodi merges every `<dir>` of a repository add-on into one update and **fails the whole update when any single `<dir>` fails**
+(`xbmc/addons/Repository.cpp`, `FetchIfChanged`). `repository.povil` therefore holds ONE `<dir>` (ours, `verify="sha256"`,
+`<hashes>sha256</hashes>`), and everything we do not control lives in `repository.povil.upstream`: a dead third-party server can
+stop POV from installing, never our own add-ons from updating. `gen_repo.py` enforces the split.
+
+### Native installs and updates
+
+- **Install:** `provisioning/provisioner.install_native()` calls Kodi's `InstallAddon(<id>)`, which resolves the add-on and its
+  whole dependency tree from the repositories. A tiny watchdog accepts only the dependency Yes/No dialog (window 10100).
+- **Update:** Kodi's own updater (`general.addonupdates` is baked to automatic). The Wizard asks it to check at every start
+  (`UpdateAddonRepos`). Kodi never downgrades: to roll back, publish a **higher** version carrying the old code.
+- **After an update:** an add-on that Kodi replaced loses its runtime patches. `host_repairs/flow/addon_update_watch.py` watches
+  every add-on the PatchEngine patches (POV, Umbrella, Idan Plus, Arctic Fuse 3): when one is installed or updated it waits until Kodi
+  has finished unpacking it (the add-on's whole folder and `addon.xml` stable, no Kodi install dialog) and re-applies its patches
+  under one lock, within seconds and without a restart (§6). It stands down during a clean reinstall and a fresh install.
+- **Config vs. updates:** before `config_apply` writes settings it waits (bounded) for Kodi to finish installing or updating the
+  add-ons whose `addon_data` the pack carries, so an update cannot overwrite what was just written; on an existing device a timeout
+  defers the pack to the next start (§4).
+
+
 
 `config-<ver>.zip` carries `userdata/`, including **POV's own `settings.xml`**
 (Hebrew metadata language, fanart, TMDB/Trakt keys) and the skin settings. It **must be extracted/applied as the
@@ -103,7 +118,7 @@ absolute final step of a fresh install — after
 every addon is on disk** — so that nothing an addon writes at install/first‑init
 can clobber our configuration. Applying it earlier reintroduces the *black‑background + English‑metadata* race. This
 ordering is enforced in
-`modular_updater.ModularUpdater.execute_updates()`.
+`provisioner.run_fresh_install()`.
 
 ### Active-profile paths
 
@@ -115,109 +130,125 @@ the master). Everything the engine keeps per profile — the `kodipovil.provisio
 
 ---
 
-## 2. CI/CD & the Manifest Pipeline
+## 2. CI/CD & the Repository Pipeline
 
-**Workflow:** `.github/workflows/build-and-release.yml` (triggers on `push` to
-`main`).
+**Workflows** (`.github/workflows/`):
 
-Pipeline steps:
+- `deploy-repo.yml` — on every push to `main` that touches an add-on folder, `userdata/`, `.github/scripts/` or itself (and on
+  demand): checks the baked favourites, runs `gen_repo.py`, uploads the result as a **GitHub Pages artifact** and deploys it
+  (`actions/deploy-pages`). A Pages artifact replaces the whole site, so **every add-on is rebuilt on every run** (the zips are
+  deterministic: sorted entries, fixed timestamps, so unchanged add-ons produce identical bytes). There is no release asset to
+  prune and no zip in git history.
+- `upstream-health.yml` — daily (and on changes to `repository.povil.upstream/`): `check_upstreams.py` fetches every
+  third-party index the upstream repository lists.
 
-1. **Detect changed addons** — only addons whose folder changed this push are
-   rebuilt (plus the config zip when any `userdata/` file changed).
-2. **Build zips** — `.github/scripts/build_addons.py` packages each changed addon
-   into `dist/<id>-<version>.zip`. `.github/scripts/build_config.py` packages all
-   of `userdata/` into `dist/config-<version>.zip` (deterministic: sorted order,
-   fixed timestamps). The config version comes from
-   `userdata/config_policy.json → config_version`.
-3. **Publish to the rolling release** (`addons-latest`): for each *changed* addon,
-   its previous zip is deleted and the new one uploaded (`--clobber`).
-   `*-latest.zip` stable pointers (e.g. the wizard bootstrap) are preserved.
-4. **Regenerate `manifest.json`** — `.github/scripts/gen_manifest.py` discovers
-   every addon via `kodi_addons.discover_addons()`, parses each `addon.xml`, and
-   records `id / name / version / type / filename / zip URL / size / sha256 /
-   updated`. Values for addons **not** rebuilt this run are carried over from the
-   previous manifest **only if id+version still match**. The generator **refuses to
-   write a manifest with a null size/sha256** (that would mean a version bump with
-   no published zip → a 404 on install) and fails loudly instead.
-5. **Prune orphaned release assets** — reconciles the release against the fresh
-   manifest and deletes any zip it no longer references (keeping `*-latest.zip`).
-   This is what removes the last zip of a *deleted* addon (the per‑addon delete in
-   step 3 only runs for addons that still exist and changed).
-6. **Commit `manifest.json`** back to `main` with `chore(manifest): ... [skip ci]`.
+**One-time setup:** repository Settings → Pages → Source = **GitHub Actions**; Settings → Environments → `github-pages` must
+allow the `main` branch.
 
-**Key consequence for contributors:** to ship a change you only **bump the
-`addon.xml` version** (or `config_version`). CI builds, publishes, and regenerates
-the manifest. Never hand‑edit `manifest.json` — it is regenerated every run.
+**`gen_repo.py`** builds the site (`--out site --base-url https://<owner>.github.io/<repo>`):
 
----
+```
+index.html  .nojekyll                       landing page; plain <a href> links, which Kodi's HTTP file browser follows
+addons.xml  addons.xml.sha256  .md5         every add-on's addon.xml; the sha256 is verified by Kodi (verify="sha256")
+<id>-latest.zip (+ .sha256)                 stable names for repository.povil, repository.povil.upstream and the Wizard
+zips/<id>/<id>-<ver>.zip (+ .sha256)        the <datadir>; every zip is verified by Kodi (<hashes>sha256</hashes>)
+zips/<id>/icon.*, fanart.*, changelog-<ver>.txt
+config/config.json  config/config-<cfgver>.zip   the userdata pack and {config_version, file, url, size, sha256, commit}
+upstream/<name>/addons.xml (+ .sha256, .md5)     a CI-FILTERED copy of a third-party index (see below); no third-party zip is stored
+```
 
-## 3. The Installation Engine
+It fails the build (and nothing is deployed) on: a malformed `addon.xml`, a folder name that is not the add-on id, a duplicate
+id, a missing required add-on (both repositories, the Wizard), `repository.povil` having anything but one `<dir>` that matches
+`--base-url`, `repository.povil.upstream` pointing back at our site, or a finished site that fails `verify()` (index and zip
+checksums, zip contents, `config.json`). It warns about versions with letter suffixes (Kodi's comparison of those is unverified).
+
+**Filtered third-party indexes** (`FILTERED_UPSTREAMS` in `gen_repo.py`): Zaxxon709's index carries Account Manager, which we need,
+next to `skin.fentastic 100.x` and `script.fentastic.helper 100.x`, which would replace our forks (Kodi installs the highest version of
+an id). At build time `gen_repo.py` fetches that index, keeps only `script.module.acctmgr` and `script.module.acctvwr`, and publishes
+`upstream/zaxxon709/addons.xml` + `.sha256`. `repository.povil.upstream` points its `<info>` / `<checksum verify="sha256">` at that
+copy and its `<datadir>` straight at Zaxxon709's own zip server: Kodi downloads the zips from them and we store none of their code.
+A temporary outage of their server never breaks our build: the sources are tried in the order live upstream -> the copy of the
+previous deploy (read from our own site) -> an empty index (first deploy only; the add-ons are then simply not offered until a later
+deploy). The build prints which one was used.
+
+**`check_upstreams.py`** fails on: a third-party checksum or index that cannot be fetched or parsed, an upstream index that
+carries an **id of ours** (Kodi installs the highest version found anywhere, so an upstream `skin.fentastic 100.x` would replace
+our fork), an add-on the build needs that is missing or whose zip does not answer, or a filtered copy that still lists an add-on it
+should not (the filter is broken). The filtered copy on our own site is checked leniently (a 404 before the first deploy is only a
+warning) and the third party's own index is checked directly. A stale upstream checksum is only a warning
+(Kodi verifies a checksum only when `verify=` is set, and we never set it on a third-party `<dir>`).
+
+**Key consequences for contributors:**
+
+- To ship a change you **bump the `addon.xml` version** (or `config_version`) and push. Kodi only updates to a **higher** version:
+  keep versions strictly increasing and purely numeric.
+- Never hand-edit anything that `gen_repo.py` generates. `repository.povil/addon.xml` must keep naming the site in `uservar.py`
+  (`REPO_BASE_URL`); a fork changes both.
+- A new third-party add-on is a new `<dir>` in `repository.povil.upstream/addon.xml` (copy the upstream's version ranges), plus its
+  id in `check_upstreams.REQUIRED`. When an upstream index carries ids of ours (Account Manager's does), add it to
+  `FILTERED_UPSTREAMS` instead: nothing third-party is ever copied into this repository.
+
+
 
 Owner addon: **`plugin.program.kodipovilwizard`**.
 
-### A. Modular Updater & Headless Installer (`headless_installer.py`)
+### A. Repositories, Native Provisioning & the First‑Run Bootstrap
 
-`resources/libs/modular_updater.py` orchestrates the entire deployment pipeline as a **single, continuous UI experience
-**. It coordinates the local asset extraction (Phase 1) and seamlessly transitions into the third‑party content addon
-provisioning (Phase 2) without ever closing the custom installer window.
+Owner modules (all in `resources/libs/provisioning/`):
 
-**1. Manifest Phase (Local Addons & Repositories)** — `ModularUpdater.execute_updates()`:
+| Module              | Role                                                                                                                                                              |
+|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `repo_bootstrap.py` | `ensure_repositories()`: installs / enables `repository.povil` and `repository.povil.upstream` from the site's `-latest.zip` (sha256-checked, only an `<id>/` folder is extracted), then `UpdateLocalAddons` + `UpdateAddonRepos`. The **only** place the Wizard extracts an add-on zip. |
+| `provisioner.py`    | The id lists (`PROVISION_IDS`, `CORE_PROVISION_IDS`, `OWN_PROVISION_IDS`), the `.provisioned` marker, `install_native()`, `provision()`, `run_fresh_install()`, `run_update_check()`, `heal_missing_addons()`. |
+| `addon_state.py`    | `has_addon`, `on_disk`, `enable_addon` (JSON-RPC), `register_and_enable` (Addons DB), `local_version`. No network.                                                |
+| `build_sync.py`     | The start-up pass called by `startup.py`: `run_update_check` then `heal_missing_addons`.                                                                           |
 
-- Diffs local vs manifest versions (`run_update_check`) and only touches addons **already installed** unless
-  `install_missing` or `fresh` is set (and never an on‑demand skin: only the default skin is provisioned, see [§8](#8-skins--the-quick-update--force-close-ux)).
-- Per addon: download → **strictly verify sha256** (enforced for manifest items) →
-  `extract.all(zip, CONFIG.ADDONS, ignore=True)` → SQLite database registration in `Addons??.db` → `UpdateLocalAddons`.
-- Runs via the rich `install_manager` UI featuring parallel bounded downloads and real-time extraction progress tracks.
+**`install_native(ids)`** — for each add-on not yet enabled: one that is on disk but disabled is only **enabled** (never
+reinstalled: the "enable loop"); the rest get `InstallAddon(<id>)` and a bounded wait for `System.HasAddon`, with a second attempt
+after a repository refresh (right after the bootstrap Kodi may not have loaded the index yet). Binary add-ons (`inputstream.*`,
+`pvr.*`, …) need no special case any more: Kodi picks the platform-correct build itself.
 
-**2. The Synchronization Gap & Transition:**
+**`run_fresh_install(progress)`** → `(ok, issues)`: `repos` → `content` (every add-on of `fresh_ids()`: our own ones, the default
+skin and `PROVISION_IDS`) → `config` (`config_apply.apply_config_pack`, always last) → verify (`required_ids()` enabled and the
+config version applied) → write the `.provisioned` marker. Idempotent: a resumed run only does the missing work. The banner
+phases are `repos / content / config / finalize` (`provision_progress.PHASES`).
 
-- Once Phase 1 finishes, the Orchestrator executes a 2.5-second database settling pause (`waitForAbort(2.5)`) to ensure
-  the SQLite database is completely unlocked and Kodi finishes reloading newly extracted local repo structures.
-- Concurrently, the UI window enters a visual `pause_for_resolution()` state (displaying a "Calculating dependencies /
-  מנתח מאגרים..." status label), maintaining a live, uninterrupted window context.
+**`run_update_check(background)`** — the start-up pass and the manual "check for updates" (`mode=modular_update` /
+`wizardupdate`, Quick Update): bootstrap the repositories if needed, `UpdateAddonRepos`, then apply a newer config pack
+(`config_apply.config_pending`) and `ReloadSkin()` when it touched the active skin. Kodi installs the add-on updates itself.
 
-**3. Headless Content‑Addon Provisioning** — `headless_installer.HeadlessInstaller`:
+**What the user sees** (`gui/install_progress.py`, skin `DialogInstallProgress.xml`; the same branded panel the old installer had, now
+only a *view*): a header, a one-line **stage** ("מתקין את מאגרי הבילד" → "מתקין תוספים (3/11): POV" → "מחיל את הגדרות הבילד" → "בודק שהכול הותקן" →
+"מסיים: מדיה, טלאים ומסך הבית"), one **row** per step in order (the two repositories, every add-on by its Hebrew name, the build settings,
+the final touches) with a glyph, a status ("ממתין" / "מתקין..." with the loader and a small bar / "הותקן" / "כבר מותקן" / "נכשל"), and the **overall
+bar 0-100%**. The percentage is the shared `ProvisionProgress` value, the same one the top-right banner shows (the banner message follows the same
+stages); without a tracker (optional add-on installs) it is the share of finished rows. Kodi installs have no measurable progress, so the
+bar of the add-on being installed creeps toward its slot (about 20 s) and snaps to the next one when Kodi reports it installed. Kodi's own
+modal install dialog (`InstallAddon` is modal and asks "install <add-on>?", which the confirmer accepts) still opens on top for the length of
+each native install; this window is what stays on screen between them. State lives in `InstallPlan` (plain Python); `provisioner` reports
+through `plan / item_state / item_progress / set_stage`, every call guarded: a window that cannot load returns `None` and the banner alone
+carries the run. Shown by a fresh install (`auto_install`, manual full install) and by the foreground installs of Umbrella, Otaku, Account
+Manager and the skins; the start-up healing is silent.
 
-- **Resilient Manifest Fetching:** It parses repositories already on disk (ours + Kodi's official
-  `repository.xbmc.org`). To prevent the post-extraction Python SSL race condition (where rapid folder extraction
-  thrashes Python's internal certificate verification, causing an `SSLCertVerificationError`), the fetching engine
-  automatically falls back to Kodi’s native C++ abstraction layer (`xbmcvfs.File()`) to pull the remote
-  `addons.xml(.gz)`.
-- **Dynamic Dependency Closure:** Parses repository XMLs into a unified union index. When resolving dependencies, it *
-  *dynamically maps addon types based on ID prefixes** (e.g., `script.module.*` -> `module`, `resource.language.*` ->
-  `language`) to prevent database and folder structure corruption, instead of blindly forcing a `'plugin'` type.
-- **Dynamic Queue Injection:** Resolved content addons and their dependencies are injected live into the active UI via a
-  thread-safe `append_to_queue()` method. During Phase 2 downloading, the UI **gracefully bypasses SHA256 verification**
-  since upstream 3rd-party repositories omit file hashes, preventing fatal `KeyErrors`.
-- **Resolution Resilience:** If an addon's dependency tree fails to resolve, a bounding fix ensures the parent addon
-  doesn't drop into a logic "black hole"; it bubbles up to `self.unresolved` to trigger the native fallback.
+**`config/config.json`** (`config_apply.load_config_info()`; `CONFIG.REPO_BASE_URL` / `CONFIG.CONFIG_INFO_URL`, set in
+`uservar.py`) is the Wizard's only state input from the site. A pack without a sha256 is never applied or retained.
 
-**4. Binary Addon Protection & Native Fallback:**
-
-- Binary / platform‑specific addons (`inputstream.*`, `pvr.*`, etc.) are **NEVER extracted blindly**, as zip packages
-  must match the device's host OS/architecture/ABI.
-- Any binary dependency or unresolvable upstream addon is deferred to the **Minimal Native Fallback** pipeline. This
-  triggers *only after* our custom GUI cleanly closes. It executes a background native `InstallAddon(<id>)` via a sleek,
-  non-intrusive Kodi status bar overlay (`xbmcgui.DialogProgressBG()`), backed by a micro‑watchdog that auto‑accepts *
-  *only window `10100`** (the dependency confirmation dialog, control `11`).
-
-**Provision order** (`PROVISION_IDS`) is deliberate:
+**Provision lists** (`provisioner.py`):
 
 ```
-plugin.video.pov  →  plugin.video.idanplus  →  plugin.video.youtube
-  →  resource.language.he_il  →  script.xbmc.unpausejumpback
+PROVISION_IDS = script.module.acctmgr (Zaxxon709, filtered index) · plugin.video.pov · plugin.video.idanplus ·
+                plugin.video.youtube · resource.language.he_il · script.xbmc.unpausejumpback
+OWN_PROVISION_IDS = plugin.program.autocompletion · plugin.program.orderfavourites-hebrew ·
+                    script.fentastic.helper · service.subtitles.kodipovilai   (+ the default skin on a fresh install)
 ```
 
-`plugin.video.otaku` (anime) is **optional** and not in the list: it is installed on demand from the Wizard's main menu ->
-**תוספים וסקינים אופציונליים** (`addons/otaku.py`, headless from `repository.otaku`, which stays in the manifest). Umbrella + CocoScrapers work
-the same way (`addons/umbrella.py`): `repository.umbrella` and `repository.cocoscrapers`, the developers' own repository definitions, ship in the
-manifest (a fresh install has them; `ensure_repositories()` installs them, sha256-checked, on a device that predates them), and the headless
-installer resolves `plugin.video.umbrella` and `script.module.cocoscrapers` from the developers' GitHub Pages indexes. No pack zip, nothing hosted by a third party.
-Because it is not in `PROVISION_IDS`, the boot loop does not put it back after the user removed it. Its baked settings
-(`userdata/addon_data/plugin.video.otaku/settings.xml`, an unlisted file seeded only if absent) are still laid down by a fresh
-install, so it starts configured when the user installs it later.
+`plugin.video.otaku` and Umbrella (+ CocoScrapers) are **optional**: installed on demand from the Wizard's main menu →
+**תוספים וסקינים אופציונליים** (`addons/otaku.py`, `addons/umbrella.py`) through the same `provisioner.provision(ids=[...])`, resolved
+from the developers' indexes in `repository.povil.upstream`. Because they are not in `PROVISION_IDS`, the start-up healing does not put
+them back after the user removed them. Their baked settings (`userdata/addon_data/...`, seeded only if absent) are still laid down by a
+fresh install, so they start configured.
 
-### B. OTA & Self‑Healing
+### B. Install, Updates & Self‑Healing
 
 - **`.provisioned` marker** (`kodipovil.provisioned` in the **active profile's** userdata, `CONFIG.USERDATA`). Written **only** when a fresh install reaches
   the very end (every addon attempted **and** `config.zip` applied) *and* Kodi is not aborting. `startup.py` uses it to
@@ -225,15 +256,13 @@ install, so it starts configured when the user installs it later.
   launch instead of left half‑built. `run_fresh_install()` is idempotent — present addons are skipped, the config pack
   self‑applies once.
   Secondary profiles receive the marker when they are seeded ([§9.3](#93-profile-seeding--configuration-management)).
-- **`heal_missing_addons()`** — a background boot‑loop self‑heal. On startup it verifies with `System.HasAddon(...)`
-  that every required manifest addon (minus on‑demand skins) and every `PROVISION_IDS` content addon is physically
-  present. If anything is missing, it runs the **exact same headless pipeline silently in the background** without
-  invoking the `install_manager` GUI thread. This architecture guarantees the build will seamlessly self‑complete over a
-  couple of launches if an installation is ever partially interrupted.
-- **Graceful reload, not crash.** A forced restart is reserved for *critical* updates only (the Wizard itself, or the *
-  *currently active** skin whose live files can't be hot‑swapped). Everything else — plugins, services, inactive skins,
-  or a config change that only touched the active skin's look — is applied in place with **`ReloadSkin()`**. We do **not
-  ** kill Kodi to apply ordinary updates.
+- **`heal_missing_addons()`** — a start-up self-heal. It verifies with `System.HasAddon(...)` that every add-on of
+  `heal_ids()` (our own add-ons and `PROVISION_IDS`; skins are the user's choice) is present and, if anything is missing, installs
+  it through `provision()` (the repositories first, then Kodi's native `InstallAddon`). This guarantees the build self-completes
+  over a couple of launches if an installation is ever partially interrupted.
+- **Graceful reload, not crash.** Add-on updates are Kodi's: it reloads the active skin and restarts the services it updated by
+  itself, so the Wizard never force-closes Kodi for an ordinary update. A config change that touched the active skin's look is
+  applied in place with **`ReloadSkin()`**.
 - **First‑Boot Stabilizer (race shield).** The first boot after an install is a race: FENtastic fires parallel widget
   directory queries at `plugin.video.pov` while POV's service creates its databases for the first time, which can fail
   the directory calls or deadlock the skin‑variable engine (the "second boot is always fine" symptom).
@@ -259,14 +288,14 @@ install, so it starts configured when the user installs it later.
   Wipes Kodi with `install.wipe()` (the Fresh Start engine) and lets the next start provision the build from scratch
   (`fresh_install.begin()` → no `.provisioned` marker → the install above). Master profile only; a kids profile is stopped by
   the router's child gate (the mode is not in `profiles/hooks._CHILD_ALLOWED`); nothing may be playing. Order:
-  1. **Pre-flight, before anything is deleted:** the manifest loads, every file the new install downloads (all manifest add-ons
-     except the on-demand skins and the Wizard, plus the config pack) has a checksum and answers a one-byte ranged GET. Offline
-     or unreachable → a Hebrew dialog and nothing is touched.
+  1. **Pre-flight, before anything is deleted:** `config/config.json` loads (with a sha256) and every file the Wizard itself downloads
+     (our `addons.xml`, both repository zips, the config pack) answers a one-byte ranged GET. Offline or unreachable → a Hebrew
+     dialog and nothing is touched. (The wipe removes the repository add-ons too; the next start bootstraps them again.)
   2. **Questions:** what to keep (nothing is pre-selected): Account Manager + POV (the add-ons and their data are excluded from the
      wipe as whole folders, as the existing keep switches do), Umbrella, `profiles.xml` (profile contents are rebuilt); then two
      confirmations. The keep flags are set in memory only and every other `KEEP*` switch is forced off (a clean reinstall ignores the
      user's Fresh Start switches).
-  3. **Quiesce:** `pov_update_watch` stands down while the window property `kodipovil.clean_reinstall` is set; Kodi's add-on
+  3. **Quiesce:** `addon_update_watch` stands down while the window property `kodipovil.clean_reinstall` is set; Kodi's add-on
      auto-update is switched off by `install.wipe()` and restored afterwards. The skin is not switched (`skin_to_default` is a
      documented no-op; the hard kill follows and the next start provisions the default skin).
   4. **After the wipe:** POV's `povil_dropped_*.json`, `povil-*.json` and `navigator.before-*.db` are removed unless POV data is kept; the
@@ -320,10 +349,15 @@ no‑fanart defaults. The fix added it to the policy as:
   `exclude_ids` removed (screen resolution, device uuid/name, …), to `kodipovil.fresh_gui_defaults.xml`. Kodi owns its
   in‑memory settings, so `fresh_install.apply_live_defaults()` applies them through JSON‑RPC instead of overwriting the
   file.
-- **Retained verified pack.** When the manifest supplies a sha256 and the pack verifies, `config_apply` keeps a copy in
+- **Waits for Kodi's installs.** `apply_config_pack` first collects the add-ons whose `addon_data` the pack writes and calls
+  `addon_state.wait_until_settled()`: none of their folders changed for 4 s, Kodi's install dialog is not up, and (right after
+  `UpdateAddonRepos`, `wait_grace` 30 s) `System.AddonUpdateCount` announces nothing pending. Timeouts: 60 s on a fresh install (it
+  proceeds anyway), 120 s on an existing device, where a timeout **defers** the pack (`result['deferred']`, nothing written, the version stays
+  unapplied, the next start retries) so a Kodi update cannot overwrite freshly applied settings.
+- **Retained verified pack.** When `config.json` supplies a sha256 and the pack verifies, `config_apply` keeps a copy in
   the **master** profile (`addon_data/plugin.program.kodipovilwizard/config_pack/build_config.zip` plus a
   `build_config.json` receipt). Secondary profiles are seeded from it through `config_apply.open_verified_pack()`; the
-  Wizard ships no config bundle of its own. A manifest without a sha256 still applies, but is never retained. API and
+  Wizard ships no config bundle of its own. A `config.json` without a sha256 is rejected (the pack is never applied or retained). API and
   seeding rules: [§9.3](#93-profile-seeding--configuration-management).
 
 ---
@@ -672,7 +706,7 @@ source‑hook patches live in the Wizard's patch registry ([§6](#6-runtime-cros
 
 ## 8. Skins & the Quick‑Update / Force‑Close UX
 
-**Skins** ship in the manifest; how they are installed depends on the flow:
+**Skins** are served by the Kodi repositories; how they are installed depends on the flow:
 
 - **The default skin is `skin.fentastic`** (`DEFAULT_BUILD_SKIN` in `uservar.py`, read as `CONFIG.DEFAULT_BUILD_SKIN`; the
   config pack's `lookandfeel.skin` agrees). It is the only skin a fresh install or the background updater downloads, the
@@ -680,9 +714,9 @@ source‑hook patches live in the Wizard's patch registry ([§6](#6-runtime-cros
 - **Every other skin is on demand, like Umbrella** (`skins/skin_catalog.py`: `on_demand_ids()` = the catalog minus the default;
   `skin_catalog.SKINS` is the single list of skin ids, `build_skin` and `child_profiles` read it): Estuary
   (the build edition), NOX, Onyx and Arctic Fuse 3 are downloaded only when the user installs them from the **optional add-ons and skins** screen
-  (Wizard main menu -> תוספים וסקינים אופציונליים, `addons/optional.py`, rows from `skin_manager.add_rows`) or picks them in *Switch Skin*; the updater still keeps an *installed* one current. NOX /
-  Onyx / Estuary come from the verified modular manifest (`skin_packs.ensure_modular_skin`); AF3 goes through Kodi's
-  native install from repository.jurialmunkey (`post_install_provisioning(ids=[...])`). The one-table catalog also feeds the
+  (Wizard main menu -> תוספים וסקינים אופציונליים, `addons/optional.py`, rows from `skin_manager.add_rows`) or picks them in *Switch Skin*; Kodi keeps an *installed* one current. NOX /
+  Onyx / Estuary / AF3 all install through Kodi's native InstallAddon (`skin_packs.ensure_skin_installed` →
+  `provisioner.provision`): ours from `repository.povil`, AF3 from jurialmunkey's index in `repository.povil.upstream`. The one-table catalog also feeds the
   picker, so a new skin is one line there.
 - **Optional add-ons (Umbrella, Otaku)** live on the same screen (`mode=optional`: an install button while the add-on is absent, a
   status line once installed). Their **launcher tiles** are gated: `favourites_config.json` gives the `umbrella` (and its
@@ -703,8 +737,8 @@ settings API, accepts Kodi's own retention question with the scoped confirmer, a
 
 **Quick Update** is the user‑facing "fast update" button: a favourite/menu action
 `PlayMedia(plugin://plugin.program.kodipovilwizard/?mode=install&action=quick_update&...)`
-that runs the **manifest‑based** update (version diff → modular download/extract →
-config merge). It is **not** a monolithic re‑download.
+that runs `provisioner.run_update_check()` (repositories installed, `UpdateAddonRepos`, then a newer config pack merged;
+Kodi installs the add-on updates itself). It is **not** a monolithic re‑download.
 
 **Force‑close** (`Wizard.force_close_kodi_in_5_seconds(...)`, `build/wizard_actions.py`) is used **only** when
 a critical update genuinely requires a restart (the wizard itself or the active
@@ -832,7 +866,7 @@ describes. Only `profiles.xml` and the policy file below are shared, and they ar
 #### Retained verified config pack
 
 Secondary profiles are seeded **without any zip bundled in the Wizard**. After a config pack is applied and its sha256
-matches the manifest, `config_apply` keeps a copy in the **master** profile:
+matches `config.json`, `config_apply` keeps a copy in the **master** profile:
 
 ```
 <masterprofile>/addon_data/plugin.program.kodipovilwizard/config_pack/
@@ -843,7 +877,7 @@ matches the manifest, `config_apply` keeps a copy in the **master** profile:
 | API (`resources.libs.config_apply`)       | Meaning                                                                                                                                                       |
 |-------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `verified_pack_path()`                    | Path of the retained pack, or `None`. The pack is **re-hashed on every call**; a corrupt, tampered or half-written copy counts as absent.                      |
-| `ensure_verified_pack(manifest=None)`     | Returns the retained path, downloading and verifying the pack **once** if it is absent. A manifest without a sha256 yields `None` — an unverifiable pack is never retained. |
+| `ensure_verified_pack(info=None)`         | Returns the retained path, downloading and verifying the pack **once** if it is absent. A `config.json` without a sha256 yields `None` — an unverifiable pack is never retained. |
 | `open_verified_pack(fetch=False)`         | Context manager returning a `VerifiedPack`; raises `PackUnavailable` when no verified pack exists. Only the master passes `fetch=True` (it owns the shared copy).   |
 | `VerifiedPack`                            | Read-only view keyed by **userdata-relative paths**, mapped through `config_policy.json` exactly as `apply_config_pack` places files: `names()`, `in`, `read(path)`, `guisettings()`, `.version`. |
 
@@ -856,7 +890,7 @@ use the **same** filter (`_gui_defaults`), so device-specific values never reach
 `seed_profile(master, profile, archive, prepare_login=False, *, verified=False, gui_defaults=None)` repairs a secondary
 profile from a zip whose root mirrors `userdata/`. By default `archive` must be the bundled bootstrap pinned by
 `BOOTSTRAP_SHA256`; the build ships none, so `build_profiles._seed()` passes the retained pack's path with
-`verified=True` (`open_verified_pack()` has just re-hashed it against the manifest receipt) and
+`verified=True` (`open_verified_pack()` has just re-hashed it against the receipt) and
 `gui_defaults=pack.guisettings()` (the policy's machine-specific `exclude_ids` removed, exactly as on a fresh install).
 The build name and version written into the profile come from `CONFIG.BUILDNAME_DEFAULT` /
 `CONFIG.BUILDVERSION_DEFAULT` (`uservar.py`). It seeds:
@@ -1180,7 +1214,7 @@ history. New shortcut rows for POV go through `_seed_shortcuts` (insert-only).
 
 | Symptom                                                   | Where to look                                                                                                         |
 |-----------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| "Cannot download build defaults" when adding a profile    | No verified pack: check `[config_apply]` log lines and that the manifest `config` entry has a `sha256`.              |
+| "Cannot download build defaults" when adding a profile    | No verified pack: check `[config_apply]` log lines and that `config/config.json` has a `sha256`.              |
 | Child content says filtering is not ready                 | `hosts_ready()` is false: look at the patch-engine stats (`anchor_missing`, `missing`, `removed`) for `parental_control`; a required host may be uninstalled or an anchor may have drifted. |
 | A guard hook seems inactive                               | Log lines `Wizard Patch Error [profile_age_guard]` — enforcement hooks re-raise, enrichment hooks only log.          |
 | A secondary profile repeats a deferred boot               | `kodipovil.profile_home_ready` is missing: the live-home step (`complete_home`) is failing; look for `[Profiles]` lines. |
@@ -1207,7 +1241,12 @@ reintroduce them or references to them**:
   `cleanup.remove_paths` deletes stale `userdata/addon_data/plugin.video.twilight`
   so it can't resurrect menus/settings.
 - **The legacy monolithic build zip & brute‑force wipe** — replaced wholesale by
-  the manifest + config‑pack model.
+  the repository + config‑pack model.
+- **`ModularUpdater`, `HeadlessInstaller`, the `install_manager` window (its downloader / extractor machinery), `manifest.json`, the rolling
+  `addons-latest` release and the seven third-party `repository.*` folders** — removed in the repository migration (Phase 7). Kodi
+  installs and updates add-ons; the Wizard keeps the state (`provisioning/`). Their code moved: the repository bootstrap
+  (`repo_bootstrap.py`: download / extract / checksum) and the add-on state helpers (`addon_state.py`). The branded install window
+  survives as `gui/install_progress.py` + `DialogInstallProgress.xml` (same panel; it now only shows the run, see §3.A).
 - **The Wizard‑bundled config zip and all migration code.** The Wizard ships no `resources/bootstrap/config.zip`; profile
   defaults come from the retained verified pack ([§9.3](#93-profile-seeding--configuration-management)). Old‑install
   conversions, "rollout" receipts, Python 2 and zip fallbacks, `OLD_MARKERS`‑style scrubbing and the forced restart after
@@ -1229,26 +1268,30 @@ reintroduce them or references to them**:
 ```
 .
 ├── .github/
-│   ├── workflows/build-and-release.yml     # CI: build zips, release, manifest, prune
+│   ├── workflows/deploy-repo.yml           # CI: gen_repo.py -> GitHub Pages (the Kodi repository)
+│   ├── workflows/upstream-health.yml       # daily check of the third-party indexes
 │   └── scripts/
 │       ├── kodi_addons.py                   # discover_addons(), addon.xml parsing, type
-│       ├── build_addons.py                  # package each addon → dist/<id>-<ver>.zip
-│       ├── build_config.py                  # package userdata/ → dist/config-<ver>.zip
+│       ├── build_addons.py                  # package one addon folder → <id>-<ver>.zip (deterministic)
+│       ├── build_config.py                  # package userdata/ → config-<ver>.zip
+│       ├── gen_repo.py                      # build the whole repository site (addons.xml, zips, config/, aliases) and verify it
+│       ├── check_upstreams.py               # health + collision check of repository.povil.upstream
 │       ├── check_favourites.py              # CI: userdata/favourites.xml must match favourites_config.json
-│       └── gen_manifest.py                  # regenerate manifest.json (refuses null sha)
-├── manifest.json                            # GENERATED — never hand‑edit
-├── userdata/                                # the build‑config tree (shipped as config.zip)
+│       └── ...
+├── repository.povil/                        # OUR repository add-on: one <dir> (this site), verify=sha256 + hashes
+├── repository.povil.upstream/               # the third-party <dir>s (kodifitzwell, Fishenzon, Umbrella, CocoScrapers, Otaku, jurialmunkey)
+├── userdata/                                # the build‑config tree (shipped as config/config-<ver>.zip)
 │   ├── config_policy.json                   # apply policy + config_version + cleanup
 │   ├── guisettings.xml / sources.xml / advancedsettings.xml / favourites.xml
 │   └── addon_data/
 │       ├── plugin.video.pov/settings.xml    # he metadata + fanart + keys (merge_id, creds excluded)
 │       └── skin.fentastic/settings.xml
-├── plugin.program.kodipovilwizard/          # the install/OTA/self‑heal engine + the Profiles feature
+├── plugin.program.kodipovilwizard/          # the provisioning/self‑heal engine + the Profiles feature
 │   ├── default.py / startup.py              # entry points named in addon.xml (plugin source / startup service)
 │   ├── uservar.py                           # build identity (BUILDNAME_DEFAULT, BUILDVERSION_DEFAULT, URLs) → CONFIG
 │   └── resources/
 │       ├── libs/                            # see "Wizard code layout" below
-│       │   ├── {modular_updater,headless_installer,config_apply,fresh_install,patch_engine,downloader,extract,db}.py
+│       │   ├── {config_apply,fresh_install,provision_progress,patch_engine,downloader,extract,db}.py
 │       │   ├── boot/ provisioning/ build/ skins/ addons/ accounts_auth/ system/ host_repairs/   # domain folders (Phase 1 / 3)
 │       │   ├── common/ gui/                 # CONFIG, logging, router, tools · Wizard menus and windows
 │       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 150 entries) & 46 decoupled logic modules
@@ -1274,21 +1317,21 @@ one or two files. Every new folder lives inside `plugin.program.kodipovilwizard/
 | Folder           | Modules                                                                                    | Responsibility                                                                                                                                                                                |
 |------------------|--------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `boot/`          | `gui_ready`, `first_boot`, `notifications`, `build_check`, `maintenance_pass`, `language_sync` | `startup.py` helpers: wait for video / the Home window / the home rows, the first-boot stabilizer, start-up notices, APK build registration and the installed-build check, start-up housekeeping, the POV Hebrew strings sync |
-| `provisioning/`  | `banner`, `auto_install`, `ota`, `clean_reinstall`                                         | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, the start-up OTA pass (`run_startup_ota`), and the Maintenance "clean reinstall" (`mode=clean_reinstall`)  |
+| `provisioning/`  | `banner`, `auto_install`, `provisioner`, `repo_bootstrap`, `addon_state`, `build_sync`, `clean_reinstall`                                         | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, the start-up OTA pass (`run_startup_ota`), and the Maintenance "clean reinstall" (`mode=clean_reinstall`)  |
 | `build/`         | `wizard_actions`                                                                           | The `Wizard` class: fresh / normal install, GUI fix, theme, quick update, restart, force-close                                                                                                |
 | `skins/`         | `skin_catalog`, `skin_manager`, `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`, `skin_settings`, `fentastic_manager`, `onyx_home/` (`favourites_row`, `pvr_row`, `hero_details`), `search_provider_picker` | The skin catalog (default skin, on-demand rule, seeding guard), the Skin Manager menu (browse / install / switch), on-demand skins (Estuary / NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch; `skin_settings`: the `lookandfeel.*` JSON-RPC helpers (`switch_to_skin`, `skin_to_default`, `look_and_feel_data`); `fentastic_manager`: FENtastic helper data / skin XMLs kept across a wipe and the home-widget layout a quick update leaves alone; `onyx_home/`: the Onyx home's favourites / live TV rows and its hero details. |
 | `addons/`        | `umbrella`, `debrid_notice`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers, from their official repositories); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |
 | `accounts_auth/` | `acctmgr`                                                                                  | Account Manager Lite: pilot install and install-for-everyone                                                                                                                                  |
 | `system/`        | `kodi_version`, `speedtest`                                                                | The official-Kodi release check (Android / Windows) and the network speed tests                                                                                                               |
-| `host_repairs/`  | 20 patcher / repair modules (flat), `kodi_utils`, `media_assets/`, and `flow/` (`startup_pass`, `*_steps`, `runner`, `pov_update_watch`) | Runtime repairs of other add-ons and skins moved out of the subtitle add-on (Phase 3): the POV, Umbrella / MDBList / Trakt, Idan Plus, Arctic Fuse 3, NOX and Kodi patchers, the repair-state audit (`patcher_health`) and the startup-repair pass. Not the source-hook engine: that stays in `patches/`. Its settings, state files and log prefix are the Wizard's (`settings.xml`, `addon_data/`); it reads only `use_builtin_engine` and `pov_fast_navigation` from the subtitle add-on (`kodi_utils.subs_get_*`). |
+| `host_repairs/`  | 20 patcher / repair modules (flat), `kodi_utils`, `media_assets/`, and `flow/` (`startup_pass`, `*_steps`, `runner`, `addon_update_watch`) | Runtime repairs of other add-ons and skins moved out of the subtitle add-on (Phase 3): the POV, Umbrella / MDBList / Trakt, Idan Plus, Arctic Fuse 3, NOX and Kodi patchers, the repair-state audit (`patcher_health`) and the startup-repair pass. Not the source-hook engine: that stays in `patches/`. Its settings, state files and log prefix are the Wizard's (`settings.xml`, `addon_data/`); it reads only `use_builtin_engine` and `pov_fast_navigation` from the subtitle add-on (`kodi_utils.subs_get_*`). |
 | `tonight/`       | `ui`, `entrypoints`, `hub`, `engine`, `catalog`, `providers`, `history`, `storage`, `taste`, `discovery`, `experience` | The "Tonight" home tile: the one-time favourites shortcut (`entrypoints.ensure`, called by `fresh_install`, `profile_home` and the repair runner) and the picker window (`script.moransubs.tonight.xml`, `resources/media/tonight.png`), served by `Router.dispatch` `mode=tonight`; its state lives under the Wizard's `addon_data/tonight/`. |
 
 `default.py` and `startup.py` stay at the add-on root because `addon.xml` names them. `default.py` is a generic entry
 point: it hands every `mode=` to `Router` (the Onyx home modes are answered inside `Router.dispatch`, see the rules
 below). `startup.py` is now a ~180-line,
 ordered sequence of calls into these modules; every `sys.exit()` and both `PatchEngine` passes stay in it. `common/`,
-`gui/`, `profiles/`, `patches/` and the single-purpose engine modules at the `libs/` root (`modular_updater`,
-`config_apply`, `fresh_install`, `headless_installer`, …) are unchanged.
+`gui/`, `profiles/`, `patches/` and the single-purpose engine modules at the `libs/` root (`config_apply`,
+`fresh_install`, …) are unchanged.
 
 Rules for this layout:
 
@@ -1316,29 +1359,26 @@ Rules for this layout:
 - Router `mode=` names are a public API used by skins, `favourites.xml` and other add-ons; moving code never renames a
   mode.
 
-**Manifest addon inventory** (versions are illustrative — the manifest is the live
-source):
+**Add-on inventory** (versions are illustrative — the live source is each `addon.xml`; the published index is `addons.xml` on the site):
 
-| Addon                                                            | Type          | Role                                                |
-|------------------------------------------------------------------|---------------|-----------------------------------------------------|
-| `plugin.program.kodipovilwizard`                                 | plugin        | Install / OTA / self‑heal engine + Profiles         |
-| `plugin.program.orderfavourites-hebrew`                          | plugin        | Favourites generator + global icon/media installer  |
-| `service.subtitles.kodipovilai`                                  | subtitle      | AI Hebrew subtitles                                 |
-| `script.fentastic.helper`                                        | module        | FENtastic skin helper                               |
-| `script.module.autocompletion` / `plugin.program.autocompletion` | module/plugin | Search autocompletion                               |
-| `repository.kodifitzwell`                                        | repository    | Source for `plugin.video.pov`                       |
-| `repository.Fishenzon`                                           | repository    | Source for `plugin.video.idanplus`                  |
-| `repository.otaku`                                               | repository    | Source for `plugin.video.otaku` (+ `context.otaku`) |
-| `repository.umbrella` / `repository.cocoscrapers`                | repository    | Sources for the optional Umbrella + CocoScrapers    |
-| `repository.jurialmunkey`                                        | repository    | Source for Arctic Fuse 3 + helpers                  |
-| `skin.fentastic`                                                 | skin          | Default build skin (the only one provisioned)       |
-| `skin.povil.nox`                                                 | skin          | Build skin, on demand (Skin Manager)                |
-| `skin.povil.onyx`                                                | skin          | Build skin, on demand (Skin Manager)                |
-| `skin.estuary`                                                   | skin          | Build edition of Estuary, on demand (Skin Manager)  |
+| Addon                                                            | Type          | Role                                                              |
+|------------------------------------------------------------------|---------------|-------------------------------------------------------------------|
+| `plugin.program.kodipovilwizard`                                 | plugin        | Provisioning / self‑heal engine + Profiles                        |
+| `repository.povil`                                               | repository    | OUR index (one `<dir>`)                                           |
+| `repository.povil.upstream`                                      | repository    | The third-party indexes (POV, Idan Plus, Umbrella, CocoScrapers, Otaku, jurialmunkey, and Account Manager through our filtered copy of Zaxxon709's) |
+| `plugin.program.orderfavourites-hebrew`                          | plugin        | Favourites generator + global icon/media installer                |
+| `service.subtitles.kodipovilai`                                  | subtitle      | AI Hebrew subtitles                                               |
+| `script.fentastic.helper`                                        | module        | FENtastic skin helper                                             |
+| `script.module.autocompletion` / `plugin.program.autocompletion` | module/plugin | Search autocompletion                                             |
+| `skin.fentastic`                                                 | skin          | Default build skin (the only one provisioned)                     |
+| `skin.povil.nox`                                                 | skin          | Build skin, on demand (Skin Manager)                              |
+| `skin.povil.onyx`                                                | skin          | Build skin, on demand (Skin Manager)                              |
+| `skin.estuary`                                                   | skin          | Build edition of Estuary, on demand (Skin Manager)                |
 
-**Content addons (NOT in the manifest — provisioned headlessly):**
+**Content add-ons (NOT in this repository — Kodi installs them from `repository.povil.upstream` or Kodi's official repository):**
 `plugin.video.pov`, `plugin.video.idanplus`, `plugin.video.youtube`, `resource.language.he_il`
-(and `plugin.video.otaku`, only when the user installs it from the optional add-ons screen).
+plus `script.module.acctmgr` / `script.module.acctvwr` (Zaxxon709's zips, offered through our filtered index), and
+`plugin.video.otaku` / `plugin.video.umbrella` only when the user installs them from the optional add-ons screen.
 
 ---
 
@@ -1364,9 +1404,8 @@ source):
 
 ### Anti‑patterns — DO NOT do these
 
-- ❌ **NEVER revert to monolithic `.zip` payloads** for installs/updates. Updates are
-  per‑addon, manifest‑diffed, sha256‑verified zip extractions. No "download the
-  whole build" path.
+- ❌ **NEVER revert to monolithic `.zip` payloads** for installs/updates. Add-ons come from the Kodi
+  repositories and Kodi installs and updates them. No "download the whole build" path.
 - ❌ **NEVER reintroduce the brute‑force wipe.** The build hydrates and merges; it
   does not destroy user data.
 - ❌ **NO rogue background patchers hiding in secondary addons** (e.g. a stray `wizard_self_healer.py`). All
@@ -1377,10 +1416,12 @@ source):
   automation is the closed set of scoped helpers: the installer's minimal confirmer for **window 10100** and the
   label‑verified Profiles helpers in [§9.7](#97-native-ui-automation). Each acts only inside an explicit user‑initiated
   flow and does nothing when any label differs. **Never answer PIN or lock‑authorization dialogs from code.**
-- ❌ **NEVER blindly extract binary/platform addons** (`inputstream.*`, `pvr.*`,
-  `vfs.*`, etc.). Defer them to Kodi's native installer.
-- ❌ **NEVER hand‑edit `manifest.json`.** It is regenerated by CI. Bump the
-  `addon.xml` version instead.
+- ❌ **NEVER extract an add-on zip from the Wizard** (only the two repository add-ons, in `repo_bootstrap.py`, which checks
+  their sha256). Everything else goes through Kodi's `InstallAddon`.
+- ❌ **NEVER put a third-party `<dir>` into `repository.povil`** (one failing `<dir>` fails the whole repository) and **NEVER add an
+  upstream index that carries an id of ours** (the highest version wins): `gen_repo.py` / `check_upstreams.py` fail on both.
+- ❌ **NEVER hand‑edit what `gen_repo.py` generates** (`addons.xml`, checksums, the site). Bump the
+  `addon.xml` version instead; Kodi only updates to a higher one.
 - ❌ **NEVER apply `config.zip` before addons are installed.** It is always the
   final step of setup.
 - ❌ **NEVER write empty build values over user credentials.** Credential ids stay in
@@ -1439,8 +1480,8 @@ token, or hardware value.
 - ✅ **Keep patchers additive and idempotent.** Marker‑guard every on‑disk edit; **bump the marker suffix when a hook
   changes** (the engine scrubs the stale block itself); make a missed anchor fail deterministically (`anchor_missing`),
   never guess.
-- ✅ **Prefer headless** install paths; the native `InstallAddon` is a last resort
-  with the minimal confirmer only.
+- ✅ **Install through `provisioner.install_native` / `provision`** (Kodi's `InstallAddon` with the minimal dependency-dialog
+  confirmer); never extract a zip yourself.
 - ✅ **Verify before shipping.** `python -m py_compile` (and `pyflakes`) every changed `.py`; run
   `python patches_config.py` after any registry change; validate every JSON/XML; for patchers, simulate the injection
   against the real host source when possible.
@@ -1449,21 +1490,16 @@ token, or hardware value.
 
 ## 13. Git & Release Workflow
 
-- **Develop on the feature branch** (e.g. `claude/monorepo-build-automation-uhn68y`),
-  then fast‑forward `main`. Pushing to `main` triggers CI, which builds, publishes
-  to the `addons-latest` release, regenerates `manifest.json`, prunes orphaned
-  release assets, and commits the manifest back with `[skip ci]`.
-- **Push with `git push -u origin <branch>`**; retry on transient network errors
-  with exponential backoff. Do **not** open a pull request unless explicitly asked.
-- After CI lands the `chore(manifest)` commit on `main`, **sync the feature branch**
-  (fast‑forward) so it stays even with `main`.
-- A change is "done" only when: code compiles, configs validate, the version is
-  bumped, CI is green, and the regenerated `manifest.json` shows the new
-  version (s).
+- **Develop on a feature branch**, then fast‑forward `main`. **Only the owner pushes**: agents commit locally and never run
+  `git push`. Pushing to `main` triggers `deploy-repo.yml`, which builds the whole repository with `gen_repo.py`, verifies it and
+  deploys it to GitHub Pages (no manifest commit-back, no release assets).
+- Do **not** open a pull request unless explicitly asked.
+- A change is "done" only when: code compiles, configs validate, the version is bumped (Kodi updates only to a higher one),
+  CI is green, and `addons.xml` on the site lists the new version(s).
 
 ---
 
-*This README reflects the post‑migration architecture: the modular manifest engine, the headless installer with its
-verified live completion path, config‑pack timing and retention, the Unified Patching Engine, the Profiles feature (§9) and the domain-driven Wizard
+*This README reflects the repository architecture: the two Kodi repositories on GitHub Pages, native add-on installs and updates,
+the Wizard's repository bootstrap and verified live completion path, config‑pack timing and retention, the Unified Patching Engine, the Profiles feature (§9) and the domain-driven Wizard
 layout under `resources/libs/` (§11). Keep it updated when the installation, config, asset, patching or Profiles contracts change — it is the contract
 future agents will rely on.*

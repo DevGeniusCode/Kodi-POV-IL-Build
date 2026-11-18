@@ -14,28 +14,8 @@
     <files>
         <default pathversion="1"></default>
         <source>
-            <name>repository.CocoScrapers</name>
-            <path pathversion="1">https://not-coco-joe.github.io/</path>
-            <allowsharing>true</allowsharing>
-        </source>
-        <source>
-            <name>repository.FishenzonIdanPlus</name>
-            <path pathversion="1">https://fishenzon.github.io/</path>
-            <allowsharing>true</allowsharing>
-        </source>
-        <source>
-            <name>repository.FENtastic</name>
-            <path pathversion="1">https://ivarbrandt.github.io/repository.ivarbrandt/</path>
-            <allowsharing>true</allowsharing>
-        </source>
-        <source>
-            <name>repository.kodifitzwell</name>
-            <path pathversion="1">https://kodifitzwell.github.io/repo/</path>
-            <allowsharing>true</allowsharing>
-        </source>
-        <source>
-            <name>repository.Otaku</name>
-            <path pathversion="1">https://goldenfreddy0703.github.io/repository.otaku/</path>
+            <name>Kodi POV IL</name>
+            <path pathversion="1">https://devgeniuscode.github.io/Kodi-POV-IL-Build/</path>
             <allowsharing>true</allowsharing>
         </source>
     </files>

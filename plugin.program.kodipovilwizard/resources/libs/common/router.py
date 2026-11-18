@@ -429,10 +429,10 @@ class Router:
             from resources.libs import update
             update.wizard_update()
 
-        # KODI-POV-IL - Manual modular (manifest-based) update trigger
+        # KODI-POV-IL - Manual update check (repositories + config pack; Kodi installs the add-on updates itself)
         elif mode == 'modular_update':
-            from resources.libs.modular_updater import ModularUpdater
-            ModularUpdater(background=False).run_update_check()
+            from resources.libs.provisioning import provisioner
+            provisioner.run_update_check(background=False)
 
         # LOGGING
         elif mode == 'uploadlog':  # Upload Log File
