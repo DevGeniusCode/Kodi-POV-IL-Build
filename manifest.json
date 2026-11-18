@@ -3,15 +3,15 @@
   "name": "Kodi POV IL Build",
   "repo": "DevGeniusCode/Kodi-POV-IL-Build",
   "release_tag": "addons-latest",
-  "generated": "2026-11-17T18:55:05Z",
+  "generated": "2026-11-18T12:09:00Z",
   "manifest_url": "https://raw.githubusercontent.com/DevGeniusCode/Kodi-POV-IL-Build/main/manifest.json",
   "config": {
-    "config_version": "2.0.11",
-    "filename": "config-2.0.11.zip",
-    "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/config-2.0.11.zip",
-    "size": 36484,
-    "sha256": "397aa4f22f1085a48bd2d6f7bb4fdc8ee910d446844c67378fbaaa51773a45fd",
-    "updated": "2026-11-17T18:55:05Z"
+    "config_version": "2.0.12",
+    "filename": "config-2.0.12.zip",
+    "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/config-2.0.12.zip",
+    "size": 36284,
+    "sha256": "9bfb835c2c636c08e2e792ec46091e4a782bcb7b073b5fcdb02a0225fe4e690c",
+    "updated": "2026-11-18T12:09:00Z"
   },
   "addons": {
     "plugin.program.autocompletion": {
@@ -32,9 +32,9 @@
       "type": "plugin",
       "filename": "plugin.program.kodipovilwizard-0.5.2.zip",
       "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/plugin.program.kodipovilwizard-0.5.2.zip",
-      "size": 4530589,
-      "sha256": "38c9220d3a69335eed9429fc4326b98d327fa041c63dbd4c49c9c8b58a39808b",
-      "updated": "2026-11-17T18:55:05Z"
+      "size": 4577855,
+      "sha256": "12fd4585c1408c8b01df3db46b059b490a3fde7e83cf49ea0eb35d0bb9d5ab0b",
+      "updated": "2026-11-18T12:09:00Z"
     },
     "plugin.program.orderfavourites-hebrew": {
       "id": "plugin.program.orderfavourites-hebrew",
@@ -69,6 +69,17 @@
       "sha256": "18a47fdc9cc7ef3b13f40d99e607a93ef4d57a46198e0d6c6091bd77c401e244",
       "updated": "2026-11-17T15:53:28Z"
     },
+    "repository.cocoscrapers": {
+      "id": "repository.cocoscrapers",
+      "name": "CocoScrapers Repository",
+      "version": "1.0.1",
+      "type": "repository",
+      "filename": "repository.cocoscrapers-1.0.1.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/repository.cocoscrapers-1.0.1.zip",
+      "size": 68429,
+      "sha256": "d854759f17f869d902a30a4a4f04c152a40c78292a8d89fb7a3595405d64085d",
+      "updated": "2026-11-18T12:09:00Z"
+    },
     "repository.jurialmunkey": {
       "id": "repository.jurialmunkey",
       "name": "jurialmunkey Alpha Repository",
@@ -101,6 +112,17 @@
       "size": 453823,
       "sha256": "ae9ffdb5dc44ce540b75ddf0f40ef6bf9079c0b8cae61060152261b5e652262f",
       "updated": "2026-11-17T15:53:28Z"
+    },
+    "repository.umbrella": {
+      "id": "repository.umbrella",
+      "name": "Umbrella Repository",
+      "version": "2.2.6",
+      "type": "repository",
+      "filename": "repository.umbrella-2.2.6.zip",
+      "zip": "https://github.com/DevGeniusCode/Kodi-POV-IL-Build/releases/download/addons-latest/repository.umbrella-2.2.6.zip",
+      "size": 164478,
+      "sha256": "eb71566e74e4cfccf8a4c49a56c7f6ac3d394fb705356c5805520d9beb08f58d",
+      "updated": "2026-11-18T12:09:00Z"
     },
     "script.fentastic.helper": {
       "id": "script.fentastic.helper",
