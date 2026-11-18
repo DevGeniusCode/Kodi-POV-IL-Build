@@ -6,7 +6,7 @@ This is the single source of truth for:
   * parsing ``addon.xml`` (id / name / version),
   * deriving the addon *type* from its Kodi extension points.
 
-Both ``build_addons.py`` and ``gen_manifest.py`` import from here so the
+Both ``build_addons.py`` and ``gen_repo.py`` import from here so the
 two tools can never disagree about what an addon "is".
 """
 

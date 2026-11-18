@@ -1,6 +1,9 @@
 # Build artifacts produced by the CI packaging step.
 /dist/
 
+# Generated Kodi repository site (gen_repo.py --out site), deployed by CI.
+/site/
+
 # Python caches
 __pycache__/
 *.py[cod]

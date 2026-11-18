@@ -73,10 +73,10 @@ def _collect_files() -> list[tuple[str, str]]:
     return sorted(items, key=lambda pair: pair[1])
 
 
-def build() -> str:
+def build(out_dir: str = DIST_DIR) -> str:
     version = read_config_version()
-    os.makedirs(DIST_DIR, exist_ok=True)
-    out_path = os.path.join(DIST_DIR, config_zip_name(version))
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, config_zip_name(version))
     if os.path.exists(out_path):
         os.remove(out_path)
     files = _collect_files()

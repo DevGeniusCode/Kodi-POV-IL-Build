@@ -68,9 +68,9 @@ def _collect_files(addon: Addon) -> list[tuple[str, str]]:
     return sorted(items, key=lambda pair: pair[1])
 
 
-def build_zip(addon: Addon) -> str:
-    os.makedirs(DIST_DIR, exist_ok=True)
-    out_path = os.path.join(DIST_DIR, addon.zip_name)
+def build_zip(addon: Addon, out_dir: str = DIST_DIR) -> str:
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, addon.zip_name)
     if os.path.exists(out_path):
         os.remove(out_path)
     files = _collect_files(addon)

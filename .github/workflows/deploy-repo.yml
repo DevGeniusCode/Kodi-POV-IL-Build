@@ -1,0 +1,76 @@
+name: Build Kodi repository and deploy to GitHub Pages
+
+# Replaces the old "build zips -> rolling release -> manifest.json" pipeline.
+#
+# One run = the whole repository site:
+#   addons.xml + addons.xml.md5 + zips/<id>/<id>-<ver>.zip + config/ (userdata pack) + index.html
+# A Pages artifact replaces the entire site on every deploy, so every add-on is rebuilt every time
+# (zips are deterministic: unchanged add-ons produce identical bytes). There is no git history of zips
+# and no release asset to prune.
+#
+# ONE-TIME SETUP (repo Settings -> Pages): Build and deployment -> Source = "GitHub Actions".
+# Also check Settings -> Environments -> github-pages: "main" must be an allowed deployment branch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "plugin.*/**"
+      - "repository.*/**"
+      - "script.*/**"
+      - "service.*/**"
+      - "skin.*/**"
+      - "resource.*/**"
+      - "userdata/**"
+      - ".github/scripts/**"
+      - ".github/workflows/deploy-repo.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never two deploys at once; let a running deploy finish rather than cancel it half way.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check the baked favourites against favourites_config.json
+        run: python .github/scripts/check_favourites.py
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Generate the repository site
+        # --base-url is the public Pages address, e.g. https://<owner>.github.io/<repo>
+        run: python .github/scripts/gen_repo.py --out site --base-url "${{ steps.pages.outputs.base_url }}"
+
+      - name: Upload the site as the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
