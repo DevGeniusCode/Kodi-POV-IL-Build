@@ -131,20 +131,20 @@ PATCH_CONFIG = [
     },
     {
         "id": "pov_logo_for_ui",
-        "name": "Logo that suits a Hebrew screen (povil_logo art)",
-        "description": "Adds a povil_logo art entry chosen for a Hebrew screen next to the stock clear logo.",
+        "name": "Logo that suits a Hebrew screen (clearlogo + povil_logo art)",
+        "description": "A Hebrew title with only a non-Hebrew logo gets no clearlogo / tvshow.clearlogo, so skins fall back to the Hebrew title text; povil_logo (Onyx) carries the same choice.",
         "category": "ui",
         "priority": "minor",
         "addon_id": "plugin.video.pov",
         "enabled": True,
         "optional": True,
         "target_file": "resources/lib/indexers/metadata.py",
-        "marker": "# WIZARD_POV_LOGO_FOR_UI_v2",
+        "marker": "# WIZARD_POV_LOGO_FOR_UI_v3",
         "anchor": "if meta_get('mediatype') == 'movie': return art",
         "action": "prepend_before",
         "hook": _build_patch_hook(
             module_name="pov_logo_lang",
-            custom_logic="art['povil_logo'] = pov_logo_lang.for_ui(meta, clearlogo)"
+            custom_logic="clearlogo = pov_logo_lang.apply(art, meta, clearlogo)"
         )
     },
     # ======================================================================================
@@ -3012,6 +3012,27 @@ PATCH_CONFIG = [
             "if not kodi_utils.get_setting(_s)})\n"
             "except Exception:\n"
             "\tpass\n"
+        )
+    },
+
+    # =====================================================================
+    # ============= POV REUSE-LANGUAGE-INVOKER MISMATCH DIALOG ============
+    # =====================================================================
+    {
+        "id": "pov_invoker_mismatch_silent",
+        "name": "Reuse Language Invoker: sync addon.xml without the mismatch dialog",
+        "description": "After a POV update POV's own reuseLanguageInvokerCheck finds addon.xml (true) against the build's setting (false), rewrites addon.xml and asks, in English, whether to reload the profile. The rewrite is kept; only the question and the reload are skipped, so the value takes effect at the next Kodi start.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/modules/entry.py",
+        "marker": "# WIZARD_POV_INVOKER_MISMATCH_SILENT_v1",
+        "anchor": "\tif refresh and kodi_utils.confirm_dialog(text=text):",
+        "action": "prepend_before",
+        "hook": (
+            "# The Wizard owns this flag (host_repairs/pov_language_invoker_guard); addon.xml was already rewritten above.\n"
+            "refresh = False\n"
         )
     }
 ]

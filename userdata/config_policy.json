@@ -1,5 +1,5 @@
 {
-  "config_version": "2.0.11",
+  "config_version": "2.0.12",
   "_comment": "Declarative policy for how the wizard applies the shipped build-config (userdata/) onto a device. Bump config_version whenever ANY file in userdata/ changes -- that is what makes the wizard detect and apply the new config. 'fresh' is used on a clean/first install, 'update' on an existing device. Modes: replace (overwrite whole file), merge_id (per <setting id=...>, build value wins, other user settings untouched), merge_name (per <source><name>, add build's, keep user's), seed_if_absent (write only if the file does not already exist).",
   "files": [
     {
@@ -48,8 +48,8 @@
       "src": "favourites.xml",
       "dest": "userdata/favourites.xml",
       "fresh": "replace",
-      "update": "replace",
-      "_note": "favourites.xml holds ONLY internal skin shortcuts (the build is Trakt/TMDB-driven), so overwriting it on update is safe and lets UI/shortcut/icon updates reach existing users."
+      "update": "seed_if_absent",
+      "_note": "Only the first-boot fallback: it is what plugin.program.orderfavourites-hebrew generates (favourites_config.json, default skin, no account service connected), so a fresh device shows the right tiles before the generator first runs. The generator rewrites the file at finalize, on a skin switch, on a new profile, on a connection change and at every start of the add-on, keeping the user's own tiles, so an update must NOT overwrite the device file (it would drop the user's custom tiles and the gated tiles). CI (.github/scripts/check_favourites.py) fails when this file drifts from the config; regenerate it with --write."
     },
     {
       "src": "sources.xml",

@@ -41,32 +41,55 @@ def get_latest_official_kodi_version():
 
     return None
 
+NOTIFIED_SETTING = 'kodi_update_notified'  # the newest Kodi version the user was already told about (hidden Wizard setting)
+
+
 def kodi_version_update_check(kodi_version_update_check_manual="false"):
-    kodi_version_update_check_manual = True if kodi_version_update_check_manual == "true" else False
+    """The menu's "check now" (manual) answers with dialogs, as before.
+
+    The automatic start-up check never blocks the start-up thread: it runs in a daemon thread (the GitHub call can take its
+    full 10 s timeout) and, when a newer Kodi exists, shows a non-modal notification ONCE per newer version.
+    """
+    if kodi_version_update_check_manual == "true":
+        _check(True)
+        return
+    import threading
+    threading.Thread(target=_check, args=(False,), daemon=True).start()
+
+
+def _check(manual):
     os_type_label = tools.platform().capitalize()
     dialog = xbmcgui.Dialog()
 
     try:
         current_version = get_current_kodi_version()
         latest_version = get_latest_official_kodi_version()
-        current_str = ".".join(map(str, current_version))
-        latest_str = ".".join(map(str, latest_version))
 
         if not latest_version:
-            if kodi_version_update_check_manual:
+            if manual:
                 dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})",
                           "[COLOR yellow][B]לא הצלחנו לבדוק את הגרסה העדכנית.[/B][/COLOR]\nנסה שוב מאוחר יותר.")
             return
 
-        if latest_version > current_version:
-            dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})",
-                      f'[COLOR yellow][B]קיים עדכון רשמי ל-Kodi![/B][/COLOR]\n\n'
-                      f'גרסה נוכחית: [B][COLOR red]{current_str}[/COLOR][/B]\n'
-                      f'גרסה מעודכנת: [B][COLOR limegreen]{latest_str}[/COLOR][/B]\n\n'
-                      f'הבילד שלנו מותאם לרוץ על Kodi נקי והעדכני ביותר.\n'
-                      f'אנא עדכן את קודי דרך החנות הרשמית במכשירך או אתר Kodi.tv.')
+        current_str = ".".join(map(str, current_version))
+        latest_str = ".".join(map(str, latest_version))
 
-        elif kodi_version_update_check_manual:
+        if latest_version > current_version:
+            if manual:
+                dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})",
+                          f'[COLOR yellow][B]קיים עדכון רשמי ל-Kodi![/B][/COLOR]\n\n'
+                          f'גרסה נוכחית: [B][COLOR red]{current_str}[/COLOR][/B]\n'
+                          f'גרסה מעודכנת: [B][COLOR limegreen]{latest_str}[/COLOR][/B]\n\n'
+                          f'הבילד שלנו מותאם לרוץ על Kodi נקי והעדכני ביותר.\n'
+                          f'אנא עדכן את קודי דרך החנות הרשמית במכשירך או אתר Kodi.tv.')
+            elif CONFIG.get_setting(NOTIFIED_SETTING) != latest_str:
+                CONFIG.set_setting(NOTIFIED_SETTING, latest_str)
+                dialog.notification(f"{CONFIG.ADDONTITLE} ({os_type_label})",
+                                    f'קיים עדכון רשמי ל-Kodi: {latest_str} (מותקן {current_str}). '
+                                    f'אפשר לעדכן דרך החנות הרשמית או Kodi.tv',
+                                    xbmcgui.NOTIFICATION_INFO, 10000)
+
+        elif manual:
             dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})",
                       f'[COLOR limegreen][B]קודי (Kodi) מעודכן לגרסה האחרונה![/B][/COLOR]\n\n'
                       f'גרסה נוכחית: [B]{current_str}[/B]')
@@ -74,5 +97,5 @@ def kodi_version_update_check(kodi_version_update_check_manual="false"):
     except Exception as e:
         from resources.libs.common import logging
         logging.log(f'[kodi_version_update_check] Exception: {str(e)}')
-        if kodi_version_update_check_manual:
+        if manual:
             dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})", f'התרחשה שגיאה:\n{str(e)}')

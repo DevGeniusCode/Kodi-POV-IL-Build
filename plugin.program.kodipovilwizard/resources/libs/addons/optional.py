@@ -29,15 +29,15 @@ def refresh_home_tiles():
 
 def show():
     from resources.libs.skins import skin_manager
-    directory.add_file('[B]תוספים אופציונליים[/B]', themeit=CONFIG.THEME3)
+    directory.add_file('[B]תוספים אופציונליים[/B]', themeit=CONFIG.THEME3, fanart=CONFIG.SKINS_BG)
     for addon_id, name, blurb, action in OPTIONAL_ADDONS:
         if xbmc.getCondVisibility('System.HasAddon({0})'.format(addon_id)):
             directory.add_file('[B]{0}[/B] - {1}  [COLOR springgreen](מותקן)[/COLOR]'.format(name, blurb),
-                               icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME3)
+                               icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME3, fanart=CONFIG.SKINS_BG)
         else:
             directory.add_file('התקן [B]{0}[/B] - {1}  [COLOR gray](לא מותקן)[/COLOR]'.format(name, blurb),
                                {'mode': 'install', 'action': action}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1,
-                               description='לחיצה להורדה והתקנה לפי דרישה\n{0}'.format(addon_id))
-    directory.add_separator()
-    directory.add_file('[B]סקינים[/B]', themeit=CONFIG.THEME3)
+                               description='לחיצה להורדה והתקנה לפי דרישה\n{0}'.format(addon_id), fanart=CONFIG.SKINS_BG)
+    directory.add_separator(fanart=CONFIG.SKINS_BG)
+    directory.add_file('[B]סקינים[/B]', themeit=CONFIG.THEME3, fanart=CONFIG.SKINS_BG)
     skin_manager.add_rows(xbmc.getSkinDir())

@@ -38,7 +38,7 @@ def build_switch_skin():
     names = '\n'.join('{0}. סקין {1}'.format(number, skin.name) for number, skin in enumerate(skin_catalog.SKINS, 1))
     msg = "הסקינים הקיימים בבילד:\n" + names
     if policy is None:
-        window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
+        window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE)
 
     # Get the name of the current active skin. If the user manually
     # switched to a skin not in our table (e.g. via Kodi's own

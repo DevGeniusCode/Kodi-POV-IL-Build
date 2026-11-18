@@ -53,6 +53,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Check the baked favourites against favourites_config.json
+        run: python .github/scripts/check_favourites.py
+
       - name: Detect changed addons
         id: detect
         run: |

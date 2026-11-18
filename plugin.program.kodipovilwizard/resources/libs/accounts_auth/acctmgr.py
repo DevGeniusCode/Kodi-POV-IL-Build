@@ -1,10 +1,11 @@
 """Account Manager Lite: on-demand pilot install and install-for-everyone."""
+import os
+
 import xbmc
 import xbmcgui
 
 from resources.libs.common import logging
 from resources.libs.common.config import CONFIG
-from resources.libs.packs.pack_installer import _addon_on_disk
 
 
 # KODI-POV-IL - ACCOUNT MANAGER LITE PILOT (opt-in, on-demand). One place to
@@ -25,7 +26,7 @@ def _acctmgr_was_removed():
     """
     try:
         import xbmcvfs
-        if _addon_on_disk('script.module.acctmgr'):
+        if os.path.isfile(os.path.join(CONFIG.ADDONS, 'script.module.acctmgr', 'addon.xml')):
             return False
         data = xbmcvfs.translatePath(
             'special://profile/addon_data/script.module.acctmgr')

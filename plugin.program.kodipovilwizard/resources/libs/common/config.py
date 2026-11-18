@@ -118,8 +118,9 @@ class Config:
         #########################################################################################################
         # KODI-POV-IL - the default build skin (skins/skin_catalog.py)
         self.DEFAULT_BUILD_SKIN = getattr(uservar, 'DEFAULT_BUILD_SKIN', 'skin.fentastic')
-        # KODI-RD-IL - BUILD SKIN SWITCH
-        self.BUILD_SKIN_SWITCH_IMAGE_URL = getattr(uservar, 'BUILD_SKIN_SWITCH_IMAGE_URL', '')
+        # KODI-POV-IL - LOCAL ARTWORK (works offline)
+        self.SKINS_BG = getattr(uservar, 'SKINS_BG', '') or self.ADDON_FANART
+        self.BUILD_SKIN_SWITCH_IMAGE = getattr(uservar, 'BUILD_SKIN_SWITCH_IMAGE', '') or self.ADDON_ICON
         # KODI-POV-IL - MODULAR UPDATER (manifest-based). getattr keeps an old
         # uservar.py (without MANIFEST_URL) from crashing config init.
         self.MANIFEST_URL = getattr(uservar, 'MANIFEST_URL', 'http://')

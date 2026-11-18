@@ -20,7 +20,7 @@
         <source>https://www.github.com/a4k-openproject/plugin.program.openwizard/</source>
         <assets>
             <icon>icon.jpg</icon>
-            <fanart>fanart.png</fanart>
+            <fanart>fanart.jpg</fanart>
         </assets>
     </extension>
 </addon>

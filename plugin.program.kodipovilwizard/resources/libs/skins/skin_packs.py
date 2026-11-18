@@ -1,19 +1,13 @@
-"""On-demand build skins: NOX / Onyx / Arctic Fuse 3 install and auto-update."""
-import os
-
+"""On-demand build skins: NOX / Onyx / Estuary / Arctic Fuse 3 install."""
 import xbmc
 
 from resources.libs.common import logging
-from resources.libs.common import tools
-from resources.libs.common.config import CONFIG
-from resources.libs.packs.pack_installer import NOX_PACK_BASE_URL
-from resources.libs.packs.pack_installer import _af3_pack_current
 
 
 #####################################################
 # KODI-POV-IL - ON-DEMAND SKIN INSTALL
-# Two of the build's selectable skins are installed ONLY when the user picks
-# them from Switch Skin, so they never bloat the base build and are NEVER
+# The build's selectable skins other than FENtastic are installed ONLY when the user picks
+# them from the Skin Manager / Switch Skin, so they never bloat the base build and are NEVER
 # force-pushed to every device during fresh installs or background OTA:
 #
 #   * Arctic Fuse 3 (skin.arctic.fuse.3) -- installed NATIVELY via Kodi's
@@ -25,29 +19,11 @@ from resources.libs.packs.pack_installer import _af3_pack_current
 #     repos. This replaces the old four static "pack" zips (deps/skin/fonts/
 #     studios) -- no hardcoded dist links, no version-pinned bundles.
 #
-#   * NOX (skin.povil.nox) -- a rebranded + scrubbed Estuary MOD that is NOT on
-#     any public repo, so it is still shipped as a single on-demand pack zip in
-#     dist/ and downloaded+extracted on first switch (see _ensure_packs_installed).
+#   * NOX, Onyx and Estuary -- installed from the verified modular manifest (ensure_modular_skin); an INSTALLED
+#     on-demand skin is kept up to date by the background updater like any other add-on.
 
-# KODI-POV-IL - NOX skin. A rebranded + scrubbed Estuary MOD (~24 MB) whose home
-# menu was remapped to our POV / idanplus / otaku addons. It is NOT on any public
-# repo, so (unlike AF3) it cannot be resolved natively -- it is shipped as a
-# single on-demand pack zip in dist/ and downloaded only when the user picks it
-# from Switch Skin, so it never bloats the base build. Its only hard dependency,
-# script.fentastic.helper, already ships in the build.
-
-
+# NOX (skin.povil.nox) floor version for ensure_nox_installed.
 NOX_SKIN_VERSION = '1.0.17'
-NOX_PACKS = [
-    {
-        'name': 'סקין NOX',
-        'url': '{0}/Kodi-POV-IL-NOX-skin-pack.zip'.format(NOX_PACK_BASE_URL),
-        'filename': 'nox_skin_pack.zip',
-        'sentinel': 'special://home/addons/skin.povil.nox/addon.xml',
-        'expected_version': NOX_SKIN_VERSION,
-        'addon_ids': ['skin.povil.nox'],
-    },
-]
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
 
@@ -111,49 +87,20 @@ def ensure_modular_skin(ident, floor, tag):
     entry = (manifest.get('addons') or {}).get(ident)
     if not entry or updater._version_tuple(entry.get('version')) < updater._version_tuple(floor):
         return False
+    if not entry.get('zip') or not entry.get('sha256'):
+        logging.log('[{}] the manifest entry has no zip / checksum'.format(tag), level=xbmc.LOGERROR)
+        return False
     entry = dict(entry, id=ident)
-    tools.ensure_folders(CONFIG.PACKAGES)
-    package = os.path.join(CONFIG.PACKAGES, '%s-modular.zip' % tag.lower())
     try:
-        updater._download_background_zip(entry['zip'], package, entry)
-        updater._install_verified_module(package, entry, entry['sha256'])
-        xbmc.executebuiltin('UpdateLocalAddons')
-        xbmc.Monitor().waitForAbort(0.5)
+        # The same headless engine as every other install: download, sha256 check, extract (a bad checksum extracts nothing).
+        from resources.libs.headless_installer import HeadlessInstaller
+        installed = HeadlessInstaller().install_jobs([entry])
+        if ident not in installed:
+            logging.log('[{}] modular installation did not complete'.format(tag), level=xbmc.LOGERROR)
+            return False
+        updater._register_and_enable(installed)
         return (updater.get_local_version(ident) == entry['version'] and
                 build_skin.enable_skin(ident))
     except Exception as err:
         logging.log('[{}] modular installation failed: {}'.format(tag, type(err).__name__), level=xbmc.LOGERROR)
         return False
-
-
-def auto_update_active_skin_pack():
-    """Refresh an on-demand skin pack (currently NOX) when the user is already
-    ON that skin and a newer version has been published. The pack is otherwise
-    only (re)installed when picked from Switch Skin, so without this an existing
-    NOX user never gets skin updates from a normal quick_update -- they had to
-    switch away and back. Idempotent: the version gate (_af3_pack_current) means
-    we only re-download when the on-disk skin is actually OLDER than what we now
-    ship, so it does NOT re-download every boot, and it does NOT re-download when
-    the user merely toggles skins. Re-extracting overwrites only the skin's addon
-    files under addons/skin.povil.nox -- never userdata/addon_data skin settings,
-    so the user's favourites order and skin tweaks are preserved."""
-    try:
-        active = CONFIG.SKIN or ''
-        if 'skin.povil.nox' not in active:
-            return
-        pack = NOX_PACKS[0]
-        if _af3_pack_current(pack):
-            return  # on-disk version already current; no re-download
-        logging.log(
-            '[Skin Auto Update] NOX is active and the installed pack is behind '
-            '{0}; refreshing it now.'.format(pack.get('expected_version')),
-            level=xbmc.LOGINFO)
-        if ensure_nox_installed():
-            xbmc.sleep(800)
-            try:
-                xbmc.executebuiltin('ReloadSkin()')
-            except Exception:
-                pass
-    except Exception as e:
-        logging.log('[Skin Auto Update] failed: {0}'.format(e),
-                    level=xbmc.LOGERROR)

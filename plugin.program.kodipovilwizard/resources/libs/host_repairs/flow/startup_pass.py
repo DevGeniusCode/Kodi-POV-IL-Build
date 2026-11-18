@@ -325,10 +325,11 @@ def _maybe_patch_pov_language_invoker():
                 '%s (setting + addon.xml) at %s -- %s. Kodi read POV\'s '
                 'addon.xml while building its add-on list, long before this '
                 'pass ran, so the value it is RUNNING on is still the old one '
-                'this session. POV notices that within a few seconds and '
-                'offers a profile reload, which applies it without a second '
-                'restart; declining just defers it to the next start. This '
-                'number is the margin we beat POV\'s check by'
+                'this session; it applies at the next Kodi start. POV notices '
+                'the mismatch within a few seconds, rewrites addon.xml from '
+                'the setting and, with the pov_invoker_mismatch_silent patch '
+                'applied, no longer asks for a profile reload. This number is '
+                'the margin we beat POV\'s check by'
                 % (_dir, _since, pov_language_invoker_guard.describe(_dir)),
                 level='INFO')
         elif status == 'setting_only':

@@ -14,7 +14,6 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 | `boot/`          | `startup.py` helpers: GUI-ready waits, first-boot stabilizer, notices, build checks, housekeeping, language sync |
 | `provisioning/`  | Fresh install / resume, the progress banner, the start-up OTA pass                     |
 | `build/`         | `wizard_actions.Wizard`: install / GUI fix / theme / quick update / restart            |
-| `packs/`         | The shared on-demand zip-pack engine                                                   |
 | `skins/`         | On-demand skins, Switch Skin, AF3 tools, favourites sync, `skin_settings`, `fentastic_manager`, `onyx_home/`, `search_provider_picker` |
 | `addons/`        | Add-on install / management (Umbrella, `debrid_notice`)                                |
 | `accounts_auth/` | Account Manager                                                                        |
@@ -38,7 +37,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `.po` merged into POV's strings table, P3 decisions) are done. Step 2 (Category C: the 17 runtime patchers of Umbrella, Idan
   Plus and AF3, reference Umbrella 6.8.02, Idan Plus 4.0.6, AF3 3.5.2) is applied: Idan Plus (3) and Umbrella (5 of its 10) became
   registry entries, Umbrella's settings are baked into `userdata` (`config_version` 2.0.8), the AF3 search patcher was rewritten
-  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 149 entries (119
+  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 150 entries (120
   POV, 13 Umbrella, 12 Idan Plus, 5 AF3). Runtime patchers that remain because the registry cannot express them (they REPLACE
   lines or need function-scoped anchors): `umbrella_tmdb_apikey`, `umbrella_list_order`, `af3_dialog_subtitles`, `af3_home`
   (data seeding, font) and the data copies `umbrella_hebrew_ui`, `umbrella_watch_*` (see "Architectural decision" below). The AF3
@@ -81,6 +80,42 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   POV context menu (Phase 6): the list-manager entries (Trakt, MDBList, TMDb lists; "ניהול רשימות") of movie and show cards are hidden for a service
   that is not connected (registry `pov_cm_hide_unconnected_movies` / `_tvshows`: an insert after `self.cm_sort = settings.context_menu_sort()` that sets the
   sort key of the entry to 0 when `trakt.token` / `mdblist.token` / `tmdb.token` is empty; POV drops keys of 0). Episode cards already gate theirs on `watched_indicators`.
+  Continue watching (`povil_dropped_<provider>.json`): the context entry "הסר מהמשך צפייה" (`mode=dropped_choice`) hides a show from the in-progress /
+  next-episode rows through POV's local dropped list plus, with Trakt / MDBList as the indicator, the account's dropped list; the cloud list is cached in
+  `addon_data/plugin.video.pov/povil_dropped_trakt.json` / `_mdblist.json` (`pov_continue_watching.py`; TTL 300 s, failed reads never replace a complete
+  list, kept by `pov_keep_files`; README §6 "Continue watching").
+  Stale cleanup (Phase 6): the dead NOX pack constants and `skin_packs.auto_update_active_skin_pack` (plus its `startup.py` hook; a NOX update comes from the
+  modular updater) are gone, and with the Umbrella switch the whole `packs/` engine (`pack_installer`) is deleted. The baked `userdata/favourites.xml` is generated from
+  `favourites_config.json` (default skin, no service connected) and its policy is `fresh: replace` / `update: seed_if_absent`; CI step
+  `.github/scripts/check_favourites.py` fails on drift, `--write` regenerates it. `config_version` 2.0.12.
+  Umbrella from its official repositories (Phase 6): `repository.umbrella` (2.2.6; its `<dir>` blocks are listed omega first because the headless installer indexes the
+  first usable block) and `repository.cocoscrapers` (1.0.1) are add-on folders of this repo, so the manifest ships them (a fresh install has them, like `repository.otaku`);
+  `addons/umbrella.py` `ensure_repositories()` installs them from the manifest on a device that predates them, then `post_install_provisioning(ids=[umbrella, cocoscrapers])`
+  resolves both from the developers' indexes (current versions: 6.8.02 / 1.0.45 at the time of the switch, the old pack had 6.7.85 / 1.0.39). The pack URL, the
+  auto-install-for-everyone function (no callers) and the `umbrella_auto` setting are gone.
+  Skin Manager installs (Phase 6): `skin_packs.ensure_modular_skin` (NOX, Onyx, Estuary) called two `ModularUpdater` methods that no longer exist, so every install failed;
+  it now runs `HeadlessInstaller.install_jobs([manifest entry])` (sha256-checked) + `_register_and_enable` + `build_skin.enable_skin`.
+  First-boot stall (Phase 6, found in a Shield log): the start-up `kodi_version_update_check()` showed a blocking `dialog.ok` on every boot for a device on an older Kodi (a 39 s
+  stall of the startup thread). The automatic check now runs in a daemon thread and shows a non-modal notification once per newer version (hidden setting `kodi_update_notified`);
+  the menu's "check now" (`kodi_version_update_check_manual=true`) keeps its dialogs and runs inline.
+  POV invoker popup (Phase 6): registry `pov_invoker_mismatch_silent` (`prepend_before` `if refresh and kodi_utils.confirm_dialog(...)` in POV's `entry.py`
+  sets `refresh = False`): POV still rewrites addon.xml from the setting but no longer asks, in English, for a profile reload (the value applies at the next
+  start). A POV update erases that patch too, so `host_repairs/flow/pov_update_watch.py` (the runner's idle loop, every 8 s) stamps POV's addon.xml
+  (version, mtime); on a change it waits until the stamp is stable, then runs `_maybe_patch_pov_language_invoker` and `PatchEngine().run(addon_id='plugin.video.pov')`
+  (it stands down when POV patching is off). A narrow window remains: POV's own check can run before the watcher re-patches, and then shows its dialog once.
+  Hebrew titles keep the title, not an English logo (Phase 6): `pov_logo_for_ui` (marker v3) now calls `pov_logo_lang.apply(art, meta, clearlogo)` in POV's
+  `art_infodict`: when the title is Hebrew and the only logo is not (`for_ui` returns ''), `clearlogo`, `tvshow.clearlogo` and `povil_logo` are all empty, so every
+  skin that shows the title when the clearlogo is empty (FENtastic, NOX, AF3, Estuary, Onyx) shows the Hebrew title. Not covered: the season / episode lists
+  (`menus/seasons.py` builds its own art) and POV's own windows (`meta['clearlogo']`). Kodi check: a Hebrew title with an English-only logo shows text in each skin.
+  Clean reinstall (Phase 6): Maintenance -> "התקנה מחדש של הבילד נקי" (`mode=clean_reinstall`, `provisioning/clean_reinstall.py`; README §3.B): pre-flight
+  (manifest + every download answers) before any deletion, keep choices (Account Manager + POV, Umbrella, `profiles.xml`; none pre-selected), two confirmations,
+  `install.wipe()` with the keep flags set in memory only, then POV leftovers / stale Addons DB rows / the Wizard's retained pack, settings and `kodipovil.*`
+  markers are reset, `fresh_install.begin()` and the hard kill. The skin is not switched first (`skin_to_default` is a no-op by owner decision) and Otaku data has no keep
+  option (no backup mechanism exists for it). Not tested in Kodi: it deletes the whole install.
+  Local artwork (Phase 6, works offline): the Optional add-ons and Skin Manager screens pass `fanart=CONFIG.SKINS_BG` (`resources/media/skins_bg.jpg`, a copy of
+  `profile-ui/background.jpg`; `directory._add_menu_item` now also sets the `fanart` art type), and the "existing skins" notice (`switcher`, `boot/notifications`)
+  and `check.check_build` use `CONFIG.BUILD_SKIN_SWITCH_IMAGE` (`profile-ui/logo.png`); the remote `BUILD_SKIN_SWITCH_IMAGE_URL` is gone. (`addon.xml` now declares
+  `<fanart>fanart.jpg</fanart>`, the file that exists; it used to name a missing `fanart.png`.)
 
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
@@ -206,6 +241,13 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   baked settings and no setup screens); the optional add-ons tile opens the screen (`ActivateWindow(Programs, ...)` is
   unverified in FENtastic / AF3); removing Otaku hides the tile at the next refresh and boot does not reinstall it; Umbrella follows
   the same rules; movies networks tiles open provider lists. (15) **POV context menu:** with no Trakt / MDBList / TMDb connected, a movie and a show card show no list-manager entry; connecting one makes its entry appear at the next list.
+  (16) **Local artwork:** the optional add-ons and Skin Manager screens show the dark `skins_bg.jpg` with no network, and the "existing skins" notice shows the local logo (check
+  whether FENtastic / AF3 honour the `fanart` art of a plugin list). (17) **POV update:** update POV while Kodi runs (or replace its folder with an older build): within about 10 s
+  the log shows `pov_update_watch: ...` and the PatchEngine pass, `addon.xml` holds the build's `reuselanguageinvoker`, and no English "SETTING/XML mismatch" question appears
+  (it can still appear once if POV's own check wins the race); after a restart the profile is not reloaded. (18) **Hebrew titles:** a Hebrew title whose only logo is English
+  shows the title text in FENtastic, NOX, AF3, Estuary and Onyx (home widgets and lists). (19) **Clean reinstall:** run it offline (nothing is deleted, Hebrew message), then
+  online with and without the keep options: Kodi closes, the next start provisions the build, the kept data is still there, `kodipovil.provisioned` is rewritten and the home
+  is the default skin.
 
 ## ARCHITECTURAL DECISION (Phase 5): no "replace" in the PatchEngine
 

@@ -5,10 +5,16 @@ took the first logo TMDb listed, which is usually the English one. pick()
 prefers a logo in the meta language and marks it (?lang=he; TMDb's image
 server ignores the query). Any skin gets the Hebrew logo when one exists.
 
-for_ui() fills the extra art key povil_logo, which the Onyx skin shows in
-place of the title: the logo only when it suits a Hebrew screen, i.e. it is
+for_ui() decides which logo suits a Hebrew screen: the logo only when it is
 in the meta language, or the title itself is not Hebrew (an English logo for
-an untranslated title). Otherwise the skin writes the Hebrew title.
+an untranslated title). Otherwise there is no logo.
+
+apply() is the art_infodict hook. It fills the extra art key povil_logo (the
+Onyx skin shows it in place of the title) and gives the stock clearlogo /
+tvshow.clearlogo the same value, so a Hebrew title with only a non-Hebrew logo
+has NO clearlogo: every skin that falls back to the title text when the
+clearlogo is empty (FENtastic, NOX, Arctic Fuse 3, Estuary, Onyx) shows the
+Hebrew title instead of an English logo.
 """
 HEBREW = (chr(0x0590), chr(0x05FF))
 
@@ -40,3 +46,11 @@ def for_ui(meta, clearlogo):
         return clearlogo
     title = meta.get('tvshowtitle') or meta.get('title') or ''
     return '' if _hebrew(title) else clearlogo
+
+
+def apply(art, meta, clearlogo):
+    """Set povil_logo and clearlogo of a list item's art; returns the clearlogo to use for tvshow.clearlogo."""
+    logo = for_ui(meta, clearlogo)
+    art['povil_logo'] = logo
+    art['clearlogo'] = logo
+    return logo

@@ -399,6 +399,9 @@ class Router:
         elif mode == 'freshstart':  # Cleaning Tools -> Fresh Start
             from resources.libs import install
             install.fresh_start()
+        elif mode == 'clean_reinstall':  # Maintenance -> התקנה מחדש של הבילד נקי (not in profiles/hooks._CHILD_ALLOWED)
+            from resources.libs.provisioning import clean_reinstall
+            clean_reinstall.run()
         elif mode == 'purgedb':  # Cleaning Tools -> Purge Databases
             from resources.libs import db
             db.purge_db()

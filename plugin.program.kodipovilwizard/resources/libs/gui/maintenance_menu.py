@@ -31,6 +31,8 @@ class MaintenanceMenu:
 
     def get_listing(self):
         directory.add_dir('[B]מנהל טלאים[/B]', {'mode': 'patchmanager'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
+        directory.add_file('[B]התקנה מחדש של הבילד נקי[/B]', {'mode': 'clean_reinstall'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1,
+                           description='מוחק את כל Kodi ומתקין את הבילד מחדש מאפס (אפשר לשמור חשבונות ופרופילים)')
         directory.add_dir('[B]Cleaning Tools[/B]', {'mode': 'maint', 'name': 'clean'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
         directory.add_dir('[B]Addon Tools[/B]', {'mode': 'maint', 'name': 'addon'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)
         directory.add_dir('[B]Logging Tools[/B]', {'mode': 'maint', 'name': 'logging'}, icon=CONFIG.ICONMAINT, themeit=CONFIG.THEME1)

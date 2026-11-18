@@ -30,8 +30,8 @@ def show():
     active_id = xbmc.getSkinDir()
     current = skin_catalog.find(active_id)
     directory.add_file('הסקין הפעיל: [COLOR gold][B]{0}[/B][/COLOR]'.format(current.name if current else active_id),
-                       themeit=CONFIG.THEME3)
-    directory.add_separator()
+                       themeit=CONFIG.THEME3, fanart=CONFIG.SKINS_BG)
+    directory.add_separator(fanart=CONFIG.SKINS_BG)
     add_rows(active_id)
 
 
@@ -47,7 +47,7 @@ def add_rows(active_id):
         default_mark = '  [COLOR gray]ברירת מחדל[/COLOR]' if skin.id == skin_catalog.default_skin() else ''
         directory.add_file('[B]{0}[/B] - {1}  {2}{3}'.format(skin.name, skin.blurb, tag, default_mark),
                            {'mode': 'skinaction', 'skin': skin.id}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1,
-                           description='{0}\n{1}'.format(hint, skin.id))
+                           description='{0}\n{1}'.format(hint, skin.id), fanart=CONFIG.SKINS_BG)
 
 
 def act(skin_id):

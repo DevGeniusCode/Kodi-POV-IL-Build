@@ -78,13 +78,14 @@ def check_build(name, ret, release_id=None):
     #   - 'kodi'    -> the RUNNING Kodi major, so the build() version-mismatch
     #                  warning can never fire
     #   - 'url'/'gui'/'theme'/'minor'/'info' -> '' (nothing to download)
-    #   - 'icon'/'fanart' -> the build splash, for the menus
+    #   - 'icon'/'fanart' -> the build's local logo / background, for the menus
     version = getattr(CONFIG, 'BUILDVERSION_DEFAULT', None) or getattr(CONFIG, 'BUILDVERSION', '') or '0.0.0'
     try:
         kodi = str(int(float(CONFIG.KODIV)))
     except Exception:
         kodi = '21'
-    splash = getattr(CONFIG, 'BUILD_SKIN_SWITCH_IMAGE_URL', '') or ''
+    icon = getattr(CONFIG, 'BUILD_SKIN_SWITCH_IMAGE', '') or ''
+    fanart = getattr(CONFIG, 'SKINS_BG', '') or ''
     fields = {
         'version': version,
         'url': '',          # no monolithic build zip
@@ -92,8 +93,8 @@ def check_build(name, ret, release_id=None):
         'gui': '',          # no monolithic quickfix zip
         'kodi': kodi,       # == running Kodi -> no warning dialog
         'theme': '',        # themes retired with build.txt
-        'icon': splash,
-        'fanart': splash,
+        'icon': icon,
+        'fanart': fanart,
         'adult': 'no',
         'info': '',
         'description': getattr(CONFIG, 'ADDONTITLE', name),

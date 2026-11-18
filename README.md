@@ -209,7 +209,10 @@ plugin.video.pov  →  plugin.video.idanplus  →  plugin.video.youtube
 ```
 
 `plugin.video.otaku` (anime) is **optional** and not in the list: it is installed on demand from the Wizard's main menu ->
-**תוספים וסקינים אופציונליים** (`addons/otaku.py`, headless from `repository.otaku`, which stays in the manifest), like Umbrella.
+**תוספים וסקינים אופציונליים** (`addons/otaku.py`, headless from `repository.otaku`, which stays in the manifest). Umbrella + CocoScrapers work
+the same way (`addons/umbrella.py`): `repository.umbrella` and `repository.cocoscrapers`, the developers' own repository definitions, ship in the
+manifest (a fresh install has them; `ensure_repositories()` installs them, sha256-checked, on a device that predates them), and the headless
+installer resolves `plugin.video.umbrella` and `script.module.cocoscrapers` from the developers' GitHub Pages indexes. No pack zip, nothing hosted by a third party.
 Because it is not in `PROVISION_IDS`, the boot loop does not put it back after the user removed it. Its baked settings
 (`userdata/addon_data/plugin.video.otaku/settings.xml`, an unlisted file seeded only if absent) are still laid down by a fresh
 install, so it starts configured when the user installs it later.
@@ -252,6 +255,24 @@ install, so it starts configured when the user installs it later.
       `build_skin.activate`; the favourites were refreshed for that skin and the home shortcuts seeded; and Kodi's cached
       favourites match (`live_favourites_ready()`, at most two profile reloads, never a loop and never a close).
     - The same live‑defaults and favourites functions complete a secondary profile's home ([§9.4](#94-lifecycle--data-flows)).
+- **Clean reinstall (`provisioning/clean_reinstall.py`, Maintenance → "התקנה מחדש של הבילד נקי", `mode=clean_reinstall`).**
+  Wipes Kodi with `install.wipe()` (the Fresh Start engine) and lets the next start provision the build from scratch
+  (`fresh_install.begin()` → no `.provisioned` marker → the install above). Master profile only; a kids profile is stopped by
+  the router's child gate (the mode is not in `profiles/hooks._CHILD_ALLOWED`); nothing may be playing. Order:
+  1. **Pre-flight, before anything is deleted:** the manifest loads, every file the new install downloads (all manifest add-ons
+     except the on-demand skins and the Wizard, plus the config pack) has a checksum and answers a one-byte ranged GET. Offline
+     or unreachable → a Hebrew dialog and nothing is touched.
+  2. **Questions:** what to keep (nothing is pre-selected): Account Manager + POV (the add-ons and their data are excluded from the
+     wipe as whole folders, as the existing keep switches do), Umbrella, `profiles.xml` (profile contents are rebuilt); then two
+     confirmations. The keep flags are set in memory only and every other `KEEP*` switch is forced off (a clean reinstall ignores the
+     user's Fresh Start switches).
+  3. **Quiesce:** `pov_update_watch` stands down while the window property `kodipovil.clean_reinstall` is set; Kodi's add-on
+     auto-update is switched off by `install.wipe()` and restored afterwards. The skin is not switched (`skin_to_default` is a
+     documented no-op; the hard kill follows and the next start provisions the default skin).
+  4. **After the wipe:** POV's `povil_dropped_*.json`, `povil-*.json` and `navigator.before-*.db` are removed unless POV data is kept; the
+     rows of the Addons DB whose add-on no longer exists are deleted; the Wizard's retained config pack, the build settings
+     (`installed`, `config_applied_version`, `fresh_build_auto_install_done`, ...) and every `kodipovil.*` marker are reset; then
+     `fresh_install.begin()` and the same hard kill as Fresh Start. A wipe cancelled half way still arms the resume.
 
 ---
 
@@ -331,9 +352,16 @@ no‑fanart defaults. The fix added it to the policy as:
   `special://userdata/favourites.xml`. `merge=True` preserves any custom tiles the
   user added themselves (anything whose name isn't one of ours).
 - Because the build is **Trakt/TMDB‑driven**, `favourites.xml` holds **only
-  internal skin shortcuts** — no user library data — so it is safe to **overwrite**
-  on update (`config_policy.json` applies it `replace`) to push UI/shortcut/icon
-  fixes to existing users.
+  internal skin shortcuts** — no user library data.
+- **Lifecycle.** `userdata/favourites.xml` is only the **first-boot fallback**: the config pack applies it `replace` on a
+  fresh install and `seed_if_absent` on an update (it never overwrites the device file, which would drop the user's
+  custom tiles). The generator then owns the file: it runs at the end of a fresh install, on a skin switch, for a new
+  profile, when an account service connects or disconnects (`pov_visibility_mgr`) and at every start of the add-on.
+  Tiles that name an account service (`"condition"`) are emitted only while that service is connected.
+- **Sync check.** The baked file must equal what the generator writes for the default skin with no service connected.
+  `.github/scripts/check_favourites.py` (a CI step before the build) fails when it drifts, when an `order` key has no
+  tile, or when an `inherit` points nowhere; `python .github/scripts/check_favourites.py --write` regenerates the file
+  (then bump `config_version`).
 
 ---
 
@@ -416,7 +444,7 @@ Each patch configuration is declared as a structured Python dictionary within th
 (`patches_config.py`). New patches are appended to the registry; existing patches are never reordered, so branches stay
 diffable. The registry file holds entries only, grouped under large banner comments (one per domain: navigator, MDBList,
 continue watching, parental control, …); `_build_patch_hook`, the shared `_*_HOOK` constants and `validate_registry` live in
-`patches/patches_registry_utils.py`. The registry currently holds 149 entries (119 for `plugin.video.pov`, 13 for
+`patches/patches_registry_utils.py`. The registry currently holds 150 entries (120 for `plugin.video.pov`, 13 for
 `plugin.video.umbrella`, 12 for `plugin.video.idanplus`, 5 for `skin.arctic.fuse.3`).
 
 ```python
@@ -582,6 +610,30 @@ folder, with a confirm). The **כללי / מנוע** folder holds the `_pov_patc
 dialog), the patcher-health report, and "reset all preferences". The user's choice is the Wizard setting
 `patch_enabled_<patch id>` (`"true"` / `"false"`; empty = the registry's `enabled`), the same key the engine reads. Routes:
 `patchmanager` (`addon`, `cat`), `togglepatch`, `patchbulk`, `patchengine` (`op`).
+
+### ⏯️ Continue watching: "הסר מהמשך צפייה" (`povil_dropped_<provider>.json`)
+
+Implemented by the `CONTINUE WATCHING` entries of the registry and `patches/pov_continue_watching.py`.
+
+* **What the user sees.** A context-menu entry "הסר מהמשך צפייה" on an in-progress / next-episode card and on a show card
+  (`mode=dropped_choice`, patched into POV's own `dropped_choice`). It hides the show from the "continue watching"
+  rows; it never deletes watched history or bookmarks. The same entry (restore) lives in the hidden-shows lists.
+* **Where a hide is stored.** POV's local dropped list (`add_to_sync('dropped', ...)`) always; with Trakt or MDBList
+  as the watched indicator, also the account's own dropped list (`remote_toggle` verifies the cloud write before the
+  snapshot changes).
+* **What the rows exclude.** `dropped_info` = the local list ∪ the cloud list (Trakt `/users/hidden/dropped?type=show`,
+  MDBList `/sync/dropped`); `filter_episode_sources` / `filter_show_sources` remove those shows from the next-episode,
+  in-progress and in-progress-shows rows.
+* **`povil_dropped_trakt.json` / `povil_dropped_mdblist.json`** (POV's `addon_data`, next to a `.lock.db` file) cache the
+  cloud list so a directory never waits for the network: `{version, identity, items (tmdb ids), complete, checked,
+  retry_at}`. `identity` is a hash of the provider plus the account name (or the token digest), so another account never
+  inherits the exclusions. A snapshot is fresh for 300 s (`TTL`), a read has a 5 s budget, and a failed or partial read
+  never replaces a complete list (it only sets `retry_at`). Before the very first successful read the rows are held back
+  (`_UnknownHidden`) and a notice says the list is unavailable. POV's service refreshes it every 30 s
+  (`service_prefetch`), native dropped-list activity invalidates it (`invalidate`).
+* **Kept across a POV wipe** by `pov_keep_files`, and hashed by `pov_list_snapshot` (the saved-list snapshots notice a
+  change). A disconnect or an account switch leaves the file behind: its `identity` no longer matches, it is ignored and
+  rewritten on the next read. A clean reinstall removes it.
 
 ### 🔁 Lifecycle & Upstream Updates
 
@@ -1182,6 +1234,7 @@ reintroduce them or references to them**:
 │       ├── kodi_addons.py                   # discover_addons(), addon.xml parsing, type
 │       ├── build_addons.py                  # package each addon → dist/<id>-<ver>.zip
 │       ├── build_config.py                  # package userdata/ → dist/config-<ver>.zip
+│       ├── check_favourites.py              # CI: userdata/favourites.xml must match favourites_config.json
 │       └── gen_manifest.py                  # regenerate manifest.json (refuses null sha)
 ├── manifest.json                            # GENERATED — never hand‑edit
 ├── userdata/                                # the build‑config tree (shipped as config.zip)
@@ -1196,9 +1249,9 @@ reintroduce them or references to them**:
 │   └── resources/
 │       ├── libs/                            # see "Wizard code layout" below
 │       │   ├── {modular_updater,headless_installer,config_apply,fresh_install,patch_engine,downloader,extract,db}.py
-│       │   ├── boot/ provisioning/ build/ packs/ skins/ addons/ accounts_auth/ system/ host_repairs/   # domain folders (Phase 1 / 3)
+│       │   ├── boot/ provisioning/ build/ skins/ addons/ accounts_auth/ system/ host_repairs/   # domain folders (Phase 1 / 3)
 │       │   ├── common/ gui/                 # CONFIG, logging, router, tools · Wizard menus and windows
-│       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 149 entries) & 46 decoupled logic modules
+│       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 150 entries) & 46 decoupled logic modules
 │       │   └── profiles/                    # the Profiles feature (§9); hooks.py is its only engine‑facing surface (+ build_skin, profile_bootstrap)
 │       ├── skins/Default/1080i/             # Wizard windows: Profiles.xml + shared ChildHome.xml / ProfileLogin.xml templates
 │       └── media/profile-ui/                # picker / child‑home / login artwork
@@ -1221,14 +1274,13 @@ one or two files. Every new folder lives inside `plugin.program.kodipovilwizard/
 | Folder           | Modules                                                                                    | Responsibility                                                                                                                                                                                |
 |------------------|--------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `boot/`          | `gui_ready`, `first_boot`, `notifications`, `build_check`, `maintenance_pass`, `language_sync` | `startup.py` helpers: wait for video / the Home window / the home rows, the first-boot stabilizer, start-up notices, APK build registration and the installed-build check, start-up housekeeping, the POV Hebrew strings sync |
-| `provisioning/`  | `banner`, `auto_install`, `ota`                                                            | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, and the start-up OTA pass (`run_startup_ota`)                                                   |
+| `provisioning/`  | `banner`, `auto_install`, `ota`, `clean_reinstall`                                         | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, the start-up OTA pass (`run_startup_ota`), and the Maintenance "clean reinstall" (`mode=clean_reinstall`)  |
 | `build/`         | `wizard_actions`                                                                           | The `Wizard` class: fresh / normal install, GUI fix, theme, quick update, restart, force-close                                                                                                |
-| `packs/`         | `pack_installer`                                                                           | The shared on-demand zip-pack engine (`_ensure_packs_installed`, pack registration / version helpers, `NOX_PACK_BASE_URL`)                                                                    |
 | `skins/`         | `skin_catalog`, `skin_manager`, `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`, `skin_settings`, `fentastic_manager`, `onyx_home/` (`favourites_row`, `pvr_row`, `hero_details`), `search_provider_picker` | The skin catalog (default skin, on-demand rule, seeding guard), the Skin Manager menu (browse / install / switch), on-demand skins (Estuary / NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch; `skin_settings`: the `lookandfeel.*` JSON-RPC helpers (`switch_to_skin`, `skin_to_default`, `look_and_feel_data`); `fentastic_manager`: FENtastic helper data / skin XMLs kept across a wipe and the home-widget layout a quick update leaves alone; `onyx_home/`: the Onyx home's favourites / live TV rows and its hero details. |
-| `addons/`        | `umbrella`, `debrid_notice`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |
+| `addons/`        | `umbrella`, `debrid_notice`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers, from their official repositories); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |
 | `accounts_auth/` | `acctmgr`                                                                                  | Account Manager Lite: pilot install and install-for-everyone                                                                                                                                  |
 | `system/`        | `kodi_version`, `speedtest`                                                                | The official-Kodi release check (Android / Windows) and the network speed tests                                                                                                               |
-| `host_repairs/`  | 20 patcher / repair modules (flat), `kodi_utils`, `media_assets/`, and `flow/` (`startup_pass`, `*_steps`, `runner`) | Runtime repairs of other add-ons and skins moved out of the subtitle add-on (Phase 3): the POV, Umbrella / MDBList / Trakt, Idan Plus, Arctic Fuse 3, NOX and Kodi patchers, the repair-state audit (`patcher_health`) and the startup-repair pass. Not the source-hook engine: that stays in `patches/`. Its settings, state files and log prefix are the Wizard's (`settings.xml`, `addon_data/`); it reads only `use_builtin_engine` and `pov_fast_navigation` from the subtitle add-on (`kodi_utils.subs_get_*`). |
+| `host_repairs/`  | 20 patcher / repair modules (flat), `kodi_utils`, `media_assets/`, and `flow/` (`startup_pass`, `*_steps`, `runner`, `pov_update_watch`) | Runtime repairs of other add-ons and skins moved out of the subtitle add-on (Phase 3): the POV, Umbrella / MDBList / Trakt, Idan Plus, Arctic Fuse 3, NOX and Kodi patchers, the repair-state audit (`patcher_health`) and the startup-repair pass. Not the source-hook engine: that stays in `patches/`. Its settings, state files and log prefix are the Wizard's (`settings.xml`, `addon_data/`); it reads only `use_builtin_engine` and `pov_fast_navigation` from the subtitle add-on (`kodi_utils.subs_get_*`). |
 | `tonight/`       | `ui`, `entrypoints`, `hub`, `engine`, `catalog`, `providers`, `history`, `storage`, `taste`, `discovery`, `experience` | The "Tonight" home tile: the one-time favourites shortcut (`entrypoints.ensure`, called by `fresh_install`, `profile_home` and the repair runner) and the picker window (`script.moransubs.tonight.xml`, `resources/media/tonight.png`), served by `Router.dispatch` `mode=tonight`; its state lives under the Wizard's `addon_data/tonight/`. |
 
 `default.py` and `startup.py` stay at the add-on root because `addon.xml` names them. `default.py` is a generic entry
@@ -1277,6 +1329,7 @@ source):
 | `repository.kodifitzwell`                                        | repository    | Source for `plugin.video.pov`                       |
 | `repository.Fishenzon`                                           | repository    | Source for `plugin.video.idanplus`                  |
 | `repository.otaku`                                               | repository    | Source for `plugin.video.otaku` (+ `context.otaku`) |
+| `repository.umbrella` / `repository.cocoscrapers`                | repository    | Sources for the optional Umbrella + CocoScrapers    |
 | `repository.jurialmunkey`                                        | repository    | Source for Arctic Fuse 3 + helpers                  |
 | `skin.fentastic`                                                 | skin          | Default build skin (the only one provisioned)       |
 | `skin.povil.nox`                                                 | skin          | Build skin, on demand (Skin Manager)                |

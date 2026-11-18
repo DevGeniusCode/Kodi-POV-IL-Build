@@ -88,7 +88,10 @@ def _add_menu_item(display, params, menu, description, overwrite, fanart, icon, 
 
     # build list item
     liz = xbmcgui.ListItem(display)
-    liz.setArt({'icon': "DefaultFolder.png", 'thumb': icon})
+    art = {'icon': "DefaultFolder.png", 'thumb': icon}
+    if fanart:
+        art['fanart'] = fanart
+    liz.setArt(art)
     liz.setInfo(type="Video", infoLabels={"Title": display, "Plot": description})
     liz.setProperty("Fanart_Image", fanart)
 
