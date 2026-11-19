@@ -229,7 +229,7 @@ def _pool_lookup(p):
         #      /lookup dict (or {} on miss/error), same shape this code parses.
         # Runs ONLY in MoranSubs's own service process (the POV-side peek that
         # couldn't sign is gone), so `pool` imports cleanly. Fail-open on error.
-        from resources.lib import pool as _pool
+        from resources.lib.fetching import pool_client as _pool
         data = _pool._lookup_raw(p) or {}
         if data.get('ok'):
             out['_ok'] = True   # a real, successful response (memoize-able)
@@ -606,8 +606,8 @@ def confirmed_releases(meta):
 
 def _warm_log(msg, level='INFO'):
     try:
-        from resources.lib import sub_utils
-        sub_utils.log('he_avail: ' + msg, level=level)
+        from resources.lib.core import kodi
+        kodi.log('he_avail: ' + msg, level=level)
     except Exception:
         pass
 
@@ -736,11 +736,13 @@ def run_warm(info):
 
     def _fetch_opensubtitles():
         try:
-            from resources.lib import subs_engine_bridge as bridge
+            from resources.lib.fetching import bridge
+            from resources.lib.fetching import bridge as fetching_bridge
             bridge.ensure_engine_settings()
-            vd = bridge.build_video_data(bridge_info)
+            vd = fetching_bridge.build_video_data(bridge_info)
             box['vd'] = vd
-            from resources.lib.subs_engine.sources import opensubtitles
+            from resources.lib.fetching import provider_adapter
+            opensubtitles = provider_adapter.load_provider('opensubtitles')
             opensubtitles.global_var = []
             opensubtitles.get_subs(vd, True)  # all languages; we keep Hebrew
             names = []
@@ -781,7 +783,7 @@ def run_warm(info):
     _merge(names, seen, box['os_names'] or [])
 
     try:
-        from resources.lib import sub_utils as _ku
+        from resources.lib.core import settings as _ku
         ktuvit_ok = _ku.get_setting('he_match_ktuvit', 'true') != 'false'
     except Exception:
         ktuvit_ok = True
@@ -835,12 +837,14 @@ def run_warm(info):
             try:
                 vd = box['vd']
                 if vd is None:
-                    from resources.lib import subs_engine_bridge as bridge
+                    from resources.lib.fetching import bridge
+                    from resources.lib.fetching import bridge as fetching_bridge
                     bridge.ensure_engine_settings()
-                    vd = bridge.build_video_data(bridge_info)
+                    vd = fetching_bridge.build_video_data(bridge_info)
                 if vd is None:
                     return
-                from resources.lib.subs_engine.sources import ktuvit as _kt
+                from resources.lib.fetching import provider_adapter
+                _kt = provider_adapter.load_provider('ktuvit')
                 _kt.global_var = []
                 _kt.get_subs(vd)
                 kt_names = []
@@ -850,7 +854,7 @@ def run_warm(info):
                         kt_names.append(fn)
                 added = _merge(names, seen, kt_names)
                 try:
-                    from resources.lib import pool as _pool
+                    from resources.lib.ai_translation.reuse import pool_contribute as _pool
                     _pool.report_ktuvit({
                         'tmdb_id': info.get('tmdb', ''),
                         'imdb_id': info.get('imdb', ''),
@@ -1111,11 +1115,11 @@ def _release_match_mod():
         return _RM
     _RM_TRIED = True
     try:
-        from resources.lib import release_match as _m
+        from resources.lib.scoring_matching import release as _m
         _RM = _m
     except Exception:
         try:
-            import release_match as _m
+            from scoring_matching import release as _m
             _RM = _m
         except Exception:
             _RM = None

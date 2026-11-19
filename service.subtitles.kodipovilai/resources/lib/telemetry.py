@@ -58,12 +58,12 @@ def _anon_id():
     setting. Read/written on the CALLING thread (Kodi setting writes off-thread
     are unreliable)."""
     try:
-        from resources.lib import sub_utils
-        v = (sub_utils.get_setting('_telemetry_id', '') or '').strip()
+        from resources.lib.core import settings
+        v = (settings.get_setting('_telemetry_id', '') or '').strip()
         if not v:
             import uuid
             v = uuid.uuid4().hex
-            sub_utils.set_setting('_telemetry_id', v)
+            settings.set_setting('_telemetry_id', v)
         return v
     except Exception:
         return ''
@@ -77,8 +77,8 @@ def _anon_id():
 
 def _qpath():
     try:
-        from resources.lib import sub_utils
-        return os.path.join(sub_utils.addon_profile_path(), 'ev_queue.json')
+        from resources.lib.core import kodi
+        return os.path.join(kodi.addon_profile_path(), 'ev_queue.json')
     except Exception:
         return None
 
@@ -162,13 +162,13 @@ def _post_events(batch):
     failure means the batch was NOT recorded -> restore it for next time."""
     try:
         import urllib.request
-        from resources.lib import pool
+        from resources.lib.fetching import pool_client
         data = json.dumps({'events': batch}).encode('utf-8')
         headers = {'content-type': 'application/json',
                    'user-agent': 'Mozilla/5.0'}
-        headers.update(pool.sign_headers('POST', '/ev'))
+        headers.update(pool_client.sign_headers('POST', '/ev'))
         req = urllib.request.Request(
-            pool.POOL_URL + '/ev', data=data, headers=headers)
+            pool_client.POOL_URL + '/ev', data=data, headers=headers)
         urllib.request.urlopen(req, timeout=10).read()
         return  # clean 2xx -> delivered
     except Exception as e:
