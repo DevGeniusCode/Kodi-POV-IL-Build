@@ -112,6 +112,12 @@ class InvalidKey(GeminiError):
     """Key is missing / revoked / malformed."""
 
 
+class ModelUnavailable(GeminiError):
+    """Google does not serve this model id to this key (HTTP 404): retired,
+    closed to new users, or never a model. Asking it again cannot help;
+    another model can."""
+
+
 class TruncatedResponse(GeminiError):
     """Model hit its output-token cap mid-response. The text we
     received is real but cut off (incomplete subtitle entries at
@@ -456,6 +462,20 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
         return e.partial_text
 
 
+def ai_mode_on():
+    """Has the viewer chosen AI translation? With "Google Translate" or "no translation" chosen NO
+    text request is made to Gemini, whoever asks (a viewer, Nov 2026: "with Google Translate chosen it
+    still tries to translate with AI and runs into 'busy' -- it has to be Google only"). The
+    translation itself already went to Google in that mode; what still asked Gemini was the
+    proofread of a translation taken from the cache or the pool. This is the one door every text
+    request goes through, so nothing can ask by another way."""
+    try:
+        from . import kodi_utils
+        return (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') == 'ai'
+    except Exception:
+        return True
+
+
 def generate(api_key, model, prompt, temperature=0.2,
              max_output_tokens=16384, top_p=None,
              thinking_budget=None, thinking_level=None,
@@ -467,6 +487,8 @@ def generate(api_key, model, prompt, temperature=0.2,
 
     Raises QuotaExceeded on 429, InvalidKey on 400/403, GeminiError
     on anything else."""
+    if not ai_mode_on():
+        raise GeminiError('AI translation is not the chosen mode: no request is made')
     if not requests:
         raise GeminiError('python-requests is not installed')
     if not api_key:
@@ -515,6 +537,9 @@ def generate(api_key, model, prompt, temperature=0.2,
                               timeout=timeout)
         except requests.RequestException as e:
             err = GeminiError('Network error: {0}'.format(e))
+            # the connection, not the model (the gender proofread's queue
+            # keeps such a translation for later)
+            err.transport = True
             # sent, and no reply in time or one cut off mid-read: the model
             # may well have taken it
             err.answered = isinstance(e, (getattr(requests, 'ReadTimeout', ()),
@@ -545,6 +570,8 @@ def generate(api_key, model, prompt, temperature=0.2,
                          .format(r.status_code, (r.text or '')[:180]))
     if r.status_code in (400, 403):
         _raise_rejected_request(r)
+    if r.status_code == 404:
+        raise ModelUnavailable('HTTP 404: {0}'.format(r.text[:200]))
     if r.status_code != 200:
         raise GeminiError('HTTP {0}: {1}'.format(r.status_code, r.text[:200]))
 

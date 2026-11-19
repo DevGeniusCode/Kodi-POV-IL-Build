@@ -28,6 +28,81 @@ _STATE_LOCK = threading.Lock()
 # itself, as a 'no', after this many milliseconds. It never pauses playback.
 _ASK_AI_CLOSE_MS = 10000
 
+# The top overlay's status line once a subtitle is on screen, by the state of
+# its timing at that moment ...
+_LOADED_HEADINGS = {
+    'checking': 'כתובית נטענה · בודק סנכרון',
+    'confirmed': 'כתובית מסונכרנת',
+    'fixed': 'כתובית סונכרנה אוטומטית',
+    'unverified': 'כתובית נטענה · התזמון טרם אומת',
+}
+# ... and once a check that was still running at that moment has ended.
+_CHECKED_HEADINGS = {
+    'confirmed': 'כתובית מסונכרנת',
+    'fixed': 'כתובית סונכרנה אוטומטית',
+    'unverified': 'כתובית נטענה · הסנכרון לא אומת',
+}
+# What the overlay says when the pick was the video's own subtitle and it gave
+# nothing (translate.embedded_miss_since: the extractor's reason).
+_EMBEDDED_MISS_LINES = {
+    'no_index': 'את הכתובית המובנית בקובץ הזה אי אפשר לקרוא מהסטרים\n'
+                'ואין כתובית אחרת לתרגם',
+    'no_text': 'הכתובית המובנית בקובץ הזה היא תמונה ולא טקסט\n'
+               'ואין כתובית אחרת לתרגם',
+    'not_mkv': 'את הכתובית המובנית בקובץ מהסוג הזה עוד אי אפשר לקרוא\n'
+               'ואין כתובית אחרת לתרגם',
+    '': 'הקריאה של הכתובית המובנית לא הושלמה\n'
+        'אפשר לבחור אותה שוב מרשימת הכתוביות',
+}
+# A status line stays this long (seconds) ...
+_OVERLAY_LINE_SECONDS = 5.0
+# ... and "checking" stays until the check ends, this long at most.  A check
+# that ends later still announces a fix with its own toast.
+_SYNC_CHECK_OVERLAY_CAP = 25.0
+# A status that reads empty this many times in a row is gone; one empty read
+# can be a player call that failed once.
+_STATUS_GONE_READS = 3
+
+
+def _wait_for_sync_check(read_state, still_ours, sleep,
+                         cap=_SYNC_CHECK_OVERLAY_CAP, step=0.2):
+    """Wait while the timing check of the subtitle on screen is running.
+
+    Returns (state, waited).  state is what the check ended in ('confirmed',
+    'fixed' or 'unverified'); '' when the cap passed or the status is no
+    longer there; None when still_ours() said the overlay does not belong to
+    this run any more (another pick, another film, a stop).  waited counts
+    the steps slept, not the clock.
+    """
+    steps = max(1, int(round(cap / step)))
+    gone = 0
+    for done in range(steps + 1):        # one more read after the last sleep
+        if not still_ours():
+            return None, done * step
+        state = read_state()
+        if state in _CHECKED_HEADINGS:
+            return state, done * step
+        if state == 'checking':
+            gone = 0
+        else:
+            # No status: it left with the pick it belonged to (still_ours()
+            # says so on the next round), or this one read failed.
+            gone += 1
+            if gone >= _STATUS_GONE_READS:
+                return '', done * step
+        if done < steps:
+            sleep(step)
+    return '', steps * step
+
+
+def _toasts_on(kodi_utils):
+    """The viewer's switch for subtitle toasts (kodi_utils.notify obeys it)."""
+    try:
+        return (kodi_utils.get_setting('subs_notifications', 'true')
+                or 'true').strip().lower() != 'false'
+    except Exception:
+        return True
+
 
 def ai_when_no_hebrew(kodi_utils):
     """'auto' | 'ask' | 'manual': what the automatic subtitle does when there
@@ -216,6 +291,8 @@ def autosub_on_play():
         STATE['active_file'] = _playback_file
         STATE['busy'] = True
     _eng_general = None
+    _overlay_thread = [None]    # the top overlay's thread (_overlay_show)
+    _run_t0 = time.time()       # what translate reports after this is this run's
     try:
         # Ownership starts as the selection token present when auto-on-play
         # began. Once autosub claims a candidate it advances to that exact
@@ -247,7 +324,7 @@ def autosub_on_play():
                         owned.get('link_hash') or '',
                         owned.get('stream_hash') or ''))
                 return ((kodi_utils.get_subtitle_selection_token() or '')
-                        == _initial_selection_token)
+                        == _run_owner.get('token', _initial_selection_token))
             except Exception:
                 return False
 
@@ -278,10 +355,50 @@ def autosub_on_play():
             _eng_general.break_all = False
             _eng_general.with_dp = False
             _eng_general.show_msg = 'MoranSubs — מחפש כתוביות עברית'
-            threading.Thread(target=_eng_general.show_results,
-                             args=(False,), daemon=True).start()
+            _overlay_thread[0] = threading.Thread(
+                target=_eng_general.show_results, args=(False,), daemon=True)
+            _overlay_thread[0].start()
         except Exception:
             _eng_general = None
+
+        def _overlay_show(msg):
+            """Put msg in the top overlay, opening it again when it closed.
+            The engine's search ends the overlay it shares with this run
+            ('END' in subs_engine_bridge._search_inner), so every line
+            written after the search -- "בודק סנכרון", "כתובית מסונכרנת",
+            "לא נמצאה כתובית עברית" -- went nowhere (QA Kodi, 17 Nov 2026,
+            screenshots: the overlay gone 2-4 s after the start, the 'checking'
+            line never on screen). A background search can also write its own
+            progress into it: _overlay_keep() puts the line back."""
+            if _eng_general is None or not _autosub_owns_player():
+                return False
+            try:
+                t = _overlay_thread[0]
+                if (t is not None and t.is_alive()
+                        and getattr(_eng_general, 'show_msg', '') == 'END'):
+                    t.join(1.0)         # let a closing overlay finish closing
+                _eng_general.show_msg = msg
+                t = _overlay_thread[0]
+                if t is None or not t.is_alive():
+                    _eng_general.break_all = False
+                    _eng_general.with_dp = False
+                    t = threading.Thread(target=_eng_general.show_results,
+                                         args=(False,), daemon=True)
+                    _overlay_thread[0] = t
+                    t.start()
+                return True
+            except Exception:
+                return False
+
+        def _overlay_keep(msg):
+            # the line again when a search closed the overlay ('END') or
+            # wrote its own progress into it; an overlay that closed on its
+            # own (its two-minute limit, the end of playback) stays closed
+            try:
+                if getattr(_eng_general, 'show_msg', None) != msg:
+                    _overlay_show(msg)
+            except Exception:
+                pass
 
         # While auto-on-play drives, success/progress toasts from resolve() are
         # suppressed -- the top overlay shows status instead (exactly like
@@ -295,11 +412,7 @@ def autosub_on_play():
             """Show a final status line in the top overlay for ~hold seconds
             (DarkSubs shows its 'כתובית מוכנה' / 'אין כתוביות' line for ~5s
             before the overlay closes). No-op if the overlay isn't up."""
-            if _eng_general is None or not _autosub_owns_player():
-                return
-            try:
-                _eng_general.show_msg = msg
-            except Exception:
+            if not _overlay_show(msg):
                 return
             waited = 0.0
             while waited < hold:
@@ -312,6 +425,8 @@ def autosub_on_play():
                     break
                 xbmc.sleep(200)
                 waited += 0.2
+                if waited < hold:
+                    _overlay_keep(msg)
 
         # Right after onAVStarted the player metadata (imdb/title) often
         # isn't populated yet -- poll briefly until it is (mirrors how
@@ -679,9 +794,25 @@ def autosub_on_play():
                 return
             try:
                 kodi_utils.set_current_subtitle('')
+                # Still this run's player, now with no subtitle: the claim of
+                # the candidate that failed no longer matches the cleared
+                # selection, so without this every line below went nowhere.
+                _run_owner['selection'] = None
+                _run_owner['token'] = (
+                    kodi_utils.get_subtitle_selection_token() or '')
             except Exception:
                 pass
-            if (_ai_offered and _when != 'auto' and _have_key and _ai_ok
+            try:
+                _miss = translate.embedded_miss_since(_run_t0, _playback_file)
+            except Exception:
+                _miss = None
+            if _miss is not None:
+                # the video's own subtitle was the pick and gave nothing
+                _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]\n'
+                               '[COLOR lightblue]' + _EMBEDDED_MISS_LINES.get(
+                                   _miss, _EMBEDDED_MISS_LINES['']) + '[/COLOR]',
+                               hold=7.0)
+            elif (_ai_offered and _when != 'auto' and _have_key and _ai_ok
                     and _ai_answer[:1] != [True]):
                 # left to the user: say where the translation is
                 _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]\n'
@@ -714,19 +845,68 @@ def autosub_on_play():
                 chosen_link) or {}).get('state')
         except Exception:
             _sync_state = ''
-        _heading = {
-            'checking': 'כתובית נטענה · התזמון נבדק ברקע',
-            'confirmed': 'כתובית מסונכרנת',
-            'fixed': 'כתובית סונכרנה אוטומטית',
-            'unverified': 'כתובית נטענה · התזמון טרם אומת',
-        }.get(_sync_state, 'כתובית נטענה')
-        _status_msg = '[COLOR lightblue]' + _heading
-        if chosen_name:
-            _status_msg += '\n' + chosen_name
-        if chosen_from_cache:
-            _status_msg += '\n(נטענה מהקאש)'
-        _status_msg += '[/COLOR]'
-        _final_overlay(_status_msg)
+        def _status_line(heading):
+            line = '[COLOR lightblue]' + heading
+            if chosen_name:
+                line += '\n' + chosen_name
+            if chosen_from_cache:
+                line += '\n(נטענה מהקאש)'
+            return line + '[/COLOR]'
+
+        if _sync_state != 'checking' or _eng_general is None:
+            _final_overlay(_status_line(
+                _LOADED_HEADINGS.get(_sync_state, 'כתובית נטענה')))
+            return
+        # The check is still running, and a subtitle made for another cut can
+        # be seconds off until its fix arrives.  The line used to leave after
+        # five seconds whatever the check was doing (measured: gone 5.5 s
+        # after the picture started, the fix at 9.5 s), so a viewer looking at
+        # an unsynced subtitle had nothing saying that anything was still
+        # happening.  It now stays until the check ends, then says how.
+        _checking_line = _status_line(_LOADED_HEADINGS['checking'])
+        if not _autosub_owns_player():
+            return          # a stale run never writes into the next overlay
+        if not _overlay_show(_checking_line):
+            return
+
+        def _check_state():
+            try:
+                return (kodi_utils.get_subtitle_sync_status(chosen_link)
+                        or {}).get('state') or ''
+            except Exception:
+                return ''
+
+        def _overlay_ours():
+            try:
+                return bool(_autosub_owns_player()
+                            and xbmc.Player().isPlayingVideo())
+            except Exception:
+                return False
+
+        def _sleep_keeping_line(seconds):
+            xbmc.sleep(int(seconds * 1000))
+            _overlay_keep(_checking_line)
+
+        _end_state, _waited = _wait_for_sync_check(
+            _check_state, _overlay_ours, _sleep_keeping_line)
+        try:
+            kodi_utils.log('autosub overlay: timing check %s after %.1fs' % (
+                ('ended ' + _end_state) if _end_state
+                else 'left to another pick or a stop' if _end_state is None
+                else 'not followed further',
+                _waited))
+        except Exception:
+            pass
+        if _end_state == 'fixed' and _toasts_on(kodi_utils):
+            # SubSync's own "synced automatically" toast is on screen now;
+            # the same words in the overlay beside it would be noise.
+            return
+        if _end_state:
+            _final_overlay(_status_line(_CHECKED_HEADINGS[_end_state]))
+        elif _end_state == '' and _waited < _OVERLAY_LINE_SECONDS:
+            # no result to show: the line still gets its usual time
+            _final_overlay(_checking_line,
+                           hold=_OVERLAY_LINE_SECONDS - _waited)
     except Exception as e:
         try:
             kodi_utils.log('autosub_on_play failed: {0}'.format(e),
@@ -837,6 +1017,29 @@ def snapshot_on_play():
             pass
 
 
+def playback_over():
+    """A playback ended and nothing plays after it: forget the file, so that
+    playing it again is a new viewing and gets its automatic subtitle.
+
+    STATE['last_file'] is there because onAVStarted can fire more than once
+    for one playback; it was never cleared, so a file played twice in a row
+    -- stopped and started again, or picked again from the list -- got no
+    automatic subtitle the second time, and nothing in the log said why
+    (QA Kodi, 16 Nov 2026: a file with only an embedded English track had its
+    Hebrew on screen 10 s after the first start and nothing at all after the
+    second). Not when another file is already playing: that playback's own
+    run has set last_file, and clearing it would let a repeated onAVStarted
+    search again over a subtitle the viewer chose. Never raises."""
+    try:
+        if xbmc.Player().isPlaying():
+            return False
+    except Exception:
+        return False
+    with _STATE_LOCK:
+        STATE['last_file'] = None
+    return True
+
+
 if xbmc is not None:
     class AutoSubPlayer(xbmc.Player):
         def onAVStarted(self):
@@ -855,6 +1058,14 @@ if xbmc is not None:
                 threading.Thread(target=autosub_on_play, daemon=True).start()
             except Exception:
                 pass
+        def onPlayBackStopped(self):
+            playback_over()
+
+        def onPlayBackEnded(self):
+            playback_over()
+
+        def onPlayBackError(self):
+            playback_over()
 
 
 def start_if_enabled():

@@ -1048,7 +1048,7 @@ def note_playback_streams(info, streams=None, final=False):
         try:
             def _is_he_label(n):
                 low = (n or '').strip().lower()
-                if not low:
+                if not low or is_external_stream(low):
                     return False
                 if _LANG_NORMALIZE.get(low, low[:2]) == 'he':
                     return True
@@ -1191,9 +1191,7 @@ def embedded_candidates(info):
     # Built-in Hebrew here too -> flag the release for everyone (deduped,
     # backgrounded). Covers users who open the picker with autosub off.
     try:
-        if any((_LANG_NORMALIZE.get((n or '').strip().lower(),
-                                    (n or '').strip().lower()[:2]) == 'he')
-               for n in streams):
+        if any(_stream_code(n) == 'he' for n in streams):
             from resources.lib import pool
             pool.report_embedded(info)
             try:
@@ -1208,9 +1206,9 @@ def embedded_candidates(info):
     out = []
     for idx, name in enumerate(streams):
         n = (name or '').strip().lower()
-        if not n:
+        if not n or is_external_stream(n):
             continue
-        code = _LANG_NORMALIZE.get(n, n[:2] if len(n) >= 2 else n)
+        code = _stream_code(n)
         if code == 'he':
             out.append({
                 'filename': 'תרגום מובנה בעברית · 101%',
@@ -1236,6 +1234,45 @@ def embedded_candidates(info):
                 '_engine_kind': 'embedded_other', '_pct': 0,
             })
     return out
+
+
+def _iso639_1(name):
+    """The 2-letter code of a stream's language as Kodi names it ('swe',
+    'rum', 'jpn'). The first two letters are another language for several of
+    them -- 'sw' is Swahili, 'ru' Russian, 'sl' Slovenian -- so a Swedish
+    embedded pick read nothing and a Romanian one was labelled Russian (review
+    of 0.3.82): through the ISO table the extractor matches tracks with."""
+    n = (name or '').strip().lower()
+    if len(n) == 3:
+        try:
+            from resources.lib.embedded_extract import _lang_key
+            k = _lang_key(n)
+            if len(k) == 2:
+                return k
+        except Exception:
+            pass
+        return n            # 'fil' is not Finnish, 'und' is not a language
+    return n[:2] if len(n) >= 2 else n
+
+
+# Kodi names a subtitle file it loaded beside the video "<name> (External)",
+# "(חיצוני)" in Hebrew -- when no language is read from the file name. One
+# loaded before the play-start snapshot (POV's own subtitle, a viewer's log of
+# 17 Nov 2026: 'POVSubs_tt22084616_he (חיצוני)') is in the snapshot, and the
+# Hebrew word alone made it "built-in Hebrew": the release was reported to the
+# pool as carrying a Hebrew track, and the list showed an "[מובנה] PO" row.
+_EXTERNAL_STREAM_RE = re.compile(r'\((?:external|חיצוני)\)\s*$', re.I)
+
+
+def is_external_stream(name):
+    """True for a stream Kodi marks as a subtitle file, not part of the video."""
+    return bool(_EXTERNAL_STREAM_RE.search(name or ''))
+
+
+def _stream_code(name):
+    """The code an embedded stream's row and pick go by."""
+    n = (name or '').strip().lower()
+    return _LANG_NORMALIZE.get(n) or _iso639_1(n)
 
 
 # Language-name -> ISO code for the buckets sort_subtitles produces by
@@ -1708,8 +1745,7 @@ def select_embedded(stream_index, lang=None):
             want = (lang or 'he').lower()
             target = next(
                 (i for i, name in enumerate(streams)
-                 if _LANG_NORMALIZE.get((name or '').strip().lower(),
-                                        (name or '').strip().lower()[:2]) == want),
+                 if _stream_code(name) == want),
                 int(stream_index))
         p.setSubtitleStream(target)
         p.showSubtitles(True)

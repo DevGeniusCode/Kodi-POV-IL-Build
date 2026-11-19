@@ -1742,6 +1742,14 @@ class _BlockClock(object):
         if self.until is None and not isinstance(cause, _IntegrityRejected):
             self.until = time.monotonic() + self.budget
 
+    def waited(self, seconds):
+        """`seconds` went on waiting for a busy model to take the request
+        again: not the chunk being slow, and not it fighting a block."""
+        if seconds > 0:
+            self.cap += seconds
+            if self.until is not None:
+                self.until += seconds
+
     def spent(self, grace=0.0):
         now = time.monotonic() - grace
         if now > self.cap:
@@ -2190,6 +2198,132 @@ def set_quiet(value):
     _QUIET = bool(value)
 
 
+# The model every install starts on, and the one a translation goes on with
+# when the viewer's own choice does not answer.
+_FALLBACK_MODEL = 'gemini-3.5-flash-lite'
+# How long a model that did not answer is passed over by the translations
+# that follow (seconds), by why: 'busy' a 5xx answer (two in a row for a
+# paid key), 'slow' no reply within the timeout, 'quota' its free requests for the day are spent,
+# 'gone' Google does not serve it to this key (404).
+_MODEL_OUT_S = {'busy': 600, 'slow': 600, 'quota': 3 * 3600, 'gone': 6 * 3600}
+_MODEL_OUT_PROP = 'povil.gemini.model_out.'
+# How long a chunk waits for a chosen (non-default) model's reply before it
+# counts as 'slow' (seconds; gemini.REQUEST_TIMEOUT, 90, for the default
+# model, which has nothing behind it).
+_CHOSEN_MODEL_TIMEOUT = 60
+
+
+def _model_out_key(model, api_key=''):
+    # per API key: another key has its own allowance and its own access
+    import hashlib
+    return '{0}{1}.{2}'.format(
+        _MODEL_OUT_PROP, model,
+        hashlib.sha256((api_key or '').encode('utf-8', 'replace')).hexdigest()[:10])
+
+
+def _model_out_note(model, why, now=None, api_key=''):
+    """Remember, for this Kodi session, that `model` did not answer."""
+    try:
+        import xbmcgui as _g
+        until = (time.time() if now is None else now) + _MODEL_OUT_S[why]
+        _g.Window(10000).setProperty(_model_out_key(model, api_key),
+                                     '{0:.0f}|{1}'.format(until, why))
+    except Exception:
+        pass
+
+
+def _model_out(model, now=None, api_key=''):
+    """Why `model` is being passed over right now, or ''."""
+    try:
+        import xbmcgui as _g
+        raw = _g.Window(10000).getProperty(_model_out_key(model, api_key)) or ''
+        until, _sep, why = raw.partition('|')
+        if why in _MODEL_OUT_S and float(until) > (
+                time.time() if now is None else now):
+            return why
+    except Exception:
+        pass
+    return ''
+
+
+def _model_label(model):
+    """'gemini-3.8-flash' -> '3.8 Flash', as the settings list names it."""
+    name = (model or '').strip()
+    if name.lower().startswith('gemini-'):
+        name = name[7:]
+    return ' '.join(part.capitalize() for part in name.split('-')) or 'Gemini'
+
+
+def _model_fallback_notice(chosen, why):
+    """Tell the viewer the translation is on another model than their pick.
+
+    A model Google no longer serves is theirs to change in the settings, so
+    that one is shown even during the automatic translation on play, which
+    shows no other toast (the abort it replaces was shown there too). A busy
+    model or a spent allowance passes on its own and stays a status."""
+    message = _model_fallback_message(chosen, why)
+    if why == 'gone':
+        try:
+            kodi_utils.notify(message, time_ms=6000)
+        except Exception:
+            pass
+    else:
+        _status(message, time_ms=5000)
+
+
+def _model_fallback_message(chosen, why, fallback=None):
+    old, new = _model_label(chosen), _model_label(fallback or _FALLBACK_MODEL)
+    return {
+        'gone': 'AI: המודל {0} כבר לא זמין אצל Google — מתרגם עם {1}. '
+                'אפשר להחליף מודל בהגדרות',
+        'quota': 'AI: נגמרה המכסה היומית של {0} — ממשיך עם {1}',
+    }.get(why, 'AI: {0} עמוס כרגע — ממשיך עם {1}').format(old, new)
+
+
+class _ModelFallback(object):
+    """Which model one translation asks.
+
+    A viewer who picked another model than the default got no AI at all when
+    that model did not answer: 503 after 503 through a five-step backoff
+    (230 s a chunk), or three 90 s timeouts, then Google Translate for
+    whatever was left -- "the subtitles arrive when the film ends" (field,
+    Nov 2026; that night every full Flash model answered 503 or nothing while
+    Flash-Lite answered in two seconds, and three ids in the settings list
+    were no longer served at all). The translation now goes on with the
+    default model, at once, and the ones that follow start on it for a while
+    (_MODEL_OUT_S). The default model itself has nothing to fall back to and
+    keeps the behaviour it had.
+    """
+
+    def __init__(self, chosen, fallback=_FALLBACK_MODEL, out=_model_out,
+                 note=_model_out_note, api_key=''):
+        self.chosen = (chosen or '').strip() or fallback
+        self.fallback = fallback
+        self._note = note
+        self._api_key = api_key or ''
+        self._lock = threading.Lock()
+        # why this translation is not on the chosen model ('' when it is)
+        self.why = (out(self.chosen, api_key=self._api_key)
+                    if self.chosen != fallback else '')
+        self.model = fallback if self.why else self.chosen
+
+    def give_up(self, asked, why):
+        """A request to `asked` failed for `why`. True: send it again at
+        once, self.model has (or already had) another model for it. False:
+        `asked` is the last model there is; the caller's own retries apply."""
+        with self._lock:
+            if asked != self.model:
+                return True          # another chunk switched meanwhile
+            if self.model == self.fallback:
+                return False
+            self.model, self.why = self.fallback, why
+        try:
+            self._note(self.chosen, why, api_key=self._api_key)
+        except Exception:
+            pass
+        return True
+
+
 def _status(msg, **kwargs):
     """Success / informational status. Suppressed during auto-on-play (the
     overlay shows it instead); a normal toast otherwise."""
@@ -2199,6 +2333,106 @@ def _status(msg, **kwargs):
         kodi_utils.notify(msg, **kwargs)
     except Exception:
         pass
+
+
+def _still_playing():
+    try:
+        import xbmc as _x
+        return bool(_x.Player().isPlayingVideo())
+    except Exception:
+        return False
+
+
+# The last embedded pick that produced nothing at all -- no track that could
+# be read, no external subtitle to translate instead. The automatic subtitle
+# says so on screen instead of only "no Hebrew subtitle" (a viewer's log, 17
+# Nov 2026: such a pick gave up in 2 s and the viewer could not tell why).
+_EMBEDDED_MISS = {}
+
+
+def _note_embedded_miss(reason):
+    if reason == 'busy':
+        return      # not a miss: the same track is being read already, and
+                    # its own toast says so (0.3.83)
+    try:
+        import xbmc as _xbmc
+        playing = _xbmc.Player().getPlayingFile() or ''
+    except Exception:
+        playing = ''
+    _EMBEDDED_MISS.clear()
+    _EMBEDDED_MISS.update({'reason': reason or '', 'at': time.time(),
+                           'file': playing})
+
+
+def embedded_miss_since(t0, playing_file=''):
+    """The reason ('no_index', 'no_text', 'not_mkv' or '' when unknown) of an
+    embedded pick that produced nothing at or after t0, for the file playing
+    (`playing_file`, when both sides know it: runs for two files can
+    overlap); None when there was none."""
+    miss = dict(_EMBEDDED_MISS)
+    if not miss or miss.get('at', 0) < t0:
+        return None
+    if playing_file and miss.get('file') and miss['file'] != playing_file:
+        return None
+    return miss.get('reason') or ''
+
+
+# A forced (signs-only) subtitle is no stand-in for the film's dialogue: QA
+# Kodi, 17 Nov 2026, Inception BDRip 2xUKR ENG SUB -- its Ukrainian embedded
+# track had no subtitle index, and the best-matching Ukrainian file, "Inception
+# (2010) BDRip. Forced", 12 lines, was translated as the film's subtitle.
+# Whole words only -- "The Force Awakens", "Air Force One", "Armed Forces" are
+# titles -- and never a word the playing title itself has ("Forced Entry").
+import re as _re_forced    # this module imports re inside functions only
+_FORCED_NAME_RE = _re_forced.compile(
+    r'(?<![^\W\d_])(?:forced|forcés?|forzad[oa]s?|форсов[^\W\d_]*)(?![^\W\d_])',
+    _re_forced.I)
+
+
+def _named_forced(name, title_text):
+    """True when `name` marks a forced subtitle and the title does not say
+    the same word."""
+    m = _FORCED_NAME_RE.search(name or '')
+    return bool(m) and m.group(0).lower() not in (title_text or '').lower()
+
+
+def _external_for_unreadable_embedded(info, lang):
+    """The 'AI translation' payload (type engine_ai) for the external subtitle
+    in `lang` -- else English -- that best matches the playing release, or
+    None. For an embedded track that cannot be read from the stream. A file
+    named as forced is never it."""
+    try:
+        from . import subsync, release_match
+        cands = subsync._oracle_candidates(info) or []
+    except Exception:
+        return None
+    try:
+        playing = subsync.playing_release(info) or ''
+    except Exception:
+        playing = ''
+    picked = (lang or 'en').lower()[:2]
+    title_text = ' '.join(str(info.get(k) or '') for k in (
+        'title', 'tvshow', 'picked_release', 'tagline')) + ' ' + playing
+    mine = [c for c in cands
+            if (c.get('language') or '').lower()[:2] in (picked, 'en')
+            and c.get('payload')
+            and not _named_forced(c.get('release') or '', title_text)]
+    if not mine:
+        return None
+
+    def rank(c):
+        # the picked language first (owner: "I picked English"), English only
+        # when it has none; within a language, the best match to the release
+        try:
+            pct = release_match.match_pct(playing, c.get('release') or '') if playing else 0
+        except Exception:
+            pct = 0
+        return ((c.get('language') or '').lower()[:2] == picked, pct)
+    best = max(mine, key=rank)
+    out = dict(best['payload'])
+    out['type'] = 'engine_ai'
+    out['src_lang'] = (best.get('language') or picked).lower()[:2]
+    return out
 
 
 def _playing_video_url(info):
@@ -2227,6 +2461,70 @@ def _playing_video_url(info):
     except Exception:
         pass
     return ''
+
+
+# External subtitles the single-shift check refused that are then tried
+# against SubSync's file proof, per language (each costs a planner run).
+_STAIRCASE_TRIES = 3
+
+
+def _embedded_staircase_source(info, playing, ref, rejected, abort):
+    """An external subtitle made for ANOTHER CUT of the film, re-timed onto
+    the embedded track by a map with one offset per act.
+
+    The align path accepts one shift (and one speed) for the whole file, so
+    a subtitle whose gap grows after every ad break is "not confident"
+    however good its text -- and the embedded text then has to be extracted,
+    hundreds of requests at the provider's pace. SubSync proves such maps
+    since 0.3.76 (a file named as a streaming rip whose text tracks come in
+    two or more languages: the map is learned from one track and the others
+    must accept it). Offline, on the timelines of three such files: of 12
+    subtitle timings a single shift could not align, the proven map aligned
+    11, and each then passed this path's own check as already synced.
+
+    `rejected`: [(release, text)] in the order tried. `ref`: the embedded
+    track's cue times the single-shift check used. Returns (text, release)
+    or (None, None). Reads nothing from the stream: it uses the file profile
+    SubSync cached at play start, and does nothing without one. Takes only a
+    verdict SubSync's own gates passed, applied by apply_verdict (which
+    re-checks the proof), and only when the result is then CONFIRMED against
+    `ref` -- the bar the "already synced" branch above sets."""
+    if not rejected:
+        return None, None
+    try:
+        from . import subsync
+        from . import sync_align
+        bundle = subsync._cached_reference_bundle(info)
+        if not (bundle and bundle.get('track_cues')):
+            return None, None
+        for release, text in rejected[:_STAIRCASE_TRIES]:
+            if abort():
+                return None, None
+            verdict = subsync._verify_file_bundle(bundle, text, playing)[0]
+            if not verdict or verdict.get('status') != sync_align.STATUS_FIXABLE:
+                continue
+            try:
+                aligned = sync_align.apply_verdict(text, verdict)
+            except Exception:
+                continue
+            if not aligned or aligned.count('-->') < 8:
+                continue
+            after = sync_align.verify_cues(ref, aligned)
+            if after.get('status') != sync_align.STATUS_CONFIRMED:
+                kodi_utils.log('embedded-align: %r mapped onto the file but not '
+                               'confirmed against the embedded track (%s)'
+                               % (release, after.get('diag')), level='INFO')
+                continue
+            kodi_utils.log('embedded-align: %r was made for another cut -- '
+                           're-timed by a proven map of %d part(s) (%s)'
+                           % (release, len(verdict.get('segments') or []),
+                              verdict.get('validation_proof')
+                              or 'second timing family'), level='INFO')
+            return aligned, release
+    except Exception as e:
+        kodi_utils.log('embedded-align: staircase check skipped: {0}'.format(e),
+                       level='WARNING')
+    return None, None
 
 
 def _embedded_aligned_source_srt(
@@ -2484,6 +2782,8 @@ def _embedded_aligned_source_srt(
             # download cap; _abort() (checked each iteration) enforces the 45s
             # deadline + pause/playback-end so the exhaustive search can't hang
             # the player.
+            _refused = []
+            _yielded = False
             for c in cands:
                 if _abort():
                     return None, None
@@ -2496,6 +2796,7 @@ def _embedded_aligned_source_srt(
                     kodi_utils.log('embedded-align: [%s] search time budget '
                                    'reached -- yielding to the English/fallback '
                                    'language' % lang, level='INFO')
+                    _yielded = True
                     break
                 try:
                     src_text = subsync._download_oracle(c.get('payload'))
@@ -2531,6 +2832,7 @@ def _embedded_aligned_source_srt(
                     kodi_utils.log('embedded-align: [%s] %r not confident (%s)'
                                    % (lang, c.get('release'),
                                       verdict.get('diag')), level='INFO')
+                    _refused.append((c.get('release') or '', src_text))
                 if aligned and aligned.count('-->') >= 8:
                     out = os.path.join(
                         kodi_utils.cache_dir(),
@@ -2542,6 +2844,23 @@ def _embedded_aligned_source_srt(
                                    'embedded cue ref, ~%d requests avoided)'
                                    % (lang, n, n), level='INFO')
                     return out, lang
+            # No subtitle of this language fits by one shift: one made for
+            # another cut may still fit by a map. Not when this language has
+            # already used up its share of the search time (the next language
+            # needs what is left).
+            aligned, _rel = (None, None) if _yielded else (
+                _embedded_staircase_source(info, playing, ref, _refused, _abort))
+            if aligned:
+                out = os.path.join(
+                    kodi_utils.cache_dir(),
+                    'embedded_aligned_{0}.srt'.format(lang or 'src'))
+                with open(out, 'w', encoding='utf-8') as f:
+                    f.write(aligned)
+                _p(100, 100, 'מוכן')
+                kodi_utils.log('embedded-align: synced %s source ready (%d '
+                               'embedded cue ref, ~%d requests avoided)'
+                               % (lang, n, n), level='INFO')
+                return out, lang
         kodi_utils.log('embedded-align: no source aligned in any language -- '
                        'deferring to full extract', level='INFO')
         return None, None
@@ -2550,8 +2869,16 @@ def _embedded_aligned_source_srt(
         return None, None
 
 
+# The picked language's embedded subtitle is a picture (PGS): the file's other
+# TEXT tracks are read instead, the best language for the AI first -- the order
+# the AI rows list languages in (the owner, 14 Nov 2026: "switch to an embedded
+# text subtitle, in the preferred language for AI translation"; no OCR).
+_EMBEDDED_TEXT_ORDER = ('en', 'es', 'de', 'fr', 'pt')
+
+
 def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
-                          progress_cb=None, allow_http=True):
+                          progress_cb=None, allow_http=True, steps=None,
+                          cancelled=None, why=None, reference=None):
     """Extract the playing file's embedded `src_lang` subtitle track to a temp
     SRT and return its path, or None. `deadline_s` bounds the extraction (default
     900s). Every current caller runs in the BACKGROUND -- the auto-on-play thread
@@ -2562,8 +2889,28 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
     timestamps, so the Hebrew translated from this file needs no re-sync. Fully
     guarded + fail-open: any problem returns None and resolve() lets the caller
     fall through to the external-subtitle path. Aborts if playback ends mid-
-    extraction (bandwidth hygiene)."""
+    extraction (bandwidth hygiene).
+    `steps` (an _EmbeddedSteps, a stream only): the track is read in windows
+    that start where the viewer is, and it is fed what has been read after
+    each. What is returned does not change.
+    `cancelled()`, if given, is True once the viewer has picked something
+    else; a wait for the player's buffer then ends the reading. `why`, a dict
+    if given, gets 'reason' = 'no_index' when the stream's index has no entry
+    for the subtitle lines (they cannot be read short of the whole file) or
+    'no_text' when `src_lang`'s subtitle in this file is a picture (PGS) and
+    the file has no other text subtitle; and 'lang_used' as soon as the track
+    is chosen -- another text track's, in _EMBEDDED_TEXT_ORDER, when
+    `src_lang`'s is a picture.
+    `reference(stats)`, if given: the track is read as a GENDER REFERENCE for
+    a translation (_embedded_reference), not as a subtitle the viewer picked
+    -- nothing is said on screen, no "stopped at N%" flag is left for a
+    picker, and the reading ends as soon as reference(stats) is true (a
+    provider too slow for a reference to be worth its requests)."""
     try:
+        # (a local name on purpose: every toast below, in the nested
+        # functions too, goes through it)
+        _status = ((lambda *a, **k: None) if reference is not None
+                   else globals()['_status'])
         url = _playing_video_url(info)
         if not url:
             kodi_utils.log('embedded: no probeable playing url', level='INFO')
@@ -2619,6 +2966,21 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     kodi_utils.log('embedded: another extraction already running '
                                    '-- skipping to avoid doubling the debrid load',
                                    level='INFO')
+                    # Not a failure (QA, 14 Nov 2026: the pick on play had
+                    # started this very job, and picking its row -- marked
+                    # current -- ended in "could not extract, try another
+                    # subtitle"). Say it is under way; the picker's failure
+                    # toast reads this flag and stays quiet.
+                    if why is not None:
+                        why['reason'] = 'busy'
+                    _status('AI: תרגום מובנה כבר רץ ברקע — העברית תופיע '
+                            'כשיסתיים', time_ms=5000)
+                    try:
+                        if reference is None:
+                            _win.setProperty('povil.embedded_partial',
+                                             'busy@%.0f' % time.time())
+                    except Exception:
+                        pass
                     return None
             _win.setProperty(_ACTIVE, str(_now))
 
@@ -2684,11 +3046,14 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # exactly when the crawl continues and the pace decays.
                 if (_xstats.get('pace') or 0.0) >= _RESUME_ABORT_PACE_S:
                     _hot['at'] = _tt.time()
+                if reference is not None and reference(_xstats):
+                    return True
                 p = _x.Player()
                 if not p.isPlayingVideo():
                     return True
                 if _x.getCondVisibility('Player.Paused'):
                     _stall['t'] = None
+                    _buf['trend'] = []
                     _pnow = _tt.time()
                     if _stall['paused_at'] is None:
                         _stall['paused_at'] = _pnow
@@ -2771,6 +3136,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                             _hold, ' (it has been throttling us)' if _hot_now
                             else '', _xstats.get('done') or 0,
                             _xstats.get('total') or 0), level='INFO')
+                    _release()
                     _until = now + _hold
                     while _tt.time() < _until:
                         try:
@@ -2781,25 +3147,355 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                         _tt.sleep(1.0)
                     # Not an abort: the pass carries on with everything it has
                     # already banked, and the stall guard below still watches
-                    # the picture for the contention this cannot prevent.
+                    # the picture for the contention this cannot prevent --
+                    # and the buffer gate decides whether to read now.
                     _stall['t'] = None
+                    if _remote and _buffer_stand_aside(p):
+                        return True
                     return False
-                try:
-                    cur = p.getTime()
-                except Exception:
+                frozen = _clock_frozen(p, now)
+                if frozen is None:
                     return False
-                if _stall['t'] is None or abs(cur - _stall['t']) > 0.4:
-                    _stall['t'] = cur
-                    _stall['since'] = now
-                    return False
-                if _stall['since'] and (now - _stall['since']) > _STALL_ABORT_S:
-                    kodi_utils.log('embedded: player stalled >{0}s -- aborting '
-                                   'extraction to free the debrid token'
-                                   .format(_STALL_ABORT_S), level='WARNING')
+                if frozen:
+                    _log_stalled()
+                    return True
+                if _remote and _buffer_stand_aside(p):
                     return True
                 return False
             except Exception:
                 return False
+
+        def _clock_frozen(p, now):
+            """None when the clock cannot be read; True once the picture (playing,
+            not paused) has not moved for more than _STALL_ABORT_S."""
+            try:
+                cur = p.getTime()
+            except Exception:
+                return None
+            if _stall['t'] is None or abs(cur - _stall['t']) > 0.4:
+                _stall['t'] = cur
+                _stall['since'] = now
+                return False
+            return bool(_stall['since']
+                        and (now - _stall['since']) > _STALL_ABORT_S)
+
+        def _log_stalled():
+            kodi_utils.log('embedded: player stalled >{0}s -- aborting '
+                           'extraction to free the debrid token'
+                           .format(_STALL_ABORT_S), level='WARNING')
+
+        # The player's own buffer. The stall guard acts once the picture has
+        # ALREADY frozen, and then it throws the reading away. QA (TorBox,
+        # 13-14 Nov 2026): the picture froze in most evening runs with an
+        # extraction, and in a quiet night hour the provider also froze it in
+        # runs where nothing else touched the link; with the provider well,
+        # nothing the reading does -- not even 3.3 MB in two requests at a
+        # jump -- slowed the player's refill (24 trials). So the reading
+        # cannot cause a provider's bad minutes, but it can stay out of the
+        # way during them and survive them: read only while the player's
+        # buffer is stocked; once it runs low, close the connection and send
+        # nothing -- through a frozen picture too -- until it is stocked
+        # again, then carry on.
+        # Kodi reports the buffer two ways: how full its read-ahead cache is
+        # (Player.CacheLevel, %) and how much film that is (cachepercentage -
+        # percentage of the running time). Either one is enough: a small cache
+        # under a heavy file is full at a few seconds of film, the build's
+        # 128 MB one holds minutes. Measured in QA (TorBox, night): full ~10 s
+        # after a start or a jump, ~100 s of film ahead.
+        _BUF_READY_S = 30.0      # read with this much film ahead...
+        _BUF_READY_LEVEL = 90    # ...or with the cache this full
+        _BUF_LOW_S = 15.0        # stand aside below this much film...
+        _BUF_LOW_LEVEL = 50      # ...with the cache below this
+        # A buffer that fills slowly but steadily -- a provider a little
+        # faster than the film -- may never reach the marks above while the
+        # film plays on. After this much film played without a stop, with at
+        # least _BUF_LOW_S ahead and not falling, the wait ends too (review
+        # of 0.3.81: otherwise such a pick waited out the limit and gave up a
+        # reading 0.3.80 would have finished).
+        _BUF_STEADY_S = 20.0
+        # ...with this much ahead: a little over the low mark, so the first
+        # requests after it do not put the wait straight back (review)
+        _BUF_STEADY_AHEAD_S = 20.0
+        _BUF_HOLD_MAX_S = 180.0  # not stocked again by then: stop, progress saved
+        _BUF_NOINFO_S = 10.0     # this much film played with nothing reported:
+        #                          Kodi keeps no buffer here -- the guard alone
+        _BUF_FAILS_OFF = 5       # unreadable this many times running: the guard alone
+        # Falling: while we read, the film playing on and Kodi's cache not
+        # full, the buffer lost this much film within _BUF_FALL_SPAN_S -- the
+        # provider is giving the player less than the film needs, and our
+        # requests take a share of what it gives (QA 14 Nov 2026 05:08: after
+        # a jump the buffer refilled to 32 s; in the 19 s we then read, 3 MB,
+        # it fell to 15 s -- the low mark -- and the film never recovered).
+        _BUF_FALL_S = 3.0
+        _BUF_FALL_SPAN_S = 5.0
+        # ...but not with this much film in hand: minutes ahead leave time to
+        # see whether the fall goes on (review)
+        _BUF_FALL_CEILING_S = 120.0
+        _buf = {'hold': True, 'known': False, 'off': False, 'fails': 0,
+                'at': None, 'm': None, 'trend': []}
+        _t_start = {'at': None}      # when the reading began (monotonic)
+
+        def _player_buffer():
+            """(seconds of film ahead, cache fill %, seconds of film left) or
+            None if unreadable -- also for a JSON-RPC error reply, which is not
+            an empty buffer."""
+            try:
+                import json as _j
+                import xbmc as _x
+                lvl = (_x.getInfoLabel('Player.CacheLevel') or '').strip()
+                reply = _j.loads(_x.executeJSONRPC(_j.dumps({
+                    'jsonrpc': '2.0', 'id': 1,
+                    'method': 'Player.GetProperties',
+                    'params': {'playerid': 1, 'properties': [
+                        'percentage', 'cachepercentage', 'totaltime']}}))
+                    or '{}')
+                res = reply.get('result') if isinstance(reply, dict) else None
+                if not isinstance(res, dict) or 'cachepercentage' not in res:
+                    return None
+                tt = res.get('totaltime') or {}
+                total = (((tt.get('hours') or 0) * 60 + (tt.get('minutes') or 0))
+                         * 60 + (tt.get('seconds') or 0))
+                pct = float(res.get('percentage') or 0.0)
+                ahead = ((float(res.get('cachepercentage') or 0.0) - pct)
+                         / 100.0 * total)
+                rest = max(0.0, (100.0 - pct) / 100.0 * total)
+                return (max(0.0, ahead), (int(lvl) if lvl.isdigit() else 0),
+                        rest)
+            except Exception:
+                return None
+
+        def _buffer_reading():
+            """The player's buffer, asked at most about once a second (the
+            check runs before every request and in every second of the pace
+            sleeps). None = no reading this time; _BUF_FAILS_OFF of those in
+            a row switch the gate off."""
+            import time as _tt
+            mono = _tt.monotonic()
+            if _buf['at'] is not None and mono - _buf['at'] < 0.9:
+                return _buf['m']
+            m = _player_buffer()
+            _buf['at'], _buf['m'] = mono, m
+            if m is not None:
+                _buf['fails'] = 0
+                return m
+            _buf['fails'] += 1
+            if _buf['fails'] >= _BUF_FAILS_OFF and not _buf['off']:
+                _buf['off'] = True
+                _buf['hold'] = False
+                kodi_utils.log('embedded: the player\'s buffer cannot be read '
+                               '-- reading with the stall guard only',
+                               level='INFO')
+            return None
+
+        def _release():
+            # Not even an idle connection: one we are not using is still one
+            # more on the provider's count for this link. The next request
+            # opens a fresh one.
+            try:
+                _rel = _xstats.get('release')
+                if _rel:
+                    _rel()
+            except Exception:
+                pass
+
+        def _to_the_end(ahead, rest):
+            # Kodi's cache already reaches the end of the film: from here the
+            # seconds ahead ARE the rest of the film and fall with it, and
+            # the cache % falls too (review: a pick in the last minutes of an
+            # episode read as "falling" and gave up on a healthy provider).
+            return rest > 0 and ahead >= rest - 2.0
+
+        def _falling(p, ahead, lvl):
+            """While reading: has the buffer lost _BUF_FALL_S of film in the
+            last _BUF_FALL_SPAN_S, with the film playing steadily (it moved
+            as far as the clock did) and Kodi's cache not full? One entry per
+            fresh reading; anything else (a pause, a jump) starts it over."""
+            at = _buf['at']
+            tr = _buf['trend']
+            if tr and tr[-1][3] == at:
+                return False                 # the same reading again
+            try:
+                film = p.getTime()
+            except Exception:
+                return False
+            import time as _tt
+            mono = _tt.monotonic()
+            # Played on = the film moved as far as the clock over the whole
+            # trend, give or take 1.5 s (Kodi's play time moves in steps,
+            # and a poll can be late behind a busy interpreter: review).
+            if tr and abs((film - tr[0][1]) - (mono - tr[0][0])) > 1.5:
+                tr[:] = []                   # stood or jumped: start over
+            tr.append((mono, film, ahead, at, lvl))
+            while tr and mono - tr[0][0] > _BUF_FALL_SPAN_S + 1.5:
+                tr.pop(0)
+            return (lvl < _BUF_READY_LEVEL and ahead < _BUF_FALL_CEILING_S
+                    and mono - tr[0][0] >= _BUF_FALL_SPAN_S - 0.5
+                    and tr[0][2] - ahead >= _BUF_FALL_S)
+
+        def _buffer_stand_aside(p):
+            """With the picture playing: wait here, sending nothing, while the
+            player's buffer is low or falling. True = stop the extraction."""
+            if _buf['off']:
+                return False
+            m = _buffer_reading()
+            if m is None:
+                return False
+            ahead, lvl, rest = m
+            if ahead >= 0.5 or lvl > 0:
+                _buf['known'] = True
+            if _to_the_end(ahead, rest):
+                _buf['hold'] = False
+                _buf['trend'] = []
+                return False
+            if _buf['hold']:
+                if ahead >= _BUF_READY_S or lvl >= _BUF_READY_LEVEL:
+                    _buf['hold'] = False
+                    _buf['trend'] = []
+                    return False
+                why = 'is not stocked yet'
+            elif ahead < _BUF_LOW_S and lvl < _BUF_LOW_LEVEL:
+                _buf['hold'] = True
+                why = 'ran low'
+            elif _falling(p, ahead, lvl):
+                _buf['hold'] = True
+                why = 'is falling'
+            else:
+                return False
+            seed = [(e[0], e[2], e[4]) for e in _buf['trend']]
+            _buf['trend'] = []
+            import time as _tt
+            t_hold = _tt.monotonic()
+            # Never past the extraction's own deadline: the single-extraction
+            # flag is reclaimed as stale after deadline + 120 s.
+            _began = _t_start['at'] if _t_start['at'] is not None else t_hold
+            limit = min(_BUF_HOLD_MAX_S,
+                        max(0.0, deadline_s - (t_hold - _began)))
+            frozen_said = False
+            try:
+                film0 = p.getTime()
+            except Exception:
+                film0 = None
+            steady_from = film0          # where the film last stood or jumped
+            steady_mono = t_hold
+            # (monotonic, seconds ahead, %), ~10 s -- a fall carries on
+            # from the readings that showed it
+            seen = seed if why == 'is falling' else []
+            _release()
+            kodi_utils.log(
+                'embedded: the player\'s buffer {0} ({1:.0f}s of film ahead, '
+                'cache {2}%) -- connection closed, sending nothing until it '
+                'holds {3:.0f}s or {4}%'.format(why, ahead, lvl, _BUF_READY_S,
+                                                _BUF_READY_LEVEL),
+                level='INFO')
+            while True:
+                _tt.sleep(1.0)
+                try:
+                    if not p.isPlayingVideo():
+                        return True
+                    if cancelled is not None and cancelled():
+                        # the viewer has picked something else: the reading
+                        # is not wanted (and a new pick would be refused
+                        # while this one holds the single-extraction flag)
+                        kodi_utils.log('embedded: the pick was replaced while '
+                                       'waiting for the player\'s buffer -- '
+                                       'stopping', level='INFO')
+                        return True
+                    import xbmc as _x
+                    paused = bool(_x.getCondVisibility('Player.Paused'))
+                except Exception:
+                    return True
+                # A freeze sat out here is never counted after the wait.
+                if paused:
+                    _stall['t'] = None
+                    if why == 'is not stocked yet':
+                        # The pause branch takes over (reading while paused
+                        # is allowed, as before -- a pick from the subtitle
+                        # list starts paused); the hold stays set for the
+                        # moment the picture moves again.
+                        return False
+                    # A viewer who pauses a picture that ran short is letting
+                    # the player refill: stay out of its way (review).
+                now = _tt.time()
+                mono = _tt.monotonic()
+                # A frozen picture here is not ours to answer for: we send
+                # nothing and hold no connection. Stopping would throw away
+                # the reading and give the player nothing back; it was what
+                # made the extraction "not work on TorBox" (QA 13-14 Nov 2026:
+                # the provider froze the picture in runs where nothing else
+                # touched the link). So wait on, within the limit.
+                if (not paused and _clock_frozen(p, now)
+                        and not frozen_said):
+                    frozen_said = True
+                    kodi_utils.log('embedded: the picture is frozen while we '
+                                   'send nothing -- waiting for the provider '
+                                   'to serve the player again', level='INFO')
+                try:
+                    film = p.getTime()
+                except Exception:
+                    film = None
+                # Played steadily = the film moved as far as the clock since
+                # the count began, give or take 1.5 s -- over the window, not
+                # per poll: Kodi's play time moves in steps, and a poll can
+                # take seconds behind a busy interpreter (review).
+                if (film is None or steady_from is None
+                        or abs((film - steady_from) - (mono - steady_mono)) > 1.5):
+                    steady_from, steady_mono = film, mono   # count again
+                m = _buffer_reading()
+                if m is None and _buf['off']:
+                    _stall['t'] = None
+                    return False
+                if m is not None:
+                    ahead, lvl, rest = m
+                    seen.append((mono, ahead, lvl))
+                    seen = [s for s in seen if mono - s[0] <= 10.5]
+                    if ahead >= 0.5 or lvl > 0:
+                        _buf['known'] = True
+                    elif not _buf['known'] and film0 is not None:
+                        played = (film - film0) if film is not None else 0.0
+                        if played >= _BUF_NOINFO_S:
+                            _buf['off'] = True
+                            _buf['hold'] = False
+                            _stall['t'] = None
+                            kodi_utils.log('embedded: the player reports no '
+                                           'buffer -- reading with the stall '
+                                           'guard only', level='INFO')
+                            return False
+                    still_falling = (len(seen) > 1
+                                     and mono - seen[0][0] >= _BUF_FALL_SPAN_S - 0.5
+                                     and seen[0][1] - ahead >= _BUF_FALL_S
+                                     and lvl < _BUF_READY_LEVEL
+                                     and ahead < _BUF_FALL_CEILING_S)
+                    stocked = (_to_the_end(ahead, rest)
+                               or ((ahead >= _BUF_READY_S
+                                    or lvl >= _BUF_READY_LEVEL)
+                                   and not still_falling))
+                    # Steady: in film seconds, or -- a cache too small for
+                    # that much of a heavy file -- in how full it is.
+                    steady = (film is not None and steady_from is not None
+                              and mono - steady_mono >= _BUF_STEADY_S
+                              and ((ahead >= _BUF_STEADY_AHEAD_S
+                                    and ahead >= seen[0][1] - 1.0)
+                                   or (lvl >= _BUF_LOW_LEVEL
+                                       and lvl >= seen[0][2] - 2)))
+                    if stocked or steady:
+                        _buf['hold'] = False
+                        # The clock may still be standing for a moment while
+                        # the player picks up again: measure a freeze from
+                        # here, not from one we sat out.
+                        _stall['t'] = None
+                        kodi_utils.log(
+                            'embedded: the player\'s buffer is {0} after '
+                            '{1:.0f}s ({2:.0f}s of film ahead, cache {3}%) -- '
+                            'reading'.format('back' if stocked else 'steady',
+                                             mono - t_hold, ahead, lvl),
+                            level='INFO')
+                        return False
+                if mono - t_hold > limit:
+                    kodi_utils.log(
+                        'embedded: the player\'s buffer did not fill in {0:.0f}s '
+                        '-- stopping the extraction for the film\'s sake'
+                        .format(limit), level='WARNING')
+                    return True
 
         # Automatic/direct modes may extract from a live debrid/HTTP stream.
         # Over HTTP the extractor uses ONE keep-alive connection, paced requests
@@ -2817,8 +3513,9 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # start over -- exactly today's behaviour. Local files skip it; a local
         # pass is a single cheap sequential walk with nothing to carry.
         try:
-            import xbmcgui as _g0
-            _g0.Window(10000).clearProperty('povil.embedded_partial')
+            if reference is None:
+                import xbmcgui as _g0
+                _g0.Window(10000).clearProperty('povil.embedded_partial')
         except Exception:
             pass
         _resume = None
@@ -2857,6 +3554,11 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
             # _status, NOT kodi_utils.notify: auto-on-play runs this whole path
             # in quiet mode precisely so it stays silent, and a raw notify()
             # bypasses that and pops toasts for something the user never picked.
+            if steps is not None and getattr(steps, 'on_screen', False):
+                # Hebrew is on screen: the reading needs no bar and no
+                # toasts (the handler closes the bar on every view, and a
+                # tick here opened it again -- it blinked; review)
+                return
             try:
                 if total and done > 0:
                     import time as _tt
@@ -2884,11 +3586,35 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     pass
 
         try:
+            _t_start['at'] = time.monotonic()
+            def _on_track(used):
+                # The track is chosen: when it is another language's text
+                # track (src_lang's is a picture), say so NOW, while the first
+                # Hebrew lines are being read -- not after the whole track.
+                why['lang_used'] = used
+                try:
+                    if (embedded_extract._lang_key(used)
+                            != embedded_extract._lang_key(src_lang)):
+                        kodi_utils.log(
+                            'embedded_ai: the {0} embedded subtitle is a '
+                            'picture, not text -- reading the {1} embedded '
+                            'track instead'.format(src_lang, used), level='INFO')
+                        _status('AI: הכתובית המובנית ב{0} היא תמונה ולא טקסט — '
+                                'מתרגם מהכתובית המובנית ב{1}'.format(
+                                    _lang_display_he(src_lang),
+                                    _lang_display_he(used)), time_ms=6000)
+                except Exception:
+                    pass
+
             srt_text = embedded_extract.extract_srt(
                 url, track_num=track_num, lang=src_lang,
                 allow_http=_allow_http, deadline_s=deadline_s,
                 abort_cb=_should_abort, progress_cb=_progress,
                 resume_path=_resume, stats=_xstats,
+                other_text=(_EMBEDDED_TEXT_ORDER if why is not None else None),
+                on_track=(_on_track if why is not None else None),
+                steps=((steps.window, steps.feed, steps.timeline, steps.moved)
+                       if (steps is not None and _remote) else None),
                 log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                              level='INFO'))
         finally:
@@ -2897,6 +3623,10 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     _win.clearProperty(_ACTIVE)
                 except Exception:
                     pass
+        if why is not None and _xstats.get('why'):
+            why['reason'] = _xstats.get('why')
+        if reference is None and isinstance(_xstats.get('tracks'), list):
+            _remember_tracks(url, _xstats['tracks'])
         if not srt_text or srt_text.count('-->') < 3:
             # Say WHICH of the two this was. "Could not extract -- try another
             # subtitle" is wrong and actively harmful when the pass actually
@@ -2925,7 +3655,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # flag to the same condition as the message keeps the two
                 # honest, and the timestamp bounds anything that still slips
                 # through -- a picker consumes it within seconds, never later.
-                if not _QUIET:
+                if not _QUIET and reference is None:
                     try:
                         import time as _tt
                         import xbmcgui as _g
@@ -2937,7 +3667,9 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                         pass
                 return None
             kodi_utils.log(
-                'embedded: no usable text track for {0}'.format(src_lang),
+                'embedded: no usable text track for {0}{1}'.format(
+                    src_lang, (' ({0})'.format(_xstats['why'])
+                               if _xstats.get('why') else '')),
                 level='INFO')
             return None
         out = os.path.join(kodi_utils.cache_dir(),
@@ -2949,6 +3681,1066 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         return out
     except Exception as e:
         kodi_utils.log('embedded extract failed: {0}'.format(e),
+                       level='WARNING')
+        return None
+
+
+# --- A gender reference from inside the playing file ------------------------
+#
+# 15 Nov 2026, the pool's own numbers (tr_events, 14 days, 1,079 AI
+# translations): 343 had no gender reference, 267 of them because no provider
+# had a subtitle in any reference language at all -- fresh episodes and titles
+# nobody subtitled. 187 of the 343 were translated from an EMBEDDED track, and
+# a file that carries an English text track very often carries Spanish,
+# Portuguese, Arabic, French ... beside it: human subtitles of the same cut,
+# on the same clock. They are read like the source track was (same extractor,
+# same guards for the player), one track, quietly, and only where the
+# provider serves a track in seconds: a reading that would take longer than
+# _EMB_REF_BUDGET_S in all is given up after _EMB_REF_PROBE_S.
+#
+# Blind study 008 (15 Nov 2026): a Spanish track of the file as the reference
+# against no reference, 8-10-2 -- no gain, so second-tier tracks stay out
+# (arabic_gender._EMBEDDED_REF_LANGS). ON since 0.3.88 for an ARABIC track,
+# by the owner's word without a study of its own (Arabic is the foreign
+# oracle the reference was measured on; the file's track is on the file's
+# clock), and only for a translation made from the file's own track -- that
+# job reads the stream already; any other translation asks the playing file
+# nothing. The setting (no row in the settings screen) turns it off.
+_EMB_REF_SETTING = 'embedded_reference'
+_EMB_REF_DEFAULT = True
+# The subtitle tracks of the file a source track was just extracted from,
+# as its extraction parsed them: the reference asks no second read of the
+# file's head (2 MB in one request, beside the player) to learn whether an
+# Arabic track is there -- for most files it is not (review, 0.3.88).
+_EMB_TRACKS = {}
+_EMB_TRACKS_KEEP = 2
+
+
+def _remember_tracks(url, tracks):
+    try:
+        _EMB_TRACKS.pop(url, None)
+        _EMB_TRACKS[url] = [dict(t) for t in tracks if isinstance(t, dict)]
+        while len(_EMB_TRACKS) > _EMB_TRACKS_KEEP:
+            _EMB_TRACKS.pop(next(iter(_EMB_TRACKS)))
+    except Exception:
+        pass
+_EMB_REF_DEADLINE_S = 120.0
+_EMB_REF_PROBE_S = 15.0
+_EMB_REF_BUDGET_S = 90.0
+
+
+def _embedded_reference(info, source_lang, cancelled=None):
+    """(tracks, read) for arabic_gender.begin(embedded=...), or None when the
+    playing file may not be read for a reference (the setting, the embedded
+    mode, no direct stream). tracks() lists the file's text subtitle tracks
+    that are not `source_lang`'s; read(track) returns one as SRT text or
+    None. Never raises."""
+    try:
+        if not kodi_utils.get_bool(_EMB_REF_SETTING, _EMB_REF_DEFAULT):
+            return None
+        policy = _embedded_translation_policy()
+        url = _playing_video_url(info)
+        if not url or not policy.get('enabled'):
+            return None
+        remote = '://' in url
+        if remote and not policy.get('allow_http'):
+            return None
+        from . import embedded_extract
+        own = embedded_extract._lang_key(source_lang)
+    except Exception:
+        return None
+
+    def tracks():
+        found = _EMB_TRACKS.get(url)
+        if found is None:
+            # no extraction of this file in this process (an external
+            # subtitle laid on the track's cue times): the head is read
+            try:
+                found = embedded_extract.probe_tracks(
+                    url, log=lambda m: kodi_utils.log('embedded_extract: ' + m,
+                                                      level='INFO'))
+            except Exception:
+                found = []
+        return [t for t in found
+                if t.get('is_text') and not t.get('forced')
+                and not t.get('signs')
+                and embedded_extract._lang_key(t.get('lang')) != own]
+
+    slow = {'said': False}
+
+    def read(track):
+        if slow['said']:
+            # the provider's pace, not the track's: the next language of the
+            # same file would be given up the same way, 15 s later (QA Kodi,
+            # 15 Nov 2026: French, then Italian)
+            return None
+        started = time.monotonic()
+
+        def too_slow(stats):
+            spent = time.monotonic() - started
+            if spent < _EMB_REF_PROBE_S:
+                return False
+            done, total = stats.get('done') or 0, stats.get('total') or 0
+            if not done or not total:
+                late = spent >= 2 * _EMB_REF_PROBE_S
+            else:
+                late = spent * total / done > _EMB_REF_BUDGET_S
+            if late and not slow['said']:
+                slow['said'] = True
+                kodi_utils.log(
+                    'embedded reference: {0} of {1} line(s) of the {2} track '
+                    'in {3:.0f}s -- too slow here for a reference, the '
+                    'other tracks of the file are not tried'.format(
+                        done, total or '?', track.get('lang'), spent),
+                    level='INFO')
+            return late
+
+        try:
+            path = _extract_embedded_srt(
+                info, embedded_extract._lang_key(track.get('lang')),
+                track_num=track.get('num'), deadline_s=_EMB_REF_DEADLINE_S,
+                allow_http=True, cancelled=cancelled, reference=too_slow)
+            if path and os.path.isfile(path):
+                with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                    return f.read()
+        except Exception as e:
+            kodi_utils.log('embedded reference: {0}'.format(e), level='INFO')
+        return None
+
+    return tracks, read
+
+
+# --- An embedded track shown in steps while it is still being read ---------
+#
+# Field report (Nov 2026): "extracting the embedded subtitle takes half the
+# film before any translation shows". Nothing could be translated before the
+# last cue was read: one request a cue, at the pace a strict provider
+# tolerates -- 169 s for a 40-minute episode with no player competing, and in
+# Kodi during playback the same stream gave 4 cues a second in one play and
+# 0.7 in another (QA Kodi, 13 Nov 2026).
+#
+# So the track is read in windows that start where the viewer IS (embedded_
+# extract.extract_srt steps=), and the lines of each window go to the model
+# while the next window is read. Nothing here is the translation that is kept:
+# it is a view, held in memory, of lines the full job translates again once
+# the whole track is in -- no cache file, no pool, no telemetry, no proofread,
+# never Google's text. The first attempt at this (pulled from 0.3.79 in
+# review) ran each step through resolve() and failed on exactly those side
+# effects, and on the viewer's handler dropping every event after the first
+# step's because each step came with a source id of its own.
+
+# Read in steps only a film at least this long (seconds).
+_STEPS_MIN_DURATION_S = 15 * 60
+# The first window: from the viewer's position this far ahead (ms)...
+_STEPS_FIRST_MS = 150 * 1000
+# ...but not fewer cues than this (a quiet stretch must not make it an empty
+# window: the first Hebrew line is what the viewer is waiting for), nor more
+# (dense dialogue: the wait for that first line is counted in cues).
+_STEPS_FIRST_MIN_CUES = 15
+_STEPS_FIRST_MAX_CUES = 60
+# Every window after it is sized from what the last one measured, in CUES:
+# a cue is a request, a minute of film is not (a quiet minute is read in no
+# time and a window sized by it then swallowed a quarter of an hour; review
+# of the first draft of this, 0.3.80). The next window is as many cues as can
+# be read in this share of the lead the view has now -- the time until the
+# viewer reaches the first line that has not been read.
+_STEPS_USE_OF_LEAD = 0.6
+# Never fewer than this (a provider slower than the film cannot be kept ahead
+# of; small windows at least keep lines arriving)...
+_STEPS_MIN_CUES = 10
+# ...and never more than this many times the window before it (one fast
+# window is not a measurement to bet a long read on).
+_STEPS_GROW_MAX = 8
+# A window that took less than this, or held fewer cues than this, measures
+# nothing (it was read by an earlier attempt, or is too small to time).
+_STEPS_MEASURE_MIN_S = 2.0
+_STEPS_MEASURE_MIN_CUES = 5
+# A window that would leave fewer cues than this ahead takes them too.
+_STEPS_TAIL_CUES = 5
+# A window starts this far BEHIND the viewer: the line being spoken now.
+_STEPS_BEHIND_MS = 15 * 1000
+# Cues a request.
+_STEPS_CHUNK = 50
+# Requests a cue may be part of without coming back.
+_STEPS_TRIES = 2
+# Requests in a row that brought nothing: stop asking (the full job follows
+# and has its own retries and fallbacks).
+_STEPS_GIVE_UP = 3
+# Requests the views may make for one pick: they come on top of the full
+# translation, which translates the same lines again. With the track read in
+# minutes they were up to +40% of a regular translation's requests (QA, 14 Nov
+# 2026: Interstellar 12 on 54 chunks, Fight Club 9 on 39, Game of Thrones 4 on
+# 10); read in seconds, two windows (~100 lines ahead of the viewer) carry the
+# picture until the full job's chunks arrive. A jump earns one more (moved()).
+# The owner: an embedded pick must not cost more quota than a regular one.
+_STEPS_MAX_REQUESTS = 2
+# ...unless the track comes in a line a request. A TorBox "store" node
+# answers only the first range of many, so the reading goes at the pace the
+# provider tolerates for single requests: ~2.5 lines a second, thirteen
+# minutes for a film of 1,900 lines (field log, 15 Nov 2026, The Odyssey
+# 2160p). The two views are ~80 lines, six or seven minutes of film; after
+# them the viewer read the source language until the full job could start.
+# So while the reading still has at least _STEPS_SLOW_LEFT_S to go at the
+# rate measured, one more request may go out each time the Hebrew ahead of
+# the viewer is down to _STEPS_SLOW_LEAD_MS, at most _STEPS_SLOW_MAX for a
+# pick. Such a request carries _STEPS_SLOW_CHUNK lines, not _STEPS_CHUNK: a
+# request is what the quota counts, and fifty lines of dense dialogue are two
+# minutes of film -- in the QA Kodi (Fight Club, 15 Nov 2026) the rule fired
+# again 36 s after it had fired. A hundred lines are five to eight minutes:
+# one or two such requests for the thirteen minutes that film took to read.
+# A track read in seconds earns none.
+_STEPS_SLOW_LEFT_S = 60.0
+_STEPS_SLOW_LEAD_MS = 120 * 1000
+_STEPS_SLOW_MAX = 6
+_STEPS_SLOW_CHUNK = 100
+# A step's request is answered in seconds or not worth waiting for.
+_STEPS_TIMEOUT = 45
+# The whole track in before the first view's answer: how long after the
+# request went out to wait for it (see _EmbeddedSteps.settle). An answer
+# normally lands ~8 s after it is sent; past this, the full translation's first
+# lines come about as fast (review).
+_STEPS_SETTLE_S = 12.0
+# How often the view is checked against the viewer's position (seconds), and
+# how far past its last line the viewer may be before the embedded track is
+# put back (ms).
+_STEPS_WATCH_S = 2.0
+_STEPS_PAST_END_MS = 1000
+# The embedded track goes back when the viewer will reach a line not read
+# before the next check (ms: the watcher's period and a margin)...
+_STEPS_HAND_BACK_MS = 2500
+# ...and the view comes (back) only with at least this much film read ahead
+# of the viewer: with less, a provider about as fast as the film switched
+# the subtitle back and forth on every window (ms).
+_STEPS_SHOW_LEAD_MS = 20 * 1000
+
+
+def _thinking_params(raw, for_model):
+    """(thinking level, thinking budget) for `for_model` from the stored
+    'thinking_budget' setting."""
+    level, budget = None, None
+    if raw in ('minimal', 'low', 'medium', 'high'):
+        level = raw
+    else:
+        try:
+            budget = int(raw)
+        except (TypeError, ValueError):
+            budget = 0
+        if budget <= 0:
+            budget = None
+    if budget and for_model.lower().startswith('gemini-3.'):
+        if budget <= 512:
+            level = 'minimal'
+        elif budget <= 768:
+            level = 'low'
+        elif budget <= 1024:
+            level = 'medium'
+        else:
+            level = 'high'
+        budget = None
+    return level, budget
+
+
+def _srt_start_ms(block):
+    """A cue's start in ms, or None."""
+    for line in (block or '').split('\n')[:3]:
+        if '-->' in line:
+            try:
+                hh, mm, rest = line.split('-->')[0].strip().replace(
+                    '.', ',').split(':')
+                ss, ms = rest.split(',')
+                return ((int(hh) * 60 + int(mm)) * 60 + int(ss)) * 1000 + int(ms)
+            except Exception:
+                return None
+    return None
+
+
+def _unique_starts(blocks):
+    """Each block's start (ms), None where it has none or shares it with
+    another block: a start is what ties a line of the view to a line of the
+    full translation, so it has to name one line."""
+    starts = [_srt_start_ms(b) for b in blocks]
+    count = {}
+    for s in starts:
+        count[s] = count.get(s, 0) + 1
+    return [s if (s is not None and count[s] == 1) else None for s in starts]
+
+
+def _block_with_text(block, text):
+    """`block` with its number and times and `text` as its lines."""
+    lines = (block or '').strip('\n').split('\n')
+    at = next((i for i, line in enumerate(lines[:3]) if '-->' in line), None)
+    if at is None or not text:
+        return block
+    return '\n'.join(lines[:at + 1] + [text])
+
+
+def _has_hebrew(text):
+    return any('֐' <= ch <= '׿' for ch in (text or ''))
+
+
+def _with_steps_preview(blocks, he):
+    """`blocks` (source cues the full job has not translated yet) with the
+    Hebrew the viewer already has for them. `he` is {start ms: text}."""
+    if not he:
+        return list(blocks)
+    return [_block_with_text(b, he.get(_srt_start_ms(b))) for b in blocks]
+
+
+def _ms_label(ms):
+    ms = int(ms or 0)
+    return '%d:%02d' % (ms // 60000, ms // 1000 % 60)
+
+
+class _EmbeddedSteps(object):
+    """What the viewer is shown while an embedded track is still being read.
+
+    The extractor calls timeline() once with every cue's start, window() for
+    the next span to read and feed() with everything read so far; a worker
+    thread puts the new lines into Hebrew, the ones nearest ahead of the
+    viewer first, while the reading goes on. show(text) gets the whole view
+    -- Hebrew where there is some, the source line where not -- every time it
+    changes.
+
+    The view takes the embedded track's place on screen, and that track has
+    every line of the film while the view has only what was read -- a stretch
+    from where the viewer picked it, and another after every jump. Which
+    lines were read is known one by one (the timeline has every line; a
+    window, once fed, is read whole). So:
+    - the view is shown only when at least 20 s of film from the viewer on
+      have been read and there is a Hebrew line in that stretch;
+    - when the viewer is about to reach a line not read while the reading
+      goes on (a provider slower than the film, a jump ahead, a jump back to
+      before the pick), `restore()` puts the embedded track back, the next
+      window starts there (moved() cuts the one being read), and the view
+      returns by the rule above;
+    - back_out() puts it back when the reading is given up.
+
+    `translate(blocks, before)` returns {index: Hebrew text, or '' for a cue
+    the model answered without Hebrew}, {} when the request failed, None to
+    stop asking for good. `position()` is the viewer's place in ms or None.
+    finish() ends it and returns {start ms: Hebrew text}; no view is shown
+    after it returns."""
+
+    def __init__(self, position, translate, show, restore=None, log=None,
+                 clock=time.time):
+        self._position = position
+        self._translate = translate
+        self._show = show
+        self._restore = restore
+        self._log = log or (lambda message: None)
+        self._clock = clock
+        self._lock = threading.Lock()          # the cues and their Hebrew
+        self._show_lock = threading.Lock()     # one view at a time
+        self._cues = []                        # every cue's start, the whole film
+        self._blocks = []                      # source cues read so far, by time
+        self._starts = []                      # _unique_starts(self._blocks)
+        self._he = {}                          # start -> Hebrew text
+        self._kept = set()                     # starts answered without Hebrew
+        self._tries = {}                       # start -> requests that failed
+        self._read = set()                     # starts of every line fed
+        self._covered = []                     # (from, until) of every window fed
+        self._asked_span = None                # the window being read
+        self._asked_at_viewer = False          # ...from the viewer's own line
+        self._cut = False                      # it was cut short by a jump
+        self._read_before = 0                  # lines read when it was asked for
+        self._moved_at = 0.0                   # moved(): asked at most 2x a second
+        self._frozen = False                   # the last feed: nothing more to ask
+        self._mark = None                      # the last window's end (ms)
+        self._count = 0                        # lines the last window had to read
+        self._asked = 0.0                      # when it was asked for
+        self._rate = 0.0                       # cues read a second, last measured
+        self._view_end = None                  # start of the view's last cue
+        self._closed = False
+        self._dead = translate is None
+        self._stop = threading.Event()
+        self._wake = threading.Event()
+        self._idle = threading.Event()         # no request out (see settle)
+        self._idle.set()
+        self._sent_at = 0.0                    # when the last request went out
+        self._thread = None
+        self._watcher = None
+        self.shown = False                     # a view was shown at least once
+        self.on_screen = False                 # the view is what the player shows
+        self.windows = 0
+        self.requests = 0
+        self._budget = _STEPS_MAX_REQUESTS     # requests the views may make
+        self.slow_requests = 0                 # ...earned by a slow reading
+        self.handed_back = 0
+
+    # -- the extractor's side
+
+    def timeline(self, starts_ms):
+        """Every cue's start (ms of film), before the first window."""
+        self._cues = sorted(int(s) for s in starts_ms)
+
+    def window(self):
+        """(from, until) in ms of film for the next read, or None when what
+        is left should be read in one go."""
+        import bisect
+        cues = self._cues
+        if self._closed or not cues:
+            return None
+        pos = self._position()
+        if pos is None:
+            return None
+        now = self._clock()
+        low = max(0, pos - _STEPS_BEHIND_MS)
+        with self._lock:
+            need = self._need(pos)
+            first = self._run_end(need)
+        if first >= len(cues):
+            # everything from the viewer on is read; what is behind is read
+            # by the complete pass
+            return None
+        spent = now - self._asked
+        lines = self._count
+        if self._cut:
+            # a window cut short read only part of its lines: measured by
+            # those (a provider the film overtakes is cut too, and that is
+            # exactly when the rate matters; review)
+            self._cut = False
+            with self._lock:
+                lines = len(self._read) - self._read_before
+        if (lines >= _STEPS_MEASURE_MIN_CUES
+                and spent >= _STEPS_MEASURE_MIN_S):
+            self._rate = lines / spent
+        if first == need:
+            # Nothing read ahead of the viewer: the first window, a jump
+            # (either way) into a stretch not read, or a provider slower than
+            # the film. From here, and small: the viewer is waiting.
+            in_time = bisect.bisect_right(cues, pos + _STEPS_FIRST_MS) - first
+            count = max(_STEPS_FIRST_MIN_CUES,
+                        min(in_time, _STEPS_FIRST_MAX_CUES))
+        else:
+            # Lines read from the viewer on, up to cues[first]: the next
+            # window continues there (not after the last window -- after a
+            # jump back that is far ahead, and everything between would be
+            # read in one window before anything new is shown; review).
+            if self._rate > 0:
+                # until the viewer reaches the first line that was not read
+                lead_s = max(0, cues[first] - pos) / 1000.0
+                count = int(_STEPS_USE_OF_LEAD * self._rate * lead_s)
+            else:
+                count = 2 * self._count
+            count = max(_STEPS_MIN_CUES, min(
+                count, _STEPS_GROW_MAX * max(self._count, _STEPS_MIN_CUES)))
+        last = first + count - 1
+        if last >= len(cues) - 1 - _STEPS_TAIL_CUES:
+            # everything ahead of the viewer; what is behind is read last
+            last = len(cues) - 1
+        # +1: the span's end is turned into the file's ticks and back
+        mark = cues[last] + 1
+        with self._lock:
+            # what the extractor will actually fetch: the lines in the span
+            # not read yet (the measured rate is per line fetched)
+            count = sum(1 for c in cues[bisect.bisect_left(cues, low):last + 1]
+                        if not self._is_read(c))
+            self._asked_span = (low, mark)
+            self._asked_at_viewer = first == need
+            self._read_before = len(self._read)
+        self._mark, self._count, self._asked = mark, count, now
+        self.windows += 1
+        return (low, mark)
+
+    def moved(self):
+        """Asked by the extractor between clusters while a window is read:
+        has the viewer jumped where this window does not help -- before it or
+        past its end, onto a line not read? Then the window is cut short and
+        the next one starts from the viewer. Its span is not counted as read
+        (only the lines that came in are).
+
+        Inside the window too, when it is one that carries on from lines read
+        earlier: nothing of a window is in the view before its end, and such
+        a window is as long as the provider allows -- on one that reads a
+        line a request, everything left ahead, five minutes and more (field
+        log, 15 Nov 2026: a jump ahead inside it, and the embedded track was
+        on screen until the viewer jumped again). Cut, it hands over what it
+        has read, and the next window is a small one from the viewer -- one
+        that is waited for, not cut (it was asked for at the viewer's own
+        line), so no window is cut twice for one place. Only a jump out of
+        the window earns a request; the lines at the new place inside it
+        are asked for by the rule for a slow reading (_earns_slow)."""
+        span = self._asked_span
+        if span is None or self._closed or not self._cues:
+            return False
+        now = self._clock()
+        if now - self._moved_at < 0.5:
+            return False
+        self._moved_at = now
+        pos = self._position()
+        if pos is None:
+            return False
+        low, mark = span
+        inside = low <= pos <= mark
+        if inside and self._asked_at_viewer:
+            return False
+        with self._lock:
+            need = self._need(pos)
+            if need >= len(self._cues) or self._is_read(self._cues[need]):
+                return False
+            self._asked_span = None
+            self._cut = True
+            if not inside:
+                # the new place earns one view of its own (_STEPS_MAX_REQUESTS).
+                # (A viewer who PLAYS past a window's end is "out" too; what
+                # keeps that from repeating is the window sizing -- a window
+                # asked for at the viewer's line is small and waited for --
+                # and LineARequest's slower-than-the-film test holds it to
+                # the ceiling.)
+                self._budget = max(self._budget, self.requests + 1)
+            # (A cut from inside earns nothing here: it needs no jump -- a
+            # viewer who plays on past the lines a slow provider has handed
+            # over is cut too, again and again, and each cut would have
+            # bought a request outside every ceiling; review of 0.3.85. The
+            # request for the new place is _earns_slow's, which counts.)
+        if inside:
+            self._log('embedded steps: the viewer is at a line the window '
+                      'being read has not handed over (at %s) -- cutting it '
+                      'short' % _ms_label(pos))
+        else:
+            self._log('embedded steps: the viewer jumped out of the window '
+                      'being read (to %s) -- cutting it short' % _ms_label(pos))
+        return True
+
+    # -- what was read (under _lock)
+
+    def _is_read(self, start):
+        return start in self._read or any(
+            low <= start <= high for low, high in self._covered)
+
+    def _need(self, pos):
+        """Index in the timeline of the line the viewer is at or reaches
+        next."""
+        import bisect
+        return bisect.bisect_left(self._cues, pos - _STEPS_PAST_END_MS)
+
+    def _run_end(self, index):
+        """Index of the first line not read, from `index` on."""
+        cues = self._cues
+        while index < len(cues) and self._is_read(cues[index]):
+            index += 1
+        return index
+
+    def _lead(self, pos):
+        """ms until the viewer reaches a line not read: -1 when the line
+        the viewer is at was not read, None when everything from there on
+        was."""
+        if not self._cues:
+            # no timeline: the view's last line is all there is to go by
+            if self._view_end is None:
+                return None
+            return self._view_end + _STEPS_PAST_END_MS - pos
+        need = self._need(pos)
+        end = self._run_end(need)
+        if end >= len(self._cues):
+            return None
+        if end == need:
+            return -1
+        return self._cues[end] - pos
+
+    def _hebrew_ahead(self, pos):
+        """A Hebrew line in the stretch read from where the viewer is."""
+        if not self._cues:
+            return any(start >= pos for start in self._he)
+        need = self._need(pos)
+        end = self._run_end(need)
+        if end <= need:
+            return False
+        low, high = pos - _STEPS_PAST_END_MS, self._cues[end - 1]
+        return any(low <= start <= high for start in self._he)
+
+    def _may_show(self, pos):
+        lead = self._lead(pos)
+        return ((lead is None or lead >= _STEPS_SHOW_LEAD_MS)
+                and self._hebrew_ahead(pos))
+
+    def feed(self, srt_text, translate=True):
+        """Everything read so far, as SRT, after a window. `translate`
+        False: the whole track, as the reading ends -- shown, not asked for
+        (the full translation is about to start; review)."""
+        if self._closed:
+            return
+        blocks = srt.parse_blocks(srt_text or '')
+        starts = _unique_starts(blocks)
+        read = set(s for s in (_srt_start_ms(b) for b in blocks)
+                   if s is not None)
+        with self._lock:
+            self._blocks, self._starts, self._read = blocks, starts, read
+            if self._asked_span is not None:
+                self._covered.append(self._asked_span)
+                self._asked_span = None
+            if not translate:
+                self._frozen = True
+        self._view()
+        if self._dead or not translate:
+            return
+        if self._thread is None:
+            self._thread = threading.Thread(
+                target=self._run, name='povil-embedded-steps')
+            self._thread.daemon = True
+            self._thread.start()
+        self._wake.set()
+
+    def settle(self, cancelled=None, timeout=None):
+        """The whole track is in (the last feed froze new requests). When no
+        view is up yet but a window's request is out, wait for its answer: it
+        is the lines the viewer reaches next, and the full translation's first
+        lines take as long again (QA, 14 Nov 2026, South Park S04E04 MULTI
+        BluRay: the track was read in 5.5 s, the first window's answer was
+        dropped, and the first Hebrew line came at +24 s, not +12 s). At most
+        _STEPS_SETTLE_S from when the request went out, and not past a
+        replaced pick (`cancelled`). Returns whether it waited."""
+        if self.shown or self._dead or self._idle.is_set():
+            return False
+        limit = timeout if timeout is not None else _STEPS_SETTLE_S
+        until = self._sent_at + limit
+        while not self._idle.is_set():
+            left = until - time.time()
+            if left <= 0:
+                break
+            try:
+                if cancelled is not None and cancelled():
+                    break
+            except Exception:
+                pass
+            self._idle.wait(min(0.5, left))
+        return True
+
+    def finish(self):
+        """The reading is over (the whole track is in): no more views."""
+        self._stop.set()
+        self._wake.set()
+        with self._show_lock:
+            self._closed = True
+        with self._lock:
+            return dict(self._he)
+
+    def back_out(self):
+        """The reading was given up: the view covers only what was read, so
+        the embedded track goes back on screen (as before there were views).
+        Call after finish()."""
+        with self._show_lock:
+            self._hand_back('the reading stopped')
+
+    # -- the worker
+
+    def _earns_slow(self, pos, pending_start):
+        """Under _lock, with the budget spent: may one more request go out
+        (see _STEPS_SLOW_LEFT_S)? `pending_start`: the first line from the
+        viewer on that is read and has no Hebrew."""
+        if (pos is None or self._rate <= 0 or not self._cues
+                or self.slow_requests >= _STEPS_SLOW_MAX
+                or pending_start - pos > _STEPS_SLOW_LEAD_MS):
+            return False
+        left = sum(1 for c in self._cues if not self._is_read(c))
+        if left < self._rate * _STEPS_SLOW_LEFT_S:
+            return False              # the full job starts within the minute
+        self.slow_requests += 1
+        self._budget = self.requests + 1
+        self._log('embedded steps: {0} line(s) still to read at {1:.1f} a '
+                  'second, and the Hebrew ends {2} s ahead of the viewer -- '
+                  'one more request ({3} of {4})'.format(
+                      left, self._rate, max(0, pending_start - pos) // 1000,
+                      self.slow_requests, _STEPS_SLOW_MAX))
+        return True
+
+    def _next_batch(self):
+        with self._lock:
+            if self._frozen or (self.requests >= self._budget and (
+                    self._rate <= 0
+                    or self.slow_requests >= _STEPS_SLOW_MAX)):
+                return None
+            pos = self._position()
+            # The lines the viewer reaches next, wherever the reading started
+            # (a resumed film, a seek, an attempt carried on) -- and only
+            # those: a line behind the viewer is left to the full
+            # translation, which costs no request more (review: translating
+            # them too doubled the default model's requests for a film).
+            pending = [i for i, s in enumerate(self._starts)
+                       if s is not None and s not in self._he
+                       and s not in self._kept
+                       and self._tries.get(s, 0) < _STEPS_TRIES
+                       and (pos is None or s >= pos - _STEPS_BEHIND_MS)]
+            if not pending:
+                return None
+            size = _STEPS_CHUNK
+            if self.requests >= self._budget:
+                if not self._earns_slow(pos, self._starts[pending[0]]):
+                    return None
+                size = _STEPS_SLOW_CHUNK
+            take = pending[:size]
+            before = [srt.block_text_only(b)
+                      for b in self._blocks[max(0, take[0] - 3):take[0]]]
+            # a request is about to go out: settle() waits from here (under
+            # the lock, so the last feed cannot slip between; review)
+            self._idle.clear()
+            self._sent_at = time.time()
+            return ([self._starts[i] for i in take],
+                    [self._blocks[i] for i in take],
+                    [line for line in before if line])
+
+    def _run(self):
+        failed = 0
+        while not self._stop.is_set() and not self._dead:
+            batch = self._next_batch()
+            if not batch:
+                self._wake.clear()
+                self._wake.wait(2.0)
+                continue
+            starts, blocks, before = batch
+            try:
+                if self._stop.is_set():
+                    return
+                self.requests += 1
+                try:
+                    got = self._translate(blocks, before)
+                except Exception as e:
+                    self._log('embedded steps: request failed: {0}'.format(e))
+                    got = {}
+                if self._stop.is_set():
+                    return
+                if got is None:
+                    self._dead = True
+                    self._log('embedded steps: no more requests -- the lines '
+                              'keep their source text until the full '
+                              'translation')
+                    return
+                with self._lock:
+                    for i, start in enumerate(starts):
+                        if got.get(i):
+                            self._he[start] = got[i]
+                        elif i in got:
+                            self._kept.add(start)
+                        else:
+                            self._tries[start] = self._tries.get(start, 0) + 1
+                if any(got.values()):
+                    failed = 0
+                    self._view()
+                    continue
+            finally:
+                self._idle.set()
+            failed += 1
+            if failed >= _STEPS_GIVE_UP:
+                self._dead = True
+                self._log('embedded steps: {0} requests in a row brought '
+                          'nothing -- stopped asking'.format(failed))
+                return
+            self._stop.wait(5.0)
+
+    def _view(self):
+        with self._show_lock:
+            if self._closed:
+                return
+            with self._lock:
+                if not self._he:
+                    return
+                if not self.on_screen:
+                    # Showing the view takes the embedded track off the
+                    # screen. Not before the line the viewer is at has been
+                    # read and the stretch read from there has Hebrew (QA
+                    # Kodi: a jump to minute 20 while minutes 0-2.5 were
+                    # being read left the viewer with a subtitle that had
+                    # nothing in it from there on).
+                    pos = self._position()
+                    if pos is None or not self._may_show(pos):
+                        # (no position: the player is going -- nothing to
+                        # show it on)
+                        return
+                source = list(self._blocks)
+                blocks = [_block_with_text(b, self._he[s]) if s in self._he
+                          else b for b, s in zip(self._blocks, self._starts)]
+                ends = [s for s in (_srt_start_ms(b) for b in source[-3:])
+                        if s is not None]
+            try:
+                self._show(_preview_clean(blocks, srt.stitch_blocks(source)))
+                self.shown = self.on_screen = True
+                self._view_end = max(ends) if ends else None
+            except Exception as e:
+                self._log('embedded steps: could not show the view: {0}'
+                          .format(e))
+                return
+            if self._watcher is None and self._restore is not None:
+                self._watcher = threading.Thread(
+                    target=self._watch, name='povil-embedded-steps-watch')
+                self._watcher.daemon = True
+                self._watcher.start()
+
+    # -- the embedded track back on screen
+
+    def _hand_back(self, why):
+        """Under _show_lock."""
+        if not self.on_screen or self._restore is None:
+            return
+        try:
+            self._restore()
+            self.on_screen = False
+            self.handed_back += 1
+            self._log('embedded steps: {0} -- the embedded track is back on '
+                      'screen'.format(why))
+        except Exception as e:
+            self._log('embedded steps: could not put the embedded track '
+                      'back: {0}'.format(e))
+
+    def _watch(self):
+        while not self._stop.wait(_STEPS_WATCH_S):
+            self.check()
+
+    def check(self):
+        """The viewer is about to reach a line not read while the track is
+        still being read (past the view's end, or a jump into a stretch not
+        read): the embedded track has that line, the view does not. And the
+        other way: the embedded track is on screen and the viewer is back in
+        a stretch the view has in Hebrew (a jump back, then forward again) --
+        the view returns now, not at the next window's end (review)."""
+        with self._show_lock:
+            if self._closed:
+                return
+            if self.on_screen:
+                pos = self._position()
+                if pos is None:
+                    return
+                with self._lock:
+                    lead = self._lead(pos)
+                if lead is not None and lead < _STEPS_HAND_BACK_MS:
+                    self._hand_back('the viewer is about to reach a line not '
+                                    'read')
+                return
+        if self.shown:
+            self._view()          # takes _show_lock itself; _may_show decides
+
+
+class _StepsScreen(object):
+    """Where the views of an embedded track read in steps go, and what the
+    full job's own events must look like after them.
+
+    The viewer's handler (default.py on_phase) ties everything it shows to
+    ONE source id: it adopts the id of the first 'first_ready' it is handed
+    and drops any 'chunk_ready' or 'done' that carries another. The full job
+    computes its id from the complete source file, which does not exist while
+    the views are being shown -- so every view carries an id made from the
+    pick, and after a view the full job reports under that id too (the job
+    takes it as its own progressive id, and handler() rewrites any event that
+    still carries another). Without that the screen froze on the first view:
+    nothing after it passed the handler, not even the finished translation
+    (review of the first attempt, 0.3.79).
+
+    With no handler (the on-play pick) the view is written to one of two
+    alternating files and handed to the player from here."""
+
+    def __init__(self, link, release, handler, selection):
+        import hashlib as _hashlib
+        self.source_id = 'steps' + _hashlib.sha1(
+            (link or '').encode('utf-8')).hexdigest()[:11]
+        self._release = release or ''
+        self._handler = handler
+        self._selection = selection
+        self._slot = 'b'
+        self.shown = False
+
+    def show(self, text):
+        first, self.shown = not self.shown, True
+        if self._handler is not None:
+            if first:
+                _status('AI: הדקות הקרובות מתורגמות, ההמשך בדרך',
+                        time_ms=4000)
+                self._handler('first_ready', {
+                    'fallback_text': text, 'source_id': self.source_id,
+                    'release': self._release})
+            self._handler('chunk_ready', {
+                'completed': 0, 'total': 0, 'merged_text': text,
+                'source_id': self.source_id, 'release': self._release})
+            return
+        self._slot = 'b' if self._slot == 'a' else 'a'
+        rel = kodi_utils.safe_release_filename(self._release)
+        path = os.path.join(
+            kodi_utils.cache_dir(),
+            ('{0}.{1}.he.srt'.format(rel, self._slot) if rel else
+             'progressive_{0}_{1}.he.srt'.format(self.source_id, self._slot)))
+        with open(path + '.aitmp', 'w', encoding='utf-8') as f:
+            f.write(text)
+        os.replace(path + '.aitmp', path)
+        kodi_utils.apply_subtitle_file(path, selection=self._selection,
+                                       abandon_on_failure=False)
+
+    def handler(self):
+        """The callback the full job reports to: the caller's own while
+        nothing was shown, else one that keeps the views' source id."""
+        inner = self._handler
+        if inner is None or not self.shown:
+            return inner
+        source_id = self.source_id
+
+        def same_source(phase, data):
+            data = dict(data or {})
+            if data.get('source_id'):
+                data['source_id'] = source_id
+            return inner(phase, data)
+
+        return same_source
+
+
+def _steps_translator(info, source_lang, cancelled):
+    """translate(blocks, before) for _EmbeddedSteps, or None when there is
+    nothing to ask (no key, or the viewer chose Google as the translator: the
+    view never carries Google's text).
+
+    Always the default model, whatever model is chosen: it answers in
+    seconds and has the requests to spare, and a chosen full Flash model has
+    twenty a day. One request a batch, one more after a busy answer; anything
+    else leaves the lines in their source language -- the full job has the
+    retries, the fallbacks and the checks."""
+    try:
+        if (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
+            return None
+        api_key = kodi_utils.get_setting('api_key', '')
+        if not api_key:
+            return None
+        model = _FALLBACK_MODEL
+        chosen = (kodi_utils.get_setting('model', _FALLBACK_MODEL)
+                  or _FALLBACK_MODEL)
+        level, budget = _thinking_params(
+            (kodi_utils.get_setting('thinking_budget', 'medium')
+             or 'medium').strip().lower(), model)
+        temperature = kodi_utils.get_float('temperature', 1.0)
+        top_p = kodi_utils.get_float('top_p', 0.95)
+        if kodi_utils.get_bool('ai_paid_mode', False):
+            rpm = kodi_utils.get_int('gemini_rpm', 0)
+            interval = (60.0 / rpm) if rpm > 0 else 0.0
+        else:
+            cap = _gemini_free_rpm_cap(model)
+            interval = 60.0 / max(1, min(
+                kodi_utils.get_int('gemini_rpm', cap), cap))
+    except Exception as e:
+        kodi_utils.log('embedded steps: no translator: {0}'.format(e),
+                       level='WARNING')
+        return None
+    state = {'template': None}
+
+    def _template():
+        if state['template'] is None:
+            imdb_id = (info.get('imdb_id') or '').strip()
+            season = info.get('season') or ''
+            episode = info.get('episode') or ''
+            try:
+                cast, title, year = _title_cast(info, imdb_id, season, episode)
+            except Exception:
+                cast, title, year = [], info.get('title') or '', info.get(
+                    'year') or ''
+            state['template'] = prompt.build(
+                source_lang=(source_lang() if callable(source_lang)
+                             else source_lang),
+                title=title, year=year, cast=cast,
+                is_episode=info.get('is_episode', False),
+                tvshow=info.get('tvshow', ''), season=season, episode=episode,
+                numbered=False)
+        return state['template']
+
+    def translate(blocks, before):
+        nums = [b.lstrip().split('\n', 1)[0].strip() for b in blocks]
+        full = (_template()
+                .replace('{prev_context_block}',
+                         prompt.build_prev_context_block(before))
+                .replace('{entry_count}', str(len(blocks)))
+                .replace('{first_num}', nums[0] if nums else '?')
+                .replace('{last_num}', nums[-1] if nums else '?')
+                .replace('{chunk}', '\n\n'.join(blocks)))
+        reply = None
+        for attempt in (0, 1):
+            if cancelled():
+                return None
+            _gemini_rate_gate(interval)
+            if cancelled():
+                # the gate can hold a request for seconds
+                return None
+            try:
+                reply = gemini.generate(
+                    api_key=api_key, model=model, prompt=full,
+                    temperature=temperature, max_output_tokens=16384,
+                    top_p=top_p, thinking_budget=budget, thinking_level=level,
+                    timeout=_STEPS_TIMEOUT, count_usage=(chosen == model))
+                break
+            except (gemini.QuotaExceeded, gemini.InvalidKey,
+                    gemini.ModelUnavailable) as e:
+                kodi_utils.log('embedded steps: {0}'.format(e), level='INFO')
+                return None
+            except gemini.OverloadError:
+                if attempt:
+                    return {}
+                time.sleep(5)
+            except gemini.GeminiError as e:
+                kodi_utils.log('embedded steps: {0}'.format(e), level='INFO')
+                return {}
+        if not reply:
+            return {}
+        # A reply is matched to its cue by the cue's START, which the request
+        # carried and the model copies back: a reply renumbered from 1 would
+        # otherwise put its Hebrew under other cues (review, 0.3.80). A reply
+        # block with no readable time falls back to its number.
+        by_start, by_num = {}, {}
+        for block in srt.parse_blocks(reply):
+            start = _srt_start_ms(block)
+            text = srt.block_text_only(block)
+            if start is not None:
+                by_start.setdefault(start, text)
+            else:
+                first = block.lstrip().split('\n', 1)[0].strip()
+                if first.isdigit():
+                    by_num.setdefault(first, text)
+        out = {}
+        for i, block in enumerate(blocks):
+            start = _srt_start_ms(block)
+            if start in by_start:
+                text = by_start[start]
+            elif nums[i] in by_num:
+                text = by_num[nums[i]]
+            else:
+                continue
+            out[i] = text if _has_hebrew(text) else ''
+        return out
+
+    return translate
+
+
+def _embedded_steps(info, lang, show, cancelled, restore=None):
+    """An _EmbeddedSteps for the playing film, or None when it should be
+    read in one pass as before: not a stream, or under fifteen minutes."""
+    try:
+        if '://' not in (_playing_video_url(info) or ''):
+            return None
+        import xbmc as _x
+
+        def position():
+            try:
+                p = _x.Player()
+                if not p.isPlayingVideo():
+                    return None
+                return int(float(p.getTime()) * 1000.0)
+            except Exception:
+                return None
+
+        duration = float(_x.Player().getTotalTime() or 0.0)
+        if duration < _STEPS_MIN_DURATION_S or position() is None:
+            return None
+        made = {}
+
+        def stopped():
+            # the pick was replaced, or the reading is over (finish()): a busy
+            # answer's retry is not sent then either (review)
+            steps = made.get('steps')
+            return bool(cancelled() or (steps is not None
+                                        and steps._stop.is_set()))
+
+        translator = _steps_translator(info, lang, stopped)
+        if translator is None:
+            # no view can come (no key, or Google is the translator): read
+            # in one pass, as before -- windows would only cost passes
+            return None
+        made['steps'] = _EmbeddedSteps(
+            position, translator, show,
+            restore=restore, log=lambda m: kodi_utils.log(m, level='INFO'))
+        return made['steps']
+    except Exception as e:
+        kodi_utils.log('embedded steps skipped: {0}'.format(e),
                        level='WARNING')
         return None
 
@@ -3098,6 +4890,10 @@ def _gp_saved(path):
 # last search found a human Hebrew subtitle: the reference search takes
 # Hebrew first (an Arabic one may still have won when the Hebrew did not
 # align; the search cannot tell).
+# Since 0.3.88 such a translation IS proofread, by gemini-4-hydrogen alone
+# (gender_proofread.HEBREW_REF_MODELS; blind study 007: 13-3-3 where the
+# models above had 12-15-3 and 19-8-3). What is asked here is therefore no
+# longer "proofread or not" but "which models" (_gp_models).
 
 def _gp_ref_marker(path):
     return path + '.gpref'
@@ -3213,12 +5009,24 @@ def _gp_settle(markers, report, stopped):
             _gp_try_mark(m, False)
 
 
-def _gp_models_left():
-    """Whether a proofread model still has quota today."""
+def _gp_models(hebrew_ref=False):
+    """The proofread's models for a translation: gemini-4-hydrogen alone for
+    one made with a Hebrew gender reference."""
+    from . import gender_proofread
+    return (gender_proofread.HEBREW_REF_MODELS if hebrew_ref
+            else gender_proofread.MODELS)
+
+
+def _gp_models_left(hebrew_ref=False):
+    """Whether a proofread model (_gp_models) still has quota today -- and AI is the chosen mode at
+    all: with "Google Translate" or "no translation" chosen nothing is proofread (0.3.96; a translation
+    from the cache or the pool was, and the viewer saw Gemini's "busy")."""
     try:
+        if (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
+            return False
         from . import gender_proofread
         return any(not gender_proofread.exhausted_today(m, kodi_utils)
-                   for m in gender_proofread.MODELS)
+                   for m in _gp_models(hebrew_ref))
     except Exception:
         return False
 
@@ -3228,8 +5036,9 @@ def _proofread_due(path, source_text, progressive_cb, marker=None,
     """Whether an opened translation gets the proofread now: from the list
     (a live preview to swap in), the setting on, a key, not proofread before
     (`marker`, else `path`), AI-made (not Google, not a Hebrew source passed
-    through), not made with a Hebrew gender reference (`info`: the title, for
-    one of unknown origin made with a reference) and a model with quota left. `source_text` None:
+    through) and a model with quota left -- gemini-4-hydrogen alone for one
+    made with a Hebrew gender reference (`info`: the title, for one of
+    unknown origin made with a reference). `source_text` None:
     all of it but the source (before looking for one). `held`: the
     in-progress marker is the caller's own, or not a reason here."""
     try:
@@ -3244,9 +5053,7 @@ def _proofread_due(path, source_text, progressive_cb, marker=None,
                          and not _is_mostly_hebrew(source_text, min_ratio=0.60)))):
             return False
         if _gp_hebrew_ref(path, info):
-            kodi_utils.log('gender proofread: not run -- this translation was '
-                           'made with a Hebrew reference', level='INFO')
-            return False
+            return bool(_gp_models_left(True))
         return bool(_gp_models_left())
     except Exception:
         return False
@@ -3304,7 +5111,10 @@ def _gp_why(report, fails, stopped):
 # gemini-3.7-flash, all but one refused with 503, then QuotaExceeded), so the
 # rounds cost no more than the one round they replace: the job asks every
 # model once, then one model a round (in turn from the last, skipping one out
-# of today's quota), _GP_BUSY_ROUNDS times -- six requests at most.
+# of today's quota), _GP_BUSY_ROUNDS times -- six requests at most; four with
+# 0.3.75's one model, five with 0.3.79's two (gemini-4-hydrogen, then
+# gemini-3.7-flash). Still no answer: the service asks
+# again later (gp_later), one request at a time.
 _GP_BUSY_WAIT = 120
 _GP_BUSY_WAIT_MAX = 480
 _GP_BUSY_ROUNDS = 3
@@ -3312,15 +5122,18 @@ _GP_JOB_BUDGET = 1800
 
 
 def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
-                          background=False):
+                          background=False, rounds=True, hebrew_ref=False):
     """(blocks with gender_proofread's corrections applied, report). The
     blocks come back as they are when no model answers. `src_text` is the
     prepared source the blocks were translated from; `model` the translator's
     (the usage counter holds that one only). `background`: nothing waits for
-    it (_GP_BUSY_WAIT). Never raises."""
+    it (_GP_BUSY_WAIT). `rounds` False: one request a model, no busy rounds
+    (gp_later's ask again). `hebrew_ref`: the translation was made with a
+    Hebrew gender reference (_gp_models). Never raises."""
     report = {}
     try:
         from . import gender_proofread
+        _models = _gp_models(hebrew_ref)
         # no new model after this: a viewer waits for the swap (a background
         # proofread has longer)
         _start = time.monotonic()
@@ -3331,6 +5144,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
         _tries = [1 if background else 2]
 
         _asked = [False]   # a request went out (the markers pause after one)
+        _net = [False]     # a connection failed (the queue keeps it: gp_later)
         _fails = []        # why each model did not answer (report['why'])
         _cut = [False]     # the viewer's stop cut the proofread short
 
@@ -3384,6 +5198,8 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
                         # a second request for this proofread
                         raise gender_proofread.Spent(proof_model)
                     # refused unread, a retired model id: the next may answer
+                    if getattr(e, 'transport', False):
+                        _net[0] = True
                     _fails.append('error')
                     raise gender_proofread.Skip(proof_model)
             _fails.append('busy')
@@ -3396,10 +5212,11 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
                   and (c.get('character') or c.get('name'))
                   and c.get('gender') in ('female', 'male')]
         new_texts, report = gender_proofread.proofread(
-            sources, texts, _request, cast=people, cancelled=stopped)
+            sources, texts, _request, models=_models,
+            cast=people, cancelled=stopped)
         _wait, _rounds = _GP_BUSY_WAIT, 1
-        _turn = list(reversed(gender_proofread.MODELS))
-        while (background and _rounds <= _GP_BUSY_ROUNDS
+        _turn = list(reversed(_models))
+        while (background and rounds and _rounds <= _GP_BUSY_ROUNDS
                and not report.get('model') and not report.get('spent')
                and not set(_fails) - {'busy', 'quota', 'error'}
                # the first round: something was busy; a later one asked one
@@ -3426,6 +5243,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
             _wait = min(_wait * 2, _GP_BUSY_WAIT_MAX)
         report['rounds'] = _rounds
         report['asked'] = _asked[0]
+        report['net'] = _net[0]
         # a stop that ended it, not one after every model had refused
         report['why'] = _gp_why(report, _fails,
                                 _cut[0] or (not _fails and stopped()))
@@ -3516,7 +5334,7 @@ def _title_cast(info, imdb_id, season, episode):
 
 def _proofread_opened(path, source_text, source_id, release, progressive_cb,
                       deliver, cancelled, info, share=None, shown_already=False,
-                      mark_path=None):
+                      mark_path=None, later=None, hebrew_ref=False):
     """An older AI translation opened from the list, proofread once.
 
     `path` is the Hebrew file, corrected in place; `deliver(path)` returns the
@@ -3525,8 +5343,9 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
     same phases a fresh translation uses, and the corrected file replaces it
     with 'done'. `shown_already`: it is on screen (proofread_later), so 'done'
     swaps only a corrected file. `mark_path`: where the marker goes, when not
-    next to `path`. Returns the delivered path; None when nothing changed on
-    a file shown already."""
+    next to `path`. `later`: where the pool keeps it (gp_later's 'share'), for
+    a proofread no model answered and the service asks again. Returns the
+    delivered path; None when nothing changed on a file shown already."""
     if not source_text:
         # no source: the model could not tell who speaks to whom
         return None if shown_already else deliver(path)
@@ -3565,7 +5384,8 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
         blocks = srt.parse_blocks(cache.load_text(path) or '')
         proofed, report = _run_gender_proofread(
             blocks, source_text, kodi_utils.get_setting('api_key', '') or '',
-            model, cast, stopped, background=shown_already)
+            model, cast, stopped, background=shown_already,
+            hebrew_ref=hebrew_ref)
         final = None
         if proofed != blocks:
             final = srt.stitch_blocks(proofed)
@@ -3578,6 +5398,11 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
         # answered, nothing sent or the viewer moved on: no pause before the
         # next open; a reply of no use: a week
         _gp_settle((marker,), report, stopped)
+        if not report.get('model'):
+            # 3.7 busy, out of today's quota, or the viewer moved on: the
+            # service asks again later
+            _gp_later_add(report, path, source_text, info, share=later,
+                          marker=marker)
         if report.get('model'):
             _gp_mark(marker, report)
             if share is not None:
@@ -3602,6 +5427,263 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
         kodi_utils.log('progressive_cb done (after the gender proofread of an '
                        'opened translation) raised: ' + str(e), level='WARNING')
     return delivered
+
+
+# A proofread no model answered, asked again from the service (0.3.75):
+# gp_later keeps the queue and its pacing; here what is queued and how one is
+# asked. Queued for these reasons only (a reply of no use, a refused key or a
+# refusal unread would come back the same) -- and a connection that failed
+# (report 'net': no network yet after a box woke up).
+_GP_LATER_WHY = ('busy', 'time', 'quota', 'stopped')
+
+
+def _gp_later_retry(report):
+    report = report or {}
+    return (report.get('why') in _GP_LATER_WHY
+            or (report.get('why') == 'error' and bool(report.get('net'))))
+
+
+def _gp_later_file():
+    return os.path.join(kodi_utils.cache_dir(), 'gp_later.json')
+
+
+def _gp_later_today():
+    try:
+        from . import gender_proofread
+        return gender_proofread._today()
+    except Exception:
+        return ''
+
+
+def _gp_later_src(marker):
+    """Where the queue keeps a copy of the subtitle a translation was made
+    from (the source search's copy may be gone by the time it is asked)."""
+    import hashlib
+    return os.path.join(kodi_utils.cache_dir(), 'gpl_{0}.src.srt'.format(
+        hashlib.sha1(marker.encode('utf-8')).hexdigest()[:20]))
+
+
+def _gp_later_forget(entry):
+    try:
+        os.remove(entry.get('src') or '')
+    except OSError:
+        pass
+
+
+def _gp_later_markers(entry):
+    return [entry['marker']] + [c for c in entry.get('copies') or [] if c]
+
+
+def _gp_try_age(path):
+    """Seconds since the in-progress marker was set (inf without one; below
+    zero while it holds a reply of no use for a week)."""
+    try:
+        return time.time() - os.path.getmtime(_gp_try_marker(path))
+    except OSError:
+        return float('inf')
+
+
+# An in-progress marker more than this far in the future holds a reply of no
+# use (a week, _GP_SPENT_SECS); one a little ahead is a clock that went back
+# (a box without a clock of its own, before its time sync): only held.
+_GP_LATER_SPENT_AHEAD = 86400
+
+
+def _gp_later_alive(entry):
+    """Still worth asking: its files there, not proofread meanwhile (any of
+    its copies counts), not waiting out a reply of no use."""
+    marks = _gp_later_markers(entry)
+    return (os.path.isfile(entry.get('path') or '') and os.path.isfile(entry.get('src') or '')
+            and not any(_gp_done(m) for m in marks)
+            and min(_gp_try_age(m) for m in marks) >= -_GP_LATER_SPENT_AHEAD)
+
+
+def _gp_later_add(report, path, source_text, info, share=None, marker=None,
+                  copies=()):
+    """Queue a proofread no model answered (_gp_later_retry), for the service
+    to ask again (gp_later_tick). `share`: where the pool keeps the
+    translation ({'hash', 'lang', 'release', 'kind'}, and 'ref_hash': the
+    pooled variant's own hash, for the Hebrew-reference rule), None when it
+    does not; `copies`: other files holding the same translation. Never
+    raises."""
+    try:
+        report = report or {}
+        if report.get('model') or report.get('spent') or not _gp_later_retry(report):
+            return
+        marker = marker or path
+        if not (source_text and path and os.path.isfile(path)) or _gp_done(marker):
+            return
+        from . import gp_later
+        share = dict(share or {})
+        ref_hash = share.pop('ref_hash', None) or None
+        src = _gp_later_src(marker)
+        with open(src, 'w', encoding='utf-8') as f:
+            f.write(source_text)
+        entry = {
+            'path': path, 'marker': marker, 'src': src, 'ref_hash': ref_hash,
+            'copies': [c for c in copies or () if c and c != path],
+            'info': {k: v for k, v in (info or {}).items()
+                     if isinstance(k, str)
+                     and (v is None or isinstance(v, (str, int, float, bool)))},
+            'share': share if share.get('hash') else None}
+        pushed = []
+
+        def change(state):
+            pushed.extend(gp_later.add(state, entry))
+            return None, True
+        gp_later.update(_gp_later_file(), change, _gp_later_today())
+        for old in pushed:
+            _gp_later_forget(old)
+        kodi_utils.log('gender proofread: no answer ({0}) -- queued, asked again '
+                       'later'.format(report.get('why')), level='INFO')
+    except Exception as e:
+        kodi_utils.log('gender proofread queue add failed: {0}'.format(e),
+                       level='DEBUG')
+
+
+class _GpLaterGone(Exception):
+    """A queued translation's files went between the pick and the request."""
+
+
+def gp_later_tick(should_cancel=None):
+    """The service's turn: asks gemini-3.7-flash again for one queued
+    proofread when one is due (gp_later's pacing). The corrected file replaces
+    the translation where it is kept (and its copies), with their markers, and
+    goes to the pool when sharing is on. Returns what happened, in a word (''
+    when nothing was due). Never raises."""
+    try:
+        from . import gp_later
+        queue = _gp_later_file()
+        if not os.path.isfile(queue):
+            return ''
+        today = _gp_later_today()
+        api_key = (kodi_utils.get_setting('api_key', '') or '').strip()
+        ready = bool(kodi_utils.get_bool('gender_proofread', True) and api_key
+                     and _gp_models_left())
+        now = time.time()
+        dropped = []
+
+        # 1. under the lock, no network: the dead out, the one due picked
+        def pick(state):
+            dropped.extend(gp_later.prune(state, now, _gp_later_alive))
+            entry = gp_later.due(state, now, today) if ready else None
+            if entry is not None and min(_gp_try_age(m) for m in
+                                         _gp_later_markers(entry)) < gp_later.FRESH_TRY:
+                # an attempt for it may be running now (opened again, the job)
+                gp_later.hold(entry, now)
+                return ('held', None), True
+            return ('', dict(entry) if entry else None), bool(dropped)
+        word, entry = gp_later.update(queue, pick, today)
+        for e in dropped:
+            _gp_later_forget(e)
+        if entry is None:
+            return word
+        marker, path = entry['marker'], entry['path']
+        info = entry.get('info') or {}
+        share = entry.get('share') or None
+        # 2. outside the lock: the Hebrew-reference rule again (the file may
+        # have been made again since: gemini-4-hydrogen alone then, 0.3.88),
+        # and someone else's proofread in the pool (asked only with the pool
+        # in use, as the list does)
+        drop = ''
+        hebrew = bool(
+            _gp_hebrew_ref(path, info if _gp_ref_tier(path, entry.get('ref_hash')) else None)
+            or any(_gp_hebrew_ref(c) for c in entry.get('copies') or []
+                   if c and os.path.isfile(c)))
+        if (share and pool is not None and pool.use_enabled()
+                and _pool_variant_proofread(info, share['hash'])):
+            drop = 'pooled'     # the next open from the list takes theirs
+        # its one model out of today's quota while another has some: it
+        # waits its turn again and the queue's other entries are not held up
+        wait = hebrew and not drop and not _gp_models_left(True)
+
+        # 3. under the lock: dropped, or claimed -- the request counts now
+        def settle(state):
+            mine = gp_later.find(state, marker)
+            if mine is None:
+                return '', False
+            if drop:
+                gp_later.remove(state, marker)
+                return drop, True
+            if wait:
+                gp_later.hold(mine, time.time())
+                return 'quota', True
+            t = time.time()
+            if (mine.get('next') or 0) > t or not gp_later.can_send(state, t, today):
+                return '', False
+            gp_later.claim(state, mine, t, today)
+            return 'claimed', True
+        word = gp_later.update(queue, settle, today)
+        if word != 'claimed':
+            if drop and word == drop:
+                _gp_later_forget(entry)
+            return word
+        markers = [marker] + [c for c in entry.get('copies') or [] if c and os.path.isfile(c)]
+        report = {}
+        try:
+            source_text = cache.load_text(entry['src']) or ''
+            blocks = srt.parse_blocks(cache.load_text(path) or '')
+            if not (source_text and blocks):
+                # gone since the pick (the cache's own clean-up): nothing sent
+                raise _GpLaterGone()
+            model = kodi_utils.get_setting('model', 'gemini-3.5-flash-lite') \
+                or 'gemini-3.5-flash-lite'
+            cast = _title_cast(info, (info.get('imdb_id') or '').strip(),
+                               info.get('season') or '', info.get('episode') or '')[0]
+
+            def stopped():
+                return bool(should_cancel and should_cancel())
+            for m in markers:
+                _gp_try_mark(m, True)
+            proofed, report = _run_gender_proofread(
+                blocks, source_text, api_key, model, cast, stopped,
+                background=True, rounds=False, hebrew_ref=hebrew)
+            _gp_settle(markers, report, stopped)
+            if report.get('model'):
+                final = srt.stitch_blocks(proofed) if proofed != blocks else None
+                for m in markers:
+                    if final is not None:
+                        cache.save_text(m if m != marker else path, final)
+                    _gp_mark(m, report)
+                if share and pool is not None and pool.share_enabled():
+                    text = final if final is not None else (cache.load_text(path) or '')
+                    if _pool_quality_ok(source_text, text):
+                        pool.contribute_once(
+                            info, share['hash'], share.get('lang') or 'en', text,
+                            marker_path=_gp_marker(marker),
+                            release_override=share.get('release') or None,
+                            kind=share.get('kind') or 'ai',
+                            proofread=_gp_stats(report) or True)
+        except _GpLaterGone:
+            report = {'why': 'gone'}
+        except Exception as e:
+            kodi_utils.log('gender proofread from the queue failed: {0}'.format(e),
+                           level='WARNING')
+        why = 'answered' if report.get('model') else (report.get('why') or 'error')
+        keep = why != 'answered' and _gp_later_retry(report)
+
+        # 4. under the lock: the outcome
+        def outcome(state):
+            if not report.get('asked'):
+                gp_later.refund(state, today)
+            mine = gp_later.find(state, marker)
+            if not keep or mine is None:
+                gp_later.remove(state, marker)
+                return True, True
+            gp_later.retry_later(mine, time.time())
+            return False, True
+        try:
+            if gp_later.update(queue, outcome, today):
+                _gp_later_forget(entry)
+        except Exception as e:
+            # the claim keeps it away for its retry time; the request counted
+            kodi_utils.log('gender proofread queue save failed: {0}'.format(e),
+                           level='WARNING')
+        kodi_utils.log('gender proofread from the queue: {0}'.format(why), level='INFO')
+        return why
+    except Exception as e:
+        kodi_utils.log('gender proofread queue failed: {0}'.format(e), level='WARNING')
+        return 'error'
 
 
 def _pool_gp_base(source_hash):
@@ -4062,6 +6144,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # proofread_later's job: a translation already on screen gets its gender
     # proofread and a corrected file swapped in -- never a translation.
     _proofread_only = bool(payload.get('proofread_only'))
+    # {start ms: Hebrew} of an embedded track shown in steps while it was read
+    # (_EmbeddedSteps); empty for every other job.
+    _steps_he = {}
+    # ...and the source id its views went to the screen under ('' when no view
+    # was shown). From then on it is THIS job's id on screen: what the
+    # handler holds, and so what "is this translation still the one being
+    # watched" has to be asked about (the residual repairs, the proofread).
+    _steps_source_id = ''
     if _proofread_only:
         set_quiet(True)     # its own process: the status toasts are not its
 
@@ -4205,7 +6295,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     _praw, _psource, _pool_job_id(_gp_base),
                     payload.get('release') or '', progressive_cb, _pool_deliver,
                     _translation_cancelled, info, share=_pshare,
-                    shown_already=True, mark_path=_gp_base)
+                    shown_already=True, mark_path=_gp_base,
+                    later={'hash': _phash, 'lang': _psrc or 'en',
+                           'release': payload.get('release') or '',
+                           'kind': ('ai_emb' if _pkind == 'ai_emb' else 'ai'),
+                           'ref_hash': _phash},
+                    hebrew_ref=_gp_hebrew_ref(_praw, _gp_info))
             if not os.path.isfile(_praw):
                 with open(_praw, 'w', encoding='utf-8') as f:
                     f.write(text)
@@ -4399,6 +6494,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if not _emb_policy['enabled']:
             return None
         _emb_lang = payload.get('src_lang') or 'en'
+        _emb_why = {}     # why the embedded text could not be read, if it was not
         # FAST PATH first (debrid-safe): re-sync an external source sub to the
         # embedded track's DENSE cue-time skeleton (~5 range requests) rather
         # than pulling ~1700 text blocks -- which a strict provider (TorBox)
@@ -4433,38 +6529,145 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _emb_lang = _used_lang or _emb_lang
         elif _emb_policy['try_extract']:
             _status('AI: מחלץ תרגום מובנה...', time_ms=3000)
-            emb_path = _extract_embedded_srt(
-                info, _emb_lang, payload.get('track_num'),
-                progress_cb=extract_progress_cb,
-                allow_http=_emb_policy['allow_http'])
+            # The minutes the viewer is at, in Hebrew, while the rest of the
+            # track is still being read (_EmbeddedSteps, _StepsScreen).
+            _screen = _StepsScreen(link, info.get('picked_release') or '',
+                                   progressive_cb, _timing_selection)
+
+            def _steps_restore():
+                # the embedded track itself, as the pick put it on screen
+                # before this job started (default.py); not when the viewer
+                # has chosen something else since
+                if _translation_cancelled():
+                    return
+                from . import subs_engine_bridge as _seb
+                _seb.select_embedded(payload.get('stream_index'),
+                                     lang=_emb_lang)
+
+            _steps = None
+            if _emb_policy['allow_http'] and not _proofread_only:
+                _steps = _embedded_steps(
+                    info, lambda: _emb_why.get('lang_used') or _emb_lang,
+                    _screen.show, _translation_cancelled,
+                    restore=(_steps_restore if (
+                        progressive_cb is not None
+                        and payload.get('stream_index') is not None)
+                        else None))
+            try:
+                emb_path = _extract_embedded_srt(
+                    info, _emb_lang, payload.get('track_num'),
+                    progress_cb=extract_progress_cb,
+                    allow_http=_emb_policy['allow_http'], steps=_steps,
+                    cancelled=_translation_cancelled, why=_emb_why)
+                if (_steps is not None and emb_path
+                        and os.path.isfile(emb_path)):
+                    # The whole track, once: the last pass read lines no view
+                    # has shown, and the handler does not show the full job's
+                    # 'first_ready'.
+                    try:
+                        _steps.feed(cache.load_text(emb_path) or '',
+                                    translate=False)
+                        if _steps.settle(cancelled=_translation_cancelled):
+                            kodi_utils.log(
+                                'embedded steps: the whole track was in before '
+                                'the answer for the first view -- waited for '
+                                'it, shown={0}'.format(_steps.shown),
+                                level='INFO')
+                    except Exception:
+                        pass
+            finally:
+                if _steps is not None:
+                    _steps_he = _steps.finish()
+                    kodi_utils.log(
+                        'embedded steps: {0} window(s), {1} request(s), {2} '
+                        'line(s) in Hebrew, shown={3}, embedded track put '
+                        'back {4} time(s)'.format(
+                            _steps.windows, _steps.requests, len(_steps_he),
+                            _steps.shown, _steps.handed_back), level='INFO')
+            if _steps is not None and not (
+                    emb_path and os.path.isfile(emb_path)):
+                # given up part-way: the view holds only what was read
+                _steps.back_out()
+            if _screen.shown and progressive_cb is not None:
+                _steps_source_id = _screen.source_id
+            # the id the viewer's handler adopted with the first view
+            progressive_cb = _screen.handler()
+        _unreadable = None
         if not emb_path or not os.path.isfile(emb_path):
-            kodi_utils.log('embedded_ai: mode={0} produced no synced source -- '
-                           'deferring to the external path'.format(_emb_mode),
-                           level='INFO')
-            return None
-        # its pooled copy is proofread against this later, here
-        _kept_src = _keep_embedded_source(emb_path)
-        _status('AI: מתרגם תרגום מובנה לעברית...', time_ms=3000)
-        payload = {'type': 'ai',
-                   'source_lang': _emb_lang,
-                   'local_path': emb_path,
-                   # An embedded track carries no release string of its own, so
-                   # use the video's real release (the 'ai' pipeline's own
-                   # fallback chain -- picked_release/tagline/label -- fills any
-                   # gap). NEVER reuse the '[מובנה] XX' placeholder here: it
-                   # would poison the pool upload's release tag and the display
-                   # name for every embedded translation.
-                   'release': info.get('picked_release') or '',
-                   # Mark this as an EMBEDDED-sourced translation so the pool
-                   # stores it under kind='ai_emb' -- it is synced to the video's
-                   # own timing, so it is surfaced distinctly ("תרגום מובנה")
-                   # and sorted first among the community AI translations.
-                   'embedded': True,
-                   'force_ai': True}
-        if _kept_src:
-            _remember_embedded(link, dict(payload, local_path=_kept_src))
-        kind = 'ai'
-        # fall through to the AI logic below
+            # A file whose index has no entry for the subtitle lines cannot be
+            # read from a stream short of downloading all of it. Instead of
+            # failing (field: 'could not extract -- try another subtitle'),
+            # translate the external subtitle that best matches the release,
+            # as its own "AI translation" row would (owner, 14 Nov 2026: do
+            # not hide the row, fix it).
+            if (_emb_why.get('reason') in ('no_index', 'no_text', 'not_mkv')
+                    and not _proofread_only and not _translation_cancelled()
+                    and _still_playing()):
+                _unreadable = _external_for_unreadable_embedded(info, _emb_lang)
+            if _unreadable is None:
+                kodi_utils.log('embedded_ai: mode={0} produced no synced source '
+                               '-- deferring to the external path'.format(
+                                   _emb_mode), level='INFO')
+                if not _proofread_only:
+                    _note_embedded_miss(_emb_why.get('reason'))
+                return None
+            _reason = _emb_why.get('reason')
+            _no_text = _reason == 'no_text'
+            kodi_utils.log(
+                'embedded_ai: the {0} embedded track cannot be read {1} -- '
+                'translating the external {2} subtitle "{3}" instead'.format(
+                    _emb_lang,
+                    '(it is a picture track and the file has no other text subtitle)'
+                    if _no_text else
+                    '(the file is not Matroska; its embedded subtitles are not '
+                    'read yet)' if _reason == 'not_mkv'
+                    else 'from the stream (its index has no subtitle lines)',
+                    _unreadable.get('src_lang'), _unreadable.get('filename') or ''),
+                level='INFO')
+            _status('AI: הכתובית המובנית ב{0} בקובץ הזה היא תמונה ולא טקסט — '
+                    'מתרגם במקומה כתובית ב{1} שתואמת לגרסה'.format(
+                        _lang_display_he(_emb_lang),
+                        _lang_display_he(_unreadable.get('src_lang')))
+                    if _no_text else
+                    'AI: את הכתובית המובנית בקובץ הזה אי אפשר לקרוא — '
+                    'מתרגם במקומה כתובית תואמת לגרסה', time_ms=6000)
+            payload, kind = _unreadable, 'engine_ai'
+        else:
+            _used = _emb_why.get('lang_used') or ''
+            try:
+                from . import embedded_extract as _ee
+                _switched = bool(_used) and (_ee._lang_key(_used)
+                                             != _ee._lang_key(_emb_lang))
+            except Exception:
+                _switched = False
+            if _switched:
+                # the viewer was told when the track was chosen (_on_track)
+                kodi_utils.log(
+                    'embedded_ai: translating from the {1} embedded track, not '
+                    'the {0} picture one'.format(_emb_lang, _used), level='INFO')
+                _emb_lang = _used
+            _kept_src = _keep_embedded_source(emb_path)
+            _status('AI: מתרגם תרגום מובנה לעברית...', time_ms=3000)
+            payload = {'type': 'ai',
+                       'source_lang': _emb_lang,
+                       'local_path': emb_path,
+                       # An embedded track carries no release string of its own, so
+                       # use the video's real release (the 'ai' pipeline's own
+                       # fallback chain -- picked_release/tagline/label -- fills any
+                       # gap). NEVER reuse the '[מובנה] XX' placeholder here: it
+                       # would poison the pool upload's release tag and the display
+                       # name for every embedded translation.
+                       'release': info.get('picked_release') or '',
+                       # Mark this as an EMBEDDED-sourced translation so the pool
+                       # stores it under kind='ai_emb' -- it is synced to the video's
+                       # own timing, so it is surfaced distinctly ("תרגום מובנה")
+                       # and sorted first among the community AI translations.
+                       'embedded': True,
+                       'force_ai': True}
+            if _kept_src:
+                _remember_embedded(link, dict(payload, local_path=_kept_src))
+            kind = 'ai'
+            # fall through to the AI logic below
 
     if kind == 'engine_ai':
         # User picked "AI Hebrew (translate from English)" sourced from the
@@ -4617,6 +6820,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # per-line gender instead of falling straight to English-only.
     _ref_stack = []            # [(lang, {entry_number: reference_line}), ...]
     _ref_plan = [None]         # arabic_gender.ReferencePlan (boxed for the closure)
+    # A fallback reference for a blocked chunk is looked for briefly, and once.
+    # The search went on through every candidate left, up to the providers'
+    # whole budget (60 s of downloads), for each blocked chunk in turn: QA
+    # Kodi, 16 Nov 2026 -- the first reference in hand after 5 s; a chunk was
+    # blocked 25 s later, and 33 subtitles were downloaded and refused over
+    # the next 40 s while it waited. The next language's best match aligns in
+    # its first tries or the title's subtitles are another cut; a chunk that
+    # gets no fallback is isolated line by line, as before.
+    _REF_FALLBACK_TRIES = 6
+    _REF_FALLBACK_SECONDS = 15.0
     _ref_lock = threading.Lock()
 
     def _ref_ensure(level):
@@ -4644,10 +6857,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         try:
             while len(_ref_stack) <= level:
                 try:
-                    lang, mp = plan.next()
+                    if _ref_stack:
+                        lang, mp = plan.next(max_tries=_REF_FALLBACK_TRIES,
+                                             max_seconds=_REF_FALLBACK_SECONDS)
+                    else:
+                        lang, mp = plan.next()
                 except Exception:
                     lang, mp = None, None
                 if mp is None:
+                    if _ref_stack:
+                        _ref_plan[0] = None    # no later chunk looks again
                     return False
                 _ref_stack.append((lang or 'ar', mp))
                 if len(_ref_stack) > 1:
@@ -4699,12 +6918,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
         # Proofread here before, its pool upload never went through (the
         # worker answered 502): offered again, with no new request -- not
-        # one made with a Hebrew reference (proofread before 0.3.72).
+        # one made with a Hebrew reference and proofread before 0.3.72 by
+        # the models of then (gemini-4-hydrogen's proofread of one, 0.3.88,
+        # is offered like any other).
+        _made_he = _gp_hebrew_ref(path, info if _gp_ref_tier(path, pooled_hash)
+                                  else None)
         if (_gp_done(path) and source_text and pool is not None
                 and pool.share_enabled()
                 and not pool.was_contributed(_gp_marker(path))
-                and not _gp_hebrew_ref(path, info if _gp_ref_tier(path, pooled_hash)
-                                       else None)):
+                and not (_made_he and _gp_saved(path).get('model')
+                         not in _gp_models(True))):
             pool_hash = held_hash()
             if pool_hash:
                 share_to(pool_hash)(cache.load_text(path) or '', _gp_saved(path))
@@ -4740,10 +6963,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         share = None
         if pool is not None and pool_hash and pool.share_enabled():
             share = share_to(pool_hash)
-        return _proofread_opened(path, source_text, source_id, _src_release,
+        return _proofread_opened(path, source_text,
+                                 _steps_source_id or source_id, _src_release,
                                  progressive_cb, _deliver,
                                  _translation_cancelled, info, share=share,
-                                 shown_already=_proofread_only)
+                                 shown_already=_proofread_only,
+                                 later=({'hash': pool_hash, 'lang': source_lang,
+                                         'release': _release_override or '',
+                                         'kind': _pool_kind,
+                                         'ref_hash': pooled_hash}
+                                        if pool_hash else None),
+                                 hebrew_ref=_made_he)
 
     # Respect the user's preferred subtitle language: if they've chosen a
     # specific non-Hebrew language (e.g. English) DON'T force an AI Hebrew
@@ -5042,7 +7272,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # so the caller can correlate first_ready/chunk_ready/done into a
     # single in-flight translation. Same value the cache key uses
     # above. Safe to evaluate here -- both ids are now stable.
-    _progressive_source_id = early_source_id or content_id
+    _progressive_source_id = _steps_source_id or early_source_id or content_id
     # Replacing a cached Google Translate file: the viewer already had that
     # Hebrew, so it stands in for the English placeholder while the AI works
     # (a failed run hands the same file back, see _keep_replaced_google).
@@ -5060,6 +7290,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # for display -- src_text itself keeps those prefixes (Gemini uses them
     # for per-line gender), but the onscreen English placeholder must not
     # show raw "MABEL:" tags. A buggy callback must not abort us.
+    if _steps_he:
+        # The views' Hebrew stands in for lines the full job has not reached
+        # (the chunk merge below), keyed by a start the source names once.
+        _steps_he = dict(
+            (s, _steps_he[s])
+            for s in _unique_starts(srt.parse_blocks(src_text))
+            if s in _steps_he)
     if progressive_cb is not None:
         try:
             progressive_cb('first_ready', {
@@ -5166,8 +7403,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     if not api_key:
         kodi_utils.notify(kodi_utils.localised(33002))
         return None
-    model = kodi_utils.get_setting('model', 'gemini-3.5-flash-lite') \
-            or 'gemini-3.5-flash-lite'
+    _models = _ModelFallback(
+        kodi_utils.get_setting('model', 'gemini-3.5-flash-lite')
+        or 'gemini-3.5-flash-lite', api_key=api_key)
+    model = _models.model
+    if _models.why:
+        kodi_utils.log('model {0} passed over ({1}, seen in this session): '
+                       'translating with {2}'.format(
+                           _models.chosen, _models.why, model), level='INFO')
+        _model_fallback_notice(_models.chosen, _models.why)
     # Gemini tuning (validated A/B on 2.5/3.1): keep temperature at Google's
     # recommended default 1.0 (lowering it degrades Gemini 3 reasoning), use
     # thinking_level MEDIUM (HIGH burns the output budget -> truncation +
@@ -5197,27 +7441,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                        .format(model), level='INFO')
     thinking_raw = (kodi_utils.get_setting('thinking_budget', 'medium')
                     or 'medium').strip().lower()
-    thinking_level = None
-    thinking_budget = None
-    if thinking_raw in ('minimal', 'low', 'medium', 'high'):
-        thinking_level = thinking_raw
-    else:
-        try:
-            thinking_budget = int(thinking_raw)
-        except (TypeError, ValueError):
-            thinking_budget = 0
-        if thinking_budget <= 0:
-            thinking_budget = None
-    if thinking_budget and model.lower().startswith('gemini-3.'):
-        if thinking_budget <= 512:
-            thinking_level = 'minimal'
-        elif thinking_budget <= 768:
-            thinking_level = 'low'
-        elif thinking_budget <= 1024:
-            thinking_level = 'medium'
-        else:
-            thinking_level = 'high'
-        thinking_budget = None
+    def _thinking_for(for_model):
+        return _thinking_params(thinking_raw, for_model)
+
+    thinking_level, thinking_budget = _thinking_for(model)
     whole_subtitle_request = kodi_utils.get_bool(
         'whole_subtitle_request', False)
     # Safety: a single 'whole subtitle' request can't fit a very large source --
@@ -5268,11 +7495,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                            (info.get('title') or imdb_id or '?')), level='INFO')
         try:
             from . import arabic_gender
+            _emb_ref = (_embedded_reference(
+                info, source_lang, cancelled=_translation_cancelled)
+                if payload.get('embedded') else None)
             if _timing_src:
                 plan, _diag0 = arabic_gender.begin(
-                    info, src_text, timing_text=_timing_src)
+                    info, src_text, timing_text=_timing_src,
+                    embedded=_emb_ref)
             else:
-                plan, _diag0 = arabic_gender.begin(info, src_text)
+                plan, _diag0 = arabic_gender.begin(
+                    info, src_text, embedded=_emb_ref)
             _ref_plan[0] = plan
             if plan is not None and _ref_ensure(0):
                 # primary reference pulled (same single-download cost as before);
@@ -5363,10 +7595,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 return ''
             if not kodi_utils.get_bool('gender_proofread', True):
                 return 'off'
-            if _gp_ref == 'he':
-                return 'heref'
             if progressive_cb is None:
                 # the job proofread_later starts asks only a model with quota
+                # (after a Hebrew reference: gemini-4-hydrogen alone)
+                if _gp_ref == 'he':
+                    return 'later' if _gp_models_left(True) else 'quota'
                 return 'later' if _gp_models_left() else 'quota'
             return _gp_report.get('why') or ''
         except Exception:
@@ -5460,7 +7693,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # Backoff schedule for retryable Gemini failures (503 overload,
     # 500 / 502 / 504 transients). Google's published guidance is to
     # wait at least a few seconds before retrying these.
-    OVERLOAD_BACKOFF = [5, 15, 30, 60, 120]  # seconds
+    # Ten minutes of them since 0.3.79 (it was four): a viewer who asked for an
+    # AI translation wants the AI's, and Google's text is what follows the
+    # last retry. The lines not translated yet stay in their source language
+    # meanwhile, and the default model has hundreds of requests a day.
+    OVERLOAD_BACKOFF = [5, 15, 30, 60, 120, 120, 120, 120]  # seconds
     # Other transient (non-overload) Gemini errors get a shorter
     # schedule -- they're usually content / parse / safety issues,
     # not infrastructure.
@@ -5542,6 +7779,40 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # not once per chunk per retry.
     _ratelimit_notified = [False]
 
+    _switch_lock = threading.Lock()
+
+    def _go_on_with_fallback(asked, why):
+        """A request to `asked` failed for `why`. True when it should go out
+        again at once to the model the job now uses (_ModelFallback): the
+        names every later request reads are moved to that model here."""
+        nonlocal model, thinking_level, thinking_budget, _rpm_interval
+        if not _models.give_up(asked, why):
+            return False
+        with _switch_lock:
+            if model == _models.model:
+                return True          # another chunk has moved the names
+            model = _models.model
+            thinking_level, thinking_budget = _thinking_for(model)
+            if not _paid_mode:
+                # the pace follows the model: Flash-Lite's free allowance is
+                # three times a Flash model's
+                _cap = _gemini_free_rpm_cap(model)
+                _rpm_interval = 60.0 / max(1, min(
+                    kodi_utils.get_int('gemini_rpm', _cap), _cap))
+            # Slots already handed out were spaced for the old model (15 s
+            # apart on a Flash model): left there, the chunk that caused the
+            # switch -- the first, where the viewer is -- waited 36 s for its
+            # turn at three chunks in flight (review, fake clock). The new
+            # model's allowance is its own; its first slot is now.
+            with _GEMINI_RATE_LOCK:
+                _GEMINI_NEXT_SLOT[0] = min(_GEMINI_NEXT_SLOT[0],
+                                           time.monotonic())
+        kodi_utils.log('model {0} did not answer ({1}): the translation '
+                       'goes on with {2}'.format(asked, why, model),
+                       level='WARNING')
+        _model_fallback_notice(asked, why)
+        return True
+
     # Per-chunk translator. Holds the inner retry loop. Returns the
     # raw Gemini response text, or raises a Stop-style exception
     # that the orchestrator below catches and converts into a
@@ -5565,7 +7836,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         """_call_gemini, counted on the chunk's clock (_BlockClock.calls)."""
         if clock is not None:
             clock.calls += 1
-        return _call_gemini(*args, **kwargs)
+        _busy_waits.seconds = 0.0
+        try:
+            return _call_gemini(*args, **kwargs)
+        finally:
+            # A chunk answered on its last busy retry had used up its whole
+            # slow cap by then, and its top-ups went English-only or to
+            # Google although nothing about it was slow (review, 0.3.79).
+            if clock is not None:
+                clock.waited(getattr(_busy_waits, 'seconds', 0.0))
 
     def _english_only_safe(idx, ch, deadline=None):
         """Translate `ch` with NO gender reference (English only), splitting on
@@ -6002,10 +8281,20 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     prev_context_lines = max(0, kodi_utils.get_int(
         'prev_context_lines', 5))
 
+    # Set once the job has given up on one chunk (the dispatcher below):
+    # chunks still waiting to ask a busy model again stop there, instead of
+    # holding the Google fill -- and spending requests -- for the rest of
+    # their own ten minutes.
+    _job_gave_up = threading.Event()
+    # busy-retry numbers already announced (one toast a number, not one a chunk)
+    _busy_toasts = set()
+    # seconds this thread's current request spent waiting on a busy model
+    _busy_waits = threading.local()
+
     def _cancel_aware_wait(seconds):
         deadline = time.monotonic() + max(0.0, float(seconds))
         while time.monotonic() < deadline:
-            if _translation_cancelled():
+            if _translation_cancelled() or _job_gave_up.is_set():
                 raise _AbortTranslation('cancelled', '')
             time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
 
@@ -6106,6 +8395,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _gemini_rate_gate(_rpm_interval)   # pace to stay under the RPM cap
             if _translation_cancelled():
                 raise _AbortTranslation('cancelled', '')
+            _asked_model = model
             try:
                 response = gemini.generate(
                     api_key=api_key,
@@ -6116,7 +8406,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     top_p=top_p,
                     thinking_budget=thinking_budget,
                     thinking_level=thinking_level,
-                    timeout=gemini_timeout or gemini.REQUEST_TIMEOUT,
+                    timeout=gemini_timeout or (
+                        gemini.REQUEST_TIMEOUT if model == _models.fallback
+                        else _CHOSEN_MODEL_TIMEOUT),
                 )
                 if _NUMBERED_REQUESTS:
                     response = srt_wire.from_wire(ch, response)
@@ -6172,6 +8464,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # misleading "daily quota exhausted, try again after midnight".
                 raise _AbortTranslation('ratelimit', 'AI: עומס זמני חורג')
             except gemini.QuotaExceeded:
+                # the chosen model's day is spent (20 requests on a Flash
+                # model): the default model has its own allowance
+                if _go_on_with_fallback(_asked_model, 'quota'):
+                    continue
                 raise _AbortTranslation('quota',
                     kodi_utils.localised(33005))
             except gemini.InvalidKey as e:
@@ -6202,6 +8498,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     continue
                 raise
             except gemini.OverloadError as e:
+                # No second try on a chosen model that says it is busy: the
+                # refusal itself took 11 s to come back, and its retry, paced
+                # at a Flash model's 4 requests a minute, put the switch 68 s
+                # into the job (QA Kodi, gemini-3.8-flash, 13 Nov 2026).
+                # (A paid key keeps one 5 s retry: nothing paces it, and
+                # one blip would move ten minutes of its translations.)
+                if ((_asked_model != model or not _paid_mode
+                     or overload_attempts >= 1)
+                        and _go_on_with_fallback(_asked_model, 'busy')):
+                    overload_attempts = 0
+                    continue
                 if overload_attempts < len(OVERLOAD_BACKOFF):
                     wait = OVERLOAD_BACKOFF[overload_attempts]
                     overload_attempts += 1
@@ -6211,11 +8518,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             idx, total, overload_attempts,
                             len(OVERLOAD_BACKOFF), wait),
                         level='WARNING')
-                    kodi_utils.notify(
-                        'AI: Gemini עמוס. ניסיון {0}/{1} בעוד {2}ש'
-                        .format(overload_attempts,
-                                len(OVERLOAD_BACKOFF), wait),
-                        time_ms=min(wait * 1000, 8000))
+                    if overload_attempts not in _busy_toasts:
+                        _busy_toasts.add(overload_attempts)
+                        kodi_utils.notify(
+                            'AI: Gemini עמוס. ניסיון {0}/{1} בעוד {2}ש'
+                            .format(overload_attempts,
+                                    len(OVERLOAD_BACKOFF), wait),
+                            time_ms=min(wait * 1000, 8000))
+                    _busy_waits.seconds = getattr(
+                        _busy_waits, 'seconds', 0.0) + wait
                     _cancel_aware_wait(wait)
                     continue
                 raise _AbortTranslation('overload',
@@ -6223,6 +8534,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     'תרגום נכשל ב-chunk {1}/{2}.'.format(
                         len(OVERLOAD_BACKOFF), idx, total))
             except gemini.GeminiError as e:
+                # Not served to this key (404), or sent and no reply within
+                # the timeout: the same model again is the same wait again.
+                _why = ('gone' if isinstance(e, gemini.ModelUnavailable)
+                        else 'slow' if (getattr(e, 'transport', False)
+                                        and getattr(e, 'answered', False))
+                        else '')
+                if ((_why or _asked_model != model)
+                        and _go_on_with_fallback(_asked_model, _why or 'busy')):
+                    generic_attempts = 0
+                    continue
                 if generic_attempts < len(GENERIC_BACKOFF):
                     wait = GENERIC_BACKOFF[generic_attempts]
                     generic_attempts += 1
@@ -6289,6 +8610,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     abort_detail = getattr(e, 'detail', '') or ''
                     # Try to cancel pending futures; in-flight ones
                     # will run to completion but we ignore them.
+                    _job_gave_up.set()
                     for f in future_to_idx:
                         f.cancel()
                     break
@@ -6297,6 +8619,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         str(e)[:80])
                     abort_reason = 'crash'
                     abort_detail = str(e)[:100]
+                    _job_gave_up.set()
                     for f in future_to_idx:
                         f.cancel()
                     break
@@ -6354,7 +8677,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                 # Hebrew the viewer already had, not English
                                 _merged_blocks.extend(_google_chunks[_i])
                             else:
-                                _merged_blocks.extend(_ch)
+                                _merged_blocks.extend(
+                                    _with_steps_preview(_ch, _steps_he))
                         # Bound the cues here too: this text is written to a
                         # file and handed to the player LIVE, so an unrepaired
                         # runaway cue would sit frozen on screen for the rest of
@@ -6443,7 +8767,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if abort_reason == 'quota':
                 try:
                     from . import gemini_quota
-                    gemini_quota.note_exhausted(model)
+                    # under the setting's model: that is the one
+                    # _google_cache_upgradeable asks about, and after a
+                    # fallback both allowances are spent
+                    gemini_quota.note_exhausted(_models.chosen)
                 except Exception:
                     pass
             # Nothing from the AI and a cached Google file in hand: that file,
@@ -7042,7 +9369,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         as they are when no model answers. Never raises."""
         proofed, report = _run_gender_proofread(
             blocks, src_text, api_key, model, cast,
-            _proofread_stopper(_progressive_source_id, _translation_cancelled))
+            _proofread_stopper(_progressive_source_id, _translation_cancelled),
+            hebrew_ref=(_gp_ref == 'he'))
         _gp_report.update(report or {})
         return proofed
 
@@ -7237,10 +9565,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # runs on the file already saved, so a stop or a crash in those minutes
     # keeps this translation; what it corrects is saved over it and goes out
     # with 'done' below, and to the pool.
-    if _gp_ref == 'he' and progressive_cb is not None:
-        kodi_utils.log('gender proofread: not run -- translated with a Hebrew '
-                       'reference', level='INFO')
-    if (progressive_cb is not None and _gp_ref != 'he'
+    if (progressive_cb is not None
             and kodi_utils.get_bool('gender_proofread', True)):
         try:
             progressive_cb('chunk_ready', {
@@ -7262,6 +9587,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         _proofed = _proofread_gender(_proof_blocks)
         _gp_settle(_gp_slots, _gp_report, _proofread_stopper(
             _progressive_source_id, _translation_cancelled))
+        if not _gp_report.get('model'):
+            # 3.7 busy, out of today's quota, or the viewer moved on: the
+            # service asks again later, and the pool gets the proofread then
+            # (the upload below carries this translation without it)
+            _gp_later_add(_gp_report, translated, src_text, info,
+                          share={'hash': _final_pool_hash, 'lang': source_lang,
+                                 'release': _release_override or '',
+                                 'kind': _pool_kind},
+                          copies=_gp_slots[1:])
         if _proofed != _proof_blocks:
             final = srt.stitch_blocks(_proofed)
             cache.save_text(translated, final)

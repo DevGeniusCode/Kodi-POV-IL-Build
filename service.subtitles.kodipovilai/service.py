@@ -368,6 +368,32 @@ def _start_pool_queue_drainer(monitor):
         pass
 
 
+def _start_gp_later_runner(monitor):
+    """Every few minutes, the gender proofread's queue (translate.gp_later_tick,
+    0.3.75): a translation whose proofread found gemini-3.7-flash busy is asked
+    again later, one request at a time and spaced out (gp_later). A request
+    takes minutes, so it has a thread of its own, apart from the uploads."""
+    def _loop():
+        try:
+            if monitor.waitForAbort(300):   # let startup settle first
+                return
+            while not monitor.abortRequested():
+                try:
+                    from resources.lib import translate
+                    translate.gp_later_tick(should_cancel=monitor.abortRequested)
+                except Exception:
+                    pass
+                if monitor.waitForAbort(300):
+                    break
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_loop, daemon=True).start()
+    except Exception:
+        pass
+
+
 def _start_he_warm_drainer(monitor):
     """Drain the Hebrew-availability warm queue from this long-lived service.
 
@@ -866,6 +892,37 @@ def _maybe_bump_gemini_model_38():
             pass
 
 
+def _maybe_retire_gemini_31_flash():
+    """One-shot: a stored 'gemini-3.1-flash' becomes the default model.
+
+    Google has no model of that id (HTTP 404 for every key, Nov 2026), and
+    0.3.78 took it out of the picker; a stored id the list cannot show is a
+    blank model row (see _maybe_bump_gemini_model_38). translate.py falls
+    back to the default model on a 404 anyway, so this only makes the setting
+    say what is already happening. The two 2.5 ids stay: Google still serves
+    them to older keys. A new marker, as every bump before it."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_gemini_model_bump_v4', '') == '1':
+            return
+        cur = (kodi_utils.get_setting('model', '') or '').strip()
+        if cur == 'gemini-3.1-flash':
+            kodi_utils.set_setting('model', 'gemini-3.5-flash-lite')
+            kodi_utils.log('Gemini model gemini-3.1-flash -> '
+                           'gemini-3.5-flash-lite: Google no longer has it '
+                           '(migration v4)', level='INFO')
+        kodi_utils.set_setting('_gemini_model_bump_v4', '1')
+    except Exception as e:
+        try:
+            kodi_utils.log('gemini 3.1 retire migration failed: {0}'
+                           .format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_lower_chunk_lines():
     """One-shot: move existing users to the smaller 50-line translation chunk.
     Live testing showed big chunks (100+) of graphically-explicit dialogue trip
@@ -1196,6 +1253,7 @@ def main():
     # two; it does not DEPEND on that order, because its retired set covers the
     # older ids as well.
     _maybe_bump_gemini_model_38()
+    _maybe_retire_gemini_31_flash()
     # Lower chunk size to 50 (block-avoidance), one-shot for existing installs.
     _maybe_lower_chunk_lines()
 
@@ -1244,6 +1302,7 @@ def main():
     # past Telegram's bot rate limit. Best-effort; never blocks.
     _start_shared_sdh_refresh(monitor)
     _start_pool_queue_drainer(monitor)
+    _start_gp_later_runner(monitor)
     # (the Hebrew warm drainer was already started at the top of main(), before
     # the build startup repairs, so it's alive for the first play of the session)
 

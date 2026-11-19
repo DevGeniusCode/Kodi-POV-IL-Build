@@ -156,10 +156,22 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `pov_combined_discover`), pyflakes (one old message), 76 behaviour checks (bootstrap, provisioner, window plan, settle-wait, config deferral,
   update watcher) against a local copy of the generated site.
 
+- **SUBTITLE PHASE 0 COMPLETE (19 Nov 2026; owner decision: decouple from MoranSubs).** The last upstream merge (`update-migration`
+  @ `96efe59a`, 36 commits since `77880b8`) was resolved and the add-on is now ours (rule "SUBTITLE ADD-ON: DECOUPLED" below). Taken:
+  MoranSubs 0.3.75 -> 0.3.96 core (translate / subsync / sync_align / embedded_extract + new `embedded_mp4.py`, `gp_later.py`, gender
+  proofread, Gemini model migration `_gemini_model_bump_v4`), FENtastic 1.0.34, Estuary 4.0.9, `script.fentastic.helper` lazy MDbList
+  import. Kept ours: every `service.py` / `settings.xml` conflict (all were blocks moved to the Wizard), the 4 Wizard `host_repairs` files
+  git's rename detection had patched, the whole Onyx skin (see "SKIPPED UPSTREAM FEATURES"). Dropped: `af3_osd_tap_close_patcher.py` (a
+  host repair) and the `povil.tr.file` trailer guard in `autosub_service.py`. Verified: same 13 pyflakes messages, same stub-import
+  result as before the merge (plus the two new modules), every file compiles. The blueprint is `ARCHITECTURE_SUBTITLES.md` (repo root);
+  the next phases are Subtitle Phase 1 (cleanup, settings, Deletion Report), 2 (core refactoring and splitting), 3 (wiring, testing,
+  final statistics).
+
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
 - **STRUCTURAL REFACTORING ONLY:** NO bug fixing, NO logic optimization. A fix is made only when the user explicitly
-  approves it, as its own clearly labelled change; report every bug you find instead of fixing it silently.
+  approves it, as its own clearly labelled change; report every bug you find instead of fixing it silently. (The subtitle
+  add-on follows the same rule for behaviour, but its architecture is ours to reshape: see "SUBTITLE ADD-ON: DECOUPLED" below.)
 - **THE `libs/` DIRECTORY RULE:** domain folders live INSIDE the Wizard's `resources/libs/`, never at the root level.
 - **SKINS ARE ON DEMAND (owner rule, Phase 5):** only `CONFIG.DEFAULT_BUILD_SKIN` (`skin.fentastic`) is downloaded by a fresh
   install or the background updater (`skin_catalog.on_demand_ids()` is everything else, an INSTALLED on-demand skin is still
@@ -177,7 +189,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 - **NO SHIMS (clean-install build):** move the code, update every import / caller to the new path, delete the old one.
 - **NO EMPTY `__init__.py` IN SUBFOLDERS:** folders under `resources/libs/` are Python 3 namespace packages
   (`xbmc.python` 3.0.0). Keep only `resources/__init__.py`, `resources/libs/__init__.py` and the pre-existing ones in
-  `common/` and `gui/`.
+  `common/` and `gui/`. The same holds for new feature folders under the subtitle add-on's `resources/lib/`.
 - **USE `CONFIG` FOR GLOBALS:** build-wide values come from the `CONFIG` singleton (`resources.libs.common.config`, fed by
   `uservar.py`); never copy one into a module-level constant (`startup.py` updates `CONFIG` in memory at boot).
 - **PATCH REGISTRY (Phase 5):** `patches/`, `patches_config.py`, `patches_registry_utils.py` and `patch_engine.py` change ONLY for
@@ -189,18 +201,27 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 - **PATH-PINNED (never move or rename):** `patches/`, `profiles/profile_age_guard.py` (stdlib-only; host add-ons import it by
   bare name), `profiles/profile_bootstrap.py` (skins' `Home.xml`), `default.py` / `startup.py` (`addon.xml`), every router
   `mode=` name, and every string in the subtitle boundary below.
-- **SUBTITLE ADD-ON BOUNDARY** (`service.subtitles.kodipovilai`; upstream MoranSubs merges keep landing there): never rename,
-  move or reorganize a core subtitle file or folder; remove whole functions / blocks, never rewrite them; nothing naming the
-  Wizard, `uservar`, `povil_icons` or build markers may re-enter it. Byte-identical public surface: Kodi hooks
+- **SUBTITLE ADD-ON: DECOUPLED FROM MORANSUBS, WE OWN THE CORE (owner decision, 19 Nov 2026).** `service.subtitles.kodipovilai`
+  no longer takes upstream MoranSubs merges: the last one (0.3.74 -> 0.3.96, `update-migration` @ `96efe59a`) closed Subtitle
+  Phase 0, and `update-migration` is not merged again. **Architectural refactoring of the subtitle core is strictly encouraged**:
+  move, rename, split and reorganize its files and folders to the target of `ARCHITECTURE_SUBTITLES.md` (repo root), with NO SHIMS
+  (update every import, delete the old path). The rules that still hold: (a) behaviour stays the same unless the owner approved
+  the change (dead-code deletion and the `settings.xml` reorganization are approved; every deletion is logged in the Deletion
+  Report of `ARCHITECTURE_SUBTITLES.md`); (b) at the end of every subtitle phase the "Refactoring Statistics" section of
+  `ARCHITECTURE_SUBTITLES.md` is updated (lines / files / functions deleted, moved, added; the largest files and functions);
+  (c) nothing naming the Wizard, `uservar`, `povil_icons` or build markers may re-enter it (Phase 3 decoupling); (d) the
+  external public surface below stays byte-identical, because other add-ons, skins and the Wizard call it. The "left for
+  clean upstream merges" items of the Open Notes are now ordinary cleanup candidates. Public surface: Kodi hooks
   (`xbmc.subtitle.module` = `default.py`, `xbmc.service` = `service.py`, `subtitles.tv` / `subtitles.movie` in `guisettings.xml`
   = the add-on id); `RunScript(service.subtitles.kodipovilai,action=choose_subs)` (skins) and `action=connect_gemini` (frozen
   `patches/pov_myservices.py`) plus its own actions (`search`, `manualsearch`, `download`, `translate_file`,
   `bg_translate_picker`, `he_avail`, the Telegram / Gemini / pool / cache / engine-test buttons of its `settings.xml`);
   `Addon.OpenSettings(service.subtitles.kodipovilai)` (`skins/af3_tools`, `profiles/build_profiles`, Onyx `Home.xml`,
-  `widget_baselines`); window properties `subs.player_filename`, `MoranSubsChooserOpen`; `resources/lib/he_sub_match.py`
+  `widget_baselines`); window properties `subs.player_filename` (published by `subs_filename_publisher`), `MoranSubsChooserOpen`
+  (set by `subs_chooser`; those two modules may move, the strings and the chooser XML file name may not); `resources/lib/he_sub_match.py`
   (imported by bare name after a `sys.path` append by POV / Umbrella hooks and frozen `patches/pov_prewarm`, `pov_sub_match_v2`:
-  stdlib-only at module level; API `prewarm`, `release_names`, `embedded_names`, `confirmed_releases`, `label_prefix`), with
-  `subs_chooser` and `subs_filename_publisher`. The Wizard reads only `use_builtin_engine` (`flow/runner.py`) and
+  stdlib-only at module level; API `prewarm`, `release_names`, `embedded_names`, `confirmed_releases`, `label_prefix`; this
+  file's path is PINNED). The Wizard reads only `use_builtin_engine` (`flow/runner.py`) and
   `pov_fast_navigation` (`pov_language_invoker_guard`) from it, and only through
   `host_repairs/kodi_utils.subs_get_*`; it names the add-on id only as an existence / required-add-on reference
   (`build/wizard_actions`, `fresh_install`, `auto_install`, `build_profiles`, `pyc_warm`, `clear`, `manifest.json`).
@@ -225,6 +246,50 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 - **WORKFLOW:** stop after each step; the user reviews and commits. No version bump or changelog per step.
 - **LINE ENDINGS:** sources and docs use CRLF (a file that is LF stays LF).
 - **Output Mirroring:** For every single response you generate in this project, you MUST automatically write your full, exact textual response into a file named `output.txt` in the root directory. Overwrite the file completely each time (do not append).
+
+## ⏭️ SKIPPED UPSTREAM FEATURES (for future review)
+
+Bypassed on purpose in the Subtitle Phase 0 merge (owner decision, 19 Nov 2026). Source of every item: commit `96efe59a` (tip of
+`update-migration`); port by hand with `git show 96efe59a:<path>` or `git diff 77880b8 96efe59a -- <path>` (git treats those commits as
+merged, so a later merge will NOT bring them back). Each item needs the owner's go-ahead before it is ported.
+
+**Onyx skin, upstream 1.0.10 -> 1.0.20 (we stay on our 1.0.9).** Most items need upstream Wizard 0.5.x features our Wizard does not
+have. Our 1.0.9 and upstream's 1.0.9 are different releases; a port must take a version above 1.0.20. About 110 files: 59 modified, 51 new
+(`media/povil/osd/*`, `media/povil/ratings/*`, `media/povil/settings/*`, `focus_box.png`, `panel.png`, `tab_line_*.png`).
+- **Ratings from several sites** (1.0.15/1.0.16): the hero, every list view, the info screen and the player's info panel show TMDb, IMDb,
+  Rotten Tomatoes (critics / audience), Metacritic, Trakt and Letterboxd. Properties `povil.rt.*` / `povil.rtp.*` (`imdb`, `tmdb`,
+  `tomato(_state)`, `popcorn(_state)`, `meta(_tone)`, `trakt`, `letterboxd`, `ask`, `for`). Needs the upstream Wizard's `ratings.py`
+  (0.5.5/0.5.6), which our Wizard does not have. Also a rating corner plate on every poster / wide tile.
+- **Home trailers** (1.0.16-1.0.20): after 3 s on a title its trailer plays behind the hero, then the screen fades to the trailer; a
+  settings tile turns it off. Properties `povil.tr.on`, `povil.tr.ask`, `povil.tr.opening`, `povil.tr.file`; LG / busy-dialog guards; a
+  tap on the trailer keeps the tab. Needs the upstream Wizard's `trailers.py` (0.5.6-0.5.16, Kodi's own player, HLS 1080p, YouTube
+  translated trailers). The subtitle-side half (skip snapshot / autosub while `povil.tr.file` is the playing file) was also dropped from
+  `autosub_service.py` and must come back with it.
+- **Streaming-service hub tab** (1.0.16): Netflix / Disney+ / Apple TV+ / Prime Video / HBO Max chips open a page of the home filtered
+  to that service. Properties `povil.hub.*` (`enter`, `id`, `name`, `net`, `type`), `povil.tab.hub`, `povil.deep.hub`, `povil.far.hub`.
+- **Continue-watching tab** (1.0.18, `povil.tab.continue`, `povil.deep.continue`) and **the viewer chooses the top bar's tabs** (Wizard mode
+  `onyx_tabs`, the settings tile "בחירת מסכים"; the bar became a list of buttons, `tab_line_*.png`).
+- **Wizard modes our router does not have:** `onyx_tabs`, `player_subs_position` (`step=up|down`, subtitles up / down buttons in the
+  player, 1.0.12), `pov_favorites_order`. (`profile_skin`, `profiles` exist.)
+- **Player redesign** (1.0.9 upstream / 1.0.12 / 1.0.15): a focusable timeline with real seeking, one seek bar, glass button groups,
+  format pills (resolution, fps, HDR kind, audio, codec), the source provider in the details line (`povil_osd_provider`,
+  `povil_osd_provider_for`, `pov_picked_source_name`, upstream Wizard source hook 0.5.1), a tap on the picture closes the controls (1.0.10).
+- **Other Onyx items:** generated Kodi settings screens and dialogs in the build's look (1.0.9 / 1.0.15), clear-cache tile (1.0.11, POV
+  `clear_all_cache`), power button in the top bar (1.0.12), POV chips in favourites and the favourites rows refresh at once (1.0.13 /
+  1.0.14, a property changed by upstream Wizard 0.5.4 POV hooks), "dark, not black" veil (1.0.13), home rows not reloaded at every play
+  start / stop (`sortby="size"`, 1.0.16), Hebrew in system information.
+- **Conflicts with our refactor if taken as-is:** upstream Onyx calls `RunScript(service.subtitles.kodipovilai,action=search_provider)` and
+  reads `Addon.SettingStr(service.subtitles.kodipovilai,search_provider)` (both moved to the Wizard: `mode=search_provider`, the Wizard's
+  setting); upstream also made Onyx the default skin and retired NOX ("one skin leaves the build", Wizard 0.5.0), against our skin policy.
+
+**Wizard-side upstream edits (reverted to ours).**
+- `af3_home_patcher.py`: 12 Hebrew strings for AF3 3.5's search window (msgctxt `#31016`, `#31022`, `#31281`, `#31324`, `#31639`,
+  `#31850`-`#31852`, `#31861`, `#31863`-`#31865`). Pure data; a candidate to port.
+- `search_provider.py`, `umbrella_watch_prompt.py`, `pov_reload.py`: NOX removed, and `addon_presence` imported as `resources.lib.addon_presence`
+  (wrong in the Wizard: `resources.libs.host_repairs.addon_presence`). Our versions already ask through `addon_presence`; nothing to port
+  unless NOX is retired.
+- `af3_osd_tap_close_patcher.py` (new upstream, AF3 player: a tap on the picture closes the controls; marker `AI_SUBS_AF3_OSD_TAP_CLOSE_v1`,
+  control id 6990): a host repair, so it would belong in the Wizard's `host_repairs/` (+ a call in the runner), not in the subtitle add-on.
 
 ## 🔮 FUTURE ENHANCEMENTS
 
