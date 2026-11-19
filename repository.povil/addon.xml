@@ -9,14 +9,13 @@
   <checksum verify="sha256"> makes Kodi check the index, <hashes>sha256</hashes> makes it check every zip against <zip>.sha256
   (both written by .github/scripts/gen_repo.py).
 
-  The optional import below names the upstream repository. NOTE: Kodi does NOT install optional imports by itself. The
-  Wizard installs repository.povil.upstream at first start; a user who installed only this repository finds it listed in
+  NO requires / import block, on purpose: Kodi 21 refuses to install a repository add-on that declares any dependency
+  (CAddonInstallJob: "failed to install repository [repository.povil]. It has dependencies defined"), even xbmc.addon.
+  gen_repo.py fails the build if a repository add-on gets one. repository.povil.upstream is therefore installed by the Wizard
+  at first start (provisioning/repo_bootstrap.py); a user who installed only this repository finds it listed in
   "Install from repository" -> "Kodi POV IL Repository" -> "Add-on repository".
 -->
-<addon id="repository.povil" name="Kodi POV IL Repository" version="1.0.0" provider-name="DevGeniusCode">
-    <requires>
-        <import addon="repository.povil.upstream" optional="true"/>
-    </requires>
+<addon id="repository.povil" name="Kodi POV IL Repository" version="1.0.1" provider-name="DevGeniusCode">
     <extension point="xbmc.addon.repository" name="Kodi POV IL Repository">
         <dir>
             <info compressed="false">https://devgeniuscode.github.io/Kodi-POV-IL-Build/addons.xml</info>

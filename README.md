@@ -80,12 +80,20 @@ Three classes of payload:
 
 ### Two install paths
 
-1. **Repository first:** add the site URL as a source, install `repository.povil` from it (zip), then install the Wizard from
-   the repository. The Wizard's first start installs `repository.povil.upstream` (Kodi does **not** install an `optional="true"`
-   `<import>`, so the Wizard does it).
-2. **Standalone Wizard zip:** install `plugin.program.kodipovilwizard-latest.zip`. The first start installs **both** repository
-   add-ons from the site's `<id>-latest.zip` (each verified against `<id>-latest.zip.sha256`; `provisioning/repo_bootstrap.py`).
-   The Wizard does **not** `<import>` the repository, because a zip installed without it would fail on the missing dependency.
+1. **Repository first (the documented route):** add the site URL as a source (Kodi's file browser lists exactly one file there,
+   `repository.povil-latest.zip`: `gen_repo.write_landing` allows one static zip link and `verify()` enforces it), install
+   `repository.povil` from it, then install the Wizard from the repository. The Wizard's first start installs
+   `repository.povil.upstream`. Neither repository add-on has a `<requires>` block: Kodi 21 refuses to install a repository
+   add-on that declares any dependency (`failed to install repository ... It has dependencies defined`), so Kodi cannot pull the
+   upstream repository in by itself and `gen_repo.py` fails the build on a `<requires>` in either of them.
+2. **Standalone Wizard zip:** download `https://devgeniuscode.github.io/Kodi-POV-IL-Build/plugin.program.kodipovilwizard-latest.zip`
+   in a normal browser (or the button on the site's `index.html`) and install the file from local storage. The first start installs
+   **both** repository add-ons from the site's `<id>-latest.zip` (each verified against `<id>-latest.zip.sha256`;
+   `provisioning/repo_bootstrap.py`). The Wizard does **not** `<import>` the repository, because a zip installed without it would
+   fail on the missing dependency. **Do not install it from a remote source in Kodi's file manager:** Kodi's `zip://https://` reader
+   opens one HTTP range connection per file (274 files, about 1 s each, and a cold CDN edge can stall one for a minute), which
+   takes minutes and ends in cURL error 28. The Wizard zip and `repository.povil.upstream-latest.zip` are deployed at their root
+   URLs but deliberately not linked as `<a href>` on `index.html`.
 
 Either way the build then provisions itself exactly as before (banner, fresh-install resume, `.provisioned` marker).
 

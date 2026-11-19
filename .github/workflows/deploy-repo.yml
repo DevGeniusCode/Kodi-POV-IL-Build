@@ -70,7 +70,48 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  warm:
+    # A deploy replaces the whole site, so the Pages CDN holds none of the new files and the first reader pays for the origin
+    # fetch (measured: 61 s for the 4.6 MB Wizard zip, 2 s once cached). Kodi's low-speed timeout turns that into
+    # "Timeout was reached(28)". One GET of every stable zip and of the index right after the deploy moves that cost here.
+    # Best effort: the CDN cache is per edge location and the runner reaches one of them, so this lowers the odds, it does not
+    # guarantee them. A failure here never undoes the deploy (continue-on-error).
+    needs: deploy
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch the index and every stable zip once
+        env:
+          SITE: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          base="${SITE%/}"
+          # gen_repo.STABLE_ALIASES is the single list of the <id>-latest.zip files the site publishes
+          ids="$(python -c "import sys; sys.path.insert(0, '.github/scripts'); import gen_repo; print(*gen_repo.STABLE_ALIASES)")"
+          urls="$base/ $base/addons.xml $base/addons.xml.sha256 $base/addons.xml.md5"
+          for id in $ids; do
+            urls="$urls $base/$id-latest.zip $base/$id-latest.zip.sha256"
+          done
+          failed=0
+          for url in $urls; do
+            if ! curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors --max-time 300 -o /dev/null \
+                 -w "%{http_code} %{size_download} B in %{time_total}s  $url\n" "$url"; then
+              echo "::warning::could not fetch $url"
+              failed=1
+            fi
+          done
+          exit $failed

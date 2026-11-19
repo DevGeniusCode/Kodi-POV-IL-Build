@@ -7,7 +7,8 @@ Usage::
 
 Output layout (``--out``)::
 
-    index.html                          landing page + links Kodi's "install from zip" browser can follow
+    index.html                          landing page; its ONLY static <a href="*.zip"> is repository.povil-latest.zip (what Kodi's
+                                        file browser lists); the Wizard zip is a JS download button, see write_landing
     .nojekyll
     addons.xml                          every add-on's addon.xml, wrapped in <addons>
     addons.xml.sha256                   hex sha256 of addons.xml (verified by Kodi: <checksum verify="sha256">)
@@ -54,6 +55,12 @@ from kodi_addons import Addon, discover_addons  # noqa: E402
 # Copied to <site>/<id>-latest.zip (+ .sha256) so install instructions and the Wizard's first-run bootstrap can use a name that
 # never changes. All of them MUST exist in the repo: the build fails otherwise.
 STABLE_ALIASES = ("repository.povil", "repository.povil.upstream", "plugin.program.kodipovilwizard")
+
+# index.html: Kodi's HTTP file browser lists every static <a href="*.zip"> of the page, so exactly ONE is allowed, the repository
+# zip. The Wizard zip is offered by a script-driven button (Kodi's scraper does not run scripts) and by the README; the upstream
+# repository zip is installed by the Wizard and linked nowhere.
+LANDING_LINK_ID = "repository.povil"
+LANDING_BUTTON_ID = "plugin.program.kodipovilwizard"
 
 # Files Kodi looks for next to the zips when <assets> does not name them.
 DEFAULT_ASSETS = ("icon.png", "fanart.jpg")
@@ -188,6 +195,10 @@ def check_repositories(addons: list[Addon], base_url: str) -> None:
     """
     by_id = {a.id: a for a in addons}
     own, upstream = by_id.get("repository.povil"), by_id.get("repository.povil.upstream")
+    for repo in (own, upstream):
+        if repo is not None and ET.parse(os.path.join(repo.path, "addon.xml")).getroot().find("requires") is not None:
+            raise RepoError(f"{repo.id}: a repository add-on must not have a <requires> block "
+                            "(Kodi 21: \"failed to install repository ... It has dependencies defined\")")
     if own is not None:
         dirs = _repository_dirs(own)
         if len(dirs) != 1:
@@ -363,8 +374,17 @@ def write_aliases(out_dir: str, addons: list[Addon]) -> list[str]:
 
 
 def write_landing(out_dir: str, base_url: str, aliases: list[str]) -> None:
-    """index.html. Kodi's HTTP file browser follows plain <a href> links, so the zips are linked directly."""
-    links = "\n".join(f'    <li><a href="{html.escape(n)}">{html.escape(n)}</a></li>' for n in aliases)
+    """index.html.
+
+    Kodi's HTTP file browser lists every static <a href="*.zip"> of this page, so the page carries exactly ONE: the repository
+    zip. The Wizard zip is a <button> whose script sets location.href (Kodi's scraper does not run scripts and only looks at
+    <a href>); the upstream repository zip is not offered at all (the Wizard installs it). Both stay deployed at their root
+    URLs. verify() re-reads this page and fails the build on a second static zip link.
+    """
+    link, button = f"{LANDING_LINK_ID}-latest.zip", f"{LANDING_BUTTON_ID}-latest.zip"
+    for needed in (link, button):
+        if needed not in aliases:
+            raise RepoError(f"{needed} was not written; the landing page needs it")
     shown = html.escape(base_url + "/") if base_url else "(this address)"
     page = f"""<!doctype html>
 <html lang="he" dir="rtl">
@@ -378,13 +398,20 @@ def write_landing(out_dir: str, base_url: str, aliases: list[str]) -> None:
   <p>Source URL / כתובת המקור: <code>{shown}</code></p>
   <ol>
     <li>Kodi &rarr; Settings &rarr; File manager &rarr; Add source &rarr; the URL above</li>
-    <li>Add-ons &rarr; Install from zip file &rarr; choose the source &rarr; <b>repository.povil-latest.zip</b></li>
+    <li>Add-ons &rarr; Install from zip file &rarr; choose the source &rarr; <b>{link}</b></li>
     <li>Add-ons &rarr; Install from repository &rarr; the POV IL repository &rarr; the Wizard</li>
   </ol>
-  <p>Or install <b>plugin.program.kodipovilwizard-latest.zip</b> directly: it installs both repositories on first start.</p>
   <ul>
-{links}
+    <li><a href="{link}">{link}</a></li>
   </ul>
+  <p>Wizard zip for a normal browser (download it, then Kodi &rarr; Install from zip file &rarr; the downloaded file; do not
+  install it from a remote source, Kodi would need one connection per file):</p>
+  <p><button type="button" id="wizard-zip" data-file="{button}">Download {button}</button></p>
+  <script>
+    document.getElementById("wizard-zip").addEventListener("click", function () {{
+      window.location.href = this.getAttribute("data-file");
+    }});
+  </script>
 </body>
 </html>
 """
@@ -463,6 +490,15 @@ def verify(out_dir: str, addons: list[Addon]) -> list[str]:
 
     if not os.path.isfile(os.path.join(out_dir, "config", "config.json")):
         problems.append("config/config.json missing")
+
+    try:
+        with open(os.path.join(out_dir, "index.html"), "r", encoding="utf-8") as fh:
+            page = fh.read()
+        zip_links = re.findall(r"<a\b[^>]*?\bhref\s*=\s*[\"']?([^\"'\s>]*\.zip)\b", page, flags=re.IGNORECASE)
+        if zip_links != [f"{LANDING_LINK_ID}-latest.zip"]:
+            problems.append(f"index.html must have exactly one static zip link, {LANDING_LINK_ID}-latest.zip (found {zip_links})")
+    except OSError as exc:
+        problems.append(f"index.html unreadable: {exc}")
     return problems
 
 
