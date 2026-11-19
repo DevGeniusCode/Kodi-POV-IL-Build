@@ -9,7 +9,7 @@ import tempfile
 
 root = os.path.abspath(sys.argv[1])
 out = sys.argv[2]
-FIX = os.environ.get('SUBS_CONTRACT_DIR') or r'C:\Users\User\Documents\GitHub\Kodi-POV-IL-Build\.github\scripts\subs_contract'
+FIX = os.environ.get('SUBS_CONTRACT_DIR') or os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, FIX)
 import _stubmaker
 prof = tempfile.mkdtemp(prefix='smoke_')
