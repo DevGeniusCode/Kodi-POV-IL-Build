@@ -461,7 +461,6 @@ def copy_to_clipboard(txt):
 # Python 3.14 removed entirely). The class had no other callers.
 
 import qrcode
-import xbmcaddon
 
 def generate_code(data, filename):
 
@@ -515,7 +514,7 @@ def show_result(message, url=None):
 
             clean_message = message.replace(url, '').strip()
 
-            addon_path = xbmcvfs.translatePath(xbmcaddon.Addon().getAddonInfo('path'))
+            addon_path = xbmcvfs.translatePath(CONFIG.ADDON_PATH)
 
             qr_dialog = QRWindow(
                 'loguploader.xml',

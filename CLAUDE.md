@@ -37,8 +37,8 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `.po` merged into POV's strings table, P3 decisions) are done. Step 2 (Category C: the 17 runtime patchers of Umbrella, Idan
   Plus and AF3, reference Umbrella 6.8.02, Idan Plus 4.0.6, AF3 3.5.2) is applied: Idan Plus (3) and Umbrella (5 of its 10) became
   registry entries, Umbrella's settings are baked into `userdata` (`config_version` 2.0.8), the AF3 search patcher was rewritten
-  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 150 entries (120
-  POV, 13 Umbrella, 12 Idan Plus, 5 AF3). Runtime patchers that remain because the registry cannot express them (they REPLACE
+  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 151 entries (121
+  POV, 13 Umbrella, 12 Idan Plus, 5 AF3; `pov_curtain_start` (QA Phase 4) is the 121st POV entry, with `patches/pov_curtain.py`). Runtime patchers that remain because the registry cannot express them (they REPLACE
   lines or need function-scoped anchors): `umbrella_tmdb_apikey`, `umbrella_list_order`, `af3_dialog_subtitles`, `af3_home`
   (data seeding, font) and the data copies `umbrella_hebrew_ui`, `umbrella_watch_*` (see "Architectural decision" below). The AF3
   discover-grid patcher is retired without replacement; AF3 3.5.2 + script.skinvariables 2.3.2 were re-evaluated (reference:

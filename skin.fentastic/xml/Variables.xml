@@ -441,8 +441,8 @@
 	</variable>
 
 	<variable name="texturecurrentimage">
-	<value condition="!String.IsEmpty(Player.Art(fanart)">$INFO[Player.Art(fanart)]</value>
-	<value condition="!String.IsEmpty(Player.Art(landscape)">$INFO[Player.Art(landscape)]</value>
+	<value condition="!String.IsEmpty(Player.Art(fanart))">$INFO[Player.Art(fanart)]</value>
+	<value condition="!String.IsEmpty(Player.Art(landscape))">$INFO[Player.Art(landscape)]</value>
 	<value condition="!String.IsEmpty(VideoPlayer.Cover)">$INFO[VideoPlayer.Cover]</value>
 	<value>$INFO[VideoPlayer.Cover]</value>
 	</variable>
@@ -1088,7 +1088,7 @@
 	</variable>
 
 	<variable name="_FixOsdIcon">
-	<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(episodes) + !String.IsEmpty(Player.Art(poster)">$INFO[Player.Art(poster)]</value>
+	<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(episodes) + !String.IsEmpty(Player.Art(poster))">$INFO[Player.Art(poster)]</value>
 	<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(episodes) + !String.IsEmpty(VideoPlayer.Cover)">$INFO[VideoPlayer.Cover]</value>
 	<value condition="VideoPlayer.Content(movies) | VideoPlayer.Content(episodes) + !String.IsEmpty(Player.Icon)">$INFO[Player.Icon]</value>
 	<value>$INFO[Player.Icon]</value>

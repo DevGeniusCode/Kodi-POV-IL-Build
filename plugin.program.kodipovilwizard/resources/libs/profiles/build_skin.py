@@ -20,6 +20,8 @@ import xbmc
 import xbmcvfs
 import xbmcgui
 
+from resources.libs.common import logging
+
 # Seeded into the active profile when absent (the master receives them with
 # its config pack; secondary profiles through profile_store.seed_profile).
 LAYOUT_DEFAULTS = ('addon_data/script.fentastic.helper/cpath_cache.db',
@@ -164,8 +166,11 @@ def gui_barrier():
     it ran, so an earlier ReloadSkin has finished by then. Call it between two changes that each reload the skin, and before
     anything that reads or draws GUI controls. Assumption, not yet checked in Kodi: the queue is first-in first-out.
     """
+    started = time.monotonic()
     xbmc.executebuiltin('SetProperty(POVIL.GuiBarrier,1,home)', True)
     xbmc.executebuiltin('ClearProperty(POVIL.GuiBarrier,home)', True)
+    # The FIFO assumption above is checked in the log: compare this line with Kodi's own "skin loaded" lines.
+    logging.log('[BuildSkin] GUI barrier passed after {0:.2f}s'.format(time.monotonic() - started), level=xbmc.LOGINFO)
 
 
 def persist_live_settings():

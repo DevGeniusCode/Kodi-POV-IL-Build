@@ -1393,5 +1393,18 @@
 			<control type="label"><left>96</left><top>955</top><width>1728</width><height>50</height><font>font12</font><align>center</align><label>תוכן לפי הגיל שנבחר או באישור הורה • שידורים חיים חסומים</label><textcolor>FFB7C9D8</textcolor></control>
 		</control>
 		<!-- ######## PROFILES ###### -->
+		<!-- POVIL_CURTAIN_v1: the Wizard's POV patch (pov_curtain_start / pov_curtain.py) raises Window(10000).Property(povil.pov_curtain)
+		     while POV moves from progress_media to sources_results to the video; without this, Home shows for 1-3 s in between.
+		     Last control of Home = on top of it, below every dialog. The Python side always takes the property down again. -->
+		<control type="image">
+			<left>0</left>
+			<top>0</top>
+			<width>1920</width>
+			<height>1080</height>
+			<texture>colors/black.png</texture>
+			<visible>!String.IsEmpty(Window(10000).Property(povil.pov_curtain))</visible>
+			<animation effect="fade" time="120">Visible</animation>
+			<animation effect="fade" time="350">Hidden</animation>
+		</control>
 	</controls>
 </window>

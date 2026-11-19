@@ -115,7 +115,7 @@ def registry():
 
 
 def _overrides(entries, settings=None):
-    settings = settings or xbmcaddon.Addon()
+    settings = settings or xbmcaddon.Addon(CONFIG.ADDON_ID)
     return {e['id']: settings.getSetting(SETTING_PREFIX + e['id']) for e in entries}
 
 
@@ -234,7 +234,7 @@ def _notify(text):
 def toggle(patch_id):
     """Flip one patch and run the engine for that patch only."""
     entry = next((e for e in registry() if e['id'] == patch_id), None)
-    settings = xbmcaddon.Addon()
+    settings = xbmcaddon.Addon(CONFIG.ADDON_ID)
     current = effective_state(entry or {}, settings.getSetting(SETTING_PREFIX + patch_id))
     settings.setSetting(SETTING_PREFIX + patch_id, 'false' if current else 'true')
     stats = _run_engine(only_ids=[patch_id])
@@ -258,7 +258,7 @@ def bulk(params):
             text += '\n({0} מהם כבויים כברירת מחדל בבילד)'.format(off_by_default)
     if not xbmcgui.Dialog().yesno(CONFIG.ADDONTITLE, text):
         return
-    settings = xbmcaddon.Addon()
+    settings = xbmcaddon.Addon(CONFIG.ADDON_ID)
     for entry in entries:
         settings.setSetting(SETTING_PREFIX + entry['id'], 'true' if state == 'on' else 'false')
     stats = _run_engine(only_ids=[e['id'] for e in entries])
@@ -302,7 +302,7 @@ def _health_report():
 
 def _reset_overrides():
     entries = registry()
-    settings = xbmcaddon.Addon()
+    settings = xbmcaddon.Addon(CONFIG.ADDON_ID)
     changed = [e['id'] for e in entries if settings.getSetting(SETTING_PREFIX + e['id']) in ('true', 'false')]
     if not changed:
         _notify('אין העדפות ידניות לאפס')

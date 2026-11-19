@@ -147,7 +147,7 @@ def log(msg, level='INFO'):
         pass
 
 
-def notify(msg, title=None, icon=None, time_ms=4000):
+def notify(msg, title=None, icon=None, time_ms=4000, sound=True):
     if not KODI_AVAILABLE:
         print('NOTIFY:', title, '-', msg)
         return
@@ -192,9 +192,9 @@ def notify(msg, title=None, icon=None, time_ms=4000):
         # saw "AI is translating" but nothing ever happened). Dialog().
         # notification() is meant to be async, but under that duress it did not
         # return -- so we never issue it on a thread that has real work to do.
-        def _show(_title=title, _msg=msg, _icon=icon, _ms=time_ms):
+        def _show(_title=title, _msg=msg, _icon=icon, _ms=time_ms, _sound=sound):
             try:
-                xbmcgui.Dialog().notification(_title, _msg, _icon, _ms)
+                xbmcgui.Dialog().notification(_title, _msg, _icon, _ms, _sound)
             except Exception:
                 pass
             finally:

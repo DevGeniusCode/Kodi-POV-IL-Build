@@ -55,7 +55,7 @@ def _background_ui_busy():
 def _addon_version():
     try:
         import xbmcaddon
-        return xbmcaddon.Addon().getAddonInfo('version') or ''
+        return xbmcaddon.Addon(ADDON_ID).getAddonInfo('version') or ''
     except Exception:
         return ''
 

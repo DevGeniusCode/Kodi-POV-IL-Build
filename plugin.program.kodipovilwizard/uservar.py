@@ -5,8 +5,11 @@ import os
 #########################################################
 #         Global Variables - DON'T EDIT!!!              #
 #########################################################
-ADDON_ID = xbmcaddon.Addon().getAddonInfo('id')
-PATH = xbmcaddon.Addon().getAddonInfo('path')
+# Explicit id, never a bare xbmcaddon.Addon(): host_repairs_service.py runs as a path script (RunScript(special://...py)),
+# which has no add-on, and a bare Addon() there raises "No valid addon id could be obtained" (and, at import, kept the
+# whole CONFIG import failing and being retried by every poll of the repair runner).
+ADDON_ID = 'plugin.program.kodipovilwizard'
+PATH = xbmcaddon.Addon(ADDON_ID).getAddonInfo('path')
 ART = os.path.join(PATH, 'resources', 'media')
 CUSTOM_ART = os.path.join(PATH, 'resources', 'kodi_rd_israel_art')
 #########################################################

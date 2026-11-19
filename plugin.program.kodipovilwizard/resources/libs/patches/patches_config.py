@@ -2469,14 +2469,17 @@ PATCH_CONFIG = [
         "enabled": True,
         "optional": True,
         "target_file": "resources/lib/menus/movies.py",
-        "marker": "# WIZARD_IL_RELEASE_v3",
+        "marker": "# WIZARD_IL_RELEASE_v4",
         "anchor": "\t\t\tlistitem.setProperties(props)",
         "action": "append_after",
-        # Runs once per movie row: after the first import il_release is found in sys.modules.
+        # Runs once per movie row, from POV's widget threads. sys.modules.get() alone is NOT safe: while one thread is still
+        # executing il_release's top level (it imports il_fetcher) the half-built module is already in sys.modules, and a
+        # second thread got it without apply_release_property ("partially initialized module"). A real `import` waits for
+        # the importing thread, so the shortcut is only taken for a module that is complete.
         "hook": (
             "try:\n"
             "\t_il = __import__('sys').modules.get('il_release')\n"
-            "\tif _il is None:\n"
+            "\tif _il is None or not hasattr(_il, 'apply_release_property'):\n"
             "\t\t_povil_dir = __import__('xbmcvfs').translatePath('%s')\n"
             "\t\tif _povil_dir not in __import__('sys').path:\n"
             "\t\t\t__import__('sys').path.append(_povil_dir)\n"
@@ -3033,6 +3036,32 @@ PATCH_CONFIG = [
         "hook": (
             "# The Wizard owns this flag (host_repairs/pov_language_invoker_guard); addon.xml was already rewritten above.\n"
             "refresh = False\n"
+        )
+    },
+
+    # =====================================================================
+    # ============= POV SOURCE FLOW: NO HOME FLASH BETWEEN WINDOWS =========
+    # =====================================================================
+    {
+        "id": "pov_curtain_start",
+        "name": "Dark curtain over Home while POV's source windows change",
+        "description": "POV closes progress_media before sources_results opens, and again before the video starts; Home showed for 1-3 s in between. Raises the povil.pov_curtain window property (a black image on top of Home.xml in skin.fentastic); pov_curtain.py takes it down when the video runs or the flow ends.",
+        "category": "ux",
+        "priority": "minor",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "optional": True,
+        "target_file": "resources/lib/modules/sources.py",
+        "marker": "# WIZARD_POV_CURTAIN_v1",
+        "anchor": "\t\tself.config_loader.apply(self, params)",
+        "action": "append_after",
+        "hook": _build_patch_hook(
+            module_name="pov_curtain",
+            indent="\t\t",
+            custom_logic=(
+                "if getattr(self, 'full_screen', False) and not getattr(self, 'background', False):\n"
+                "\tpov_curtain.raise_curtain()"
+            )
         )
     }
 ]

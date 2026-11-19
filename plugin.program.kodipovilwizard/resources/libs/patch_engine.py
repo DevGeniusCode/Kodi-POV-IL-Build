@@ -38,6 +38,7 @@ import xbmcaddon
 import xbmcvfs
 
 from resources.libs.common import logging
+from resources.libs.common.config import CONFIG
 
 # Addons that predate the "addon_id" field in patches_config.py were all
 # written against the main build addon -- default to it for backward compat.
@@ -342,7 +343,7 @@ class PatchEngine(object):
             patch_id = entry['id']
             try:
                 if self._addon_settings is None:
-                    self._addon_settings = xbmcaddon.Addon()
+                    self._addon_settings = xbmcaddon.Addon(CONFIG.ADDON_ID)
                 override = self._addon_settings.getSetting('patch_enabled_' + patch_id)
                 if override == 'true':
                     is_enabled = True

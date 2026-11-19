@@ -174,7 +174,7 @@
 					<width>100</width>
 					<texture colordiffuse="95FFFFFF" fallback="flags/starrating/rating0.png">$INFO[ListItem.ActualIcon,flags/starrating/rating,.png]</texture>
 					<aspectratio>keep</aspectratio>
-					<visible>!String.IsEmpty(ListItem.property(sync)</visible>
+					<visible>!String.IsEmpty(ListItem.Property(sync))</visible>
 				</control>
 				</control>
 				</itemlayout>
@@ -247,7 +247,7 @@
 					<width>100</width>
 					<texture colordiffuse="95FFFFFF" fallback="flags/starrating/rating0.png">$INFO[ListItem.ActualIcon,flags/starrating/rating,.png]</texture>
 					<aspectratio>keep</aspectratio>
-					<visible>!String.IsEmpty(ListItem.property(sync)</visible>
+					<visible>!String.IsEmpty(ListItem.Property(sync))</visible>
 				</control>
 				</control>
 				</focusedlayout>
@@ -275,7 +275,7 @@
 					<top>200</top>
 					<width>280</width>
 					<height>200</height>
-					<onup>150</onup>
+					<onup>9001</onup>
 					<onleft>120</onleft>
 					<ondown>130</ondown>
 					<scrolltime>200</scrolltime>
@@ -286,6 +286,25 @@
 						<param name="align" value="center" />
 						<param name="diffuse" value="stroke/stroke.png" />
 					</include>
+				</control>
+				<!-- AI_SUBS_SETTINGS_BUTTON_v1: the subtitle add-on's own settings, above the service list (same look as DefaultDialogButton) -->
+				<control type="button" id="9001">
+					<left>20</left>
+					<top>137</top>
+					<width>280</width>
+					<height>55</height>
+					<label>הגדרות כתוביות</label>
+					<font>font12</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<textcolor>unfocused_text</textcolor>
+					<focusedcolor>focused_text</focusedcolor>
+					<texturefocus colordiffuse="button_focus">buttons/dfo.png</texturefocus>
+					<texturenofocus colordiffuse="button_focus2">buttons/dnfo.png</texturenofocus>
+					<onleft>120</onleft>
+					<ondown>150</ondown>
+					<onup>9001</onup>
+					<onclick>Addon.OpenSettings(service.subtitles.kodipovilai)</onclick>
 				</control>
 			</control>
 			

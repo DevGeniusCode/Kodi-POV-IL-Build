@@ -8,7 +8,7 @@ try:
     import xbmc
 except ImportError:
     xbmc = None
-from resources.lib.autosub.policy import AI_ROW_TYPES, CHECKED_HEADINGS, EMBEDDED_MISS_LINES, LOADED_HEADINGS, OVERLAY_LINE_SECONDS, ask_ai_translation, toasts_on, wait_for_sync_check, ai_when_no_hebrew
+from resources.lib.autosub.policy import AI_ROW_TYPES, CHECKED_HEADINGS, EMBEDDED_MISS_LINES, LOADED_HEADINGS, SYNC_CHECK_END_TOAST_MS, SYNC_CHECK_START_TOAST_MS, ask_ai_translation, wait_for_sync_check, ai_when_no_hebrew
 
 
 STATE = {'last_file': None, 'busy': False, 'player': None, 'snap_file': None,
@@ -738,20 +738,25 @@ def autosub_on_play():
             return line + '[/COLOR]'
 
         if _sync_state != 'checking' or _eng_general is None:
+            # the subtitle is on screen and its timing needs no check: a
+            # two-second note, not the usual five
             _final_overlay(_status_line(
-                LOADED_HEADINGS.get(_sync_state, 'כתובית נטענה')))
+                LOADED_HEADINGS.get(_sync_state, 'כתובית נטענה')), hold=2.0)
             return
         # The check is still running, and a subtitle made for another cut can
-        # be seconds off until its fix arrives.  The line used to leave after
-        # five seconds whatever the check was doing (measured: gone 5.5 s
-        # after the picture started, the fix at 9.5 s), so a viewer looking at
-        # an unsynced subtitle had nothing saying that anything was still
-        # happening.  It now stays until the check ends, then says how.
-        _checking_line = _status_line(LOADED_HEADINGS['checking'])
+        # be seconds off until its fix arrives.  The top overlay used to stay
+        # over the picture until the check ended (17-25 s measured); now the
+        # overlay is closed and the check is announced with two corner toasts:
+        # one when it starts and one with the result.  A "fixed" result already
+        # has SubSync's own toast (with the offset), so it gets no second one.
         if not _autosub_owns_player():
-            return          # a stale run never writes into the next overlay
-        if not _overlay_show(_checking_line):
-            return
+            return          # a stale run never toasts for the next film
+        try:
+            _eng_general.show_msg = 'END'
+        except Exception:
+            pass
+        kodi.notify('בודק איכות סנכרון...',
+                    time_ms=SYNC_CHECK_START_TOAST_MS, sound=False)
 
         def _check_state():
             try:
@@ -760,37 +765,31 @@ def autosub_on_play():
             except Exception:
                 return ''
 
-        def _overlay_ours():
+        def _check_is_ours():
             try:
                 return bool(_autosub_owns_player()
                             and xbmc.Player().isPlayingVideo())
             except Exception:
                 return False
 
-        def _sleep_keeping_line(seconds):
+        def _sleep_step(seconds):
             xbmc.sleep(int(seconds * 1000))
-            _overlay_keep(_checking_line)
 
         _end_state, _waited = wait_for_sync_check(
-            _check_state, _overlay_ours, _sleep_keeping_line)
+            _check_state, _check_is_ours, _sleep_step)
         try:
-            kodi.log('autosub overlay: timing check %s after %.1fs' % (
+            kodi.log('autosub: timing check %s after %.1fs' % (
                 ('ended ' + _end_state) if _end_state
                 else 'left to another pick or a stop' if _end_state is None
                 else 'not followed further',
                 _waited))
         except Exception:
             pass
-        if _end_state == 'fixed' and toasts_on(settings):
-            # SubSync's own "synced automatically" toast is on screen now;
-            # the same words in the overlay beside it would be noise.
-            return
+        if _end_state == 'fixed':
+            return          # SubSync's own toast carries the result
         if _end_state:
-            _final_overlay(_status_line(CHECKED_HEADINGS[_end_state]))
-        elif _end_state == '' and _waited < OVERLAY_LINE_SECONDS:
-            # no result to show: the line still gets its usual time
-            _final_overlay(_checking_line,
-                           hold=OVERLAY_LINE_SECONDS - _waited)
+            kodi.notify(CHECKED_HEADINGS[_end_state],
+                        time_ms=SYNC_CHECK_END_TOAST_MS, sound=False)
     except Exception as e:
         try:
             kodi.log('autosub_on_play failed: {0}'.format(e),

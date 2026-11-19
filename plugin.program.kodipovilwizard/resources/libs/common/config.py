@@ -34,7 +34,7 @@ class Config:
         self.init_settings()
 
     def init_meta(self):
-        self.ADDON_ID = xbmcaddon.Addon().getAddonInfo('id')
+        self.ADDON_ID = uservar.ADDON_ID
         self.ADDON = xbmcaddon.Addon(self.ADDON_ID)
         self.ADDON_NAME = self.ADDON.getAddonInfo('name')
         self.ADDON_VERSION = self.ADDON.getAddonInfo('version')
@@ -328,13 +328,13 @@ class Config:
         self.LOGEMAIL = _get('email')
         self.NEXTCLEANDATE = _get('nextwizcleandate')
 
-    def get_setting(self, key, id=xbmcaddon.Addon().getAddonInfo('id')):
+    def get_setting(self, key, id=uservar.ADDON_ID):
         try:
             return xbmcaddon.Addon(id).getSetting(key)
         except:
             return False
 
-    def set_setting(self, key, value, id=xbmcaddon.Addon().getAddonInfo('id')):
+    def set_setting(self, key, value, id=uservar.ADDON_ID):
         try:
             return xbmcaddon.Addon(id).setSetting(key, value)
         except:

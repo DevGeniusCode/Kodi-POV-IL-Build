@@ -35,9 +35,11 @@ EMBEDDED_MISS_LINES = {
     '': 'הקריאה של הכתובית המובנית לא הושלמה\n'
         'אפשר לבחור אותה שוב מרשימת הכתוביות',
 }
-# A status line stays this long (seconds) ...
-OVERLAY_LINE_SECONDS = 5.0
-# ... and "checking" stays until the check ends, this long at most.  A check
+# The timing check of the subtitle on screen is announced with two corner
+# toasts (no overlay over the picture): one when it starts, one when it ends.
+SYNC_CHECK_START_TOAST_MS = 2500
+SYNC_CHECK_END_TOAST_MS = 3000
+# The wait for the end of the check is bounded by this many seconds.  A check
 # that ends later still announces a fix with its own toast.
 _SYNC_CHECK_OVERLAY_CAP = 25.0
 # A status that reads empty this many times in a row is gone; one empty read
