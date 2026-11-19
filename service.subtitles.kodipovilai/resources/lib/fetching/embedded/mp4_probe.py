@@ -8,22 +8,14 @@ codecs, fragmented files, and complex edit lists fail closed.
 import array
 import struct
 import sys
-import time
 from pathlib import Path
+from resources.lib.core import kodi
 
 _MAX_INDEX_BYTES = 16 * 1024 * 1024
 
 # A 1 ms nap at most every 20 ms in the long per-frame loops, so a new Kodi
-# script (the subtitle chooser) can start meanwhile -- see sync_align._breathe.
-_BREATHE_SLICE = 0.02
-_breath = [0.0]
-
-
-def _breathe():
-    now = time.monotonic()
-    if now - _breath[0] >= _BREATHE_SLICE:
-        time.sleep(0.001)
-        _breath[0] = time.monotonic()
+# script (the subtitle chooser) can start meanwhile -- see core/kodi.make_breather.
+_breathe = kodi.make_breather()
 
 _MAX_SUBTITLE_SAMPLES = 50000
 

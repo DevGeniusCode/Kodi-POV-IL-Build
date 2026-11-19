@@ -113,9 +113,9 @@ def _hebrew_subtitle_listed(info):
     """Whether the title's last search (the list's, or the reference search's)
     found a human Hebrew subtitle."""
     try:
-        from resources.lib.ai_translation.context import gender_reference
+        from resources.lib.ai_translation.context.gender.chain import chain_lang_of
         from resources.lib.fetching import bridge
-        return any(isinstance(c, dict) and gender_reference.chain_lang_of(c) == 'he'
+        return any(isinstance(c, dict) and chain_lang_of(c) == 'he'
                    for c in bridge.reusable_results(info) or [])
     except Exception:
         return False

@@ -237,8 +237,8 @@ def learn_cut_signature(info):
             return True
 
     try:
-        from resources.lib.fetching.embedded import embedded_extract
-        sig = embedded_extract.media_cut_signature(
+        from resources.lib.fetching.embedded.extract.cue_reference import media_cut_signature
+        sig = media_cut_signature(
             url, allow_http=True, abort_cb=abort,
             log=lambda m: log('cut-id: ' + m)) or ''
     except Exception as e:

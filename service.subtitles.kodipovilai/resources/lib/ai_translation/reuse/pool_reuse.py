@@ -17,6 +17,7 @@ except Exception:
     pool_contribute = pool_client = None
 from resources.lib.core.link_codec import decode_link
 from resources.lib.ai_translation.source_prep import content_hash, prepare_source, prepared_source_reader
+from resources.lib.core.srt.cues import MIN_CUES
 
 
 def pool_reuse_fetch(info, content_id, ar_on):
@@ -330,7 +331,7 @@ def _emb_source_laid(he_text, raw):
         return laid
     try:
         he = srt_cues.parse_srt(he_text)
-        if len(he) < common.MIN_CUES:
+        if len(he) < MIN_CUES:
             return ''
         verdict = verify.verify_cues(
             [{'start': c['start'], 'end': c['end']} for c in he], raw)

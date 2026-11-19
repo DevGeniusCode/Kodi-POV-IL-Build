@@ -1,0 +1,125 @@
+{
+ "_comment": "Facts recorded by Subtitle Phase 3 (step 3g), updated in Phase 4: embedded_extract.py and gender_reference.py were split into packages (step 4e) and are no longer standalone modules.",
+ "he_sub_match": {
+  "sha256": "61b54457d554533f10502f7289987ef86750b975f6b8bcc9ca3fad8a8780e552",
+  "module_level_imports": [
+   "import os",
+   "import re",
+   "import time",
+   "import json",
+   "import base64",
+   "import urllib.request as _req",
+   "import urllib.parse as _parse"
+  ]
+ },
+ "release": {
+  "sha256": "e7b48acc09e9f1973e8a11d79ce1433be215b9739fccf996d11eb970f415d60c",
+  "module_level_imports": [
+   "import re",
+   "import difflib"
+  ]
+ },
+ "frozen_signatures": [
+  [
+   "resources.lib.core.kodi",
+   "log",
+   [
+    "msg",
+    "level"
+   ]
+  ],
+  [
+   "resources.lib.core.settings",
+   "get_setting",
+   [
+    "key",
+    "default"
+   ]
+  ],
+  [
+   "resources.lib.fetching.bridge",
+   "build_video_data",
+   [
+    "info"
+   ]
+  ],
+  [
+   "resources.lib.fetching.bridge",
+   "ensure_engine_settings",
+   []
+  ],
+  [
+   "resources.lib.fetching.provider_adapter",
+   "load_provider",
+   [
+    "name"
+   ]
+  ],
+  [
+   "resources.lib.ai_translation.reuse.pool_contribute",
+   "report_ktuvit",
+   [
+    "info",
+    "names"
+   ]
+  ],
+  [
+   "resources.lib.fetching.pool_client",
+   "_lookup_raw",
+   [
+    "p"
+   ]
+  ],
+  [
+   "resources.lib.scoring_matching.release",
+   "match_pct",
+   [
+    "video_name",
+    "sub_name"
+   ]
+  ],
+  [
+   "resources.lib.scoring_matching.release",
+   "best_pct",
+   [
+    "video_name",
+    "sub_names",
+    "stop_at",
+    "floor"
+   ]
+  ]
+ ],
+ "private_exceptions": [
+  [
+   "resources.lib.fetching.pool_client",
+   "_lookup_raw"
+  ]
+ ],
+ "pinned_strings": [
+  "search",
+  "manualsearch",
+  "download",
+  "translate_file",
+  "bg_translate_picker",
+  "he_avail",
+  "choose_subs",
+  "connect_gemini",
+  "subs.player_filename",
+  "MoranSubsChooserOpen",
+  "use_builtin_engine",
+  "pov_fast_navigation"
+ ],
+ "wizard_read_settings": [
+  "use_builtin_engine",
+  "pov_fast_navigation"
+ ],
+ "settings_known_undeclared": [
+  "gemini_rpm"
+ ],
+ "placeholder_label_ids": [
+  30000
+ ],
+ "labels_with_percent": [
+  32506
+ ]
+}

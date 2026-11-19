@@ -6,10 +6,11 @@ import bisect
 import math
 import statistics
 from resources.lib.core.srt.cues import cues_median, preflight_cues, preflight_srt, dialogue_cues
-from resources.lib.sync.align.common import MAX_PLAUSIBLE_OFFSET_MS, MIN_CUES, MIN_OVERLAP, SCALE_MAX, SCALE_MIN, STATUS_FIXABLE, LOCAL_MIN_REF_CUES, MAXOFF, MICRO_MAX_SEGMENTS, MICRO_MAX_STEP_MS, MICRO_MIN_STEP_MS, PIECEWISE_MIN_GAIN, REGION_FINE_MIN_GAIN, TOL, UNIQUE_MIN
+from resources.lib.sync.align.common import MAX_PLAUSIBLE_OFFSET_MS, MIN_OVERLAP, SCALE_MAX, SCALE_MIN, STATUS_FIXABLE, LOCAL_MIN_REF_CUES, MAXOFF, MICRO_MAX_SEGMENTS, MICRO_MAX_STEP_MS, MICRO_MIN_STEP_MS, PIECEWISE_MIN_GAIN, REGION_FINE_MIN_GAIN, TOL, UNIQUE_MIN
 from resources.lib.sync.align.estimate import best_offset
 from resources.lib.sync.align.regions import region_fine_plan, region_free_plan, region_piecewise_plan
 from resources.lib.sync.align.verify import nearest_onset_distance, tight_agreement, timing_score, unique_match_metrics, overlap_rate
+from resources.lib.core.srt.cues import MIN_CUES
 
 
 PIECEWISE_MIN_STEP_MS = 5000

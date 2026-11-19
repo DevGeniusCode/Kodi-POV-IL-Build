@@ -6,14 +6,12 @@
 
 TOL = 500            # offset histogram bin (ms)
 MAXOFF = 250000      # search window: just past MAX_PLAUSIBLE_OFFSET_MS;
-MIN_CUES = 8          # min dialogue cues on each side
 MIN_OVERLAP = 0.80    # >=80% of ref cues must overlap after the map
 SCALE_MIN, SCALE_MAX = 0.90, 1.11
 CONFIRM_OFFSET_MS = 350   # |offset| <= this and scale==1.0 -> already synced
 
 STATUS_CONFIRMED = 'CONFIRMED'
 STATUS_FIXABLE = 'FIXABLE'
-STATUS_UNKNOWN = 'UNKNOWN'
 LOCAL_MIN_REF_CUES = 40
 
 # Some broadcast/stream masters insert a short bumper or black-frame pad at

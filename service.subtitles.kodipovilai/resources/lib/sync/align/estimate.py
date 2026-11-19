@@ -4,9 +4,9 @@
 
 import bisect
 import collections
-import time
 from resources.lib.core.srt.cues import cues_median
 from resources.lib.sync.align.common import SCALE_MAX, SCALE_MIN, LOCAL_MIN_REF_CUES, MAXOFF, TOL
+from resources.lib.core import kodi
 
 
 # ---- gate thresholds (mirroring arabic_gender's production values) --------
@@ -21,29 +21,18 @@ _IDENTITY_SHORTCUT_VOTE = 0.80   # identity this strong: no FPS search
 
 # ---- linear time-map estimation (from arabic_gender, generalized) ----------
 
-# Kodi runs every add-on's Python under one interpreter lock. Measured in QA
-# Kodi (21, Python 3.11): while one thread runs a CPU-bound loop that never
-# sleeps, a NEW script -- e.g. our own "בחירת כתוביות" button -- does not even
-# start until that loop ends (15.8 s behind a 20 s loop, 0.3 s idle); a 1 ms
-# sleep every ~20 ms brings it back to 0.3 s. Field logs from an Android box
-# showed the same 5-11 s waits behind SubSync's deep check at playback start.
-# The long loops here call _breathe(): about 5% slower in the background,
-# never in the way of the viewer.
-_BREATHE_SLICE = 0.02
-_breath = [0.0]
-
+# The long loops here call breathe() (core/kodi.make_breather has the why).
 
 # subsync sets this to its deep-job yield (a no-op on any other thread).
 YIELD = None
 
 
-def breathe():
-    now = time.monotonic()
-    if now - _breath[0] >= _BREATHE_SLICE:
-        time.sleep(0.001)
-        _breath[0] = time.monotonic()
-        if YIELD is not None:
-            YIELD()
+def _yield():
+    if YIELD is not None:
+        YIELD()
+
+
+breathe = kodi.make_breather(_yield)
 
 
 def best_offset(ref_on, cand_on, a, max_off=MAXOFF):

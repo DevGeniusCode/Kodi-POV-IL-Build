@@ -22,6 +22,31 @@ from resources.lib.ui.settings_actions.engine import handle_engine_test
 from resources.lib.ui.settings_actions.gemini import handle_connect_gemini, handle_open_aistudio, handle_open_tmdb_notice, handle_show_gemini_usage, handle_test_connection
 
 
+# action -> handler. The directory actions get Kodi's plugin handle; the RunScript / settings actions get the
+# params only. An action in neither table is logged and ends the directory.
+HANDLE_ACTIONS = {
+    'search': handle_search,
+    'manualsearch': handle_manualsearch,
+    'download': handle_download,
+}
+PARAMS_ACTIONS = {
+    'open_aistudio': handle_open_aistudio,
+    'test_connection': handle_test_connection,
+    'connect_gemini': handle_connect_gemini,
+    'show_gemini_usage': handle_show_gemini_usage,
+    'open_tmdb_notice': handle_open_tmdb_notice,
+    'clear_cache': handle_clear_cache,
+    'pool_share_cache': handle_pool_share_cache,
+    'pool_share_cache_run': handle_pool_share_cache_run,
+    'purge_temp': handle_purge_temp,
+    'translate_file': handle_translate_file,
+    'bg_translate_picker': handle_bg_translate_picker,
+    'he_avail': handle_he_avail,
+    'engine_test': handle_engine_test,
+    'choose_subs': handle_choose_subs,
+}
+
+
 def _parse_query():
     """Pull params from the query string Kodi handed us.
 
@@ -74,40 +99,10 @@ def main():
     action = (params.get('action') or 'search').lower()
 
     try:
-        if action == 'search':
-            handle_search(handle, params)
-        elif action == 'manualsearch':
-            handle_manualsearch(handle, params)
-        elif action == 'download':
-            handle_download(handle, params)
-        elif action == 'open_aistudio':
-            handle_open_aistudio(params)
-        elif action == 'test_connection':
-            handle_test_connection(params)
-        elif action == 'connect_gemini':
-            handle_connect_gemini(params)
-        elif action == 'show_gemini_usage':
-            handle_show_gemini_usage(params)
-        elif action == 'open_tmdb_notice':
-            handle_open_tmdb_notice(params)
-        elif action == 'clear_cache':
-            handle_clear_cache(params)
-        elif action == 'pool_share_cache':
-            handle_pool_share_cache(params)
-        elif action == 'pool_share_cache_run':
-            handle_pool_share_cache_run(params)
-        elif action == 'purge_temp':
-            handle_purge_temp(params)
-        elif action == 'translate_file':
-            handle_translate_file(params)
-        elif action == 'bg_translate_picker':
-            handle_bg_translate_picker(params)
-        elif action == 'he_avail':
-            handle_he_avail(params)
-        elif action == 'engine_test':
-            handle_engine_test(params)
-        elif action == 'choose_subs':
-            handle_choose_subs(params)
+        if action in HANDLE_ACTIONS:
+            HANDLE_ACTIONS[action](handle, params)
+        elif action in PARAMS_ACTIONS:
+            PARAMS_ACTIONS[action](params)
         else:
             safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:

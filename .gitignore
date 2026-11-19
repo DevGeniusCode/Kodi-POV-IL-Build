@@ -12,3 +12,5 @@ __pycache__/
 
 # Claude output mirror (CLAUDE.md "Output Mirroring")
 /output.txt
+
+PHASE_4_PROMPT.md

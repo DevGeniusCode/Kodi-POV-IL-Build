@@ -443,7 +443,7 @@ def _meta_str(meta, keys):
     return ''
 
 
-def _dbg(msg):
+def dbg(msg):
     """Log via xbmc directly so it works in EITHER process -- POV's source-scrape
     interpreter (where 'from resources.lib import sub_utils' fails because only
     resources/lib is on sys.path) AND MoranSubs's own service. Timing diagnostics
@@ -455,7 +455,7 @@ def _dbg(msg):
         pass
 
 
-def _warm_queue_dir():
+def warm_queue_dir():
     try:
         import xbmcvfs
         return xbmcvfs.translatePath(_WARM_QUEUE_DIR)
@@ -467,7 +467,7 @@ def _enqueue_warm(key, payload):
     """Drop a warm job on disk for the long-lived service to pick up. A tiny,
     atomic write -- no network, no new interpreter. Returns True on success so
     the caller can fall back to RunScript only when the queue is unwritable."""
-    d = _warm_queue_dir()
+    d = warm_queue_dir()
     if not d:
         return False
     try:
@@ -480,7 +480,7 @@ def _enqueue_warm(key, payload):
         # POV plugin invocations that don't share _FIRED).
         try:
             if os.path.isfile(path) and (time.time() - os.path.getmtime(path)) < _FIRE_RETRY:
-                _dbg('enqueue skip (fresh job already queued) ' + key)
+                dbg('enqueue skip (fresh job already queued) ' + key)
                 return True
         except OSError:
             pass
@@ -488,10 +488,10 @@ def _enqueue_warm(key, payload):
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(payload, f, ensure_ascii=False)
         os.replace(tmp, path)
-        _dbg('enqueued ' + key)
+        dbg('enqueued ' + key)
         return True
     except Exception as e:
-        _dbg('enqueue FAILED ' + key + ': ' + repr(e))
+        dbg('enqueue FAILED ' + key + ': ' + repr(e))
         return False
 
 
@@ -917,10 +917,10 @@ def release_names(meta):
             ent = _cache_entry(key)
             if ent is not None and ent.get('warm'):
                 n = [x for x in (ent.get('names') or []) if x]
-                _dbg('first-entry wait: warm landed for ' + key
+                dbg('first-entry wait: warm landed for ' + key
                      + (' (%d names)' % len(n)))
                 return n
-        _dbg('first-entry wait: timed out (~%.1fs) for %s' % (_FIRST_ENTRY_WAIT, key))
+        dbg('first-entry wait: timed out (~%.1fs) for %s' % (_FIRST_ENTRY_WAIT, key))
         return []
     except Exception:
         return []
@@ -937,20 +937,20 @@ def prewarm(meta):
     no id."""
     try:
         if not _enabled():
-            _dbg('prewarm skip (disabled)')
+            dbg('prewarm skip (disabled)')
             return
         p = _media_params(meta)
         if not p:
-            _dbg('prewarm skip (no media id in meta)')
+            dbg('prewarm skip (no media id in meta)')
             return
         key = _media_key(p)
         if _cached_names(key) is not None:
-            _dbg('prewarm skip (already warm) ' + key)
+            dbg('prewarm skip (already warm) ' + key)
             return  # already warm -- nothing to do
-        _dbg('prewarm fired ' + key)
+        dbg('prewarm fired ' + key)
         _fire_engine_warm(key, p, meta)
     except Exception as e:
-        _dbg('prewarm crashed: ' + repr(e))
+        dbg('prewarm crashed: ' + repr(e))
 
 
 def embedded_names(meta):

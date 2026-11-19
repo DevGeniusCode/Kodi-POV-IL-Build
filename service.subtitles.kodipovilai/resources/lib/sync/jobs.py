@@ -24,11 +24,12 @@ from resources.lib.sync.candidates import is_human_hebrew_candidate, ready_candi
 from resources.lib.sync.common import INFO_KEYS, STATUS_ALTERNATE_APPLIED, STATUS_NO_ORACLE, yield_state
 from resources.lib.sync.deep import ViewerLeft, DEEP_THREAD, deep_verify, remember_rejected_timing, timing_attempt_key
 from resources.lib.sync.delivery_record import clear_delivery, record_delivery
-from resources.lib.sync.oracles import decode_link
+from resources.lib.core.link_codec import decode_link_safe
 from resources.lib.sync.probes.bundle import bundle_envelope, cached_reference_bundle, envelope_diag, envelope_hypothesis_search, probe_reference_bundle, verify_file_bundle
 from resources.lib.sync.probes.cache import learn_cut_signature
 from resources.lib.sync.probes.remote import current_stream_transport
 from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, load_verdicts, store_verdict
+from resources.lib.core.srt.cues import STATUS_UNKNOWN
 
 
 # ---- background worker plumbing (service-side) -------------------------------
@@ -233,7 +234,7 @@ def _apply_proven_pool_fallback(job):
     if (not link or not job_matches_current(job)
             or not _job_stream_is_current(job)):
         return False
-    payload = decode_link(link) or {}
+    payload = decode_link_safe(link) or {}
     if (payload.get('type') != 'pool'
             or (payload.get('pool_kind') or 'ai') == 'ktuvit'):
         return False
@@ -308,7 +309,7 @@ def _tournament_candidate_text(info, link, cache_only=False):
     text, payload = ready_candidate_text(info, candidate)
     if text:
         return text, payload
-    payload = decode_link(link) or {}
+    payload = decode_link_safe(link) or {}
     if cache_only:
         return '', payload
     if not is_human_hebrew_candidate(payload):
@@ -403,7 +404,7 @@ def apply_verified_human_fallback(job, cache_only=False, reference=None):
             count = 0
             if (verdict.get('status') == common.STATUS_FIXABLE
                     and verdict.get('coverage_rescue')):
-                verdict = dict(verdict, status=common.STATUS_UNKNOWN,
+                verdict = dict(verdict, status=STATUS_UNKNOWN,
                                reason='rescue_needs_corroboration')
         verdict = verdict or {}
         status = verdict.get('status')
@@ -430,7 +431,7 @@ def apply_verified_human_fallback(job, cache_only=False, reference=None):
                      'applied (%r) -- trying the next one' % (rel, e))
                 remember_rejected_timing(
                     job, text, cut_signature,
-                    dict(verdict, status=common.STATUS_UNKNOWN,
+                    dict(verdict, status=STATUS_UNKNOWN,
                          reason='map_not_applicable'))
                 continue
         # Preserve the complete proof (including piecewise certificates) for
@@ -773,7 +774,7 @@ def _run_file_only_job(job, info, playing, path, job_selection):
                 if cut_signature:
                     store_verdict(exact_key, verdict)
             else:
-                verdict = {'status': common.STATUS_UNKNOWN,
+                verdict = {'status': STATUS_UNKNOWN,
                            'scale': 1.0, 'offset_ms': 0.0,
                            'reason': 'file_timeline_conflict',
                            'diag': envelope_diag(check)}
@@ -805,7 +806,7 @@ def _run_file_only_job(job, info, playing, path, job_selection):
                 _announce(dict(verdict, applied=True), fresh=True,
                           selection=job_selection)
             return
-    if (verdict and verdict.get('status') == common.STATUS_UNKNOWN
+    if (verdict and verdict.get('status') == STATUS_UNKNOWN
             and job.get('fallback_links')
             and apply_verified_human_fallback(job)):
         # The file could not confirm the release-trusted row; another
@@ -882,7 +883,7 @@ def run_deep_job(job):
         cached = load_verdicts().get(key)
         if (cached and cached.get('v') == VERDICT_VERSION
                 and cached.get('status') in (
-                    common.STATUS_CONFIRMED, common.STATUS_UNKNOWN)):
+                    common.STATUS_CONFIRMED, STATUS_UNKNOWN)):
             if job_matches_current(job):
                 if cached.get('status') == common.STATUS_CONFIRMED:
                     publish_selection_status(
@@ -935,7 +936,7 @@ def run_deep_job(job):
                     clear_delivery(selection=job_selection)
         if current and not swapped:
             if (verdict.get('status') in (
-                    common.STATUS_UNKNOWN, STATUS_NO_ORACLE)
+                    STATUS_UNKNOWN, STATUS_NO_ORACLE)
                     and (apply_verified_human_fallback(job)
                          or _apply_proven_pool_fallback(job))):
                     return

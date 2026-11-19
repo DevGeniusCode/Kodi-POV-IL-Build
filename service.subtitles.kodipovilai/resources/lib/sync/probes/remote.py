@@ -131,8 +131,8 @@ def local_cut_signature(info):
     if not path:
         return ''
     try:
-        from resources.lib.fetching.embedded import embedded_extract
-        return embedded_extract.media_cut_signature(
+        from resources.lib.fetching.embedded.extract.cue_reference import media_cut_signature
+        return media_cut_signature(
             path, allow_http=False,
             log=lambda m: log('cut-id: ' + m)) or ''
     except Exception as e:
@@ -204,13 +204,13 @@ def remote_reference_bundle(url):
             return False
 
     try:
-        from resources.lib.fetching.embedded import embedded_extract
-        reader = getattr(embedded_extract, 'cue_reference_profile', None)
+        from resources.lib.fetching.embedded.extract.cue_reference import cue_reference_profile, cue_reference_times
+        reader = cue_reference_profile
         if reader is not None:
             raw = reader(url, allow_http=True, abort_cb=abort,
                          log=lambda m: log('remote-cues: ' + m)) or {}
         else:  # older in-memory module after a quick update
-            starts = embedded_extract.cue_reference_times(
+            starts = cue_reference_times(
                 url, allow_http=True, abort_cb=abort,
                 log=lambda m: log('remote-cues: ' + m))
             raw = {'starts': starts or [], 'track_starts': [],

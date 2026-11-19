@@ -574,3 +574,63 @@ def maybe_seed_hebrew_subtitle_prefs():
                        level='INFO')
     except Exception:
         pass
+
+
+# The start-up migrations in the order entry/service.py main() runs them: BEFORE_PREWARM first, then the engine
+# pre-warm, then AFTER_PREWARM. Every one is one-shot and marker-gated, and a later manual opt-out sticks.
+BEFORE_PREWARM = (
+    # Grow the shared Hebrew pool: force community-pool sharing ON for everyone
+    # once (a later manual opt-out sticks). Must run before the harvest/drainer
+    # below so it mirrors Ktuvit subs to the pool already this session.
+    maybe_force_pool_share,
+
+    # ROLLOUT: switch everyone to MoranSubs's built-in engine (one-shot, marker-
+    # gated). A later manual opt-out sticks (marker prevents re-forcing).
+    maybe_default_builtin_engine,
+
+    # When the engine is on, make MoranSubs the default subtitle service so it
+    # opens/searches first in the dialog.
+    maybe_set_default_subtitle_service,
+    maybe_seed_hebrew_subtitle_prefs,
+)
+
+AFTER_PREWARM = (
+    # One-shot RTL punctuation repair of any cached translations
+    # that were written before the post-processor caught their
+    # specific edge case. Marker-gated so it only runs once.
+    maybe_repair_rtl_cache,
+
+    # One-shot: flip `fast_first_chunk` default from off -> on for
+    # existing users on the old default. Marker-gated.
+    maybe_default_fast_first_chunk,
+
+    # Preserve the legacy embedded toggles, then make the explained mode selector
+    # canonical. Runs for both build and standalone installations.
+    maybe_migrate_embedded_translation_mode,
+
+    # One-shot: turn the community pool ON (pull + share) for existing users
+    # still on the old default-off. New installs get it via settings.xml
+    # defaults. Marker-gated so a later manual opt-out sticks.
+    maybe_default_pool_on,
+
+    # One-shot: turn the Arabic-gender-reference setting ON for everyone (it
+    # tested clean and lifts gender accuracy a lot). Forced once; a later manual
+    # opt-out sticks. Marker-gated.
+    maybe_force_gender_ref_arabic,
+
+    # One-shot: move existing users to the validated Gemini 3 translation
+    # settings (temperature 1.0 + thinking medium). Marker-gated; respects a
+    # deliberate manual choice.
+    maybe_tune_gemini3_defaults,
+    # One-shot: bump the superseded default models to their same-quota
+    # successors (3.1-flash-lite -> 3.5-flash-lite, 3.5/3.6-flash -> 3.8-flash).
+    maybe_bump_gemini_model,
+    # And again for 3.8, which replaced 3.7 in the picker. Runs after the line
+    # above so a device still on 3.5-flash lands on 3.8 in ONE boot rather than
+    # two; it does not DEPEND on that order, because its retired set covers the
+    # older ids as well.
+    maybe_bump_gemini_model_38,
+    maybe_retire_gemini_31_flash,
+    # Lower chunk size to 50 (block-avoidance), one-shot for existing installs.
+    maybe_lower_chunk_lines,
+)

@@ -1,0 +1,35 @@
+name: Subtitle add-on contract test
+
+# Stdlib-only smoke test of service.subtitles.kodipovilai (Subtitle Phase 3, step 3g): provider contract, frozen
+# names, pinned strings, no private cross-module names, single route, settings / strings consistency, every module
+# imports under stubs, and the golden harness (.github/scripts/subs_contract/). The golden expectations were
+# recorded on Windows (os.path is ntpath), so the job runs on windows-latest.
+
+on:
+  push:
+    paths:
+      - "service.subtitles.kodipovilai/**"
+      - ".github/scripts/check_subs_contract.py"
+      - ".github/scripts/subs_contract/**"
+      - ".github/workflows/subs-contract.yml"
+  pull_request:
+    paths:
+      - "service.subtitles.kodipovilai/**"
+      - ".github/scripts/check_subs_contract.py"
+      - ".github/scripts/subs_contract/**"
+      - ".github/workflows/subs-contract.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Run the contract test
+        run: python .github/scripts/check_subs_contract.py

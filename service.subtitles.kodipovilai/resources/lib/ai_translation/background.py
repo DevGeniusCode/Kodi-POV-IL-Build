@@ -119,7 +119,7 @@ def handle_bg_translate_picker(params):
         # `label` (optional) lets the resolve-side phases narrate what's
         # happening -- the align path reports "reading timing / finding source /
         # syncing", the full-text extract omits it and keeps the default. Two-arg
-        # callers (embedded_extract.extract_srt) still work unchanged.
+        # callers (embedded/extract/extract.extract_srt) still work unchanged.
         try:
             msg = label or 'מכין תרגום מובנה...'
             if _ebar['d'] is None:

@@ -12,7 +12,7 @@ where every subtitle sample is, how long it is and when it plays -- so, as with
 a Matroska index, only the subtitle bytes are fetched: the top-level box
 headers (one small request each until 'moov'), 'moov' itself (6 MB on the Dark
 Knight, in 2 MB pieces), then the samples, batched (_Source.prefetch). This
-module only parses; embedded_extract drives the reading with its _Source, so
+module only parses; extract/extract_mp4 drives the reading with its Source, so
 the pacing, the player's buffer gate and the abort checks are the same ones.
 """
 import struct
@@ -148,7 +148,7 @@ def _text_of(d, start, end):
 
 def tracks(moov_bytes):
     """Every subtitle track of a moov box (bytes starting at its header):
-    dicts shaped like embedded_extract's Matroska tracks (num, codec, lang,
+    dicts shaped like extract/matroska's Matroska tracks (num, codec, lang,
     lang_explicit, forced, name, hearing_impaired) plus what reading needs."""
     d = moov_bytes
     top = next(_boxes(d, 0, len(d)), None)

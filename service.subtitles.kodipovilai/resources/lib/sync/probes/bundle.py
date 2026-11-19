@@ -21,10 +21,12 @@ try:
 except Exception:
     srt_cues = common = piecewise = retime = verify = None
 from resources.lib.sync.common import MIN_REMOTE_CUES
-from resources.lib.sync.oracles import decode_link, download_oracle, oracle_candidates
+from resources.lib.sync.oracles import download_oracle, oracle_candidates
+from resources.lib.core.link_codec import decode_link_safe
 from resources.lib.sync.probes.cache import PROBE_CACHE_VERSION, probe_cache_path, read_probe_entry, write_probe_cache
 from resources.lib.sync.probes.remote import current_stream_url, local_cut_signature, playing_url, probe_enabled, remote_playing_url, remote_probe_ready, remote_reference_bundle, starts_to_cues, transport_cache_key
 from resources.lib.sync.verdicts import verdict_strength
+from resources.lib.core.srt.cues import STATUS_UNKNOWN
 
 
 _NEGATIVE_PROBE_TTL_S = 6 * 60 * 60
@@ -142,8 +144,8 @@ def _probe_reference_bundle_unlocked(info, playing):
                 if local_url.lower().endswith('.webm'):
                     # WebM commonly has an exact subtitle Cues index. Read it
                     # before the older sparse byte-window fallback.
-                    from resources.lib.fetching.embedded import embedded_extract
-                    raw = embedded_extract.cue_reference_profile(
+                    from resources.lib.fetching.embedded.extract.cue_reference import cue_reference_profile
+                    raw = cue_reference_profile(
                         local_url, allow_http=False,
                         log=lambda m: log('probe: ' + m)) or {}
                     cues = starts_to_cues(raw.get('starts') or [])
@@ -217,7 +219,7 @@ def prefetch_autosub_reference(info, candidates):
             if (candidate.get('language') or '').strip().lower() not in (
                     'he', 'heb', 'hebrew'):
                 continue
-            payload = decode_link(candidate.get('link') or '') or {}
+            payload = decode_link_safe(candidate.get('link') or '') or {}
             if is_human_hebrew_candidate(payload):
                 humans.append((candidate, payload))
             if len(humans) >= 2:
@@ -503,7 +505,7 @@ def envelope_hypothesis_search(info, text, envelope, before, early_job=None,
         if (verdict.get('status') == common.STATUS_FIXABLE
                 and fixed and fixed.strip() and fixed != text):
             proposals.append((verdict, fixed))
-        elif (verdict.get('status') == common.STATUS_UNKNOWN
+        elif (verdict.get('status') == STATUS_UNKNOWN
                 and time.monotonic() - started <= _ENVELOPE_SEARCH_S):
             try:
                 oracle_cues = srt_cues.dialogue_cues(
@@ -682,7 +684,7 @@ def verify_file_bundle(bundle, text, playing=None):
                     (p.get('track') or {}).get('lang', '?'),
                     int((p.get('verdict') or {}).get('offset_ms') or 0))
                 for p in accepted)
-            return ({'status': common.STATUS_UNKNOWN,
+            return ({'status': STATUS_UNKNOWN,
                      'scale': 1.0, 'offset_ms': 0.0,
                      'reason': 'embedded_track_conflict',
                      'diag': 'independent embedded tracks disagree: ' + summary},

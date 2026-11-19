@@ -6,7 +6,11 @@ import re
 import math
 import statistics
 from resources.lib.core.srt.blocks import TC_PAIR
-from resources.lib.sync.align.common import MIN_CUES, STATUS_UNKNOWN
+
+# The alignment constants the cue-level helpers and the sync package share (they lived in sync/align/common.py;
+# core/ must not import from sync/).
+MIN_CUES = 8          # min dialogue cues on each side
+STATUS_UNKNOWN = 'UNKNOWN'
 
 
 # Free mode: fine mode without the one-direction rule and the 4.5 s ceiling.

@@ -5,6 +5,7 @@
 
 import os
 import threading
+import time
 try:
     import xbmc
     import xbmcaddon
@@ -37,6 +38,33 @@ DIALOG_TITLE = 'Kodi POV IL'
 _NOTIFY_MAX_PENDING = 8
 _notify_lock = threading.Lock()
 _notify_pending = [0]
+
+
+# Kodi runs every add-on's Python under one interpreter lock. Measured in QA
+# Kodi (21, Python 3.11): while one thread runs a CPU-bound loop that never
+# sleeps, a NEW script -- e.g. our own "בחירת כתוביות" button -- does not even
+# start until that loop ends (15.8 s behind a 20 s loop, 0.3 s idle); a 1 ms
+# sleep every ~20 ms brings it back to 0.3 s. Field logs from an Android box
+# showed the same 5-11 s waits behind SubSync's deep check at playback start.
+# A long loop calls its breathe() (make_breather below): about 5% slower in the background,
+# never in the way of the viewer.
+BREATHE_SLICE = 0.02
+
+
+def make_breather(after_nap=None):
+    """A breathe() for one module's long loops: at most every BREATHE_SLICE seconds a 1 ms nap (see above).
+    Each module keeps ITS OWN timer, as before (the copies this replaced were one per module); `after_nap`, if given, runs
+    after every nap (the deep SubSync job's yield to the viewer)."""
+    last = [0.0]
+
+    def breathe():
+        now = time.monotonic()
+        if now - last[0] >= BREATHE_SLICE:
+            time.sleep(0.001)
+            last[0] = time.monotonic()
+            if after_nap is not None:
+                after_nap()
+    return breathe
 
 
 def localised(strid, *args):

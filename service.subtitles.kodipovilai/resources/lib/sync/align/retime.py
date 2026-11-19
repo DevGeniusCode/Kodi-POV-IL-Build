@@ -6,10 +6,11 @@ import re
 import bisect
 import math
 from resources.lib.core.srt.cues import TIME_RE, ms_to_stamp, preflight_srt, to_ms
-from resources.lib.sync.align.common import CONFIRM_OFFSET_MS, MAX_PLAUSIBLE_OFFSET_MS, MIN_CUES, MIN_OVERLAP, SCALE_MAX, SCALE_MIN, STATUS_CONFIRMED, STATUS_FIXABLE, STATUS_UNKNOWN, ENV_NEAR_MS, MICRO_MAX_SEGMENTS, REGION_FINE_MIN_GAIN, TIGHT_MIN, UNIQUE_MIN
+from resources.lib.sync.align.common import CONFIRM_OFFSET_MS, MAX_PLAUSIBLE_OFFSET_MS, MIN_OVERLAP, SCALE_MAX, SCALE_MIN, STATUS_CONFIRMED, STATUS_FIXABLE, ENV_NEAR_MS, MICRO_MAX_SEGMENTS, REGION_FINE_MIN_GAIN, TIGHT_MIN, UNIQUE_MIN
 from resources.lib.sync.align.estimate import breathe, estimate
 from resources.lib.sync.align.piecewise import piecewise_local_spread, piecewise_local_windows, map_cues_global, piecewise_plan, smooth_drift_refinement, trusted_local_windows
 from resources.lib.sync.align.verify import edge_windows, required_tight, rescue_regions_agree, tight_agreement, timing_score, unique_match_metrics, coverage_profile, overlap_rate, verify
+from resources.lib.core.srt.cues import MIN_CUES, STATUS_UNKNOWN
 
 
 MIN_VOTE = 0.65       # histogram peak must carry >=65% of sampled cues

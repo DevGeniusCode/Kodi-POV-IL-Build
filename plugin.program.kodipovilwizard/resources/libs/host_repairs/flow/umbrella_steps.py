@@ -112,8 +112,8 @@ def _maybe_patch_umbrella():
 
 
 # The auto-on-play machinery (state, the on-play search/apply flow, and the
-# Player listener) lives in resources/lib/autosub_service.py -- extracted
-# VERBATIM so the standalone (repo-channel) service runs the exact same code.
+# Player listener) lives in the subtitle add-on, resources/lib/autosub/player.py
+# (and autosub/policy.py), so the standalone (repo-channel) service runs the exact same code.
 
 
 def _start_service_mirror_keeper(monitor):

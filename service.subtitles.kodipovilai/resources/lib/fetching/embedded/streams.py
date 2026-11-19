@@ -437,7 +437,7 @@ def _iso639_1(name):
     n = (name or '').strip().lower()
     if len(n) == 3:
         try:
-            from resources.lib.fetching.embedded.embedded_extract import lang_key
+            from resources.lib.fetching.embedded.extract.tracks import lang_key
             k = lang_key(n)
             if len(k) == 2:
                 return k

@@ -22,6 +22,7 @@ from resources.lib.sync.probes.bundle import cached_reference_bundle
 from resources.lib.sync.probes.cache import known_cut_signature
 from resources.lib.sync.probes.remote import playing_url, remote_playing_url
 from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, community_verdict, load_verdicts, store_verdict
+from resources.lib.core.srt.cues import STATUS_UNKNOWN
 
 
 # Trusted tiers need no verification at delivery time (same release / same
@@ -228,7 +229,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                                  'segments': cached.get('segments') or [],
                                  'diag': cached.get('diag', ''), 'cached': True}
             if status in (common.STATUS_CONFIRMED,
-                          common.STATUS_UNKNOWN):
+                          STATUS_UNKNOWN):
                 record_delivery(info, playing, key, 1.0, 0.0,
                                  cut_signature=cut_signature,
                                  selection=selection)
@@ -238,7 +239,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                             if status == common.STATUS_CONFIRMED
                             else 'unverified'),
                     source='cache')
-                if (status == common.STATUS_UNKNOWN
+                if (status == STATUS_UNKNOWN
                         and (fallback_link or fallback_links)
                         and mark_pending(key, selection=selection)):
                     enqueue_deep(

@@ -4,6 +4,7 @@
 
 import os
 import json
+from resources.lib.core.link_codec import decode_link_safe
 try:
     from resources.lib.scoring_matching import release as scoring_matching_release
 except Exception:
@@ -11,14 +12,6 @@ except Exception:
 
 
 # ---- oracle acquisition -----------------------------------------------------
-
-def decode_link(link):
-    try:
-        import urllib.parse
-        return json.loads(urllib.parse.unquote(link))
-    except Exception:
-        return None
-
 
 def oracle_candidates(info, include_he=False, all_languages=False,
                        search_state=None):
@@ -66,7 +59,7 @@ def oracle_candidates(info, include_he=False, all_languages=False,
                          else (None, 'other'))
             if _kind not in _ok_kinds:
                 continue
-            pl = decode_link(c.get('link') or '')
+            pl = decode_link_safe(c.get('link') or '')
             if not pl or pl.get('type') != 'engine' or pl.get('embedded'):
                 continue
             rel = (pl.get('filename') or '').strip()

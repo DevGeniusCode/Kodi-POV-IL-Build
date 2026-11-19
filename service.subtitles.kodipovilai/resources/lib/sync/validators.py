@@ -16,6 +16,7 @@ except Exception:
     srt_cues = common = piecewise = retime = verify = None
 from resources.lib.sync.common import MIN_REMOTE_CUES, AUDIO_MAX_OFFSET_MS, AUDIO_SCALES, ORACLE_SOURCE_MIN_VOTE, ORACLE_SOURCE_SCALES
 from resources.lib.sync.oracles import diversify_oracle_matches, download_oracle, merge_oracle_candidates, oracle_candidates, oracle_match
+from resources.lib.core.srt.cues import STATUS_UNKNOWN
 
 
 # This rare rescue runs only after an ordinary oracle abstains and only in the
@@ -56,7 +57,7 @@ def guard_soft_probe_shift(verdict, ref_kind):
         return verdict
     guarded = dict(verdict)
     guarded.update({
-        'status': common.STATUS_UNKNOWN,
+        'status': STATUS_UNKNOWN,
         'reason': 'soft_probe_shift',
         'diag': ('soft probe shift preserved unchanged (%s %+dms; %s)'
                  % (ref_kind, int(offset), verdict.get('diag', ''))),
@@ -80,12 +81,12 @@ def _track_base_language(track):
     language, as must 'fre' and 'fr-CA', or a twin counts as a second
     language's agreement."""
     lang = (track.get('lang') or '').strip().lower()
-    # The table lives in embedded_extract, which the media probe has already
+    # The table lives in embedded/extract/tracks, which the media probe has already
     # loaded by the time a track is ranked; loading it with this module cost
     # every script that imports subsync ~50 ms on a PC.
     if not _ISO_LANG_KEY:
         try:
-            from resources.lib.fetching.embedded.embedded_extract import lang_key as _lang_key
+            from resources.lib.fetching.embedded.extract.tracks import lang_key as _lang_key
         except Exception:
             _lang_key = None
         _ISO_LANG_KEY.append(_lang_key)
@@ -1328,18 +1329,18 @@ def corroborate_rescued_oracle(cands, playing, text, oracle, oracle_text,
                     return dict(verdict, corroborated_by=cand.get('release'),
                                 diag=verdict.get('diag', '')
                                 + ' | corroborated by %r' % cand.get('release'))
-                return dict(verdict, status=common.STATUS_UNKNOWN,
+                return dict(verdict, status=STATUS_UNKNOWN,
                             reason='oracle_conflict',
                             diag=verdict.get('diag', '')
                             + ' | CONFLICT with %r (%s)'
                             % (cand.get('release'), other.get('diag', '')))
-        return dict(verdict, status=common.STATUS_UNKNOWN,
+        return dict(verdict, status=STATUS_UNKNOWN,
                     reason='uncorroborated_rescue',
                     diag=verdict.get('diag', '')
                     + ' | no independent second reference (%d tried)' % tried)
     except Exception as e:
         log('rescue corroboration failed: %r' % e, level='WARNING')
-        return dict(verdict, status=common.STATUS_UNKNOWN,
+        return dict(verdict, status=STATUS_UNKNOWN,
                     reason='uncorroborated_rescue')
 # Embedded subtitle tracks are an excellent video-timeline anchor for large
 # offsets and clock drift, but different language/subber tracks routinely lead

@@ -5,8 +5,9 @@
 import bisect
 import math
 from resources.lib.core.srt.cues import cues_median, preflight_cues, preflight_srt, preflight_unknown, tolerant_reference, dialogue_cues
-from resources.lib.sync.align.common import CONFIRM_OFFSET_MS, MAX_PLAUSIBLE_OFFSET_MS, STATUS_CONFIRMED, STATUS_FIXABLE, STATUS_UNKNOWN, ENV_NEAR_MS, LOCAL_MIN_REF_CUES, TIGHT_MIN
+from resources.lib.sync.align.common import CONFIRM_OFFSET_MS, MAX_PLAUSIBLE_OFFSET_MS, STATUS_CONFIRMED, STATUS_FIXABLE, ENV_NEAR_MS, LOCAL_MIN_REF_CUES, TIGHT_MIN
 from resources.lib.sync.align.estimate import best_offset, breathe
+from resources.lib.core.srt.cues import STATUS_UNKNOWN
 
 
 def overlap_rate(ref_cues, cand_cues, a, b):

@@ -230,7 +230,7 @@ def embedded_aligned_source_srt(
             from resources.lib.sync.align import common, retime, verify
             from resources.lib.sync import oracles, service
             from resources.lib.scoring_matching import release as scoring_matching_release
-            from resources.lib.fetching.embedded import embedded_extract
+            from resources.lib.fetching.embedded.extract.cue_reference import cue_reference_times_multi
         except Exception as e:
             kodi.log('embedded-align: import failed: {0}'.format(e),
                            level='WARNING')
@@ -404,7 +404,7 @@ def embedded_aligned_source_srt(
             return None, None
         _p(30, 100, 'קורא תזמון מובנה...')
         try:
-            times_by_lang = embedded_extract.cue_reference_times_multi(
+            times_by_lang = cue_reference_times_multi(
                 url, try_set, allow_http=allow, abort_cb=_abort, stats=_alstats,
                 log=lambda m: kodi.log('embedded-align: ' + m,
                                              level='INFO'))
@@ -579,7 +579,8 @@ def extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
             kodi.log('embedded: no probeable playing url', level='INFO')
             return None
         try:
-            from resources.lib.fetching.embedded import embedded_extract
+            from resources.lib.fetching.embedded.extract.extract import extract_srt
+            from resources.lib.fetching.embedded.extract.tracks import lang_key
         except Exception as e:
             kodi.log('embedded_extract import failed: {0}'.format(e),
                            level='WARNING')
@@ -1256,8 +1257,8 @@ def extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # Hebrew lines are being read -- not after the whole track.
                 why['lang_used'] = used
                 try:
-                    if (embedded_extract.lang_key(used)
-                            != embedded_extract.lang_key(src_lang)):
+                    if (lang_key(used)
+                            != lang_key(src_lang)):
                         kodi.log(
                             'embedded_ai: the {0} embedded subtitle is a '
                             'picture, not text -- reading the {1} embedded '
@@ -1269,7 +1270,7 @@ def extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 except Exception:
                     pass
 
-            srt_text = embedded_extract.extract_srt(
+            srt_text = extract_srt(
                 url, track_num=track_num, lang=src_lang,
                 allow_http=_allow_http, deadline_s=deadline_s,
                 abort_cb=_should_abort, progress_cb=_progress,
@@ -1408,8 +1409,8 @@ def embedded_reference(info, source_lang, cancelled=None):
         remote = '://' in url
         if remote and not policy.get('allow_http'):
             return None
-        from resources.lib.fetching.embedded import embedded_extract
-        own = embedded_extract.lang_key(source_lang)
+        from resources.lib.fetching.embedded.extract.tracks import lang_key, probe_tracks
+        own = lang_key(source_lang)
     except Exception:
         return None
 
@@ -1419,7 +1420,7 @@ def embedded_reference(info, source_lang, cancelled=None):
             # no extraction of this file in this process (an external
             # subtitle laid on the track's cue times): the head is read
             try:
-                found = embedded_extract.probe_tracks(
+                found = probe_tracks(
                     url, log=lambda m: kodi.log('embedded_extract: ' + m,
                                                       level='INFO'))
             except Exception:
@@ -1427,7 +1428,7 @@ def embedded_reference(info, source_lang, cancelled=None):
         return [t for t in found
                 if t.get('is_text') and not t.get('forced')
                 and not t.get('signs')
-                and embedded_extract.lang_key(t.get('lang')) != own]
+                and lang_key(t.get('lang')) != own]
 
     slow = {'said': False}
 
@@ -1460,7 +1461,7 @@ def embedded_reference(info, source_lang, cancelled=None):
 
         try:
             path = extract_embedded_srt(
-                info, embedded_extract.lang_key(track.get('lang')),
+                info, lang_key(track.get('lang')),
                 track_num=track.get('num'), deadline_s=_EMB_REF_DEADLINE_S,
                 allow_http=True, cancelled=cancelled, reference=too_slow)
             if path and os.path.isfile(path):

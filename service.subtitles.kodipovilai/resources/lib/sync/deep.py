@@ -23,6 +23,8 @@ from resources.lib.sync.probes.cache import learn_cut_signature
 from resources.lib.sync.probes.remote import current_stream_transport
 from resources.lib.sync.validators import corroborate_rescued_oracle, guard_soft_probe_shift, provider_piecewise_rescue
 from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, community_verdict, load_verdicts, store_verdict, sync_registry_release
+from resources.lib.core import kodi
+from resources.lib.core.srt.cues import STATUS_UNKNOWN
 
 
 # Audio-VAD boundaries are softer than subtitle cues -> relaxed vote/overlap,
@@ -35,24 +37,8 @@ _AUDIO_MIN_VOTE = 0.55
 _AUDIO_MIN_OVERLAP = 0.65
 
 
-# Kodi runs every add-on's Python under one interpreter lock. Measured in QA
-# Kodi (21, Python 3.11): while one thread runs a CPU-bound loop that never
-# sleeps, a NEW script -- e.g. our own "בחירת כתוביות" button -- does not even
-# start until that loop ends (15.8 s behind a 20 s loop, 0.3 s idle); a 1 ms
-# sleep every ~20 ms brings it back to 0.3 s. Field logs from an Android box
-# showed the same 5-11 s waits behind SubSync's deep check at playback start.
-# The long loops here call _breathe(): about 5% slower in the background,
-# never in the way of the viewer.
-_BREATHE_SLICE = 0.02
-_breath = [0.0]
-
-
-def breathe():
-    now = time.monotonic()
-    if now - _breath[0] >= _BREATHE_SLICE:
-        time.sleep(0.001)
-        _breath[0] = time.monotonic()
-        _yield_to_viewer()
+# The long loops here call breathe() (core/kodi.make_breather has the why).
+breathe = kodi.make_breather(lambda: _yield_to_viewer())
 
 
 # On a Shield the 1 ms breaths were not enough: a new script got ~5% of the
@@ -157,7 +143,7 @@ def remember_rejected_timing(job, text, cut_signature, verdict):
     """Memoize only a failed verification during this one first-play job."""
     if not isinstance(job, dict) or not isinstance(verdict, dict):
         return
-    if verdict.get('status') not in (common.STATUS_UNKNOWN, None):
+    if verdict.get('status') not in (STATUS_UNKNOWN, None):
         return
     timing_key = timing_attempt_key(text, cut_signature)
     if timing_key:
@@ -215,7 +201,7 @@ def deep_verify(info, path, text, rel, playing, key, early_job=None):
                 if out:
                     return out, dict(result, applied=True)
             if status in (common.STATUS_CONFIRMED,
-                          common.STATUS_UNKNOWN):
+                          STATUS_UNKNOWN):
                 return path, result
 
         # Shared (community) learning is consulted only AFTER the playing file
@@ -327,7 +313,7 @@ def deep_verify(info, path, text, rel, playing, key, early_job=None):
                                 != common.STATUS_FIXABLE):
                             oracle_fixed = None
                     if (oracle_verdict.get('status')
-                            == common.STATUS_UNKNOWN
+                            == STATUS_UNKNOWN
                             and oracle_verdict.get('reason') not in (
                                 'oracle_conflict',)):
                         rescue_state = {}
@@ -351,7 +337,7 @@ def deep_verify(info, path, text, rel, playing, key, early_job=None):
                             else:
                                 oracle_verdict = dict(
                                     oracle_verdict,
-                                    status=common.STATUS_UNKNOWN,
+                                    status=STATUS_UNKNOWN,
                                     diag=(oracle_verdict.get('diag', '')
                                           + ' | structural apply failed'))
             else:
@@ -421,7 +407,7 @@ def deep_verify(info, path, text, rel, playing, key, early_job=None):
                 verdict = verify.verify_cues(ref_cues, text, **gate_kw)
                 log('verdict for %r vs AUDIO PROBE (%d ref cues): %s'
                      % (rel or '?', len(ref_cues), verdict['diag']))
-                if (verdict['status'] == common.STATUS_UNKNOWN
+                if (verdict['status'] == STATUS_UNKNOWN
                         and 'tight check FAILED' in verdict.get('diag', '')
                         and verdict.get('vote', 0) >= 0.8):
                     more = audio_probe_reference(info, playing,
@@ -436,7 +422,7 @@ def deep_verify(info, path, text, rel, playing, key, early_job=None):
                         and verdict.get('coverage_rescue')):
                     # Speech-detector onsets carry ~1s of error; they cannot
                     # stand in for the onset agreement a rescue relaxes.
-                    verdict = dict(verdict, status=common.STATUS_UNKNOWN,
+                    verdict = dict(verdict, status=STATUS_UNKNOWN,
                                    reason='audio_rescue_refused')
 
         envelope_searched = False
@@ -452,7 +438,7 @@ def deep_verify(info, path, text, rel, playing, key, early_job=None):
             if found:
                 verdict, fixed_text = found
             elif verdict is None:
-                verdict = {'status': common.STATUS_UNKNOWN,
+                verdict = {'status': STATUS_UNKNOWN,
                            'scale': 1.0, 'offset_ms': 0.0,
                            'reason': 'file_timeline_conflict',
                            'diag': envelope_diag(envelope_before)}
@@ -468,7 +454,7 @@ def deep_verify(info, path, text, rel, playing, key, early_job=None):
             except Exception:
                 fixed_text = None
             if not (fixed_text and fixed_text.strip()):
-                verdict = dict(verdict, status=common.STATUS_UNKNOWN)
+                verdict = dict(verdict, status=STATUS_UNKNOWN)
 
         # The playing file is the ground truth for its own cut.  A provider or
         # community answer that still leaves the delivered text on two
@@ -487,7 +473,7 @@ def deep_verify(info, path, text, rel, playing, key, early_job=None):
                         ', '.join('%+dms x%d' % (int(offset), count)
                                   for offset, count in conflict)))
                 verdict = dict(
-                    verdict, status=common.STATUS_UNKNOWN,
+                    verdict, status=STATUS_UNKNOWN,
                     reason='file_timeline_conflict',
                     diag=(verdict.get('diag', '')
                           + ' | contradicted by the playing file'))
@@ -513,7 +499,7 @@ def deep_verify(info, path, text, rel, playing, key, early_job=None):
         if (cut_signature
                 and not (transient_oracle_search
                          and verdict.get('status')
-                         == common.STATUS_UNKNOWN)):
+                         == STATUS_UNKNOWN)):
             store_verdict(final_key, verdict)
 
         # Reuse the existing Worker protocol by namespacing its release key with

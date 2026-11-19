@@ -11,7 +11,7 @@ try:
     import xbmc
 except ImportError:
     xbmc = None
-from resources.lib.entry.migrations import maybe_bump_gemini_model, maybe_bump_gemini_model_38, maybe_default_builtin_engine, maybe_default_fast_first_chunk, maybe_default_pool_on, maybe_force_gender_ref_arabic, maybe_force_pool_share, maybe_lower_chunk_lines, maybe_migrate_embedded_translation_mode, maybe_repair_rtl_cache, maybe_retire_gemini_31_flash, maybe_seed_hebrew_subtitle_prefs, maybe_set_default_subtitle_service, maybe_tune_gemini3_defaults
+from resources.lib.entry.migrations import AFTER_PREWARM, BEFORE_PREWARM
 
 
 ADDON_ID = 'service.subtitles.kodipovilai'
@@ -241,10 +241,10 @@ def _start_he_warm_drainer(monitor):
             from resources.lib.fetching import provider_adapter
             provider_adapter.load_provider('opensubtitles')  # noqa: F401
             provider_adapter.load_provider('ktuvit')  # noqa: F401
-            _hsm._dbg('drainer engine pre-imported in {0:.1f}s after startup '
+            _hsm.dbg('drainer engine pre-imported in {0:.1f}s after startup '
                       'settled'.format(_t.time() - _pt0))
         except Exception as e:
-            _hsm._dbg('drainer engine pre-import failed: ' + repr(e))
+            _hsm.dbg('drainer engine pre-import failed: ' + repr(e))
 
     def _loop():
         try:
@@ -255,7 +255,7 @@ def _start_he_warm_drainer(monitor):
             while not monitor.abortRequested():
                 picked_up = False
                 try:
-                    d = _hsm._warm_queue_dir()
+                    d = _hsm.warm_queue_dir()
                     if d and os.path.isdir(d):
                         for fn in sorted(os.listdir(d)):
                             if monitor.abortRequested():
@@ -283,7 +283,7 @@ def _start_he_warm_drainer(monitor):
                                 pass
                             if info:
                                 picked_up = True
-                                _hsm._dbg('drainer picked up {0} (queued {1:.1f}s ago)'.format(
+                                _hsm.dbg('drainer picked up {0} (queued {1:.1f}s ago)'.format(
                                     (info.get('mk') or fn), age))
                                 try:
                                     # A user is waiting, so do not impose the
@@ -544,63 +544,16 @@ def main():
     # Initial prune.
     _prune_once()
 
-    # Grow the shared Hebrew pool: force community-pool sharing ON for everyone
-    # once (a later manual opt-out sticks). Must run before the harvest/drainer
-    # below so it mirrors Ktuvit subs to the pool already this session.
-    maybe_force_pool_share()
-
-    # ROLLOUT: switch everyone to MoranSubs's built-in engine (one-shot, marker-
-    # gated). A later manual opt-out sticks (marker prevents re-forcing).
-    maybe_default_builtin_engine()
-
-    # When the engine is on, make MoranSubs the default subtitle service so it
-    # opens/searches first in the dialog.
-    maybe_set_default_subtitle_service()
-    maybe_seed_hebrew_subtitle_prefs()
+    for step in BEFORE_PREWARM:
+        step()
 
 
     # Pre-warm the built-in sources engine (only when the user enabled it) so
     # the first subtitle search doesn't pay the heavy import cost inline.
     _maybe_prewarm_engine()
 
-    # One-shot RTL punctuation repair of any cached translations
-    # that were written before the post-processor caught their
-    # specific edge case. Marker-gated so it only runs once.
-    maybe_repair_rtl_cache()
-
-    # One-shot: flip `fast_first_chunk` default from off -> on for
-    # existing users on the old default. Marker-gated.
-    maybe_default_fast_first_chunk()
-
-    # Preserve the legacy embedded toggles, then make the explained mode selector
-    # canonical. Runs for both build and standalone installations.
-    maybe_migrate_embedded_translation_mode()
-
-    # One-shot: turn the community pool ON (pull + share) for existing users
-    # still on the old default-off. New installs get it via settings.xml
-    # defaults. Marker-gated so a later manual opt-out sticks.
-    maybe_default_pool_on()
-
-    # One-shot: turn the Arabic-gender-reference setting ON for everyone (it
-    # tested clean and lifts gender accuracy a lot). Forced once; a later manual
-    # opt-out sticks. Marker-gated.
-    maybe_force_gender_ref_arabic()
-
-    # One-shot: move existing users to the validated Gemini 3 translation
-    # settings (temperature 1.0 + thinking medium). Marker-gated; respects a
-    # deliberate manual choice.
-    maybe_tune_gemini3_defaults()
-    # One-shot: bump the superseded default models to their same-quota
-    # successors (3.1-flash-lite -> 3.5-flash-lite, 3.5/3.6-flash -> 3.8-flash).
-    maybe_bump_gemini_model()
-    # And again for 3.8, which replaced 3.7 in the picker. Runs after the line
-    # above so a device still on 3.5-flash lands on 3.8 in ONE boot rather than
-    # two; it does not DEPEND on that order, because its retired set covers the
-    # older ids as well.
-    maybe_bump_gemini_model_38()
-    maybe_retire_gemini_31_flash()
-    # Lower chunk size to 50 (block-avoidance), one-shot for existing installs.
-    maybe_lower_chunk_lines()
+    for step in AFTER_PREWARM:
+        step()
 
     if monitor.abortRequested():
         return

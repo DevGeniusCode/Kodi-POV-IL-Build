@@ -16,7 +16,7 @@ try:
     from resources.lib.sync.align import common
 except Exception:
     common = None
-from resources.lib.sync.oracles import decode_link
+from resources.lib.core.link_codec import decode_link_safe
 from resources.lib.sync.probes.bundle import cached_reference_bundle, verify_file_bundle
 from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, load_verdicts, store_verdict
 
@@ -24,7 +24,7 @@ from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, load_verdict
 def ready_candidate_text(info, candidate):
     """Canonical subtitle text already on disk; never starts a download."""
     try:
-        payload = decode_link(candidate.get('link') or '') or {}
+        payload = decode_link_safe(candidate.get('link') or '') or {}
         kind = payload.get('type')
         path = ''
         if kind == 'passthrough':
@@ -89,7 +89,7 @@ def diverse_human_alternatives(candidates, limit=6, info=None):
         link = candidate.get('link') or ''
         if not isinstance(link, str) or not link or link in seen_links:
             continue
-        payload = decode_link(link) or {}
+        payload = decode_link_safe(link) or {}
         if (not isinstance(payload, dict)
                 or not is_human_hebrew_candidate(payload)
                 or payload.get('embedded')):
@@ -171,7 +171,7 @@ def rank_ready_candidates(info, candidates, max_candidates=4, cached_only=False)
         }
         for index, candidate in enumerate(rows):
             listed_lang = (candidate.get('language') or '').strip().lower()
-            payload = decode_link(candidate.get('link') or '') or {}
+            payload = decode_link_safe(candidate.get('link') or '') or {}
             if (listed_lang not in ('he', 'heb', 'hebrew')
                     or not is_human_hebrew_candidate(payload)):
                 continue
@@ -273,7 +273,7 @@ def rank_ready_candidates(info, candidates, max_candidates=4, cached_only=False)
             # A real cut-scoped confirmation beats a release-name guess even
             # when the guessed first file has not yet been downloaded. Without
             # that exact proof, keep the old protection for trusted names.
-            first_payload = decode_link(rows[first_index].get('link') or '') or {}
+            first_payload = decode_link_safe(rows[first_index].get('link') or '') or {}
             first_release = (first_payload.get('filename') or
                              rows[first_index].get('filename') or '')
             _pct, tier, _diag = scoring_matching_release.score(playing, first_release)
