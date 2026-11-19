@@ -11,7 +11,6 @@ from resources.lib.subs_engine.extract_sub import extract
 from resources.lib.subs_engine.general import DEFAULT_REQUEST_TIMEOUT
 from resources.lib.subs_engine import cache
 import xbmcvfs
-import struct
 #########################################
 
 que=urllib.parse.quote_plus
@@ -45,7 +44,6 @@ sub_color='orange'
 ###### Requests Params ##############
 REQUEST_MAX_RETRIES_NUMBER = 8
 REQUEST_RETRY_DELAY_IN_MS = 500
-OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4
 #########################################
 
 def _base_search_query(lang_string):
@@ -242,9 +240,6 @@ def api_search_subtitles(video_data, all_lang_override):
        
 def get_subs(video_data, all_lang_override=False):
 
-    # For settings changes to take effect.
-    Addon=xbmcaddon.Addon()
-    
     global global_var
     log.warning('DEBUG | [OpenSubtitles] | Searching Opensubtitles')
     subtitle_list = []
@@ -469,11 +464,6 @@ def get_api_keys(shuffle_keys=False):
         random.shuffle(api_keys)
     return api_keys
     
-def get_random_key():
-    api_keys = get_api_keys(shuffle_keys=True)
-    return api_keys[0]
-
-
 # Keys this process saw answer "quota used up" (a quota 406, or remaining 0).
 # The pool's ~33 keys are shared by every build user (and NG's desktop app
 # copies the same list); about 100 downloads per key per day (NG probe).

@@ -760,7 +760,7 @@ def _refine_on_onsets(ref, cand, verdict):
 
     segments = verdict.get('segments')
     if segments:
-        fixed, refined_any = [], 0
+        fixed = []
         for i, seg in enumerate(segments):
             lo = seg.get('cand_from_ms')
             hi = segments[i + 1].get('cand_from_ms') if i + 1 < len(segments) else None
@@ -771,7 +771,6 @@ def _refine_on_onsets(ref, cand, verdict):
             if abs(refined - seg_b) > _ONSET_MATCH_MS:
                 return refuse('bitmap_onsets_disagree')
             fixed.append(dict(seg, offset_ms=refined))
-            refined_any += 1
         out['segments'] = fixed
         out['offset_ms'] = float(fixed[0].get('offset_ms') or 0.0)
         return out

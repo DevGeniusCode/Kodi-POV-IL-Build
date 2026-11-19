@@ -18,7 +18,6 @@
 # path with only resources/lib on sys.path, so NO package-relative imports,
 # no xbmc, no PTN. Pure stdlib. Deterministic on every surface.
 
-import os
 import re
 import difflib
 

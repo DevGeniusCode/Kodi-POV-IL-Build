@@ -19,7 +19,7 @@
 '''
 
 from resources.lib.subs_engine import log
-import xbmc,re,hashlib,time,os,logging
+import xbmc,re,hashlib,time,os
 
 try:
     from sqlite3 import dbapi2 as database
@@ -48,7 +48,7 @@ def get(function, timeout, *args, **table):
         response = None
 
         f = repr(function)
-        f = re.sub('.+\smethod\s|.+function\s|\sat\s.+|\sof\s.+', '', f)
+        f = re.sub(r'.+\smethod\s|.+function\s|\sat\s.+|\sof\s.+', '', f)
 
         a = hashlib.md5()
         for i in args: a.update(str(i).encode('utf-8'))

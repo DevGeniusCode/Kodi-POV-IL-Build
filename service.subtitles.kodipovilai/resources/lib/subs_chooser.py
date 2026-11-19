@@ -4,8 +4,8 @@
 # "בחר כתוביות" button. It lists the SAME Hebrew candidates the search dialog
 # offers -- WITH a Hebrew match % per real Hebrew sub -- and applies the picked
 # one immediately, staying open so the user can try another. This is the
-# MoranSubs replacement for DarkSubs's MySubs window (service.subtitles.All_Subs
-# is disabled once the built-in engine is on, which left that button dead).
+# MoranSubs replacement for DarkSubs's MySubs window (DarkSubs is disabled once
+# the built-in engine is on, which left that button dead).
 #
 # pyxbmct is a programmatic (code-built) window, so it renders the same on EVERY
 # skin -- no per-skin XML needed. Every entry point is guarded; on any failure
@@ -23,10 +23,19 @@ except Exception:
 ADDON_ID = 'service.subtitles.kodipovilai'
 
 
+def _title():
+    """The brand title of the add-on's windows (sub_utils.DIALOG_TITLE)."""
+    try:
+        from resources.lib.sub_utils import DIALOG_TITLE
+        return DIALOG_TITLE
+    except Exception:
+        return ADDON_ID
+
+
 def _log(msg, level='INFO'):
     try:
-        from resources.lib import kodi_utils
-        kodi_utils.log('subs_chooser: ' + msg, level=level)
+        from resources.lib import sub_utils
+        sub_utils.log('subs_chooser: ' + msg, level=level)
     except Exception:
         pass
 
@@ -111,12 +120,6 @@ def _row_item(c, info, translate, xbmcgui):
     lang = (c.get('language') or '').strip()
     name = (c.get('filename') or '').strip()
     current = name.startswith('» נוכחית')
-    payload = {}
-    try:
-        payload = translate._decode_link(c.get('link') or '') or {}
-    except Exception:
-        payload = {}
-
     # match % already embedded in the label (list_candidates computed it).
     pct = None
     m = _re.search(r'(\d{1,3})%', name)
@@ -184,17 +187,17 @@ def _start_ai_apply(link, info):
     own process and survives. Fully guarded."""
     try:
         import base64
-        from resources.lib import (kodi_utils, translate,
+        from resources.lib import (sub_utils, translate,
                                     subs_engine_bridge)
         try:
-            timing_selection = kodi_utils.current_subtitle_selection(
+            timing_selection = sub_utils.current_subtitle_selection(
                 expected_link=link)
         except Exception:
             timing_selection = {}
 
         def _selection_current():
             try:
-                return bool(kodi_utils.subtitle_selection_matches(
+                return bool(sub_utils.subtitle_selection_matches(
                     timing_selection.get('token') or '',
                     timing_selection.get('link_hash') or '',
                     timing_selection.get('stream_hash') or ''))
@@ -210,13 +213,13 @@ def _start_ai_apply(link, info):
         # (same first step the search dialog does).
         if payload.get('type') == 'engine_ai':
             try:
-                kodi_utils.notify('AI: מוריד את כתובית המקור...', time_ms=2500)
+                sub_utils.notify('AI: מוריד את כתובית המקור...', time_ms=2500)
                 src_path = subs_engine_bridge.download(payload)
             except Exception:
                 src_path = None
             if not (src_path and os.path.isfile(src_path)):
                 try:
-                    kodi_utils.notify('AI: לא ניתן להוריד את כתובית המקור',
+                    sub_utils.notify('AI: לא ניתן להוריד את כתובית המקור',
                                       time_ms=4000)
                 except Exception:
                     pass
@@ -259,7 +262,7 @@ def _start_ai_apply(link, info):
             try:
                 if not _selection_current():
                     return
-                kodi_utils.apply_subtitle_file(
+                sub_utils.apply_subtitle_file(
                     local_src, selection=timing_selection,
                     abandon_on_failure=False)
             except Exception:
@@ -289,7 +292,7 @@ def _start_ai_apply(link, info):
                 'selection_b64={2})'.format(lk, sd, ss))
             # (the chooser already recorded the original picked link as the
             # current sub, so it's marked "» נוכחית" on the next open.)
-            kodi_utils.notify('AI: מתרגם לעברית ברקע', time_ms=3000)
+            sub_utils.notify('AI: מתרגם לעברית ברקע', time_ms=3000)
         except Exception as _e:
             _log('ai bg fire failed: {0}'.format(_e), level='WARNING')
     except Exception as e:
@@ -309,11 +312,11 @@ def _show_pyxbmct():
     except Exception:
         return False
     try:
-        from resources.lib import kodi_utils, translate
+        from resources.lib import sub_utils, translate
     except Exception:
         return False
 
-    info = kodi_utils.current_video_info()
+    info = sub_utils.current_video_info()
     try:
         cands = translate.list_candidates(info, modal_progress=False) or []
     except Exception as e:
@@ -327,7 +330,7 @@ def _show_pyxbmct():
     items = [c for c in cands if c.get('link') and c.get('filename')]
     if not items:
         try:
-            kodi_utils.notify('לא נמצאו כתוביות לכותר הזה', time_ms=3500)
+            sub_utils.notify('לא נמצאו כתוביות לכותר הזה', time_ms=3500)
         except Exception:
             pass
         return False
@@ -340,7 +343,7 @@ def _show_pyxbmct():
 
     class Chooser(pyxbmct.AddonDialogWindow):
         def __init__(self):
-            super(Chooser, self).__init__('MoranSubs — בחר כתוביות')
+            super(Chooser, self).__init__(_title() + ' — בחר כתוביות')
             self.info = info
             self.items = items
             self.setGeometry(950, 620, 9, 2)
@@ -454,18 +457,18 @@ def _show_pyxbmct():
                 # it matches this same candidate next time) -- so reopening the
                 # chooser shows it at the top marked "» נוכחית".
                 try:
-                    kodi_utils.set_current_subtitle(link, renew=True)
+                    sub_utils.set_current_subtitle(link, renew=True)
                 except Exception:
                     pass
                 try:
-                    timing_selection = kodi_utils.current_subtitle_selection(
+                    timing_selection = sub_utils.current_subtitle_selection(
                         expected_link=link)
                 except Exception:
                     timing_selection = {}
 
                 def _still_current():
                     try:
-                        return bool(kodi_utils.subtitle_selection_matches(
+                        return bool(sub_utils.subtitle_selection_matches(
                             timing_selection.get('token') or '',
                             timing_selection.get('link_hash') or '',
                             timing_selection.get('stream_hash') or ''))
@@ -485,10 +488,10 @@ def _show_pyxbmct():
                             self._set_head(
                                 '[B][COLOR red]הפעלת התרגום המובנה נכשלה'
                                 '[/COLOR][/B]')
-                            kodi_utils.abandon_subtitle_selection(
+                            sub_utils.abandon_subtitle_selection(
                                 timing_selection)
                             return
-                        kodi_utils.set_subtitle_sync_status(
+                        sub_utils.set_subtitle_sync_status(
                             'confirmed', source='embedded',
                             selection_token=(
                                 timing_selection.get('token') or ''),
@@ -502,7 +505,7 @@ def _show_pyxbmct():
                         self._set_head(
                             '[B][COLOR red]הפעלת התרגום המובנה נכשלה'
                             '[/COLOR][/B]')
-                        kodi_utils.abandon_subtitle_selection(
+                        sub_utils.abandon_subtitle_selection(
                             timing_selection)
                         return
                     self._set_head('[B][COLOR lightgreen]הופעל תרגום '
@@ -522,7 +525,7 @@ def _show_pyxbmct():
                 path = _t.resolve(
                     link, self.info, selection=timing_selection)
                 if (path and os.path.isfile(path) and _still_current()):
-                    if kodi_utils.apply_subtitle_file(
+                    if sub_utils.apply_subtitle_file(
                             path, selection=timing_selection):
                         self.close()
                         # a pooled AI translation: its gender proofread
@@ -622,21 +625,21 @@ def _deliver_pick(c, info, close_cb):
     pyxbmct on_pick: embedded -> switch stream; AI -> close + background
     translate; ready Hebrew -> resolve + apply. close_cb() closes the window."""
     try:
-        from resources.lib import kodi_utils, translate as _t
+        from resources.lib import sub_utils, translate as _t
         link = c.get('link') or ''
         try:
-            kodi_utils.set_current_subtitle(link, renew=True)
+            sub_utils.set_current_subtitle(link, renew=True)
         except Exception:
             pass
         try:
-            timing_selection = kodi_utils.current_subtitle_selection(
+            timing_selection = sub_utils.current_subtitle_selection(
                 expected_link=link)
         except Exception:
             timing_selection = {}
 
         def _still_current():
             try:
-                return bool(kodi_utils.subtitle_selection_matches(
+                return bool(sub_utils.subtitle_selection_matches(
                     timing_selection.get('token') or '',
                     timing_selection.get('link_hash') or '',
                     timing_selection.get('stream_hash') or ''))
@@ -654,19 +657,19 @@ def _deliver_pick(c, info, close_cb):
                         payload.get('lang') or 'he')
                     and _still_current())
                 if selected:
-                    kodi_utils.set_subtitle_sync_status(
+                    sub_utils.set_subtitle_sync_status(
                         'confirmed', source='embedded',
                         selection_token=(timing_selection.get('token') or ''),
                         link_hash=(timing_selection.get('link_hash') or ''),
                         stream_hash=(timing_selection.get('stream_hash') or ''))
-                    kodi_utils.notify('הופעל תרגום מובנה', time_ms=2500)
+                    sub_utils.notify('הופעל תרגום מובנה', time_ms=2500)
                 else:
-                    kodi_utils.abandon_subtitle_selection(timing_selection)
-                    kodi_utils.notify(
+                    sub_utils.abandon_subtitle_selection(timing_selection)
+                    sub_utils.notify(
                         'הפעלת התרגום המובנה נכשלה', time_ms=3000)
             except Exception as _e:
                 _log('embedded select failed: {0}'.format(_e), level='WARNING')
-                kodi_utils.abandon_subtitle_selection(timing_selection)
+                sub_utils.abandon_subtitle_selection(timing_selection)
             close_cb()
             return
         if kind in ('engine_ai', 'ai', 'embedded_ai'):
@@ -675,7 +678,7 @@ def _deliver_pick(c, info, close_cb):
             return
         path = _t.resolve(link, info, selection=timing_selection)
         if path and os.path.isfile(path) and _still_current():
-            if kodi_utils.apply_subtitle_file(
+            if sub_utils.apply_subtitle_file(
                     path, selection=timing_selection):
                 close_cb()
                 # a pooled AI translation: its gender proofread
@@ -683,12 +686,12 @@ def _deliver_pick(c, info, close_cb):
             elif not _still_current():
                 close_cb()
             else:
-                kodi_utils.notify(
+                sub_utils.notify(
                     'הפעלת הכתובית נכשלה, נסה אחרת', time_ms=3500)
         elif path and not _still_current():
             close_cb()
         else:
-            kodi_utils.notify('ההורדה נכשלה, נסה אחרת', time_ms=3500)
+            sub_utils.notify('ההורדה נכשלה, נסה אחרת', time_ms=3500)
     except Exception as e:
         _log('deliver pick failed: {0}'.format(e), level='WARNING')
 
@@ -697,7 +700,7 @@ def _searching_notice():
     """A small non-blocking progress bar while the list is prepared."""
     try:
         bar = xbmcgui.DialogProgressBG()
-        bar.create('MoranSubs', 'מחפש כתוביות…')
+        bar.create(_title(), 'מחפש כתוביות…')
         return bar
     except Exception:
         return None
@@ -857,7 +860,7 @@ def _show():
     except Exception:
         return False
     try:
-        from resources.lib import kodi_utils, translate
+        from resources.lib import sub_utils, translate
     except Exception:
         return False
     # The list can take seconds on a streaming box. Measured in a user's
@@ -873,7 +876,7 @@ def _show():
     _paused = False
     _notice = _searching_notice()
     try:
-        info = kodi_utils.current_video_info()
+        info = sub_utils.current_video_info()
         items = _chooser_items(info, translate, quick=True)
         pending = bool(info.pop('_list_pending', False))
     finally:
@@ -887,7 +890,7 @@ def _show():
     if not items:
         _resume_after_chooser(_paused)
         try:
-            kodi_utils.notify('לא נמצאו כתוביות לכותר הזה', time_ms=3500)
+            sub_utils.notify('לא נמצאו כתוביות לכותר הזה', time_ms=3500)
         except Exception:
             pass
         return False
@@ -1029,8 +1032,8 @@ def _show():
                             return
                         if pending and _is_ai_row(item):
                             try:
-                                from resources.lib import kodi_utils
-                                kodi_utils.notify('עוד מחפש כתוביות מוכנות -- '
+                                from resources.lib import sub_utils
+                                sub_utils.notify('עוד מחפש כתוביות מוכנות -- '
                                                   'רגע ותוכל לבחור', time_ms=2500)
                             except Exception:
                                 pass

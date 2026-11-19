@@ -29,12 +29,12 @@ import datetime
 import threading
 
 try:
-    from resources.lib import kodi_utils
+    from resources.lib import sub_utils
 except Exception:
     try:
-        from . import kodi_utils
+        from . import sub_utils
     except Exception:
-        kodi_utils = None
+        sub_utils = None
 
 
 # Conservative free-tier daily request ceilings, keyed by lowercased
@@ -112,8 +112,8 @@ def _stored_model():
     is treated as the legacy default so an existing Flash-Lite count is
     not reset for no reason."""
     try:
-        if kodi_utils is not None:
-            return (kodi_utils.get_setting(SETTING_MODEL, '') or '').strip() \
+        if sub_utils is not None:
+            return (sub_utils.get_setting(SETTING_MODEL, '') or '').strip() \
                 or MODEL_TRACKED
     except Exception:
         pass
@@ -126,20 +126,20 @@ def note_request(model):
     scoped to (day, model): switching model or crossing Pacific midnight
     starts a fresh count so the two families never conflate."""
     try:
-        if not is_tracked(model) or kodi_utils is None:
+        if not is_tracked(model) or sub_utils is None:
             return
         model = _norm(model)
         today = _today_utc()
         with _LOCK:
-            last_date = (kodi_utils.get_setting(SETTING_DATE, '') or '').strip()
+            last_date = (sub_utils.get_setting(SETTING_DATE, '') or '').strip()
             last_model = _stored_model()
             if last_date != today or last_model != model:
                 count = 1
             else:
-                count = kodi_utils.get_int(SETTING_COUNT, 0) + 1
-            kodi_utils.set_setting(SETTING_COUNT, str(count))
-            kodi_utils.set_setting(SETTING_DATE, today)
-            kodi_utils.set_setting(SETTING_MODEL, model)
+                count = sub_utils.get_int(SETTING_COUNT, 0) + 1
+            sub_utils.set_setting(SETTING_COUNT, str(count))
+            sub_utils.set_setting(SETTING_DATE, today)
+            sub_utils.set_setting(SETTING_MODEL, model)
     except Exception:
         pass
 
@@ -151,8 +151,8 @@ def note_exhausted(model):
     """Google said the daily quota is used up: remember (day, model), so a
     Google-translated fallback is not re-translated before the quota resets."""
     try:
-        if kodi_utils is not None:
-            kodi_utils.set_setting(SETTING_EXHAUSTED,
+        if sub_utils is not None:
+            sub_utils.set_setting(SETTING_EXHAUSTED,
                                    '{0} {1}'.format(_today_utc(), _norm(model)))
     except Exception:
         pass
@@ -161,9 +161,9 @@ def note_exhausted(model):
 def exhausted_today(model):
     """True when the daily quota for `model` ran out today (Pacific day)."""
     try:
-        if kodi_utils is None:
+        if sub_utils is None:
             return False
-        stored = (kodi_utils.get_setting(SETTING_EXHAUSTED, '') or '').split()
+        stored = (sub_utils.get_setting(SETTING_EXHAUSTED, '') or '').split()
         return stored == [_today_utc(), _norm(model)]
     except Exception:
         return False
@@ -179,13 +179,13 @@ def get_today_usage(model=None):
     stored = _stored_model()
     target = _norm(model) or stored
     try:
-        if kodi_utils is not None:
-            last = (kodi_utils.get_setting(SETTING_DATE, '') or '').strip()
+        if sub_utils is not None:
+            last = (sub_utils.get_setting(SETTING_DATE, '') or '').strip()
             # The stored count belongs to `target` only if the stored slot is
             # both today's AND for that same model; a different (or stale-date)
             # slot means `target` has had 0 requests today.
             if last == today and stored == target:
-                count = max(0, kodi_utils.get_int(SETTING_COUNT, 0))
+                count = max(0, sub_utils.get_int(SETTING_COUNT, 0))
     except Exception:
         count = 0
     limit = _limit_for(target)

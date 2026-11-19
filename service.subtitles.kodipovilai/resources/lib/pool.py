@@ -13,7 +13,7 @@ import os
 import threading
 import time
 
-from resources.lib import kodi_utils
+from resources.lib import sub_utils
 
 try:
     import urllib.request as _urlreq
@@ -33,7 +33,6 @@ except ImportError:        # pragma: no cover
 _EV_REQUEUE_CODES = (401, 403, 426, 500, 503)
 
 POOL_URL = 'https://povil-subs-pool.moran200333.workers.dev'
-POOL_API_KEY = 'povil_x8FayxrUOAS9Qew1sFWzO6UgAnEAgJAG'
 # Non-secret client format tag. Old Ktuvit rows were stored after the vendored
 # engine physically reversed punctuation; new rows store logical source bytes.
 # The picker carries this returned source_lang into its local display repair so
@@ -66,12 +65,12 @@ def _pool_key():
 def _anon_id():
     """Stable anonymous per-install id (shared with telemetry)."""
     try:
-        from resources.lib import kodi_utils
-        v = (kodi_utils.get_setting('_telemetry_id', '') or '').strip()
+        from resources.lib import sub_utils
+        v = (sub_utils.get_setting('_telemetry_id', '') or '').strip()
         if not v:
             import uuid
             v = uuid.uuid4().hex
-            kodi_utils.set_setting('_telemetry_id', v)
+            sub_utils.set_setting('_telemetry_id', v)
         return v
     except Exception:
         return ''
@@ -118,12 +117,12 @@ _BULK_THROTTLE_SEC = 6.0
 
 def use_enabled():
     """Pull from the pool before translating? (default off)"""
-    return kodi_utils.get_bool('pool_use', False)
+    return sub_utils.get_bool('pool_use', False)
 
 
 def share_enabled():
     """Push fresh translations to the pool? (default off)"""
-    return kodi_utils.get_bool('pool_share', False)
+    return sub_utils.get_bool('pool_share', False)
 
 
 def _is_token_like(s):
@@ -228,7 +227,7 @@ def _lookup_raw(p):
         if not isinstance(data, dict) or not data.get('ok'):
             data = {}
     except Exception as e:
-        kodi_utils.log('pool lookup failed: {0}'.format(e), level='DEBUG')
+        sub_utils.log('pool lookup failed: {0}'.format(e), level='DEBUG')
         data = {}
         cacheable = False   # transient/network/parse error -- a reachable "no
         #                     results" answer is cached (below) as a genuine
@@ -342,7 +341,7 @@ def sync_map(info):
         _sync_cache_put(p, sm)
         return sm
     except Exception as e:
-        kodi_utils.log('pool sync_map failed: {0}'.format(e), level='DEBUG')
+        sub_utils.log('pool sync_map failed: {0}'.format(e), level='DEBUG')
         return {}
 
 
@@ -406,12 +405,12 @@ def report_sync(info, sub_hash, release, scale, offset_ms, status,
                 req = _urlreq.Request(POOL_URL + '/syncrep', data=data,
                                       headers=_post_headers('/syncrep'))
                 _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
-                kodi_utils.log(
+                sub_utils.log(
                     'pool syncrep sent ({0}, {1}, {2:+d}ms, {3})'.format(
                         body['status'], body['origin'], body['offset_ms'],
                         rel), level='INFO')
             except Exception as e:
-                kodi_utils.log('pool syncrep failed: {0}'.format(e),
+                sub_utils.log('pool syncrep failed: {0}'.format(e),
                                level='DEBUG')
 
         import threading as _th
@@ -433,7 +432,7 @@ def fetch(info, source_hash=None):
     try:
         return _get('/sub', p).decode('utf-8')
     except Exception as e:
-        kodi_utils.log('pool fetch failed: {0}'.format(e), level='DEBUG')
+        sub_utils.log('pool fetch failed: {0}'.format(e), level='DEBUG')
         return None
 
 
@@ -639,7 +638,7 @@ def _post(body, marker_path=None):
             except Exception:
                 pass
         try:
-            kodi_utils.log('pool contribute failed (http {0}): {1}'.format(code, e),
+            sub_utils.log('pool contribute failed (http {0}): {1}'.format(code, e),
                            level='DEBUG')
         except Exception:
             pass
@@ -802,7 +801,7 @@ def report_embedded(info):
     deduped locally and thrown onto a background thread so it never touches
     playback. No-op when disabled, when ids/release are missing, or on error."""
     try:
-        if kodi_utils.get_setting('he_embedded_report', 'true') == 'false':
+        if sub_utils.get_setting('he_embedded_report', 'true') == 'false':
             return
         # A playback source can opt this playback out of pool embedded-reporting
         # by stamping a window property at play start (same pattern as the
@@ -847,7 +846,7 @@ def report_embedded(info):
                     _embedded_mark(path, lst, key)
             except Exception as e:
                 try:
-                    kodi_utils.log('pool report_embedded failed: {0}'.format(e),
+                    sub_utils.log('pool report_embedded failed: {0}'.format(e),
                                    level='DEBUG')
                 except Exception:
                     pass
@@ -893,7 +892,7 @@ def report_ktuvit(info, names):
                 _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
             except Exception as e:
                 try:
-                    kodi_utils.log('pool report_ktuvit failed: {0}'.format(e),
+                    sub_utils.log('pool report_ktuvit failed: {0}'.format(e),
                                    level='DEBUG')
                 except Exception:
                     pass
@@ -943,7 +942,7 @@ def share_cache(progress_cb=None, should_cancel=None):
             r'^(?P<imdb>.+?)_S(?P<s>\d+)E(?P<e>\d+)_(?P<lang>[a-z]+)_'
             r'[0-9a-f]+(?:\.(?P<tier>[a-z0-9]+))?\.he\.srt$')
 
-    base = os.path.join(kodi_utils.cache_dir(), 'translated')
+    base = os.path.join(sub_utils.cache_dir(), 'translated')
     try:
         files = glob.glob(os.path.join(base, '*.he.srt'))
     except Exception:
@@ -1133,7 +1132,7 @@ _DRAIN_LOCK = threading.Lock()
 
 def _queue_dir():
     try:
-        d = os.path.join(kodi_utils.cache_dir(), 'pool_queue')
+        d = os.path.join(sub_utils.cache_dir(), 'pool_queue')
         if not os.path.isdir(d):
             os.makedirs(d)
         return d
@@ -1171,7 +1170,7 @@ def enqueue(body, marker_path=None):
         path = os.path.join(d, _job_id(body) + '.json')
         if os.path.exists(path):
             try:
-                kodi_utils.log('pool enqueue: already queued ({0} {1})'.format(
+                sub_utils.log('pool enqueue: already queued ({0} {1})'.format(
                     body.get('kind') or 'ai', body.get('release') or ''),
                     level='INFO')
             except Exception:
@@ -1182,7 +1181,7 @@ def enqueue(body, marker_path=None):
             json.dump({'body': body, 'marker_path': marker_path or ''}, f)
         os.replace(tmp, path)
         try:
-            kodi_utils.log('pool enqueue: queued {0} "{1}" (queue={2})'.format(
+            sub_utils.log('pool enqueue: queued {0} "{1}" (queue={2})'.format(
                 body.get('kind') or 'ai', body.get('release') or '',
                 queue_len()), level='INFO')
         except Exception:
@@ -1190,7 +1189,7 @@ def enqueue(body, marker_path=None):
         _kick_drain()
     except Exception as e:
         try:
-            kodi_utils.log('pool enqueue failed: {0}'.format(e), level='WARNING')
+            sub_utils.log('pool enqueue failed: {0}'.format(e), level='WARNING')
         except Exception:
             pass
 
@@ -1263,13 +1262,13 @@ def _post_sync(body):
         code = getattr(e, 'code', None)
         if code in (400, 401):           # invalid srt / unauthorized -> never ok
             try:
-                kodi_utils.log('pool drop job (HTTP {0})'.format(code),
+                sub_utils.log('pool drop job (HTTP {0})'.format(code),
                                level='DEBUG')
             except Exception:
                 pass
             return 'drop'
         try:                              # 429 / 5xx / network -> retry later
-            kodi_utils.log('pool _post_sync retry: {0}'.format(e), level='DEBUG')
+            sub_utils.log('pool _post_sync retry: {0}'.format(e), level='DEBUG')
         except Exception:
             pass
         return 'retry'
@@ -1362,7 +1361,7 @@ def drain(throttle=None, should_cancel=None, max_sends=40):
         remaining = queue_len()
         if sent or dropped or failed:
             try:
-                kodi_utils.log(
+                sub_utils.log(
                     'pool drain: uploaded={0} dropped={1} failed={2} '
                     'remaining={3}'.format(sent, dropped, failed, remaining),
                     level='INFO')
@@ -1393,7 +1392,7 @@ _HARVEST_MAX_TRIES = 8
 
 def _harvest_queue_dir():
     try:
-        d = os.path.join(kodi_utils.cache_dir(), 'pool_harvest_queue')
+        d = os.path.join(sub_utils.cache_dir(), 'pool_harvest_queue')
         if not os.path.isdir(d):
             os.makedirs(d)
         return d
@@ -1432,7 +1431,7 @@ def enqueue_harvest(info, payload):
         os.replace(tmp, p)
     except Exception as e:
         try:
-            kodi_utils.log('harvest enqueue failed: {0}'.format(e),
+            sub_utils.log('harvest enqueue failed: {0}'.format(e),
                            level='DEBUG')
         except Exception:
             pass

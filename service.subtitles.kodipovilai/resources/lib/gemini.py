@@ -470,8 +470,8 @@ def ai_mode_on():
     proofread of a translation taken from the cache or the pool. This is the one door every text
     request goes through, so nothing can ask by another way."""
     try:
-        from . import kodi_utils
-        return (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') == 'ai'
+        from . import sub_utils
+        return (sub_utils.get_setting('translation_mode', 'ai') or 'ai') == 'ai'
     except Exception:
         return True
 

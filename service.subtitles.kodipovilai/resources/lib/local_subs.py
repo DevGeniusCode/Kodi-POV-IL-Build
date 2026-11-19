@@ -8,7 +8,7 @@
 #
 #   2. find_in_temp() -- recently-touched SRTs in Kodi's special://
 #      temp dir. This is where Kodi drops subtitles downloaded by
-#      OTHER subtitle addons (DarkSubs, OpenSubtitles, etc.) as the
+#      OTHER subtitle addons (OS-by-OS, etc.) as the
 #      user picks them from the search dialog. Picking up these
 #      files lets the user pull source subtitles through any of
 #      their already-configured subtitle addons and just use our

@@ -17,7 +17,7 @@ import hashlib
 import time
 import json
 
-from . import kodi_utils
+from . import sub_utils
 
 CACHE_SUBDIR_TRANSLATED = 'translated'
 CACHE_SUBDIR_SOURCE     = 'source'
@@ -25,7 +25,7 @@ CACHE_SUBDIR_METADATA   = 'metadata'
 
 
 def _ensure_subdir(name):
-    p = os.path.join(kodi_utils.cache_dir(), name)
+    p = os.path.join(sub_utils.cache_dir(), name)
     if not os.path.isdir(p):
         try:
             os.makedirs(p)
@@ -178,7 +178,7 @@ def _walk_cache_files():
     parent may come later in the walk. At the 200 MB default that is a few MB;
     at the 2000 MB maximum roughly 35 MB, briefly, on a background thread.
     """
-    root = kodi_utils.cache_dir()
+    root = sub_utils.cache_dir()
     stats = {}
     for dirpath, _dirnames, filenames in os.walk(root):
         for fn in filenames:
@@ -200,8 +200,8 @@ def _walk_cache_files():
 def prune():
     """Apply TTL + size-cap eviction. Safe to run any time; returns
     (files_removed, bytes_freed) for caller telemetry."""
-    ttl_days = kodi_utils.get_int('cache_ttl_days', 180)
-    cap_mb   = kodi_utils.get_int('cache_size_mb', 200)
+    ttl_days = sub_utils.get_int('cache_ttl_days', 180)
+    cap_mb   = sub_utils.get_int('cache_size_mb', 200)
     cap_bytes = max(10, cap_mb) * 1024 * 1024
     cutoff    = time.time() - ttl_days * 86400
 
@@ -270,9 +270,3 @@ def clear_all():
             pass
     return count
 
-
-def total_size_mb():
-    total = 0
-    for _p, _r, s in _walk_cache_files():
-        total += s
-    return total / (1024.0 * 1024.0)

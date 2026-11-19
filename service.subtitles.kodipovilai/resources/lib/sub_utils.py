@@ -6,7 +6,6 @@
 
 import os
 import re
-import sys
 import threading
 import hashlib
 import json
@@ -29,6 +28,10 @@ except ImportError:
     xbmcgui = None
 
 ADDON_ID = 'service.subtitles.kodipovilai'
+
+# The brand title shown in every dialog, progress bar, toast and HTML page title of this
+# add-on. Change it here and nowhere else.
+DIALOG_TITLE = 'Kodi POV IL'
 _ADDON = None
 
 # notify() fires each GUI toast on a short-lived daemon thread so a wedged GUI
@@ -353,7 +356,7 @@ def notify(msg, title=None, icon=None, time_ms=4000):
         pass
     try:
         if title is None:
-            title = 'Kodi POV IL'
+            title = DIALOG_TITLE
         if icon is None:
             icon = xbmcvfs.translatePath('special://home/addons/' + ADDON_ID + '/icon.png')
         # Force RTL paragraph direction. The previous version used
@@ -935,10 +938,6 @@ def get_subtitle_sync_status(link=None, stream_url=None):
         return {}
 
 
-def subtitle_sync_status_label(state):
-    return _SUBTITLE_SYNC_LABELS.get(state, '')
-
-
 def _selection_values(selection=None):
     expected = selection if selection is not None else current_subtitle_selection()
     expected = expected or {}
@@ -1374,12 +1373,3 @@ def confirm_subtitle_sync_fix(path, selection=None):
     except Exception:
         return False
 
-
-def progress_dialog():
-    """Return a DialogProgressBG or None if not available."""
-    if not KODI_AVAILABLE:
-        return None
-    try:
-        return xbmcgui.DialogProgressBG()
-    except Exception:
-        return None

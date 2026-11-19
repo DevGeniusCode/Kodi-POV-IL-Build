@@ -58,12 +58,12 @@ def _anon_id():
     setting. Read/written on the CALLING thread (Kodi setting writes off-thread
     are unreliable)."""
     try:
-        from resources.lib import kodi_utils
-        v = (kodi_utils.get_setting('_telemetry_id', '') or '').strip()
+        from resources.lib import sub_utils
+        v = (sub_utils.get_setting('_telemetry_id', '') or '').strip()
         if not v:
             import uuid
             v = uuid.uuid4().hex
-            kodi_utils.set_setting('_telemetry_id', v)
+            sub_utils.set_setting('_telemetry_id', v)
         return v
     except Exception:
         return ''
@@ -77,8 +77,8 @@ def _anon_id():
 
 def _qpath():
     try:
-        from resources.lib import kodi_utils
-        return os.path.join(kodi_utils.addon_profile_path(), 'ev_queue.json')
+        from resources.lib import sub_utils
+        return os.path.join(sub_utils.addon_profile_path(), 'ev_queue.json')
     except Exception:
         return None
 

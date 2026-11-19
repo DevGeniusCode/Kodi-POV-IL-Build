@@ -4,10 +4,9 @@
 # return either a list of candidate subtitle entries (for the
 # search dialog) or a final SRT path (for the download step).
 #
-# Source policy (we do NOT touch OpenSubtitles ourselves -- the
-# user's existing subtitle addons (DarkSubs, OS-by-OS, etc.) handle
-# all sourcing and have their own working quotas/keys, so we just
-# read whatever they drop into Kodi's temp dir):
+# Source policy: the built-in sources engine (subs_engine_bridge) does the
+# sourcing. Subtitles that OTHER subtitle addons (OS-by-OS, etc.) drop into
+# Kodi's temp dir are still picked up, as follows:
 #
 #   1. Hebrew SRT next to the video         -> hand it back as-is
 #   2. Hebrew SRT in special://temp/         -> hand it back as-is
@@ -15,7 +14,7 @@
 #   4. Source-lang SRT in special://temp/    -> translate to Hebrew
 #                                              (lets the user grab
 #                                              English from
-#                                              DarkSubs/OS, then
+#                                              another addon, then
 #                                              come back to us)
 #
 # Two top-level entry points:
@@ -63,7 +62,7 @@ _GOOGLE_FALLBACK_WHY = {
     'error': 'שגיאת AI',
     'crash': 'שגיאת AI',
 }
-from . import kodi_utils
+from . import sub_utils
 from . import local_subs
 from . import prompt
 from . import srt
@@ -106,19 +105,19 @@ def _embedded_translation_mode():
     silently enabling a path the user had disabled.
     """
     try:
-        return kodi_utils.embedded_translation_mode()
+        return sub_utils.embedded_translation_mode()
     except Exception:
         try:
-            mode = (kodi_utils.get_setting(
+            mode = (sub_utils.get_setting(
                 'embedded_translation_mode', '') or '').strip().lower()
         except Exception:
             mode = ''
         if mode in _EMBEDDED_TRANSLATION_MODES:
             return mode
         try:
-            if not kodi_utils.get_bool('embedded_translate', True):
+            if not sub_utils.get_bool('embedded_translate', True):
                 return 'off'
-            if not kodi_utils.get_bool('embedded_http_extract', True):
+            if not sub_utils.get_bool('embedded_http_extract', True):
                 return 'local_only'
         except Exception:
             pass
@@ -128,7 +127,7 @@ def _embedded_translation_mode():
 def _embedded_translation_policy():
     mode = _embedded_translation_mode()
     try:
-        return kodi_utils.embedded_translation_policy(mode)
+        return sub_utils.embedded_translation_policy(mode)
     except Exception:
         return {
             'mode': mode,
@@ -227,7 +226,7 @@ ALL_SOURCE_LANGS = [
 
 def _enabled_sources():
     return [code for code, key in ALL_SOURCE_LANGS
-            if kodi_utils.get_bool(key, code in ('en', 'es'))]
+            if sub_utils.get_bool(key, code in ('en', 'es'))]
 
 
 def _looks_like_token(s):
@@ -500,7 +499,7 @@ def _rescue_reasoning_leaks(text, source=None, source_lang='auto'):
             if answer:
                 blocks[i] = '\n'.join(lines[:2] + [srt.restyle_like(body, answer)])
                 how[kind] += 1
-        kodi_utils.log('{0} cue(s) carried the model\'s working -- replaced: '
+        sub_utils.log('{0} cue(s) carried the model\'s working -- replaced: '
                        '{1} by its own answer, {2} by Google, {3} by the '
                        'source line'.format(len(bad), how['model'],
                                             how['google'], how['source']),
@@ -508,7 +507,7 @@ def _rescue_reasoning_leaks(text, source=None, source_lang='auto'):
         n = sum(how.values())
         return (srt.stitch_blocks(blocks), n) if n else (text, 0)
     except Exception as e:
-        kodi_utils.log('reasoning-leak repair skipped ({0})'.format(e),
+        sub_utils.log('reasoning-leak repair skipped ({0})'.format(e),
                        level='WARNING')
         return text, 0
 
@@ -621,7 +620,7 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None,
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(fixed)
         os.replace(tmp, path)
-        kodi_utils.log(
+        sub_utils.log(
             'cached subtitle repaired in place (RTL / cue timings): ' + path,
             level='INFO')
     except OSError:
@@ -673,14 +672,14 @@ def _rtl_delivery_copy(path, legacy_engine='auto'):
             (os.path.abspath(path) + '\0').encode('utf-8', 'replace')
             + raw).hexdigest()[:16]
         out = os.path.join(
-            kodi_utils.cache_dir(), 'local_{0}.he.srt'.format(sid))
+            sub_utils.cache_dir(), 'local_{0}.he.srt'.format(sid))
         tmp = out + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(fixed)
         os.replace(tmp, out)
         return out
     except Exception as e:
-        kodi_utils.log(
+        sub_utils.log(
             'RTL local delivery copy skipped: {0}'.format(e), level='DEBUG')
         return path
 
@@ -709,10 +708,10 @@ def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False,
         # or lose the selection race before setSubtitles completes.
         try:
             expected = (selection if selection is not None else
-                        kodi_utils.current_subtitle_selection()) or {}
+                        sub_utils.current_subtitle_selection()) or {}
             if all(expected.get(k) for k in (
                     'token', 'link_hash', 'stream_hash')):
-                kodi_utils.stage_subtitle_delivery(
+                sub_utils.stage_subtitle_delivery(
                     path, selection=expected,
                     status='confirmed', source='embedded')
         except Exception:
@@ -729,7 +728,7 @@ def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False,
             info, path, (source_release or '').strip(), **kwargs)
         return delivered or path
     except Exception as exc:
-        kodi_utils.log(
+        sub_utils.log(
             'subsync Hebrew delivery hook failed: {0}'.format(exc),
             level='WARNING')
         return path
@@ -764,7 +763,7 @@ def _pool_source_text(info, source_hash, cache_only=False):
     safe_hash = _pool_local_id(raw_hash)
     if safe_hash:
         source_path = os.path.join(
-            kodi_utils.cache_dir(),
+            sub_utils.cache_dir(),
             'pool_{0}.source.srt'.format(safe_hash))
         try:
             with open(source_path, 'r', encoding='utf-8') as f:
@@ -782,7 +781,7 @@ def _pool_source_text(info, source_hash, cache_only=False):
     stable_id = safe_hash or _hpool.sha1(
         text.encode('utf-8', 'replace')).hexdigest()[:16]
     source_path = os.path.join(
-        kodi_utils.cache_dir(),
+        sub_utils.cache_dir(),
         'pool_{0}.source.srt'.format(stable_id))
     tmp = source_path + '.tmp'
     try:
@@ -804,21 +803,21 @@ def _mark_current(results):
     top (mirrors DarkSubs's 'כתובית נוכחית'). Prefer the exact candidate link,
     then its private stable identity when a provider refreshed transport data."""
     try:
-        cur = kodi_utils.get_current_subtitle()
+        cur = sub_utils.get_current_subtitle()
         if not cur:
             return results
         match = next((i for i, c in enumerate(results)
                       if c.get('link') == cur), None)
         if match is None:
-            cur_id = kodi_utils.get_current_subtitle_identity()
+            cur_id = sub_utils.get_current_subtitle_identity()
             if cur_id:
                 match = next((
                     i for i, c in enumerate(results)
-                    if kodi_utils.subtitle_candidate_identity(
+                    if sub_utils.subtitle_candidate_identity(
                         c.get('link') or '') == cur_id), None)
         if match is not None:
             c = results[match]
-            status = kodi_utils.get_subtitle_sync_status(cur)
+            status = sub_utils.get_subtitle_sync_status(cur)
             if status:
                 c['_subsync_state'] = status.get('state') or ''
                 c['_subsync_label'] = status.get('label') or ''
@@ -938,7 +937,7 @@ def process_harvest_queue(should_cancel=None):
             path = subs_engine_bridge.download(
                 payload, for_delivery=False)
         except Exception as e:
-            kodi_utils.log('ktuvit harvest: download failed "{0}": {1}'.format(
+            sub_utils.log('ktuvit harvest: download failed "{0}": {1}'.format(
                 rel, str(e)[:120]), level='INFO')
             pool.harvest_job_failed(fp, job)
             downloaded += 1
@@ -971,7 +970,7 @@ def process_harvest_queue(should_cancel=None):
         pool.remove_harvest_job(fp)
         _sleep_harvest(should_cancel)
     if fed:
-        kodi_utils.log('ktuvit harvest: fed {0} sub(s) to the upload queue '
+        sub_utils.log('ktuvit harvest: fed {0} sub(s) to the upload queue '
                        '({1} left)'.format(fed, pool.harvest_queue_len()),
                        level='INFO')
     return fed
@@ -1021,8 +1020,8 @@ def list_candidates(info, modal_progress=True, quick=False):
     # the setting first (add Hebrew, keep whatever else is there), and if that
     # does not take, carry on anyway. Offering entries the user can ignore is a
     # far smaller harm than showing them an empty dialog.
-    if not kodi_utils.hebrew_subtitle_wanted():
-        kodi_utils.log(
+    if not sub_utils.hebrew_subtitle_wanted():
+        sub_utils.log(
             'list_candidates: Kodi\'s subtitle language preference does not '
             'name Hebrew -- listing anyway. Opening a Hebrew subtitle add-on '
             'IS the request for Hebrew, and an empty dialog is a dead end. '
@@ -1092,9 +1091,9 @@ def list_candidates(info, modal_progress=True, quick=False):
         from . import subs_engine_bridge
         _engine_on = subs_engine_bridge.enabled()
     except Exception as e:
-        kodi_utils.log('engine import/enabled() failed: {0}'.format(e),
+        sub_utils.log('engine import/enabled() failed: {0}'.format(e),
                        level='WARNING')
-    kodi_utils.log('engine gate: enabled={0}'.format(_engine_on), level='INFO')
+    sub_utils.log('engine gate: enabled={0}'.format(_engine_on), level='INFO')
     if _engine_on:
         # Embedded-stream detection and the provider search are INDEPENDENT --
         # run them in SEPARATE try blocks so a failure in one (e.g. the player
@@ -1105,7 +1104,7 @@ def list_candidates(info, modal_progress=True, quick=False):
         try:
             engine_embedded = subs_engine_bridge.embedded_candidates(info)
         except Exception as e:
-            kodi_utils.log('engine embedded_candidates failed: {0}'.format(e),
+            sub_utils.log('engine embedded_candidates failed: {0}'.format(e),
                            level='WARNING')
         try:
             _found = subs_engine_bridge.search(
@@ -1122,7 +1121,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                 else:
                     engine_other.append(c)
         except Exception as e:
-            kodi_utils.log('engine search failed: {0}'.format(e),
+            sub_utils.log('engine search failed: {0}'.format(e),
                            level='WARNING')
 
         # "עברית מסונכרנת למובנה" -- an external Hebrew subtitle re-timed onto
@@ -1153,7 +1152,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                     '_engine_kind': 'embedded_he', '_pct': 101,
                 })
         except Exception as e:
-            kodi_utils.log('embedded_sync row skipped: {0}'.format(e),
+            sub_utils.log('embedded_sync row skipped: {0}'.format(e),
                            level='WARNING')
 
         # Queue EVERY human Ktuvit result for the background harvest, so the
@@ -1175,11 +1174,11 @@ def list_candidates(info, modal_progress=True, quick=False):
                         pool.enqueue_harvest(info, pl)
                         _kt += 1
                 if _kt:
-                    kodi_utils.log('ktuvit harvest: queued {0} release(s) for '
+                    sub_utils.log('ktuvit harvest: queued {0} release(s) for '
                                    'background mirroring'.format(_kt),
                                    level='INFO')
         except Exception as e:
-            kodi_utils.log('ktuvit harvest enqueue failed: {0}'.format(e),
+            sub_utils.log('ktuvit harvest enqueue failed: {0}'.format(e),
                            level='WARNING')
 
     # Language display order (the user's requested grouping): Hebrew first
@@ -1397,7 +1396,7 @@ def list_candidates(info, modal_progress=True, quick=False):
     # opted out of AI) we hand back the RAW foreign sub instead -- no AI is
     # ever invoked. Grouped/ordered by source language (en, es, de, fr, pt,
     # then the rest); within a language, best match % first.
-    ai_translation_on = (kodi_utils.get_setting('translation_mode', 'ai')
+    ai_translation_on = (sub_utils.get_setting('translation_mode', 'ai')
                          or 'ai') != 'none'
     # Group BOTH the foreign AI-translate sources AND the embedded (built-in)
     # foreign streams by language, then emit language by language (en, es, de,
@@ -1524,7 +1523,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                 # Opt-out: deliver the raw foreign sub as-is (SDH still sorts first).
                 results.append(_clean(c))
 
-    skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
+    skip_when_hebrew = sub_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
         return _finalize(info, results)
 
@@ -1588,7 +1587,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                     entry['sync'] = 'true'
                     entry['filename'] = '[CACHE] ' + entry['filename']
         except Exception as e:
-            kodi_utils.log('cache marker check failed: {0}'.format(e),
+            sub_utils.log('cache marker check failed: {0}'.format(e),
                            level='DEBUG')
     ai_entries.sort(key=lambda e: 0 if e.get('is_cached') else 1)
     results.extend(ai_entries)
@@ -1606,8 +1605,8 @@ def list_candidates(info, modal_progress=True, quick=False):
         msg = 'AI: אין מקור לתרגום ({0}). בחר כתובית באנגלית מ-DarkSubs ' \
               'ופתח שוב את חיפוש הכתוביות — התרגום ל-AI יופעל אוטומטית.'.format(
                 ' / '.join(reasons) or 'לא ידוע')
-        kodi_utils.notify(msg, time_ms=5000)
-        kodi_utils.log('list_candidates returned empty: ' + repr(
+        sub_utils.notify(msg, time_ms=5000)
+        sub_utils.log('list_candidates returned empty: ' + repr(
             {'imdb_id': imdb_id, 'tmdb_id': tmdb_id,
              'alongside_count': len(alongside),
              'in_temp_count': len(in_temp)}),
@@ -1673,7 +1672,7 @@ def _google_rescue(blocks, source_lang):
             return None
         return out
     except Exception as e:
-        kodi_utils.log('Google rescue failed ({0}) -- keeping the source '
+        sub_utils.log('Google rescue failed ({0}) -- keeping the source '
                        'text for this chunk'.format(e), level='WARNING')
         return None
 
@@ -1696,7 +1695,7 @@ def _google_fill_missing(missing, source_lang):
                       for c in ''.join(b.split('\n')[2:]))]
         return srt.align_blocks(missing, got)
     except Exception as e:
-        kodi_utils.log('Google fill failed ({0}) -- keeping the source text '
+        sub_utils.log('Google fill failed ({0}) -- keeping the source text '
                        'for {1} entr(ies)'.format(e, len(missing or ())),
                        level='WARNING')
         return []
@@ -1917,7 +1916,7 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
                                  kind=kind)
         except Exception as e:
             try:
-                kodi_utils.log('pool backfill failed: {0}'.format(e),
+                sub_utils.log('pool backfill failed: {0}'.format(e),
                                level='DEBUG')
             except Exception:
                 pass
@@ -1999,10 +1998,10 @@ def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
                     srt.strip_leaked_speaker_prefix('\n\n'.join(missing_blocks)),
                     source_lang)
             except Exception as e:
-                kodi_utils.log('google fill failed: {0}'.format(e), level='WARNING')
+                sub_utils.log('google fill failed: {0}'.format(e), level='WARNING')
             filled = srt.parse_blocks(heb or '')
         if len(filled) != len(missing_blocks):
-            kodi_utils.log('google fill returned {0} of {1} entries -- translating '
+            sub_utils.log('google fill returned {0} of {1} entries -- translating '
                            'the whole file with Google'.format(
                                len(filled), len(missing_blocks)), level='WARNING')
             return _google_translate_and_save(src_text, source_lang, translated,
@@ -2036,18 +2035,18 @@ def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
             pass
         _reapply_rtl_fix_in_place(translated)
     except Exception as e:
-        kodi_utils.log('google fill failed ({0}) -- translating the whole file '
+        sub_utils.log('google fill failed ({0}) -- translating the whole file '
                        'with Google'.format(e), level='WARNING')
         return _google_translate_and_save(src_text, source_lang, translated,
                                           info, reason=reason)
-    kodi_utils.log('{0}: kept {1} of {2} chunk(s) from Gemini; the other {3} '
+    sub_utils.log('{0}: kept {1} of {2} chunk(s) from Gemini; the other {3} '
                    'entr(ies) are Google Translate{4}'.format(
                        reason or 'abort', len(done_by_index), len(chunks),
                        len(missing_blocks),
                        ' (from the cached file)' if google_chunks else ''),
                    level='WARNING')
     why = _GOOGLE_FALLBACK_WHY.get(reason, 'AI')
-    kodi_utils.notify('{0} — {1} מתוך {2} חלקים תורגמו ב-AI, השאר ב-Google Translate'.format(
+    sub_utils.notify('{0} — {1} מתוך {2} חלקים תורגמו ב-AI, השאר ב-Google Translate'.format(
         why, len(done_by_index), len(chunks)), time_ms=4000)
     return translated
 
@@ -2060,13 +2059,13 @@ def _google_cache_upgradeable(path):
     try:
         if not path or not os.path.isfile(path) or not _is_google_translated(path):
             return False
-        if (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
+        if (sub_utils.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
             return False
-        if not (kodi_utils.get_setting('api_key', '') or '').strip():
+        if not (sub_utils.get_setting('api_key', '') or '').strip():
             return False
         from . import gemini_quota
-        model = kodi_utils.get_setting('model', '') or ''
-        if (not kodi_utils.get_bool('ai_paid_mode', False)
+        model = sub_utils.get_setting('model', '') or ''
+        if (not sub_utils.get_bool('ai_paid_mode', False)
                 and gemini_quota.exhausted_today(model)):
             return False
         return True
@@ -2099,10 +2098,10 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
         src_text = srt.strip_leaked_speaker_prefix(src_text)
         heb = google_translate.translate_srt(src_text, source_lang)
     except Exception as e:
-        kodi_utils.log('google translate failed: {0}'.format(e),
+        sub_utils.log('google translate failed: {0}'.format(e),
                        level='WARNING')
     if not heb or not heb.strip():
-        kodi_utils.notify('Google Translate נכשל — נסה שוב', time_ms=4000)
+        sub_utils.notify('Google Translate נכשל — נסה שוב', time_ms=4000)
         return None
     heb = srt.mend_line_breaks(heb)
     try:
@@ -2113,13 +2112,13 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
             pass
         _reapply_rtl_fix_in_place(translated)
     except Exception as e:
-        kodi_utils.log('google save failed: {0}'.format(e), level='WARNING')
+        sub_utils.log('google save failed: {0}'.format(e), level='WARNING')
         return None
     if reason in _GOOGLE_FALLBACK_WHY:
         _fb_msg = _GOOGLE_FALLBACK_WHY[reason] + ' — תורגם עם Google Translate'
     else:
         _fb_msg = 'תורגם עם Google Translate'
-    kodi_utils.notify(_fb_msg, time_ms=4000)
+    sub_utils.notify(_fb_msg, time_ms=4000)
     return translated
 
 
@@ -2264,7 +2263,7 @@ def _model_fallback_notice(chosen, why):
     message = _model_fallback_message(chosen, why)
     if why == 'gone':
         try:
-            kodi_utils.notify(message, time_ms=6000)
+            sub_utils.notify(message, time_ms=6000)
         except Exception:
             pass
     else:
@@ -2330,7 +2329,7 @@ def _status(msg, **kwargs):
     if _QUIET:
         return
     try:
-        kodi_utils.notify(msg, **kwargs)
+        sub_utils.notify(msg, **kwargs)
     except Exception:
         pass
 
@@ -2511,18 +2510,18 @@ def _embedded_staircase_source(info, playing, ref, rejected, abort):
                 continue
             after = sync_align.verify_cues(ref, aligned)
             if after.get('status') != sync_align.STATUS_CONFIRMED:
-                kodi_utils.log('embedded-align: %r mapped onto the file but not '
+                sub_utils.log('embedded-align: %r mapped onto the file but not '
                                'confirmed against the embedded track (%s)'
                                % (release, after.get('diag')), level='INFO')
                 continue
-            kodi_utils.log('embedded-align: %r was made for another cut -- '
+            sub_utils.log('embedded-align: %r was made for another cut -- '
                            're-timed by a proven map of %d part(s) (%s)'
                            % (release, len(verdict.get('segments') or []),
                               verdict.get('validation_proof')
                               or 'second timing family'), level='INFO')
             return aligned, release
     except Exception as e:
-        kodi_utils.log('embedded-align: staircase check skipped: {0}'.format(e),
+        sub_utils.log('embedded-align: staircase check skipped: {0}'.format(e),
                        level='WARNING')
     return None, None
 
@@ -2569,7 +2568,7 @@ def _embedded_aligned_source_srt(
         try:
             from . import embedded_extract, sync_align, subsync, release_match
         except Exception as e:
-            kodi_utils.log('embedded-align: import failed: {0}'.format(e),
+            sub_utils.log('embedded-align: import failed: {0}'.format(e),
                            level='WARNING')
             return None, None
 
@@ -2661,7 +2660,7 @@ def _embedded_aligned_source_srt(
                 # worst here, on the cheap path that some providers depend on.
                 if (_al['saw_pause'] and _holding['link'] and _alhot['at']
                         and (_time.time() - _alhot['at']) <= 60.0):
-                    kodi_utils.log(
+                    sub_utils.log(
                         'embedded-align: playback resumed after a pause and the '
                         'CDN has throttled us to {1:.2f}s/request ({0} '
                         'push-back(s)) -- yielding the connection to the player'
@@ -2707,7 +2706,7 @@ def _embedded_aligned_source_srt(
         if strict_lang:
             try_langs = [x for x in try_langs if x == pref]
         if not try_langs:
-            kodi_utils.log('embedded-align: no external subtitle in any language '
+            sub_utils.log('embedded-align: no external subtitle in any language '
                            '-- deferring to full extract', level='INFO')
             return None, None
 
@@ -2743,7 +2742,7 @@ def _embedded_aligned_source_srt(
         try:
             times_by_lang = embedded_extract.cue_reference_times_multi(
                 url, try_set, allow_http=allow, abort_cb=_abort, stats=_alstats,
-                log=lambda m: kodi_utils.log('embedded-align: ' + m,
+                log=lambda m: sub_utils.log('embedded-align: ' + m,
                                              level='INFO'))
         finally:
             # Done with the debrid link. From here on there is nothing to hand
@@ -2793,7 +2792,7 @@ def _embedded_aligned_source_srt(
                 # so it may run to the full deadline.
                 if (lang not in _yield_exempt
                         and _time.time() - _t0 > _yield_after_s):
-                    kodi_utils.log('embedded-align: [%s] search time budget '
+                    sub_utils.log('embedded-align: [%s] search time budget '
                                    'reached -- yielding to the English/fallback '
                                    'language' % lang, level='INFO')
                     _yielded = True
@@ -2807,14 +2806,14 @@ def _embedded_aligned_source_srt(
                 try:
                     verdict = sync_align.verify_cues(ref, src_text)
                 except Exception as e:
-                    kodi_utils.log('embedded-align: verify failed: {0}'.format(e),
+                    sub_utils.log('embedded-align: verify failed: {0}'.format(e),
                                    level='WARNING')
                     continue
                 st = verdict.get('status')
                 aligned = None
                 if st == sync_align.STATUS_CONFIRMED:
                     aligned = src_text
-                    kodi_utils.log('embedded-align: [%s] %r already synced (%s)'
+                    sub_utils.log('embedded-align: [%s] %r already synced (%s)'
                                    % (lang, c.get('release'),
                                       verdict.get('diag')), level='INFO')
                 elif st == sync_align.STATUS_FIXABLE:
@@ -2823,24 +2822,24 @@ def _embedded_aligned_source_srt(
                     except Exception:
                         aligned = None
                     if aligned and aligned.count('-->') >= 8:
-                        kodi_utils.log('embedded-align: [%s] %r retimed (%s)'
+                        sub_utils.log('embedded-align: [%s] %r retimed (%s)'
                                        % (lang, c.get('release'),
                                           verdict.get('diag')), level='INFO')
                     else:
                         aligned = None
                 else:
-                    kodi_utils.log('embedded-align: [%s] %r not confident (%s)'
+                    sub_utils.log('embedded-align: [%s] %r not confident (%s)'
                                    % (lang, c.get('release'),
                                       verdict.get('diag')), level='INFO')
                     _refused.append((c.get('release') or '', src_text))
                 if aligned and aligned.count('-->') >= 8:
                     out = os.path.join(
-                        kodi_utils.cache_dir(),
+                        sub_utils.cache_dir(),
                         'embedded_aligned_{0}.srt'.format(lang or 'src'))
                     with open(out, 'w', encoding='utf-8') as f:
                         f.write(aligned)
                     _p(100, 100, 'מוכן')
-                    kodi_utils.log('embedded-align: synced %s source ready (%d '
+                    sub_utils.log('embedded-align: synced %s source ready (%d '
                                    'embedded cue ref, ~%d requests avoided)'
                                    % (lang, n, n), level='INFO')
                     return out, lang
@@ -2852,20 +2851,20 @@ def _embedded_aligned_source_srt(
                 _embedded_staircase_source(info, playing, ref, _refused, _abort))
             if aligned:
                 out = os.path.join(
-                    kodi_utils.cache_dir(),
+                    sub_utils.cache_dir(),
                     'embedded_aligned_{0}.srt'.format(lang or 'src'))
                 with open(out, 'w', encoding='utf-8') as f:
                     f.write(aligned)
                 _p(100, 100, 'מוכן')
-                kodi_utils.log('embedded-align: synced %s source ready (%d '
+                sub_utils.log('embedded-align: synced %s source ready (%d '
                                'embedded cue ref, ~%d requests avoided)'
                                % (lang, n, n), level='INFO')
                 return out, lang
-        kodi_utils.log('embedded-align: no source aligned in any language -- '
+        sub_utils.log('embedded-align: no source aligned in any language -- '
                        'deferring to full extract', level='INFO')
         return None, None
     except Exception as e:
-        kodi_utils.log('embedded-align failed: {0}'.format(e), level='WARNING')
+        sub_utils.log('embedded-align failed: {0}'.format(e), level='WARNING')
         return None, None
 
 
@@ -2913,12 +2912,12 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                    else globals()['_status'])
         url = _playing_video_url(info)
         if not url:
-            kodi_utils.log('embedded: no probeable playing url', level='INFO')
+            sub_utils.log('embedded: no probeable playing url', level='INFO')
             return None
         try:
             from . import embedded_extract
         except Exception as e:
-            kodi_utils.log('embedded_extract import failed: {0}'.format(e),
+            sub_utils.log('embedded_extract import failed: {0}'.format(e),
                            level='WARNING')
             return None
 
@@ -2963,7 +2962,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 if _age < 0:
                     _age = 0.0   # defensive: never treat a fresh flag as stale
                 if _age < (deadline_s + 120):
-                    kodi_utils.log('embedded: another extraction already running '
+                    sub_utils.log('embedded: another extraction already running '
                                    '-- skipping to avoid doubling the debrid load',
                                    level='INFO')
                     # Not a failure (QA, 14 Nov 2026: the pick on play had
@@ -3129,7 +3128,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     _hot_now = bool(_hot['at']
                                     and (now - _hot['at']) <= _TOKEN_HOT_S)
                     _hold = _YIELD_HOT_S if _hot_now else _YIELD_RESUME_S
-                    kodi_utils.log(
+                    sub_utils.log(
                         'embedded: playback resumed -- standing aside for {0:.0f}s '
                         'so the player can refill from the debrid token{1}, then '
                         'continuing from {2}/{3} cue(s)'.format(
@@ -3180,7 +3179,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                         and (now - _stall['since']) > _STALL_ABORT_S)
 
         def _log_stalled():
-            kodi_utils.log('embedded: player stalled >{0}s -- aborting '
+            sub_utils.log('embedded: player stalled >{0}s -- aborting '
                            'extraction to free the debrid token'
                            .format(_STALL_ABORT_S), level='WARNING')
 
@@ -3282,7 +3281,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
             if _buf['fails'] >= _BUF_FAILS_OFF and not _buf['off']:
                 _buf['off'] = True
                 _buf['hold'] = False
-                kodi_utils.log('embedded: the player\'s buffer cannot be read '
+                sub_utils.log('embedded: the player\'s buffer cannot be read '
                                '-- reading with the stall guard only',
                                level='INFO')
             return None
@@ -3381,7 +3380,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
             # from the readings that showed it
             seen = seed if why == 'is falling' else []
             _release()
-            kodi_utils.log(
+            sub_utils.log(
                 'embedded: the player\'s buffer {0} ({1:.0f}s of film ahead, '
                 'cache {2}%) -- connection closed, sending nothing until it '
                 'holds {3:.0f}s or {4}%'.format(why, ahead, lvl, _BUF_READY_S,
@@ -3396,7 +3395,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                         # the viewer has picked something else: the reading
                         # is not wanted (and a new pick would be refused
                         # while this one holds the single-extraction flag)
-                        kodi_utils.log('embedded: the pick was replaced while '
+                        sub_utils.log('embedded: the pick was replaced while '
                                        'waiting for the player\'s buffer -- '
                                        'stopping', level='INFO')
                         return True
@@ -3426,7 +3425,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 if (not paused and _clock_frozen(p, now)
                         and not frozen_said):
                     frozen_said = True
-                    kodi_utils.log('embedded: the picture is frozen while we '
+                    sub_utils.log('embedded: the picture is frozen while we '
                                    'send nothing -- waiting for the provider '
                                    'to serve the player again', level='INFO')
                 try:
@@ -3456,7 +3455,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                             _buf['off'] = True
                             _buf['hold'] = False
                             _stall['t'] = None
-                            kodi_utils.log('embedded: the player reports no '
+                            sub_utils.log('embedded: the player reports no '
                                            'buffer -- reading with the stall '
                                            'guard only', level='INFO')
                             return False
@@ -3483,7 +3482,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                         # the player picks up again: measure a freeze from
                         # here, not from one we sat out.
                         _stall['t'] = None
-                        kodi_utils.log(
+                        sub_utils.log(
                             'embedded: the player\'s buffer is {0} after '
                             '{1:.0f}s ({2:.0f}s of film ahead, cache {3}%) -- '
                             'reading'.format('back' if stocked else 'steady',
@@ -3491,7 +3490,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                             level='INFO')
                         return False
                 if mono - t_hold > limit:
-                    kodi_utils.log(
+                    sub_utils.log(
                         'embedded: the player\'s buffer did not fill in {0:.0f}s '
                         '-- stopping the extraction for the film\'s sake'
                         .format(limit), level='WARNING')
@@ -3522,7 +3521,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         if _remote:
             try:
                 _resume = os.path.join(
-                    kodi_utils.cache_dir(),
+                    sub_utils.cache_dir(),
                     'embedded_resume_{0}.bin'.format(src_lang or 'src'))
             except Exception:
                 _resume = None
@@ -3551,7 +3550,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         _toast = {'pct': -1, 'at': 0.0, 'started': False}
 
         def _progress(done, total):
-            # _status, NOT kodi_utils.notify: auto-on-play runs this whole path
+            # _status, NOT sub_utils.notify: auto-on-play runs this whole path
             # in quiet mode precisely so it stays silent, and a raw notify()
             # bypasses that and pops toasts for something the user never picked.
             if steps is not None and getattr(steps, 'on_screen', False):
@@ -3595,7 +3594,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 try:
                     if (embedded_extract._lang_key(used)
                             != embedded_extract._lang_key(src_lang)):
-                        kodi_utils.log(
+                        sub_utils.log(
                             'embedded_ai: the {0} embedded subtitle is a '
                             'picture, not text -- reading the {1} embedded '
                             'track instead'.format(src_lang, used), level='INFO')
@@ -3615,7 +3614,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 on_track=(_on_track if why is not None else None),
                 steps=((steps.window, steps.feed, steps.timeline, steps.moved)
                        if (steps is not None and _remote) else None),
-                log=lambda m: kodi_utils.log('embedded_extract: ' + m,
+                log=lambda m: sub_utils.log('embedded_extract: ' + m,
                                              level='INFO'))
         finally:
             if _win is not None:
@@ -3635,7 +3634,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
             # 23% done and would have finished.
             _done, _total = _xstats.get('done') or 0, _xstats.get('total') or 0
             if _remote and _done and _total and _done < _total:
-                kodi_utils.log(
+                sub_utils.log(
                     'embedded: stopped at {0}/{1} cue(s) for {2} -- progress '
                     'saved, the next attempt continues from there'.format(
                         _done, _total, src_lang), level='INFO')
@@ -3666,21 +3665,21 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     except Exception:
                         pass
                 return None
-            kodi_utils.log(
+            sub_utils.log(
                 'embedded: no usable text track for {0}{1}'.format(
                     src_lang, (' ({0})'.format(_xstats['why'])
                                if _xstats.get('why') else '')),
                 level='INFO')
             return None
-        out = os.path.join(kodi_utils.cache_dir(),
+        out = os.path.join(sub_utils.cache_dir(),
                            'embedded_{0}.srt'.format(src_lang or 'src'))
         with open(out, 'w', encoding='utf-8') as f:
             f.write(srt_text)
-        kodi_utils.log('embedded: extracted {0} cue(s) for {1}'.format(
+        sub_utils.log('embedded: extracted {0} cue(s) for {1}'.format(
             srt_text.count('-->'), src_lang), level='INFO')
         return out
     except Exception as e:
-        kodi_utils.log('embedded extract failed: {0}'.format(e),
+        sub_utils.log('embedded extract failed: {0}'.format(e),
                        level='WARNING')
         return None
 
@@ -3736,7 +3735,7 @@ def _embedded_reference(info, source_lang, cancelled=None):
     that are not `source_lang`'s; read(track) returns one as SRT text or
     None. Never raises."""
     try:
-        if not kodi_utils.get_bool(_EMB_REF_SETTING, _EMB_REF_DEFAULT):
+        if not sub_utils.get_bool(_EMB_REF_SETTING, _EMB_REF_DEFAULT):
             return None
         policy = _embedded_translation_policy()
         url = _playing_video_url(info)
@@ -3757,7 +3756,7 @@ def _embedded_reference(info, source_lang, cancelled=None):
             # subtitle laid on the track's cue times): the head is read
             try:
                 found = embedded_extract.probe_tracks(
-                    url, log=lambda m: kodi_utils.log('embedded_extract: ' + m,
+                    url, log=lambda m: sub_utils.log('embedded_extract: ' + m,
                                                       level='INFO'))
             except Exception:
                 found = []
@@ -3787,7 +3786,7 @@ def _embedded_reference(info, source_lang, cancelled=None):
                 late = spent * total / done > _EMB_REF_BUDGET_S
             if late and not slow['said']:
                 slow['said'] = True
-                kodi_utils.log(
+                sub_utils.log(
                     'embedded reference: {0} of {1} line(s) of the {2} track '
                     'in {3:.0f}s -- too slow here for a reference, the '
                     'other tracks of the file are not tried'.format(
@@ -3804,7 +3803,7 @@ def _embedded_reference(info, source_lang, cancelled=None):
                 with open(path, 'r', encoding='utf-8', errors='replace') as f:
                     return f.read()
         except Exception as e:
-            kodi_utils.log('embedded reference: {0}'.format(e), level='INFO')
+            sub_utils.log('embedded reference: {0}'.format(e), level='INFO')
         return None
 
     return tracks, read
@@ -4551,15 +4550,15 @@ class _StepsScreen(object):
                 'source_id': self.source_id, 'release': self._release})
             return
         self._slot = 'b' if self._slot == 'a' else 'a'
-        rel = kodi_utils.safe_release_filename(self._release)
+        rel = sub_utils.safe_release_filename(self._release)
         path = os.path.join(
-            kodi_utils.cache_dir(),
+            sub_utils.cache_dir(),
             ('{0}.{1}.he.srt'.format(rel, self._slot) if rel else
              'progressive_{0}_{1}.he.srt'.format(self.source_id, self._slot)))
         with open(path + '.aitmp', 'w', encoding='utf-8') as f:
             f.write(text)
         os.replace(path + '.aitmp', path)
-        kodi_utils.apply_subtitle_file(path, selection=self._selection,
+        sub_utils.apply_subtitle_file(path, selection=self._selection,
                                        abandon_on_failure=False)
 
     def handler(self):
@@ -4590,28 +4589,28 @@ def _steps_translator(info, source_lang, cancelled):
     else leaves the lines in their source language -- the full job has the
     retries, the fallbacks and the checks."""
     try:
-        if (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
+        if (sub_utils.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
             return None
-        api_key = kodi_utils.get_setting('api_key', '')
+        api_key = sub_utils.get_setting('api_key', '')
         if not api_key:
             return None
         model = _FALLBACK_MODEL
-        chosen = (kodi_utils.get_setting('model', _FALLBACK_MODEL)
+        chosen = (sub_utils.get_setting('model', _FALLBACK_MODEL)
                   or _FALLBACK_MODEL)
         level, budget = _thinking_params(
-            (kodi_utils.get_setting('thinking_budget', 'medium')
+            (sub_utils.get_setting('thinking_budget', 'medium')
              or 'medium').strip().lower(), model)
-        temperature = kodi_utils.get_float('temperature', 1.0)
-        top_p = kodi_utils.get_float('top_p', 0.95)
-        if kodi_utils.get_bool('ai_paid_mode', False):
-            rpm = kodi_utils.get_int('gemini_rpm', 0)
+        temperature = sub_utils.get_float('temperature', 1.0)
+        top_p = sub_utils.get_float('top_p', 0.95)
+        if sub_utils.get_bool('ai_paid_mode', False):
+            rpm = sub_utils.get_int('gemini_rpm', 0)
             interval = (60.0 / rpm) if rpm > 0 else 0.0
         else:
             cap = _gemini_free_rpm_cap(model)
             interval = 60.0 / max(1, min(
-                kodi_utils.get_int('gemini_rpm', cap), cap))
+                sub_utils.get_int('gemini_rpm', cap), cap))
     except Exception as e:
-        kodi_utils.log('embedded steps: no translator: {0}'.format(e),
+        sub_utils.log('embedded steps: no translator: {0}'.format(e),
                        level='WARNING')
         return None
     state = {'template': None}
@@ -4661,14 +4660,14 @@ def _steps_translator(info, source_lang, cancelled):
                 break
             except (gemini.QuotaExceeded, gemini.InvalidKey,
                     gemini.ModelUnavailable) as e:
-                kodi_utils.log('embedded steps: {0}'.format(e), level='INFO')
+                sub_utils.log('embedded steps: {0}'.format(e), level='INFO')
                 return None
             except gemini.OverloadError:
                 if attempt:
                     return {}
                 time.sleep(5)
             except gemini.GeminiError as e:
-                kodi_utils.log('embedded steps: {0}'.format(e), level='INFO')
+                sub_utils.log('embedded steps: {0}'.format(e), level='INFO')
                 return {}
         if not reply:
             return {}
@@ -4737,30 +4736,12 @@ def _embedded_steps(info, lang, show, cancelled, restore=None):
             return None
         made['steps'] = _EmbeddedSteps(
             position, translator, show,
-            restore=restore, log=lambda m: kodi_utils.log(m, level='INFO'))
+            restore=restore, log=lambda m: sub_utils.log(m, level='INFO'))
         return made['steps']
     except Exception as e:
-        kodi_utils.log('embedded steps skipped: {0}'.format(e),
+        sub_utils.log('embedded steps skipped: {0}'.format(e),
                        level='WARNING')
         return None
-
-
-def _build_prev_context_by_idx(chunks, prev_context_lines):
-    """Map each 1-based worker index to the previous chunk's source lines."""
-    context = {}
-    if prev_context_lines <= 0:
-        return context
-    for chunk_offset in range(1, len(chunks)):
-        previous_lines = []
-        for block in chunks[chunk_offset - 1][-prev_context_lines:]:
-            text = srt.block_text_only(block)
-            if text:
-                previous_lines.append(text)
-        # _translate_one is dispatched with idx=chunk_offset+1.  Keep the map
-        # in that same 1-based coordinate system: chunk 1 has no predecessor,
-        # while chunk 2 receives the tail of chunk 1.
-        context[chunk_offset + 1] = previous_lines
-    return context
 
 
 def _source_context_for_subchunk(chunks, idx, ch, prev_context_lines):
@@ -5022,10 +5003,10 @@ def _gp_models_left(hebrew_ref=False):
     all: with "Google Translate" or "no translation" chosen nothing is proofread (0.3.96; a translation
     from the cache or the pool was, and the viewer saw Gemini's "busy")."""
     try:
-        if (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
+        if (sub_utils.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
             return False
         from . import gender_proofread
-        return any(not gender_proofread.exhausted_today(m, kodi_utils)
+        return any(not gender_proofread.exhausted_today(m, sub_utils)
                    for m in _gp_models(hebrew_ref))
     except Exception:
         return False
@@ -5043,8 +5024,8 @@ def _proofread_due(path, source_text, progressive_cb, marker=None,
     in-progress marker is the caller's own, or not a reason here."""
     try:
         if not (progressive_cb is not None
-                and kodi_utils.get_bool('gender_proofread', True)
-                and (kodi_utils.get_setting('api_key', '') or '').strip()
+                and sub_utils.get_bool('gender_proofread', True)
+                and (sub_utils.get_setting('api_key', '') or '').strip()
                 and os.path.isfile(path) and not _gp_done(marker or path)
                 and (held or not _gp_trying(marker or path))
                 and not _is_google_translated(path)
@@ -5149,7 +5130,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
         _cut = [False]     # the viewer's stop cut the proofread short
 
         def _request(proof_model, prompt_text):
-            if gender_proofread.exhausted_today(proof_model, kodi_utils):
+            if gender_proofread.exhausted_today(proof_model, sub_utils):
                 _fails.append('quota')
                 raise gender_proofread.Skip(proof_model)
             if time.monotonic() > _deadline[0]:
@@ -5176,7 +5157,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
                     _fails.append('key')
                     raise           # the same key for every model
                 except gemini.QuotaExceeded:
-                    gender_proofread.note_exhausted(proof_model, kodi_utils)
+                    gender_proofread.note_exhausted(proof_model, sub_utils)
                     _fails.append('quota')
                     raise gender_proofread.Skip(proof_model)
                 except (gemini.OverloadError, gemini.RateLimited) as e:
@@ -5224,11 +5205,11 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
                and ('busy' in _fails or _rounds > 1)
                and time.monotonic() + _wait < _start + _budget and not stopped()):
             _left = [m for m in _turn
-                     if not gender_proofread.exhausted_today(m, kodi_utils)]
+                     if not gender_proofread.exhausted_today(m, sub_utils)]
             if not _left:
                 break
             _model = _left[(_rounds - 1) % len(_left)]
-            kodi_utils.log('gender proofread: every model busy -- asking {0} '
+            sub_utils.log('gender proofread: every model busy -- asking {0} '
                            'again in {1}s'.format(_model, _wait), level='INFO')
             _until = time.monotonic() + _wait
             while time.monotonic() < _until and not stopped():
@@ -5253,7 +5234,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
                 lines = block.split('\n')
                 out.append('\n'.join(lines[:2] + [new]) if new != old else block)
             blocks = out
-        kodi_utils.log(
+        sub_utils.log(
             'gender proofread: {0} -- {1} proposed, {2} applied, {3} refused'
             '{4}'.format(report.get('model') or 'no model answered (tried {0})'.format(
                              ', '.join(report.get('tried') or []) or 'none'),
@@ -5264,7 +5245,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
                           .format(report['spent'])) if report.get('spent') else ''),
             level='INFO')
     except Exception as e:
-        kodi_utils.log('gender proofread skipped: {0}'.format(e), level='WARNING')
+        sub_utils.log('gender proofread skipped: {0}'.format(e), level='WARNING')
     return blocks, report
 
 
@@ -5305,7 +5286,7 @@ def _title_cast(info, imdb_id, season, episode):
                 title = cached_meta.get('title') or title
                 year = cached_meta.get('year') or year
             else:
-                kodi_utils.log(
+                sub_utils.log(
                     'Cached cast has only {0} entries -- refetching '
                     'for expanded coverage'.format(len(cached_cast)),
                     level='DEBUG')
@@ -5326,7 +5307,7 @@ def _title_cast(info, imdb_id, season, episode):
                     'cast': cast, 'title': title, 'year': year,
                 })
         except Exception as e:
-            kodi_utils.log('TMDB lookup failed: {0}'.format(e),
+            sub_utils.log('TMDB lookup failed: {0}'.format(e),
                            level='WARNING')
             cast = []
     return cast, title, year
@@ -5372,18 +5353,18 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
             payload.update({'source_id': source_id, 'release': release})
             progressive_cb(phase, payload)
         except Exception as e:
-            kodi_utils.log('progressive_cb {0} (before the gender proofread of '
+            sub_utils.log('progressive_cb {0} (before the gender proofread of '
                            'an opened translation) raised: {1}'.format(phase, e),
                            level='WARNING')
     try:
-        model = kodi_utils.get_setting('model', 'gemini-3.5-flash-lite') \
+        model = sub_utils.get_setting('model', 'gemini-3.5-flash-lite') \
             or 'gemini-3.5-flash-lite'
         imdb_id = (info.get('imdb_id') or '').strip()
         cast = _title_cast(info, imdb_id, info.get('season') or '',
                            info.get('episode') or '')[0]
         blocks = srt.parse_blocks(cache.load_text(path) or '')
         proofed, report = _run_gender_proofread(
-            blocks, source_text, kodi_utils.get_setting('api_key', '') or '',
+            blocks, source_text, sub_utils.get_setting('api_key', '') or '',
             model, cast, stopped, background=shown_already,
             hebrew_ref=hebrew_ref)
         final = None
@@ -5393,7 +5374,7 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
             delivered = deliver(path)
             # a late round may answer once the viewer is on the next video
             if not stopped():
-                kodi_utils.notify('AI: תוקנו זכר/נקבה ב-{0} שורות'.format(
+                sub_utils.notify('AI: תוקנו זכר/נקבה ב-{0} שורות'.format(
                     report.get('applied', 0)), time_ms=4000)
         # answered, nothing sent or the viewer moved on: no pause before the
         # next open; a reply of no use: a week
@@ -5410,7 +5391,7 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
                       _gp_stats(report))
     except Exception as e:
         final = None
-        kodi_utils.log('gender proofread of an opened translation failed: '
+        sub_utils.log('gender proofread of an opened translation failed: '
                        '{0}'.format(e), level='WARNING')
     if shown_already and final is None:
         # nothing to swap: the file on screen stays
@@ -5424,7 +5405,7 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
         progressive_cb('done', {'success': True, 'source_id': source_id,
                                 'release': release, 'path': delivered})
     except Exception as e:
-        kodi_utils.log('progressive_cb done (after the gender proofread of an '
+        sub_utils.log('progressive_cb done (after the gender proofread of an '
                        'opened translation) raised: ' + str(e), level='WARNING')
     return delivered
 
@@ -5444,7 +5425,7 @@ def _gp_later_retry(report):
 
 
 def _gp_later_file():
-    return os.path.join(kodi_utils.cache_dir(), 'gp_later.json')
+    return os.path.join(sub_utils.cache_dir(), 'gp_later.json')
 
 
 def _gp_later_today():
@@ -5459,7 +5440,7 @@ def _gp_later_src(marker):
     """Where the queue keeps a copy of the subtitle a translation was made
     from (the source search's copy may be gone by the time it is asked)."""
     import hashlib
-    return os.path.join(kodi_utils.cache_dir(), 'gpl_{0}.src.srt'.format(
+    return os.path.join(sub_utils.cache_dir(), 'gpl_{0}.src.srt'.format(
         hashlib.sha1(marker.encode('utf-8')).hexdigest()[:20]))
 
 
@@ -5534,10 +5515,10 @@ def _gp_later_add(report, path, source_text, info, share=None, marker=None,
         gp_later.update(_gp_later_file(), change, _gp_later_today())
         for old in pushed:
             _gp_later_forget(old)
-        kodi_utils.log('gender proofread: no answer ({0}) -- queued, asked again '
+        sub_utils.log('gender proofread: no answer ({0}) -- queued, asked again '
                        'later'.format(report.get('why')), level='INFO')
     except Exception as e:
-        kodi_utils.log('gender proofread queue add failed: {0}'.format(e),
+        sub_utils.log('gender proofread queue add failed: {0}'.format(e),
                        level='DEBUG')
 
 
@@ -5557,8 +5538,8 @@ def gp_later_tick(should_cancel=None):
         if not os.path.isfile(queue):
             return ''
         today = _gp_later_today()
-        api_key = (kodi_utils.get_setting('api_key', '') or '').strip()
-        ready = bool(kodi_utils.get_bool('gender_proofread', True) and api_key
+        api_key = (sub_utils.get_setting('api_key', '') or '').strip()
+        ready = bool(sub_utils.get_bool('gender_proofread', True) and api_key
                      and _gp_models_left())
         now = time.time()
         dropped = []
@@ -5626,7 +5607,7 @@ def gp_later_tick(should_cancel=None):
             if not (source_text and blocks):
                 # gone since the pick (the cache's own clean-up): nothing sent
                 raise _GpLaterGone()
-            model = kodi_utils.get_setting('model', 'gemini-3.5-flash-lite') \
+            model = sub_utils.get_setting('model', 'gemini-3.5-flash-lite') \
                 or 'gemini-3.5-flash-lite'
             cast = _title_cast(info, (info.get('imdb_id') or '').strip(),
                                info.get('season') or '', info.get('episode') or '')[0]
@@ -5657,7 +5638,7 @@ def gp_later_tick(should_cancel=None):
         except _GpLaterGone:
             report = {'why': 'gone'}
         except Exception as e:
-            kodi_utils.log('gender proofread from the queue failed: {0}'.format(e),
+            sub_utils.log('gender proofread from the queue failed: {0}'.format(e),
                            level='WARNING')
         why = 'answered' if report.get('model') else (report.get('why') or 'error')
         keep = why != 'answered' and _gp_later_retry(report)
@@ -5677,12 +5658,12 @@ def gp_later_tick(should_cancel=None):
                 _gp_later_forget(entry)
         except Exception as e:
             # the claim keeps it away for its retry time; the request counted
-            kodi_utils.log('gender proofread queue save failed: {0}'.format(e),
+            sub_utils.log('gender proofread queue save failed: {0}'.format(e),
                            level='WARNING')
-        kodi_utils.log('gender proofread from the queue: {0}'.format(why), level='INFO')
+        sub_utils.log('gender proofread from the queue: {0}'.format(why), level='INFO')
         return why
     except Exception as e:
-        kodi_utils.log('gender proofread queue failed: {0}'.format(e), level='WARNING')
+        sub_utils.log('gender proofread queue failed: {0}'.format(e), level='WARNING')
         return 'error'
 
 
@@ -5692,7 +5673,7 @@ def _pool_gp_base(source_hash):
     sid = _pool_local_id(source_hash)
     if not sid:
         return ''
-    return os.path.join(kodi_utils.cache_dir(), 'pool_{0}.source.srt'.format(sid))
+    return os.path.join(sub_utils.cache_dir(), 'pool_{0}.source.srt'.format(sid))
 
 
 def proofread_later(link, selection):
@@ -5713,8 +5694,8 @@ def proofread_later(link, selection):
             return
         if kind == 'pool' and (payload.get('pool_kind') or 'ai') == 'ktuvit':
             return
-        if not (kodi_utils.get_bool('gender_proofread', True)
-                and (kodi_utils.get_setting('api_key', '') or '').strip()
+        if not (sub_utils.get_bool('gender_proofread', True)
+                and (sub_utils.get_setting('api_key', '') or '').strip()
                 and _gp_models_left()):
             return
         source_id = ''
@@ -5737,7 +5718,7 @@ def proofread_later(link, selection):
                 b64(_encode_link(dict(payload, proofread_only=True))),
                 b64(source_id), b64(json.dumps(sel, separators=(',', ':')))))
     except Exception as e:
-        kodi_utils.log('proofread_later failed: {0}'.format(e), level='DEBUG')
+        sub_utils.log('proofread_later failed: {0}'.format(e), level='DEBUG')
 
 
 _GP_NOSRC_SECS = 7 * 86400
@@ -5785,7 +5766,7 @@ def _pool_proofread_text(info, pool_hash):
 def _embedded_source_path(base_hash):
     """This device's copy of the subtitle an embedded translation was made
     from, under its content hash (the pool's key for that translation)."""
-    return os.path.join(kodi_utils.cache_dir(),
+    return os.path.join(sub_utils.cache_dir(),
                         'emb_src_{0}.srt'.format(base_hash))
 
 
@@ -5805,7 +5786,7 @@ def _keep_embedded_source(path):
             shutil.copyfile(path, kept)
             return kept
     except Exception as e:
-        kodi_utils.log('embedded source copy failed: {0}'.format(e),
+        sub_utils.log('embedded source copy failed: {0}'.format(e),
                        level='DEBUG')
     return ''
 
@@ -5985,7 +5966,7 @@ def _pool_pick_emb_source(info, pool_hash, source_lang, he_path):
             # each time): the in-progress pause, six hours
             return None if not read else False
     except Exception as e:
-        kodi_utils.log('pool pick: embedded source lookup failed: {0}'.format(e),
+        sub_utils.log('pool pick: embedded source lookup failed: {0}'.format(e),
                        level='DEBUG')
         return None
     return ''
@@ -6024,7 +6005,7 @@ def _pool_pick_source(info, pool_hash, release):
         if tried and not read:
             return None     # no download came through: no look either
     except Exception as e:
-        kodi_utils.log('pool pick: source lookup failed: {0}'.format(e),
+        sub_utils.log('pool pick: source lookup failed: {0}'.format(e),
                        level='DEBUG')
         return None
     return ''
@@ -6062,7 +6043,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # replace a subtitle selected in the meantime.
     try:
         _timing_selection = (dict(selection) if selection is not None else
-                             kodi_utils.current_subtitle_selection(
+                             sub_utils.current_subtitle_selection(
                                  expected_link=link)) or {}
     except Exception:
         _timing_selection = {}
@@ -6073,7 +6054,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             return bool(
                 all(_timing_selection.get(k) for k in (
                     'token', 'link_hash', 'stream_hash'))
-                and kodi_utils.subtitle_selection_matches(
+                and sub_utils.subtitle_selection_matches(
                     _timing_selection.get('token') or '',
                     _timing_selection.get('link_hash') or '',
                     _timing_selection.get('stream_hash') or ''))
@@ -6094,7 +6075,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
         def _selection_bound_progressive(phase, payload):
             try:
-                if not kodi_utils.subtitle_selection_matches(
+                if not sub_utils.subtitle_selection_matches(
                         _timing_selection.get('token') or '',
                         _timing_selection.get('link_hash') or '',
                         _timing_selection.get('stream_hash') or ''):
@@ -6110,7 +6091,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
         def _selection_bound_extract_progress(*args, **kwargs):
             try:
-                if not kodi_utils.subtitle_selection_matches(
+                if not sub_utils.subtitle_selection_matches(
                         _timing_selection.get('token') or '',
                         _timing_selection.get('link_hash') or '',
                         _timing_selection.get('stream_hash') or ''):
@@ -6126,7 +6107,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if not all(_timing_selection.get(k) for k in (
                     'token', 'link_hash', 'stream_hash')):
                 return False
-            return bool(kodi_utils.set_subtitle_sync_status(
+            return bool(sub_utils.set_subtitle_sync_status(
                 state, source=source,
                 selection_token=_timing_selection.get('token') or '',
                 link_hash=_timing_selection.get('link_hash') or '',
@@ -6136,11 +6117,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
     payload = _decode_link(link)
     if not payload:
-        kodi_utils.log('resolve: bad link', level='ERROR')
+        sub_utils.log('resolve: bad link', level='ERROR')
         return None
 
     kind = payload.get('type')
-    kodi_utils.log('resolve: kind={0}'.format(kind), level='INFO')
+    sub_utils.log('resolve: kind={0}'.format(kind), level='INFO')
     # proofread_later's job: a translation already on screen gets its gender
     # proofread and a corrected file swapped in -- never a translation.
     _proofread_only = bool(payload.get('proofread_only'))
@@ -6203,9 +6184,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if (_gp_base and not _had_copy and not _gp_done(_gp_base)
                 and _pool_variant_proofread(info, _phash, network=False)):
             _gp_mark(_gp_base)      # fetched just now, and proofread already
-        _praw = os.path.join(kodi_utils.cache_dir(),
+        _praw = os.path.join(sub_utils.cache_dir(),
                              'pool_{0}.source.srt'.format(sid))
-        out = os.path.join(kodi_utils.cache_dir(), 'pool_{0}.he.srt'.format(sid))
+        out = os.path.join(sub_utils.cache_dir(), 'pool_{0}.he.srt'.format(sid))
         # Old Ktuvit pool rows were stored after the vendored engine had
         # physically moved trailing punctuation. Repair them locally on
         # this fetched copy only. New logical rows carry a private format
@@ -6273,7 +6254,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     _gp_try_mark(_gp_base, False)
                     if _psource == '':
                         # looked, and it is not in the list: a week's pause
-                        kodi_utils.log('gender proofread: no source subtitle for '
+                        sub_utils.log('gender proofread: no source subtitle for '
                                        'this pooled translation', level='INFO')
                         try:
                             with open(_gp_base + '.gp.nosrc', 'w', encoding='utf-8') as f:
@@ -6340,12 +6321,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # strict_lang should make this impossible; if it ever is not,
                 # delivering it would put a foreign-language subtitle on screen
                 # for a Hebrew pick, so refuse rather than trust the flag.
-                kodi_utils.log('embedded_sync: aligner returned {0!r}, not '
+                sub_utils.log('embedded_sync: aligner returned {0!r}, not '
                                'Hebrew -- discarding'.format(_used),
                                level='WARNING')
                 _sync_path = None
         except Exception as e:
-            kodi_utils.log('embedded_sync failed: {0}'.format(e),
+            sub_utils.log('embedded_sync failed: {0}'.format(e),
                            level='WARNING')
         if _sync_path and os.path.isfile(_sync_path):
             try:
@@ -6353,7 +6334,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     _body = f.read()
                 _fixed = srt.fix_rtl_punctuation(_body)
                 _out = os.path.join(
-                    kodi_utils.cache_dir(),
+                    sub_utils.cache_dir(),
                     'embedded_sync_he.povil-rtl.srt')
                 _tmp = _out + '.aitmp'
                 with open(_tmp, 'w', encoding='utf-8', newline='') as f:
@@ -6361,14 +6342,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 os.replace(_tmp, _out)
                 # The resolver only prepares a file.  Commit CONFIRMED after
                 # the picker caller proves Kodi registered and selected it.
-                kodi_utils.stage_subtitle_delivery(
+                sub_utils.stage_subtitle_delivery(
                     _out, selection=_timing_selection,
                     status='confirmed', source='embedded')
                 _status('כתובית עברית מסונכרנת לתזמון המובנה מוכנה',
                         time_ms=3500)
                 return _out
             except Exception as e:
-                kodi_utils.log('embedded_sync write failed: {0}'.format(e),
+                sub_utils.log('embedded_sync write failed: {0}'.format(e),
                                level='WARNING')
         # Nothing aligned confidently. Fall back to the embedded track itself --
         # exactly what the user gets today -- rather than leaving them with no
@@ -6383,7 +6364,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _status('לא נמצאה כתובית עברית שמסתנכרנת — הופעל התרגום המובנה',
                         time_ms=5000)
         except Exception as e:
-            kodi_utils.log('embedded_sync fallback select failed: {0}'
+            sub_utils.log('embedded_sync fallback select failed: {0}'
                            .format(e), level='WARNING')
         return None
 
@@ -6402,7 +6383,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     _status('הופעל תרגום מובנה' + (
                         ' בעברית' if _elang == 'he' else ''), time_ms=4000)
             except Exception as e:
-                kodi_utils.log('resolve embedded select failed: {0}'
+                sub_utils.log('resolve embedded select failed: {0}'
                                .format(e), level='WARNING')
             return None
         # A human (or machine-translated) Hebrew subtitle the user
@@ -6414,7 +6395,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             from . import subs_engine_bridge
             path = subs_engine_bridge.download(payload)
         except Exception as e:
-            kodi_utils.log('resolve engine download failed: {0}'.format(e),
+            sub_utils.log('resolve engine download failed: {0}'.format(e),
                            level='ERROR')
             path = None
         if path and os.path.isfile(path):
@@ -6448,11 +6429,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             logical_source=(
                                 subs_engine_bridge.is_logical_source(
                                     _pool_source_path)))
-                        kodi_utils.log(
+                        sub_utils.log(
                             'ktuvit pool mirror: enqueued "{0}"'.format(
                                 payload.get('filename') or ''), level='INFO')
                 else:
-                    kodi_utils.log(
+                    sub_utils.log(
                         'ktuvit pool mirror: not enqueued (share={0}, '
                         'src={1}, lang={2}, already_shared={3})'.format(
                             (pool.share_enabled() if pool else False),
@@ -6461,7 +6442,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                           if pool else False)),
                         level='INFO')
             except Exception as e:
-                kodi_utils.log('ktuvit pool mirror failed: {0}'.format(e),
+                sub_utils.log('ktuvit pool mirror failed: {0}'.format(e),
                                level='WARNING')
             # SubSync S2: when this sub's release doesn't match the playing
             # release, verify -- and if a confident linear map exists, FIX --
@@ -6476,7 +6457,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _status('כתוביות עברית מ-{0}'.format(
                 payload.get('source') or 'מקור'), time_ms=4000)
             return path
-        kodi_utils.notify('לא ניתן היה להוריד את הכתובית', time_ms=4000)
+        sub_utils.notify('לא ניתן היה להוריד את הכתובית', time_ms=4000)
         return None
 
     if kind == 'embedded_ai':
@@ -6519,7 +6500,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # Without this, a "from cache" for English after the user picked
                 # French/German reads like a bug rather than a graceful fallback.
                 try:
-                    kodi_utils.notify(
+                    sub_utils.notify(
                         'AI: אין כתובית מסונכרנת ב{0} — מתרגם מ{1}'.format(
                             _lang_display_he(_emb_lang),
                             _lang_display_he(_used_lang)),
@@ -6568,7 +6549,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         _steps.feed(cache.load_text(emb_path) or '',
                                     translate=False)
                         if _steps.settle(cancelled=_translation_cancelled):
-                            kodi_utils.log(
+                            sub_utils.log(
                                 'embedded steps: the whole track was in before '
                                 'the answer for the first view -- waited for '
                                 'it, shown={0}'.format(_steps.shown),
@@ -6578,7 +6559,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             finally:
                 if _steps is not None:
                     _steps_he = _steps.finish()
-                    kodi_utils.log(
+                    sub_utils.log(
                         'embedded steps: {0} window(s), {1} request(s), {2} '
                         'line(s) in Hebrew, shown={3}, embedded track put '
                         'back {4} time(s)'.format(
@@ -6605,7 +6586,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     and _still_playing()):
                 _unreadable = _external_for_unreadable_embedded(info, _emb_lang)
             if _unreadable is None:
-                kodi_utils.log('embedded_ai: mode={0} produced no synced source '
+                sub_utils.log('embedded_ai: mode={0} produced no synced source '
                                '-- deferring to the external path'.format(
                                    _emb_mode), level='INFO')
                 if not _proofread_only:
@@ -6613,7 +6594,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 return None
             _reason = _emb_why.get('reason')
             _no_text = _reason == 'no_text'
-            kodi_utils.log(
+            sub_utils.log(
                 'embedded_ai: the {0} embedded track cannot be read {1} -- '
                 'translating the external {2} subtitle "{3}" instead'.format(
                     _emb_lang,
@@ -6642,7 +6623,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _switched = False
             if _switched:
                 # the viewer was told when the track was chosen (_on_track)
-                kodi_utils.log(
+                sub_utils.log(
                     'embedded_ai: translating from the {1} embedded track, not '
                     'the {0} picture one'.format(_emb_lang, _used), level='INFO')
                 _emb_lang = _used
@@ -6677,12 +6658,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             from . import subs_engine_bridge
             eng_path = subs_engine_bridge.download(payload)
         except Exception as e:
-            kodi_utils.log('resolve engine_ai download failed: {0}'
+            sub_utils.log('resolve engine_ai download failed: {0}'
                            .format(e), level='ERROR')
             eng_path = None
         if not eng_path or not os.path.isfile(eng_path):
             if not _proofread_only:
-                kodi_utils.notify('AI: לא ניתן היה להוריד את כתובית המקור',
+                sub_utils.notify('AI: לא ניתן היה להוריד את כתובית המקור',
                                   time_ms=4000)
             return None
         _status('AI: מוריד אנגלית ומתרגם לעברית...', time_ms=3000)
@@ -6700,7 +6681,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # fall through to the AI logic below
 
     if kind != 'ai':
-        kodi_utils.log('resolve: unknown kind ' + str(kind),
+        sub_utils.log('resolve: unknown kind ' + str(kind),
                        level='WARNING')
         return None
 
@@ -6754,7 +6735,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # OFF = byte-identical to today.
     _ar_on = False
     try:
-        _ar_on = bool(kodi_utils.get_bool('gender_ref_arabic', False))
+        _ar_on = bool(sub_utils.get_bool('gender_ref_arabic', False))
     except Exception:
         _ar_on = False
     _tier = 'ar' if _ar_on else ''
@@ -6870,7 +6851,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     return False
                 _ref_stack.append((lang or 'ar', mp))
                 if len(_ref_stack) > 1:
-                    kodi_utils.log(
+                    sub_utils.log(
                         'gender-ref: added fallback tier {0} [{1}] for blocked '
                         'chunks'.format(len(_ref_stack) - 1, lang or '?'),
                         level='INFO')
@@ -6952,11 +6933,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     _reapply_rtl_fix_in_place(path, source=source_text,
                                               source_lang=source_lang)
                     _gp_mark(path)
-                    kodi_utils.log('gender proofread: the pool holds this '
+                    sub_utils.log('gender proofread: the pool holds this '
                                    'translation proofread -- taken', level='INFO')
                     return _deliver(path)
                 except Exception as e:
-                    kodi_utils.log('pool proofread copy save failed: '
+                    sub_utils.log('pool proofread copy save failed: '
                                    '{0}'.format(e), level='WARNING')
         if not asking:
             return None
@@ -6982,13 +6963,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # we never serve a previously-cached Hebrew file either. This is an
     # extra gate only; it can't re-enable translation that auto_translate /
     # force_ai_when_auto_translate_off already disabled.
-    if not payload.get('force_ai') and not kodi_utils.hebrew_subtitle_wanted():
+    if not payload.get('force_ai') and not sub_utils.hebrew_subtitle_wanted():
         if _proofread_only:
             return None
-        kodi_utils.log(
+        sub_utils.log(
             'resolve: preferred subtitle language is not Hebrew; returning '
             'the source subtitle untranslated', level='INFO')
-        kodi_utils.notify(
+        sub_utils.notify(
             'AI: שפת הכתוביות המועדפת אינה עברית — מחזיר כתובית מקור ללא תרגום',
             time_ms=4000)
         # Never hand back nothing: an untranslated source subtitle is far
@@ -7039,7 +7020,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # text. If the cached file isn't really Hebrew, delete it and re-do.
         if os.path.isfile(translated) and not _is_mostly_hebrew(
                 cache.load_text(translated) or ''):
-            kodi_utils.log('Discarding non-Hebrew cached translation (empty/'
+            sub_utils.log('Discarding non-Hebrew cached translation (empty/'
                            'echoed): ' + translated, level='WARNING')
             try:
                 os.remove(translated)
@@ -7049,15 +7030,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if (progressive_cb is not None and local_source
                 and os.path.isfile(local_source)
                 and _google_cache_upgradeable(translated)):
-            kodi_utils.log('Cached file is a Google fallback and AI is available '
+            sub_utils.log('Cached file is a Google fallback and AI is available '
                            'again -- translating with AI: ' + translated,
                            level='INFO')
             _replacing_google = translated
         elif os.path.isfile(translated):
-            kodi_utils.log('Cache hit (early): ' + translated,
+            sub_utils.log('Cache hit (early): ' + translated,
                            level='INFO')
             if not _proofread_only:
-                kodi_utils.notify(
+                sub_utils.notify(
                     'AI: כתוביות מ-cache (תרגום קודם)',
                     time_ms=4000)
             try:
@@ -7103,7 +7084,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if _replacing_google and os.path.isfile(_replacing_google):
             return _deliver(_replacing_google)
         if not _proofread_only:
-            kodi_utils.notify(
+            sub_utils.notify(
                 'מקור הכתוביות לא נמצא — בחר שוב',
                 time_ms=5000,
             )
@@ -7151,7 +7132,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             source_id=content_id, tier=_tier)
         if os.path.isfile(translated_by_content) and not _is_mostly_hebrew(
                 cache.load_text(translated_by_content) or ''):
-            kodi_utils.log('Discarding non-Hebrew cached translation (empty/'
+            sub_utils.log('Discarding non-Hebrew cached translation (empty/'
                            'echoed): ' + translated_by_content,
                            level='WARNING')
             try:
@@ -7161,16 +7142,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _gp_ref_mark(translated_by_content, None)
         if (progressive_cb is not None
                 and _google_cache_upgradeable(translated_by_content)):
-            kodi_utils.log('Cached file is a Google fallback and AI is available '
+            sub_utils.log('Cached file is a Google fallback and AI is available '
                            'again -- translating with AI: ' + translated_by_content,
                            level='INFO')
             _replacing_google = translated_by_content
         elif os.path.isfile(translated_by_content):
-            kodi_utils.log(
+            sub_utils.log(
                 'Cache hit (content): ' + translated_by_content,
                 level='INFO')
             if not _proofread_only:
-                kodi_utils.notify(
+                sub_utils.notify(
                     'AI: כתוביות מ-cache (זהה לתרגום קיים)',
                     time_ms=4000)
             try:
@@ -7207,7 +7188,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             release_override=_release_override,
                             kind=_pool_kind)
                     except Exception as e:
-                        kodi_utils.log(
+                        sub_utils.log(
                             'pool backfill (content) failed: {0}'.format(e),
                             level='DEBUG')
             return _deliver(translated_by_content)
@@ -7244,7 +7225,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # it. When OFF we take ai_ar if present, else plain.
         pooled, _pooled_ar = _pool_reuse_fetch(info, content_id, _ar_on)
         if pooled and _pooled_ar:
-            kodi_utils.log('pool: reusing Arabic-gender (ai_ar) variant',
+            sub_utils.log('pool: reusing Arabic-gender (ai_ar) variant',
                            level='INFO')
         if pooled:
             try:
@@ -7255,7 +7236,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _gp_ref_mark(translated, '?' if _pooled_ar else '')
                 _reapply_rtl_fix_in_place(translated, source=src_text,
                                           source_lang=source_lang)
-                kodi_utils.notify(
+                sub_utils.notify(
                     'AI: כתוביות מהמאגר הקהילתי (לא נדרש תרגום)', time_ms=4000)
                 _opened = _open_with_proofread(
                     translated, src_text, early_source_id or content_id,
@@ -7265,7 +7246,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     return _opened
                 return _deliver(translated)
             except Exception as e:
-                kodi_utils.log('pool reuse save failed: {0}'.format(e),
+                sub_utils.log('pool reuse save failed: {0}'.format(e),
                                level='WARNING')
 
     # Captured once and reused for ALL progressive callback emissions
@@ -7306,7 +7287,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'release': _src_release,
             })
         except Exception as e:
-            kodi_utils.log(
+            sub_utils.log(
                 'progressive_cb first_ready raised: ' + str(e),
                 level='WARNING')
     if _google_prev and progressive_cb is not None:
@@ -7321,10 +7302,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'release': _src_release,
             })
         except Exception as e:
-            kodi_utils.log('progressive_cb chunk_ready (cached Google) raised: '
+            sub_utils.log('progressive_cb chunk_ready (cached Google) raised: '
                            + str(e), level='WARNING')
 
-    kodi_utils.log(
+    sub_utils.log(
         'No cache hit. Starting translation. imdb={0} content_id={1} '
         'src_len={2}'.format(imdb_id, content_id, len(src_text)),
         level='INFO')
@@ -7343,7 +7324,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # Hebrew message read "backwards" to the user. The 25/50/75 %
     # milestone toasts later replace the old "התקדמות תופיע בפינה"
     # explanation that used to bloat this kickoff line.
-    kodi_utils.notify(
+    sub_utils.notify(
         'AI מתרגם (כדקה-שתיים). תתעלם משגיאות ביניים.',
         time_ms=5000,
     )
@@ -7367,7 +7348,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # Hebrew credit/header block can't skew it) and only skip when Hebrew clearly
     # dominates.
     if _is_mostly_hebrew(src_text, min_ratio=0.60):
-        kodi_utils.log(
+        sub_utils.log(
             'translate step: source is already predominantly Hebrew -- '
             'passing through without translation', level='INFO')
         cache.save_text(translated, src_text)
@@ -7379,12 +7360,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # (default) falls through to the Gemini path below (which guides the user
     # to connect a key if none is set). translation_mode 'none' never reaches
     # here (list_candidates hands back raw foreign subs instead).
-    _translation_mode = kodi_utils.get_setting('translation_mode', 'ai') or 'ai'
+    _translation_mode = sub_utils.get_setting('translation_mode', 'ai') or 'ai'
     # Milestone (cheap, INFO): fires once we're past the language check and are
     # committed to actually translating (as opposed to the Hebrew-passthrough
     # above). Reports which translator we're about to use, so a future report of
     # "said it was translating but nothing happened" is diagnosable from here on.
-    kodi_utils.log('translate step: language ok, mode={0}'.format(
+    sub_utils.log('translate step: language ok, mode={0}'.format(
         _translation_mode), level='INFO')
     if _translation_mode == 'google':
         return _deliver(_google_translate_and_save(
@@ -7393,22 +7374,22 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # Bisection markers (temporary, cheap): a report showed the translation thread
     # going silent between 'Starting translation' and the dispatch summary, never
     # reaching the executor. These pin WHICH pre-dispatch step hangs.
-    kodi_utils.log('translate step: resolving cast metadata', level='INFO')
+    sub_utils.log('translate step: resolving cast metadata', level='INFO')
     cast, title, year = _title_cast(info, imdb_id, season, episode)
 
-    kodi_utils.log('translate step: cast ready ({0} members); building '
+    sub_utils.log('translate step: cast ready ({0} members); building '
                    'prompt'.format(len(cast or [])), level='INFO')
     # Prompt + chunk + translate via Gemini.
-    api_key = kodi_utils.get_setting('api_key', '')
+    api_key = sub_utils.get_setting('api_key', '')
     if not api_key:
-        kodi_utils.notify(kodi_utils.localised(33002))
+        sub_utils.notify(sub_utils.localised(32632))
         return None
     _models = _ModelFallback(
-        kodi_utils.get_setting('model', 'gemini-3.5-flash-lite')
+        sub_utils.get_setting('model', 'gemini-3.5-flash-lite')
         or 'gemini-3.5-flash-lite', api_key=api_key)
     model = _models.model
     if _models.why:
-        kodi_utils.log('model {0} passed over ({1}, seen in this session): '
+        sub_utils.log('model {0} passed over ({1}, seen in this session): '
                        'translating with {2}'.format(
                            _models.chosen, _models.why, model), level='INFO')
         _model_fallback_notice(_models.chosen, _models.why)
@@ -7429,23 +7410,23 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # Reading them here anyway keeps the stored settings intact for a user who
     # switches back to 2.5 or 3.1, and keeps this function ignorant of a rule
     # that belongs next to the payload.
-    temperature = kodi_utils.get_float('temperature', 1.0)
-    top_p = kodi_utils.get_float('top_p', 0.95)
+    temperature = sub_utils.get_float('temperature', 1.0)
+    top_p = sub_utils.get_float('top_p', 0.95)
     if gemini.sampling_params_supported(model):
-        kodi_utils.log('gemini sampling: temperature={0} top_p={1} (model {2} '
+        sub_utils.log('gemini sampling: temperature={0} top_p={1} (model {2} '
                        'still honours them)'.format(temperature, top_p, model),
                        level='INFO')
     else:
-        kodi_utils.log('gemini sampling: temperature/top_p NOT sent -- {0} is '
+        sub_utils.log('gemini sampling: temperature/top_p NOT sent -- {0} is '
                        'Gemini 3.5 or newer, where Google deprecated them'
                        .format(model), level='INFO')
-    thinking_raw = (kodi_utils.get_setting('thinking_budget', 'medium')
+    thinking_raw = (sub_utils.get_setting('thinking_budget', 'medium')
                     or 'medium').strip().lower()
     def _thinking_for(for_model):
         return _thinking_params(thinking_raw, for_model)
 
     thinking_level, thinking_budget = _thinking_for(model)
-    whole_subtitle_request = kodi_utils.get_bool(
+    whole_subtitle_request = sub_utils.get_bool(
         'whole_subtitle_request', False)
     # Safety: a single 'whole subtitle' request can't fit a very large source --
     # the Hebrew output overflows the 65535-token cap and Gemini truncates it, so
@@ -7455,14 +7436,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # fall back to chunked so the user gets a real, progressive translation.
     _WHOLE_REQUEST_MAX_CHARS = 80000
     if whole_subtitle_request and len(src_text) > _WHOLE_REQUEST_MAX_CHARS:
-        kodi_utils.log(
+        sub_utils.log(
             'whole-subtitle request disabled for this source: {0} chars > {1} '
             'cap -- a single request would truncate; using chunked mode'.format(
                 len(src_text), _WHOLE_REQUEST_MAX_CHARS), level='WARNING')
         whole_subtitle_request = False
     max_output_tokens = 65535 if whole_subtitle_request else 16384
     gemini_timeout = 300 if whole_subtitle_request else None
-    chunk_lines = kodi_utils.get_int('chunk_lines', 50)
+    chunk_lines = sub_utils.get_int('chunk_lines', 50)
 
     prompt_template = prompt.build(
         source_lang=source_lang,
@@ -7478,10 +7459,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
     blocks = srt.parse_blocks(src_text)
     if not blocks:
-        kodi_utils.log('Source SRT had no parseable blocks',
+        sub_utils.log('Source SRT had no parseable blocks',
                        level='WARNING')
         return None
-    kodi_utils.log('translate step: {0} blocks parsed, gender_ref={1} -- '
+    sub_utils.log('translate step: {0} blocks parsed, gender_ref={1} -- '
                    'setting up chunks'.format(len(blocks), _ar_on), level='INFO')
 
     # Gender reference (opt-in). Only here -- after every cache/pool miss,
@@ -7490,7 +7471,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # gender-marking languages -- see arabic_gender._REF_CHAIN); returns a
     # per-entry map or None. Fully guarded; None => normal translation.
     if _ar_on:
-        kodi_utils.log('gender-ref: ON -- translating "{0}" via the gender '
+        sub_utils.log('gender-ref: ON -- translating "{0}" via the gender '
                        'reference path'.format(
                            (info.get('title') or imdb_id or '?')), level='INFO')
         try:
@@ -7525,7 +7506,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _ar_map = None
                 _ar_diag = _diag0
         except Exception as e:
-            kodi_utils.log('gender-ref prepare crashed: {0}'.format(e),
+            sub_utils.log('gender-ref prepare crashed: {0}'.format(e),
                            level='WARNING')
             _ar_map = None
             _ar_diag = {'reason': 'crash'}
@@ -7536,7 +7517,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # sub appears.
     _used_ar = bool(_ar_map)
     if _ar_on and not _used_ar:
-        kodi_utils.log('gender-ref: no usable reference sub in any chain '
+        sub_utils.log('gender-ref: no usable reference sub in any chain '
                        'language this time -> normal translation, stored as '
                        'the plain tier', level='INFO')
         _tier = ''
@@ -7593,7 +7574,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         try:
             if not ok or note or _gp_report.get('model'):
                 return ''
-            if not kodi_utils.get_bool('gender_proofread', True):
+            if not sub_utils.get_bool('gender_proofread', True):
                 return 'off'
             if progressive_cb is None:
                 # the job proofread_later starts asks only a model with quota
@@ -7673,7 +7654,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
     if whole_subtitle_request:
         chunks = [blocks]
-        kodi_utils.notify(
+        sub_utils.notify(
             'AI: מתרגם את כל הכתוביות בפעימה אחת. זה יכול לקחת כמה דקות.',
             time_ms=5000)
     else:
@@ -7761,11 +7742,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # picking regular Flash no longer 429-storms at Flash-Lite's pace.
     # `ai_paid_mode` (a paid Gemini plan has thousands of RPM) disables the pacing
     # entirely, since the free cap only slows a paid key down.
-    _paid_mode = kodi_utils.get_bool('ai_paid_mode', False)
+    _paid_mode = sub_utils.get_bool('ai_paid_mode', False)
     if _paid_mode:
         # Paid tier has thousands of RPM, so disable pacing (0 -> the gate no-ops).
         # An explicitly pinned gemini_rpm still wins.
-        _rpm = kodi_utils.get_int('gemini_rpm', 0)
+        _rpm = sub_utils.get_int('gemini_rpm', 0)
         _rpm_interval = (60.0 / _rpm) if _rpm > 0 else 0.0
     else:
         # Free tier: pace at the model's free ceiling. A user who pins a LOWER
@@ -7774,7 +7755,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # 0/negative from accidentally unpacing a free key.
         _free_cap = _gemini_free_rpm_cap(model)
         _rpm_interval = 60.0 / max(1, min(
-            kodi_utils.get_int('gemini_rpm', _free_cap), _free_cap))
+            sub_utils.get_int('gemini_rpm', _free_cap), _free_cap))
     # Show the "rate limited" toast at most ONCE per job (shared across chunks),
     # not once per chunk per retry.
     _ratelimit_notified = [False]
@@ -7798,7 +7779,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # three times a Flash model's
                 _cap = _gemini_free_rpm_cap(model)
                 _rpm_interval = 60.0 / max(1, min(
-                    kodi_utils.get_int('gemini_rpm', _cap), _cap))
+                    sub_utils.get_int('gemini_rpm', _cap), _cap))
             # Slots already handed out were spaced for the old model (15 s
             # apart on a Flash model): left there, the chunk that caused the
             # switch -- the first, where the viewer is -- waited 36 s for its
@@ -7807,7 +7788,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             with _GEMINI_RATE_LOCK:
                 _GEMINI_NEXT_SLOT[0] = min(_GEMINI_NEXT_SLOT[0],
                                            time.monotonic())
-        kodi_utils.log('model {0} did not answer ({1}): the translation '
+        sub_utils.log('model {0} did not answer ({1}): the translation '
                        'goes on with {2}'.format(asked, why, model),
                        level='WARNING')
         _model_fallback_notice(asked, why)
@@ -7858,7 +7839,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         so the guarantee cannot itself run without a clock."""
         if deadline is not None and deadline.spent(_EO_GRACE):
             _resc = _google_fill_missing(ch, source_lang)
-            kodi_utils.log(
+            sub_utils.log(
                 'Chunk {0}: English-only grace budget spent too -- no further '
                 'Gemini calls; {1} of {2} entr(ies) with Google Translate, '
                 'the rest kept as source'.format(idx, len(_resc), len(ch)),
@@ -7879,7 +7860,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # main ladder: try a different engine before shipping English.
             _resc = _google_rescue(ch, source_lang)
             if _resc:
-                kodi_utils.log(
+                sub_utils.log(
                     'Chunk {0} English-only blocked at size 1 -- rescued with '
                     'Google Translate'.format(idx), level='WARNING')
                 _count('noar', len(ch))
@@ -7903,7 +7884,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _gap = srt.missing_blocks(ch, srt.parse_blocks(resp))
             if _gap:
                 _resc = _google_fill_missing(_gap, source_lang)
-                kodi_utils.log(
+                sub_utils.log(
                     'Chunk {0} English-only: {1} entr(ies) missing from the '
                     'reply -- {2} with Google Translate, the rest kept as '
                     'source'.format(idx, len(_gap), len(_resc)),
@@ -7967,12 +7948,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 if not missing:
                     break
                 if deadline is not None and deadline.spent():
-                    kodi_utils.log(
+                    sub_utils.log(
                         'Chunk {0}: {1} entr(ies) still missing but the block '
                         'budget is spent -- no more Gemini calls for them'.format(
                             idx, len(missing)), level='WARNING')
                     break
-                kodi_utils.log(
+                sub_utils.log(
                     'Chunk {0}: {1}/{2} entr(ies) missing from the reply -- '
                     'requesting just those (round {3})'.format(
                         idx, len(missing), len(ch), _round + 1), level='INFO')
@@ -8031,7 +8012,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # resort. `still` is strictly smaller than `ch` (the reply
                 # already yielded >=85%), so the recursion shrinks, and the
                 # shared block budget bounds the spend.
-                kodi_utils.log(
+                sub_utils.log(
                     'Chunk {0}: {1} entr(ies) still missing after top-up -- '
                     'isolating them through the bisection ladder'.format(
                         idx, len(still)), level='WARNING')
@@ -8046,7 +8027,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 except _AbortTranslation:
                     raise
                 except Exception as e:
-                    kodi_utils.log(
+                    sub_utils.log(
                         'Chunk {0}: bisection rescue failed ({1}) -- keeping '
                         'source for the leftovers'.format(idx, e),
                         level='WARNING')
@@ -8058,7 +8039,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # stays aligned.
                 _resc = _google_fill_missing(still, source_lang)
                 blocks = srt.align_blocks(ch, blocks, _resc, still)
-                kodi_utils.log(
+                sub_utils.log(
                     'Chunk {0}: {1} entr(ies) missing after top-up -- {2} with '
                     'Google Translate, the rest kept as source'
                     .format(idx, len(still), len(_resc)), level='WARNING')
@@ -8071,7 +8052,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         except _AbortTranslation:
             raise
         except Exception as e:
-            kodi_utils.log('Chunk {0} top-up failed: {1}'.format(idx, e),
+            sub_utils.log('Chunk {0} top-up failed: {1}'.format(idx, e),
                            level='WARNING')
             return response, 0
 
@@ -8098,7 +8079,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # residual blocks, so a LARGE remainder is still translated piece by
             # piece -- source is kept only for an individual line that stays
             # blocked, never a whole sub-chunk dumped at once.
-            kodi_utils.log(
+            sub_utils.log(
                 'Chunk {0} over its budget ({1}; {2} requests) -- translating '
                 'the remainder English-only'.format(
                     idx, 'blocked' if deadline.until is not None
@@ -8110,7 +8091,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 response = _gem(deadline, idx, ch, 0)      # primary reference
             except gemini.TruncatedResponse:
                 mid = len(ch) // 2
-                kodi_utils.log(
+                sub_utils.log(
                     'Chunk {0} truncated -- bisecting into {1} + {2}'
                     .format(idx, mid, len(ch) - mid), level='WARNING')
                 return (_translate_one(idx, ch[:mid], deadline, try_alts) + '\n\n'
@@ -8122,7 +8103,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _count('blocks')
                 deadline.block()
                 mid = len(ch) // 2
-                kodi_utils.log(
+                sub_utils.log(
                     'Chunk {0} stopped early -- bisecting into {1} + {2}'
                     .format(idx, mid, len(ch) - mid), level='WARNING')
                 return (_translate_one(idx, ch[:mid], deadline, False) + '\n\n'
@@ -8151,7 +8132,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         # drop entries); otherwise stop and isolate by bisection.
                         if _answered(ch, _resp) < max(1, int(len(ch) * 0.85)):
                             break
-                        kodi_utils.log(
+                        sub_utils.log(
                             'Chunk {0} passed with fallback reference [{1}]'
                             .format(idx, _ref_stack[_lvl][0]), level='INFO')
                         # The same silent drops the primary path tops up;
@@ -8166,7 +8147,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 #    do NOT re-try whole-chunk alts (try_alts=False); the isolated
                 #    single entry (below) tries alts + English-only + source.
                 mid = len(ch) // 2
-                kodi_utils.log(
+                sub_utils.log(
                     'Chunk {0} blocked -- bisecting into {1} + {2} to isolate '
                     'the offending line(s)'.format(idx, mid, len(ch) - mid),
                     level='WARNING')
@@ -8185,7 +8166,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             expected = len(ch)
             if got < max(1, int(expected * 0.85)):
                 mid = expected // 2
-                kodi_utils.log(
+                sub_utils.log(
                     'Chunk {0} low yield ({1}/{2} entries) -- '
                     'bisecting into {3} + {4}'.format(
                         idx, got, expected, mid, expected - mid),
@@ -8214,7 +8195,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         except gemini.TruncatedResponse as e:
             # shouldn't happen (one SRT entry is < 100 tokens), but if it does
             # we surface the partial text so the user sees something.
-            kodi_utils.log(
+            sub_utils.log(
                 'Chunk {0} truncated even at size 1 -- '
                 'returning partial'.format(idx),
                 level='ERROR')
@@ -8256,7 +8237,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # only thing left that can still produce Hebrew here.
             _resc = _google_rescue(ch, source_lang)
             if _resc:
-                kodi_utils.log(
+                sub_utils.log(
                     'Chunk {0} blocked by every Gemini stage -- rescued with '
                     'Google Translate ({1} entr(ies)); machine Hebrew, no '
                     'gender'.format(idx, len(ch)), level='WARNING')
@@ -8267,7 +8248,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # block is returned WHOLE and untouched -- an English line on screen
             # is the worst outcome this function has, and losing the line
             # entirely would be worse still.
-            kodi_utils.log(
+            sub_utils.log(
                 'Chunk {0} blocked even English-only at size 1, and Google '
                 'Translate could not rescue it -- keeping source text (last '
                 'resort)'.format(idx), level='WARNING')
@@ -8278,7 +8259,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # independent. The lookup also handles a retry child that starts partway
     # through its original chunk; it must see the cues immediately before its
     # own boundary, not the parent's stale predecessor window.
-    prev_context_lines = max(0, kodi_utils.get_int(
+    prev_context_lines = max(0, sub_utils.get_int(
         'prev_context_lines', 5))
 
     # Set once the job has given up on one chunk (the dispatcher below):
@@ -8325,7 +8306,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 if isinstance(e, gemini.RateLimited):
                     # A per-minute limit frees up when the API says, not sooner.
                     wait = max(wait, min(getattr(e, 'retry_after', 0) or 0, 65))
-                kodi_utils.log('repair request: {0} -- retry {1}/{2} in {3}s'.format(
+                sub_utils.log('repair request: {0} -- retry {1}/{2} in {3}s'.format(
                     e, attempt + 1, len(_REPAIR_BACKOFF), wait), level='WARNING')
                 deadline = time.monotonic() + wait
                 while time.monotonic() < deadline:
@@ -8429,7 +8410,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 untranslated = _is_untranslated_chunk_response(
                     ch, parsed_response)
                 if editorial or source_echo or negation_loss or untranslated:
-                    kodi_utils.log(
+                    sub_utils.log(
                         'Chunk {0}/{1}: generated-output integrity rejection '
                         '(self_edit={2}, source_echo={3}, negation_loss={4}, '
                         'untranslated={5}) '
@@ -8447,14 +8428,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     wait = e.retry_after or RATELIMIT_BACKOFF[ratelimit_attempts]
                     wait = max(3, min(int(wait), 65))
                     ratelimit_attempts += 1
-                    kodi_utils.log(
+                    sub_utils.log(
                         'Gemini per-minute rate limit chunk {0}/{1}, '
                         'retry {2}/{3} in {4}s'.format(
                             idx, total, ratelimit_attempts,
                             len(RATELIMIT_BACKOFF), wait), level='WARNING')
                     if not _ratelimit_notified[0]:
                         _ratelimit_notified[0] = True
-                        kodi_utils.notify(
+                        sub_utils.notify(
                             'AI: קצב זמני מוגבל, ממתין רגע…', time_ms=4000)
                     _cancel_aware_wait(wait)
                     continue
@@ -8469,12 +8450,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 if _go_on_with_fallback(_asked_model, 'quota'):
                     continue
                 raise _AbortTranslation('quota',
-                    kodi_utils.localised(33005))
+                    sub_utils.localised(32635))
             except gemini.InvalidKey as e:
-                kodi_utils.log('InvalidKey: {0}'.format(e),
+                sub_utils.log('InvalidKey: {0}'.format(e),
                                level='ERROR')
                 raise _AbortTranslation('invalid_key',
-                    kodi_utils.localised(33004, 'API key rejected'))
+                    sub_utils.localised(32634, 'API key rejected'))
             except gemini.TruncatedResponse as e:
                 # propagate up to _translate_one which will bisect; the part
                 # that did arrive gets its source timecodes like a full reply.
@@ -8489,7 +8470,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 if filtered_attempts < len(FILTERED_BACKOFF):
                     wait = FILTERED_BACKOFF[filtered_attempts]
                     filtered_attempts += 1
-                    kodi_utils.log(
+                    sub_utils.log(
                         'Chunk {0}/{1} blocked ({2}) -- flaky? retry {3}/{4} '
                         'in {5}s (same prompt)'.format(
                             idx, total, str(e)[:50], filtered_attempts,
@@ -8497,7 +8478,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     _cancel_aware_wait(wait)
                     continue
                 raise
-            except gemini.OverloadError as e:
+            except gemini.OverloadError:
                 # No second try on a chosen model that says it is busy: the
                 # refusal itself took 11 s to come back, and its retry, paced
                 # at a Flash model's 4 requests a minute, put the switch 68 s
@@ -8512,7 +8493,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 if overload_attempts < len(OVERLOAD_BACKOFF):
                     wait = OVERLOAD_BACKOFF[overload_attempts]
                     overload_attempts += 1
-                    kodi_utils.log(
+                    sub_utils.log(
                         'Gemini overloaded chunk {0}/{1}, '
                         'retry {2}/{3} in {4}s'.format(
                             idx, total, overload_attempts,
@@ -8520,7 +8501,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         level='WARNING')
                     if overload_attempts not in _busy_toasts:
                         _busy_toasts.add(overload_attempts)
-                        kodi_utils.notify(
+                        sub_utils.notify(
                             'AI: Gemini עמוס. ניסיון {0}/{1} בעוד {2}ש'
                             .format(overload_attempts,
                                     len(OVERLOAD_BACKOFF), wait),
@@ -8547,14 +8528,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 if generic_attempts < len(GENERIC_BACKOFF):
                     wait = GENERIC_BACKOFF[generic_attempts]
                     generic_attempts += 1
-                    kodi_utils.log(
+                    sub_utils.log(
                         'Gemini error chunk {0}/{1} attempt {2}: {3}'
                         .format(idx, total, generic_attempts, e),
                         level='WARNING')
                     _cancel_aware_wait(wait)
                     continue
                 raise _AbortTranslation('error',
-                    kodi_utils.localised(33008, str(e)[:80]),
+                    sub_utils.localised(32638, str(e)[:80]),
                     detail=str(e)[:100])
 
     # Parallel chunk dispatch. Gemini Flash Lite is 15 RPM, so 3
@@ -8569,9 +8550,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # much faster wall-time. FLOOR at 8 -- the parallel_chunks setting defaults
         # to 3 (free-tier safe) so we can't rely on its default here; the slider's
         # max is raised to 16 so a paid user can still tune 8..16 up.
-        parallel = max(8, min(16, kodi_utils.get_int('parallel_chunks', 8)))
+        parallel = max(8, min(16, sub_utils.get_int('parallel_chunks', 8)))
     else:
-        parallel = max(1, min(8, kodi_utils.get_int(
+        parallel = max(1, min(8, sub_utils.get_int(
             'parallel_chunks', 3)))
     out_blocks_by_index = {}
     completed = 0
@@ -8584,7 +8565,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # below pin whether it's the mode (whole vs chunked), the chunk count, or the
     # very first API call that hangs. src_len flags a source too large for a
     # single 'whole' request (which truncates -> empty result -> discarded).
-    kodi_utils.log(
+    sub_utils.log(
         'translation dispatch: {0} chunk(s), mode={1}, parallel={2}, paid={3}, '
         'model={4}, src_len={5}'.format(
             len(chunks), 'whole' if whole_subtitle_request else 'chunked',
@@ -8640,7 +8621,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         chunks[idx - 1], response, fill_missing=True))
                 out_blocks_by_index[idx] = _shaped
                 if _missing or _integrity_rejected:
-                    kodi_utils.log(
+                    sub_utils.log(
                         'Chunk {0}: output integrity gate kept {1} missing '
                         'source entr(ies); rejected={2}'.format(
                             idx, len(_missing), _integrity_rejected),
@@ -8650,7 +8631,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     # First chunk back -> API path is alive. Its absence in a log
                     # means every worker stalled BEFORE any response (network
                     # contention / a hung first request), not a post-parse issue.
-                    kodi_utils.log(
+                    sub_utils.log(
                         'translation: first chunk returned ({0} entries) -- '
                         'API path working, {1} chunk(s) to go'.format(
                             len(out_blocks_by_index[idx]), total - 1),
@@ -8711,14 +8692,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             'release': _src_release,
                         })
                     except Exception as e:
-                        kodi_utils.log(
+                        sub_utils.log(
                             'progressive_cb chunk_ready raised: '
                             + str(e),
                             level='WARNING')
     except ImportError:
         # Older Python without concurrent.futures -- shouldn't
         # happen on Kodi 21 but bail safely.
-        kodi_utils.notify('AI: שגיאה פנימית, התקן Python 3.6+',
+        sub_utils.notify('AI: שגיאה פנימית, התקן Python 3.6+',
                           time_ms=5000)
         return None
 
@@ -8730,7 +8711,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         path = _replacing_google
         if not (path and os.path.isfile(path) and _is_google_translated(path)):
             return None
-        kodi_utils.log('AI translation did not finish ({0}) -- keeping the '
+        sub_utils.log('AI translation did not finish ({0}) -- keeping the '
                        'cached Google Translate file'.format(why), level='WARNING')
         delivered = _deliver(path)
         if progressive_cb is not None:
@@ -8763,7 +8744,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if abort_reason in ('error', 'crash'):
                 # A retired model name or an API that is not enabled is the
                 # user's to fix: Google's Hebrew must not hide why AI failed.
-                kodi_utils.notify(abort_msg, time_ms=5000)
+                sub_utils.notify(abort_msg, time_ms=5000)
             if abort_reason == 'quota':
                 try:
                     from . import gemini_quota
@@ -8778,7 +8759,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             gpath = (None if out_blocks_by_index or not _google_chunks
                      else _keep_replaced_google(abort_reason))
             if gpath:
-                kodi_utils.notify(abort_msg, time_ms=5000)
+                sub_utils.notify(abort_msg, time_ms=5000)
                 _emit(False, 'abort:' + str(abort_reason)
                       + ' (cached Google file kept)')
                 return gpath
@@ -8808,7 +8789,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                           abort_reason,
                           (': ' + abort_detail) if abort_detail else ''))
                 return delivered_path
-        kodi_utils.notify(abort_msg, time_ms=5000)
+        sub_utils.notify(abort_msg, time_ms=5000)
         _kept = _keep_replaced_google(abort_reason)
         if _kept:
             _emit(False, 'abort:' + str(abort_reason or 'crash')
@@ -8821,7 +8802,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     'source_id': _progressive_source_id,
                 })
             except Exception as e:
-                kodi_utils.log(
+                sub_utils.log(
                     'progressive_cb done(abort) raised: ' + str(e),
                     level='WARNING')
         _emit(False, 'abort:' + str(abort_reason or 'crash')
@@ -8829,7 +8810,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         return None
 
     if completed != total:
-        kodi_utils.notify(
+        sub_utils.notify(
             'AI: תרגום הסתיים חלקית ({0}/{1}). נסה שוב.'.format(
                 completed, total),
             time_ms=5000)
@@ -8844,7 +8825,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     'source_id': _progressive_source_id,
                 })
             except Exception as e:
-                kodi_utils.log(
+                sub_utils.log(
                     'progressive_cb done(partial) raised: ' + str(e),
                     level='WARNING')
         _emit(False, 'partial')
@@ -8914,7 +8895,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 timeout=gemini_timeout or gemini.REQUEST_TIMEOUT)
             labels = gender_guard.parse_classifier(reply, [n for n, _b in lines])
             if labels is None:
-                kodi_utils.log('gender classifier: unreadable reply for {0} line(s) '
+                sub_utils.log('gender classifier: unreadable reply for {0} line(s) '
                                '-- adding nothing'.format(len(lines)), level='WARNING')
                 return {}
             out = {}
@@ -8923,14 +8904,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     said = (labels.get(num) or {}).get(role)
                     if said and said != g:
                         out.setdefault(num, []).append((role, g))
-            kodi_utils.log('gender classifier: {0} line(s) the readers could not read, '
+            sub_utils.log('gender classifier: {0} line(s) the readers could not read, '
                            '{1} contradict the {2} reference'.format(
                                len(lines), len(out), ref_lang), level='INFO')
             return out
         except _AbortTranslation:
             raise
         except Exception as e:
-            kodi_utils.log('gender classifier skipped: {0}'.format(e), level='WARNING')
+            sub_utils.log('gender classifier skipped: {0}'.format(e), level='WARNING')
             return {}
 
     def _regender_blocks(blocks, wanted):
@@ -8944,7 +8925,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         try:
             return _regender_unguarded(blocks, wanted)
         except Exception as e:
-            kodi_utils.log('gender repair crashed ({0}) -- keeping every line '
+            sub_utils.log('gender repair crashed ({0}) -- keeping every line '
                            'as it is'.format(e), level='WARNING')
             return blocks
 
@@ -8988,7 +8969,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         for n in dup:
             pos_of.pop(n, None)
         if dup:
-            kodi_utils.log(
+            sub_utils.log(
                 'gender repair: {0} entry number(s) appear more than once -- '
                 'not eligible'.format(len(dup)), level='WARNING')
         # Repair sees the original source and aligned reference, not just a
@@ -9125,14 +9106,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # reference, so a reply that answers none of them is worth one
             # more request (measured: a 14-entry repair came back with 0).
             if not _answers(reply):
-                kodi_utils.log(
+                sub_utils.log(
                     'gender repair: the reply answered none of the {0} entries '
                     '({1} chars, starts {2!r}) -- asking once more'.format(
                         len(ask), len(reply or ''),
                         ' '.join((reply or '').split())[:160]), level='WARNING')
                 reply = _ask()
         except Exception as e:
-            kodi_utils.log('gender repair request failed ({0}) -- keeping the '
+            sub_utils.log('gender repair request failed ({0}) -- keeping the '
                            'lines as they are'.format(e), level='WARNING')
             return blocks
         out = list(blocks)
@@ -9146,7 +9127,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         entries = _entries(reply)
         if entries and not any(nb.split('\n', 1)[0].strip().isdigit()
                                for nb in srt.parse_blocks(reply or '')):
-            kodi_utils.log('gender repair: reply read as JSON ({0} entries)'.format(
+            sub_utils.log('gender repair: reply read as JSON ({0} entries)'.format(
                 len(entries)), level='INFO')
         for nb in entries:
             head = nb.split('\n', 1)[0].strip()
@@ -9188,7 +9169,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             done.add(num)
         tally['refused'] = (tally['returned'] - tally['unchanged']
                             - tally['unproven'] - len(done))
-        kodi_utils.log(
+        sub_utils.log(
             'gender repair: {0}/{1} entr(ies) rewritten with per-entry '
             'addressee evidence (returned {2}, kept as they were {3}, '
             'not proven {4}, refused by the shape checks {5}{6}; speaker '
@@ -9253,7 +9234,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if _wanted:
                 _speakers = sum(1 for r in _wanted.values()
                                 if any(x[0] == 'speaker' for x in r))
-                kodi_utils.log(
+                sub_utils.log(
                     'gender check: {0} entr(ies) conflict with the {1} '
                     'reference ({2} speaker, {3} addressee) -- asking for '
                     'those lines again'.format(
@@ -9261,9 +9242,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         len(_wanted) - _speakers), level='INFO')
                 out_blocks = _regender_blocks(out_blocks, _wanted)
             else:
-                kodi_utils.log('gender check: clean', level='INFO')
+                sub_utils.log('gender check: clean', level='INFO')
         except Exception as e:
-            kodi_utils.log('gender check skipped: {0}'.format(e),
+            sub_utils.log('gender check skipped: {0}'.format(e),
                            level='WARNING')
 
     # Repair only verbatim English leftovers, never general semantic wording.
@@ -9315,7 +9296,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _aligned_source, out_blocks, source_lang, _residual_request,
             cancelled=_residual_cancelled)
         if _residual_counts['selected']:
-            kodi_utils.log('English residual repair: {0}/{1} lines repaired'.format(
+            sub_utils.log('English residual repair: {0}/{1} lines repaired'.format(
                 _residual_counts['repaired'], _residual_counts['selected']), level='INFO')
         # Letters or a word from a third alphabet glued into the Hebrew
         # (Thai, Chinese, Korean... measured in most Flash-Lite episodes).
@@ -9330,7 +9311,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # repaired most. Ask once more.
             if (_script_counts['selected'] and not _script_counts['repaired']
                     and _script_counts['kept'] == _script_counts['selected']):
-                kodi_utils.log('Foreign-script repair: every line came back unchanged '
+                sub_utils.log('Foreign-script repair: every line came back unchanged '
                                '-- asking once more', level='INFO')
                 out_blocks, _script_counts = script_residual.repair(
                     _aligned_source, out_blocks,
@@ -9343,7 +9324,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # 21 lines instead. Ask once more with room to finish.
             elif (_script_counts['selected'] and not _script_counts['repaired']
                     and 'Truncated' in (_script_counts['error'] or '')):
-                kodi_utils.log('Foreign-script repair: the reply was cut off at the '
+                sub_utils.log('Foreign-script repair: the reply was cut off at the '
                                'output cap -- asking once more with a larger one',
                                level='INFO')
                 out_blocks, _script_counts = script_residual.repair(
@@ -9351,17 +9332,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     lambda text: _residual_request(text, output_cap=12288),
                     cancelled=_residual_cancelled)
             if _script_counts['selected']:
-                kodi_utils.log('Foreign-script repair: {0}/{1} lines repaired '
+                sub_utils.log('Foreign-script repair: {0}/{1} lines repaired '
                                '({2} refused, {3} returned unchanged{4})'.format(
                     _script_counts['repaired'], _script_counts['selected'],
                     _script_counts['rejected'], _script_counts['kept'],
                     ', ' + _script_counts['error'] if _script_counts['error'] else ''),
                     level='INFO')
         except Exception:
-            kodi_utils.log('Foreign-script repair skipped; existing translation retained',
+            sub_utils.log('Foreign-script repair skipped; existing translation retained',
                            level='WARNING')
     except Exception:
-        kodi_utils.log('English residual repair skipped; existing translation retained',
+        sub_utils.log('English residual repair skipped; existing translation retained',
                        level='WARNING')
 
     def _proofread_gender(blocks):
@@ -9397,7 +9378,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     final = srt.strip_hebrew_speaker_prefix(final, src_text)
     if final != _pre_tag:
         try:
-            kodi_utils.log(
+            sub_utils.log(
                 'translated speaker tags stripped from {0} line(s)'.format(
                     sum(1 for a, b in zip(_pre_tag.split('\n'),
                                           final.split('\n')) if a != b)),
@@ -9408,7 +9389,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     _pre_cue = final
     final = srt.drop_untranslated_sound_cues(final, src_text)
     if final is not _pre_cue:
-        kodi_utils.log('untranslated sound cues dropped', level='INFO')
+        sub_utils.log('untranslated sound cues dropped', level='INFO')
     # Same class of defect, different source: when the Arabic gender
     # reference is on, the prompt carries real Arabic lines and the model
     # sometimes copies a word or a suffix of one into the Hebrew. Only a
@@ -9433,7 +9414,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         try:
             _n = sum(1 for a, b in zip(_pre_ar.split('\n'), final.split('\n'))
                      if a != b)
-            kodi_utils.log(
+            sub_utils.log(
                 'Arabic-script cleanup changed {0} line(s); '
                 'reference_language={1}'.format(_n, _ref_lang if _ar_map else 'none'),
                 level='WARNING')
@@ -9475,7 +9456,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     final = srt.mend_line_breaks(final)
     if final is not _pre_breaks:
         try:
-            kodi_utils.log('line breaks moved to natural points in {0} cue(s)'.format(
+            sub_utils.log('line breaks moved to natural points in {0} cue(s)'.format(
                 sum(1 for a, b in zip(_pre_breaks.split('\n'), final.split('\n'))
                     if a != b) // 2), level='INFO')
         except Exception:
@@ -9493,10 +9474,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # Google Translate so the user still gets Hebrew (unless they chose 'none'),
     # otherwise fail visibly and let them retry.
     if not _is_mostly_hebrew(final):
-        kodi_utils.log(
+        sub_utils.log(
             'AI output is not Hebrew (empty or echoed source) -- not caching; '
             'len={0}'.format(len(final or '')), level='WARNING')
-        mode = (kodi_utils.get_setting('translation_mode', 'ai') or 'ai')
+        mode = (sub_utils.get_setting('translation_mode', 'ai') or 'ai')
         if mode != 'none':
             gpath = _google_translate_and_save(
                 src_text, source_lang, translated, info)
@@ -9516,7 +9497,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             'path': delivered_path,
                         })
                     except Exception as e:
-                        kodi_utils.log(
+                        sub_utils.log(
                             'progressive_cb done(google-rescue) raised: '
                             + str(e), level='WARNING')
                 _emit(True, 'google')
@@ -9525,7 +9506,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if _kept:
             _emit(False, 'not_hebrew (cached Google file kept)')
             return _kept
-        kodi_utils.notify(
+        sub_utils.notify(
             'AI: התרגום לא הוחזר בעברית (ריק/לא תורגם). נסה שוב.', time_ms=5000)
         if progressive_cb is not None:
             try:
@@ -9555,7 +9536,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _clear_google_marker(_content_slot)
             _gp_ref_mark(_content_slot, _gp_ref)
         except Exception as e:
-            kodi_utils.log(
+            sub_utils.log(
                 'content-hash duplicate save failed: {0}'.format(e),
                 level='DEBUG')
     # Gender and number, proofread by a stronger model in ONE request over the
@@ -9566,13 +9547,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # keeps this translation; what it corrects is saved over it and goes out
     # with 'done' below, and to the pool.
     if (progressive_cb is not None
-            and kodi_utils.get_bool('gender_proofread', True)):
+            and sub_utils.get_bool('gender_proofread', True)):
         try:
             progressive_cb('chunk_ready', {
                 'completed': 1, 'total': 1, 'merged_text': final,
                 'source_id': _progressive_source_id, 'release': _src_release})
         except Exception as e:
-            kodi_utils.log('progressive_cb chunk_ready (before the gender '
+            sub_utils.log('progressive_cb chunk_ready (before the gender '
                            'proofread) raised: ' + str(e), level='WARNING')
         _proof_blocks = srt.parse_blocks(final)
         # In progress, as for an opened translation: the file is saved, and an
@@ -9605,7 +9586,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         imdb_id, season, episode, source_lang,
                         source_id=content_id, tier=_tier), final)
                 except Exception as e:
-                    kodi_utils.log(
+                    sub_utils.log(
                         'content-hash duplicate save failed: {0}'.format(e),
                         level='DEBUG')
         if _gp_report.get('model'):
@@ -9655,10 +9636,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                      kind=_pool_kind,
                                      proofread=(_gp_stats(_gp_report) or False))
             except Exception as e:
-                kodi_utils.log('pool contribute dispatch failed: {0}'.format(e),
+                sub_utils.log('pool contribute dispatch failed: {0}'.format(e),
                                level='DEBUG')
         else:
-            kodi_utils.log(
+            sub_utils.log(
                 'pool: skipped share -- translation looks incomplete or not '
                 'Hebrew (quality gate)', level='INFO')
 
@@ -9674,7 +9655,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             quota_suffix = ' · ' + gemini_quota.format_status_short(model)
     except Exception:
         quota_suffix = ''
-    kodi_utils.notify('AI: תרגום הסתיים בהצלחה ({0} chunks){1}'
+    sub_utils.notify('AI: תרגום הסתיים בהצלחה ({0} chunks){1}'
                       .format(total, quota_suffix), time_ms=4000)
     delivered_path = _deliver(translated)
     if progressive_cb is not None:
@@ -9697,7 +9678,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'path': delivered_path,
             })
         except Exception as e:
-            kodi_utils.log(
+            sub_utils.log(
                 'progressive_cb done(success) raised: ' + str(e),
                 level='WARNING')
     # (telemetry already emitted above, before the pool contribute, so it rides

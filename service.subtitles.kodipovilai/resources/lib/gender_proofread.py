@@ -284,7 +284,7 @@ def _today():
 
 
 def exhausted_today(model, settings):
-    """Whether `model`'s daily quota ran out today (`settings`: kodi_utils)."""
+    """Whether `model`'s daily quota ran out today (`settings`: sub_utils)."""
     try:
         day, _, names = (settings.get_setting(EXHAUSTED_SETTING, '') or '').partition(' ')
         return day == _today() and model in names.split()

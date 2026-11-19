@@ -403,11 +403,6 @@ def build_gender_block(entry_ref, lang='ar'):
     )
 
 
-def build_arabic_gender_block(entry_arabic):
-    """Back-compat wrapper: the original Arabic-only entry point."""
-    return build_gender_block(entry_arabic, 'ar')
-
-
 def _arabic_block_text(body):
     """The original, field-validated Arabic gender block (verbatim).
 

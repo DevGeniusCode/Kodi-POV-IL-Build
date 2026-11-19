@@ -1,6 +1,5 @@
 # Import necessary libraries
 import os,shutil
-import sys
 import traceback
 import xbmcaddon,xbmc
 global global_var,site_id,sub_color

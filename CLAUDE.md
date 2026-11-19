@@ -164,8 +164,31 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   git's rename detection had patched, the whole Onyx skin (see "SKIPPED UPSTREAM FEATURES"). Dropped: `af3_osd_tap_close_patcher.py` (a
   host repair) and the `povil.tr.file` trailer guard in `autosub_service.py`. Verified: same 13 pyflakes messages, same stub-import
   result as before the merge (plus the two new modules), every file compiles. The blueprint is `ARCHITECTURE_SUBTITLES.md` (repo root);
-  the next phases are Subtitle Phase 1 (cleanup, settings, Deletion Report), 2 (core refactoring and splitting), 3 (wiring, testing,
-  final statistics).
+  the next phases are Subtitle Phase 2 (core refactoring and splitting) and 3 (wiring, testing, final statistics).
+- **SUBTITLE PHASE 1 COMPLETE (19 Nov 2026).** Cleanup, settings and the Deletion Report (`ARCHITECTURE_SUBTITLES.md` Part 5 / 6). Deleted: the
+  DarkSubs machine-translate stack and `download_sub` of the vendored engine (`subs_engine/engine.py` 1,245 -> 542 lines), the calls into the
+  missing `dark_subs_integration` / `source_memory` modules, the Wizard-leftover tables and helpers of `default.py` / `service.py`, 50 unused
+  functions in all, 15 dead `settings.xml` declarations (among them the two visible DarkSubs switches) and their labels. `settings.xml` now has
+  8 categories with comment blocks (General, Providers & Fetching, Matching & Display, AI Translation, Sync Engine, Community Pool, Cache,
+  Advanced & Debug) and declares 7 keys the code already read (`subsync_verify` / `_probe` / `_audio` / `_autorank`, `prev_context_lines`,
+  `he_match_ktuvit`, `he_embedded_report`); new label ids are 32600-32626 (en_gb and he_il). No id, type,
+  default, level or dependency of a surviving setting changed. Verified: stub import 72 of 72, pyflakes 15 -> 7,
+  vulture 102 -> 64, the public surface byte-identical. Left open for the owner: `subs_engine/srt.py` (no importer; its MIT notice is in
+  `LICENSE.txt`), the DarkSubs empty-list toast of
+  `translate.list_candidates`, `gemini_rpm` (declared nowhere, its readers use different defaults).
+- **SUBTITLE PHASE 1 FOLLOW-UP (19 Nov 2026).** The 5 labels of `ai_when_no_hebrew` moved from `33009`-`33013` to `32610`-`32614` (settings.xml and
+  both `strings.po`); every dialog, progress bar, toast and HTML page title of the subtitle add-on now reads `sub_utils.DIALOG_TITLE` (one place to
+  rebrand; "MoranSubs" titles became "Kodi POV IL"). Git forensics against the upstream history: nothing deleted in Phase 1 was a live feature;
+  `POOL_API_KEY` is deprecated for good (HMAC signing since 0.2.290), do NOT restore it; the Telegram source (it needed DarkSubs' bundled telethon + `telegram_api`,
+  deleted with DarkSubs in `18435d90`) was deleted in the wrap-up below.
+- **SUBTITLE PHASE 1 WRAP-UP (19 Nov 2026) - PHASE 1 COMPLETE.** Owner decisions: (1) the 9 runtime strings `33000`-`33008` moved to
+  `32630`-`32638` (both `strings.po`, 12 call sites in `default.py` / `translate.py`); no string id >= 33000 remains in the add-on. (2) The broken
+  Telegram source is deleted for good: `telegram.py`, `telegram_impl.py`, the `connect_telegram` / `logout_telegram` / `telegram_test` actions, the 5
+  Telegram settings, 6 labels and the engine / bridge wiring (Part 5 rows 46-50). (3) `kodi_utils.py` is now `sub_utils.py`, so it is not confused
+  with POV's `kodi_utils`; the Wizard's `host_repairs/kodi_utils` is a different module and keeps its name. (4) FENtastic's `700068` is a string id of
+  the skin's own `strings.po` (used as `$LOCALIZE[700068]`), not a control id and not an add-on string; the add-on range rule does not apply to a
+  skin's table. Verified: stub import 72 of 72 (100%), `compile()` 72 of 72, pyflakes 7 (unchanged), `settings.xml` 93 settings (56 visible, 37
+  hidden) consistent with both `strings.po` (143 entries each). The prompts of Subtitle Phases 2 and 3 are in `PHASE_2_AND_3_PROMPTS.md` (repo root).
 
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
@@ -209,13 +232,13 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   the change (dead-code deletion and the `settings.xml` reorganization are approved; every deletion is logged in the Deletion
   Report of `ARCHITECTURE_SUBTITLES.md`); (b) at the end of every subtitle phase the "Refactoring Statistics" section of
   `ARCHITECTURE_SUBTITLES.md` is updated (lines / files / functions deleted, moved, added; the largest files and functions);
-  (c) nothing naming the Wizard, `uservar`, `povil_icons` or build markers may re-enter it (Phase 3 decoupling); (d) the
+  (c) nothing naming the Wizard, `uservar`, `povil_icons` or build markers may re-enter it (Phase 3 decoupling); dialog / toast / progress titles come from `sub_utils.DIALOG_TITLE`, never a literal; the add-on's own helper module is `resources/lib/sub_utils.py` (not `kodi_utils`); (d) the
   external public surface below stays byte-identical, because other add-ons, skins and the Wizard call it. The "left for
   clean upstream merges" items of the Open Notes are now ordinary cleanup candidates. Public surface: Kodi hooks
   (`xbmc.subtitle.module` = `default.py`, `xbmc.service` = `service.py`, `subtitles.tv` / `subtitles.movie` in `guisettings.xml`
   = the add-on id); `RunScript(service.subtitles.kodipovilai,action=choose_subs)` (skins) and `action=connect_gemini` (frozen
   `patches/pov_myservices.py`) plus its own actions (`search`, `manualsearch`, `download`, `translate_file`,
-  `bg_translate_picker`, `he_avail`, the Telegram / Gemini / pool / cache / engine-test buttons of its `settings.xml`);
+  `bg_translate_picker`, `he_avail`, the Gemini / pool / cache / engine-test buttons of its `settings.xml`; the Telegram actions were removed in Phase 1 by owner decision);
   `Addon.OpenSettings(service.subtitles.kodipovilai)` (`skins/af3_tools`, `profiles/build_profiles`, Onyx `Home.xml`,
   `widget_baselines`); window properties `subs.player_filename` (published by `subs_filename_publisher`), `MoranSubsChooserOpen`
   (set by `subs_chooser`; those two modules may move, the strings and the chooser XML file name may not); `resources/lib/he_sub_match.py`
@@ -242,7 +265,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   cross-module API scan (names exist, signatures fit); repo-wide grep of callers (skins, `userdata/`, other add-ons) for old
   paths and strings; behavior tests under the stubs for any new code. Compare each against the snapshot. Baselines: Wizard
   171 of 172 `resources/` modules import (Phase 7 stub harness) (only `patches/pov_combined_discover`, needs POV's `indexers`); subtitle add-on: with
-  `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, only `subs_engine/sources/telegram_impl` fails (missing `telegram_api`).
+  `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, every module imports (the Telegram source was deleted, so `telegram_impl` no longer fails): 72 of 72 modules (Subtitle Phase 1 harness, `requests` stubbed too, one fresh `python -I` per module, `service` counted as importing when it starts its main loop).
 - **WORKFLOW:** stop after each step; the user reviews and commits. No version bump or changelog per step.
 - **LINE ENDINGS:** sources and docs use CRLF (a file that is LF stays LF).
 - **Output Mirroring:** For every single response you generate in this project, you MUST automatically write your full, exact textual response into a file named `output.txt` in the root directory. Overwrite the file completely each time (do not append).
@@ -309,19 +332,22 @@ have. Our 1.0.9 and upstream's 1.0.9 are different releases; a port must take a 
 - **Known, kept as-is until Phase 4 gets to it:** the registry validator misreports
   `profile_age_guard.py` as missing when given the patches dir (it lives in `profiles/`); dead code `boot/gui_ready.stop_if_duplicate`, `build/wizard_actions.wizard()`, the dormant
   first-boot stabilizer; `skins/skin_settings.swap_us()` is not skin code.
-- `tonight/entrypoints.LEGACY_ICON` still names the subtitle add-on's icon (a string used to match old tiles);
-  `service.subtitles.kodipovilai/default.py` has one now-unused `xbmcaddon` name (left to keep upstream merges clean).
+- `tonight/entrypoints.LEGACY_ICON` still names the subtitle add-on's icon (a string used to match old tiles).
 - **Phase 3 findings:** Wizard-side repair logs follow the Wizard's own `log_level`
   (undeclared, so INFO) and no longer the subtitle add-on's; `userdata/` changed (baselines moved, tiles state deleted), so
-  `config_version` in `userdata/config_policy.json` was bumped to 2.0.7 in Phase 4 Step 3; two comments of retained subtitle settings still name moved keys, and the docstring of
-  `service._maybe_default_builtin_engine` still says "Build-edition only ... SLIM_SERVICE" (both left for clean merges).
+  `config_version` in `userdata/config_policy.json` was bumped to 2.0.7 in Phase 4 Step 3 (the stale subtitle comments of this finding were fixed in Subtitle Phase 1).
   `_maybe_seed_hebrew_subtitle_prefs` now also runs on build devices (it was standalone-only).
 - **Defects found (reported, not fixed):** `prepare_build_skin` has no handler (`profiles/build_skin.py:252` waits 60 s for AF3
-  and reports failure); `fentastic_search_patcher.py`, `source_memory.py`, `dark_subs_integration.py` are missing (their call
-  sites sit in `try/except`, so the hub-search patch, the source-memory prune and the DarkSubs hook silently skip; present
-  upstream at `77880b8`); `manifest.json` pins the subtitles zip at 0.3.50 while the source is 0.3.74. Inside the subtitle
-  add-on, old DarkSubs leftovers point at files that do not ship (`telegram_api`, `resources/modules/auto_translate`, the
-  `service.subtitles.All_Subs` paths): lazy and guarded, none touches the Wizard.
+  and reports failure); `fentastic_search_patcher.py` is missing (its call site sits in `try/except`, so the hub-search patch
+  silently skips; present upstream at `77880b8`; the call sites of `source_memory` and `dark_subs_integration` were deleted in Subtitle Phase 1); `manifest.json` pins the subtitles zip at 0.3.50 while the source is 0.3.74. The subtitle add-on's Telegram source (it could not
+  load: `telegram_api` did not ship) was deleted at the end of Subtitle Phase 1 on the owner's decision.
+- **LABEL IDS >= 33000 (audit task, owner request):** Kodi's add-on string range is 30000-32999 (the settings file says so); ids from 33000 up belong to Kodi
+  and are ignored or mapped to built-in strings. **The subtitle add-on is clean** (Subtitle Phase 1: `settings.xml` highest 32626, `strings.po` highest
+  32638, the 9 runtime strings moved from `33000`-`33008` to `32630`-`32638`; no id >= 33000 anywhere in it). **Still to do: audit every other add-on in this
+  repository** (`settings.xml`, `strings.po`, `<label>` / `$LOCALIZE` / `getLocalizedString` uses of an add-on's own strings) for label ids >= 33000. First
+  pass done: no other add-on `strings.po` or `settings.xml` of this repository uses an id >= 33000. Skins are different: a skin's `strings.po` is its own
+  table, and `skin.fentastic` (upstream-authored, not ours to renumber) defines 72 ids from `700010` up there (`$LOCALIZE[700068]` in `SkinSettings.xml` is
+  one: a string id, not a control id); the skins' other `33xxx` references are Kodi core strings and are correct.
 - **Check at the final Kodi test:** (1) the host-repair runner starts when the Wizard's service starts (`start="startup"`), not at
   the old login timing: after a profile switch exactly one runner must be alive and repairs must apply to the new profile;
   (2) the POV invoker guard still wins its race (its log line says how far ahead of POV it wrote); (3) `patcher_health`

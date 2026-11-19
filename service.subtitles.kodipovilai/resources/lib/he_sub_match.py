@@ -445,7 +445,7 @@ def _meta_str(meta, keys):
 
 def _dbg(msg):
     """Log via xbmc directly so it works in EITHER process -- POV's source-scrape
-    interpreter (where 'from resources.lib import kodi_utils' fails because only
+    interpreter (where 'from resources.lib import sub_utils' fails because only
     resources/lib is on sys.path) AND MoranSubs's own service. Timing diagnostics
     for the first-entry Hebrew-% warm."""
     try:
@@ -606,8 +606,8 @@ def confirmed_releases(meta):
 
 def _warm_log(msg, level='INFO'):
     try:
-        from resources.lib import kodi_utils
-        kodi_utils.log('he_avail: ' + msg, level=level)
+        from resources.lib import sub_utils
+        sub_utils.log('he_avail: ' + msg, level=level)
     except Exception:
         pass
 
@@ -781,7 +781,7 @@ def run_warm(info):
     _merge(names, seen, box['os_names'] or [])
 
     try:
-        from resources.lib import kodi_utils as _ku
+        from resources.lib import sub_utils as _ku
         ktuvit_ok = _ku.get_setting('he_match_ktuvit', 'true') != 'false'
     except Exception:
         ktuvit_ok = True
@@ -876,57 +876,6 @@ def run_warm(info):
         threading.Thread(target=_ktuvit_topup, daemon=True).start()
     else:
         _ktuvit_topup()
-
-
-def _seed_from_pool(key, pl):
-    """Write the shared-pool result of the one-shot first-entry lookup into the
-    local cache (names = pool-human + Ktuvit-registry, plus embedded flags), with
-    a short TTL so the full background warm still refreshes it with Wizdom/OS
-    shortly after. So the badge shows the SHARED data on the very first entry --
-    on every device -- instead of only after that device's own warm."""
-    try:
-        names, seen = [], set()
-        for rel in list(pl.get('names') or []) + list(pl.get('ktuvit') or []):
-            low = (rel or '').strip().lower()
-            if low and low not in seen:
-                seen.add(low)
-                names.append(rel)
-        embedded = [r for r in (pl.get('embedded') or []) if r]
-        sync_rel = [r for r in (pl.get('sync_rel') or []) if r]
-        path = _engine_cache_path()
-        if not path:
-            return names
-        data = {}
-        if os.path.isfile(path):
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    data = json.load(f) or {}
-            except Exception:
-                data = {}
-        # Preserve any sync_rel a prior warm already cached (union), so this
-        # short-TTL first-entry seed never wipes a known-synced tick.
-        _prev_sr = [s for s in ((data.get(key) or {}).get('sync_rel') or []) if s]
-        for _s in _prev_sr:
-            if _s not in sync_rel:
-                sync_rel.append(_s)
-        data[key] = {'ts': time.time(), 'names': names,
-                     'embedded': embedded, 'sync_rel': sync_rel,
-                     'ttl': _AVAIL_TTL_NONE}
-        if len(data) > 400:
-            data = dict(sorted(data.items(),
-                               key=lambda kv: kv[1].get('ts', 0),
-                               reverse=True)[:400])
-        try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            tmp = path + '.stmp'
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False)
-            os.replace(tmp, path)
-        except Exception:
-            pass
-        return names
-    except Exception:
-        return [n for n in (pl.get('names') or []) if n]
 
 
 def release_names(meta):

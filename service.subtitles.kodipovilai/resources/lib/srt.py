@@ -317,8 +317,8 @@ def fix_rtl_punctuation(text, mode=None, legacy_engine=False):
     text = repair_music_mojibake(text)
     if mode is None:
         try:
-            from . import kodi_utils
-            mode = (kodi_utils.get_setting('rtl_punct_mode', 'rtl_base')
+            from . import sub_utils
+            mode = (sub_utils.get_setting('rtl_punct_mode', 'rtl_base')
                     or 'rtl_base').lower()
         except Exception:
             mode = 'rtl_base'

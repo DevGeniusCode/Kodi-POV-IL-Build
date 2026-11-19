@@ -1,6 +1,6 @@
 # MoranSubs (`service.subtitles.kodipovilai`): architecture report and refactoring blueprint
 
-**Status:** Subtitle Phase 0 COMPLETE (decision, last upstream merge, this document). Phases 1-3 (Part 4) are the execution plan.
+**Status:** Subtitle Phase 0 COMPLETE (decision, last upstream merge, this document). **Subtitle Phase 1 COMPLETE (19 Nov 2026, wrap-up included):** dead code, DarkSubs / Wizard leftovers and the broken Telegram source deleted (Part 5), `settings.xml` reorganized into 8 categories (93 settings, 7 keys newly declared), every string id inside Kodi's add-on range (`33000`-`33008` moved to `32630`-`32638`), `kodi_utils.py` renamed `sub_utils.py`, one dialog-title constant, statistics in Part 6. Phases 2-3 (Part 4) are next; their prompts are in `PHASE_2_AND_3_PROMPTS.md`.
 **Snapshot:** the analysis was made at `main` @ `0a6ce978` (add-on 0.3.74). On 2026-11-19 the last upstream merge (`update-migration` @ `96efe59a`) took the add-on to **0.3.96**; there will be no further upstream merges.
 **Method:** static reading of every entry point and module, an AST import graph, a cross-module private-call scan, `pyflakes` and `vulture` (run from the scratchpad), a settings declared/read diff, git history, an upstream-divergence diff and per-file churn measurements. Nothing ran inside Kodi, so every behavioural claim about Kodi has to be checked in Kodi.
 
@@ -19,7 +19,7 @@
 
 1. **The add-on is ≈55.8k lines of Python after the 0.3.96 merge** (≈50.4k at 0.3.74; not counting the bundled `pysrt`, `parse_torrent_title` and `pyxbmct`, 3.5k). Seven files hold 60% of it: `translate.py` 9,706 · `subsync.py` 5,577 · `embedded_extract.py` 4,984 · `sync_align.py` 3,374 · `default.py` 3,348 · `srt.py` 3,292 · `subs_engine_bridge.py` 1,949.
 2. **One function is the AI-translation pipeline.** `translate.resolve()` runs from line 6033 to the end of the file (3,674 lines at 0.3.96, more than 30 nested closures; `_extract_embedded_srt` 807 and `list_candidates` 616 are next). It handles every link type, cache, the community pool, the Gemini and Google translators, gender references, repairs, proofreading, telemetry, pool upload and the sync hand-off. Most of the coupling lives here.
-3. **The three pillars depend on each other in a cycle.** `translate` → `subsync` → `translate`. `subsync` → `gemini` (an audio-transcription timing probe). `translate` → `sync_align` and `arabic_gender` (reference alignment). `kodi_utils` → `subs_engine_bridge` → `kodi_utils`. More than 25 private helpers are called across modules, for example `translate._decode_link` 15 times from other files.
+3. **The three pillars depend on each other in a cycle.** `translate` → `subsync` → `translate`. `subsync` → `gemini` (an audio-transcription timing probe). `translate` → `sync_align` and `arabic_gender` (reference alignment). `sub_utils` → `subs_engine_bridge` → `sub_utils`. More than 25 private helpers are called across modules, for example `translate._decode_link` 15 times from other files.
 4. **Several subsystems exist more than once:**
    - 4 SRT parsers: `srt.py`, `subs_engine/srt.py`, the bundled `pysrt`, `sync_align.parse_srt`.
    - 2 timing aligners: `arabic_gender` and `sync_align`.
@@ -57,7 +57,7 @@
 | RunScript (skins) | `RunScript(service.subtitles.kodipovilai,action=choose_subs)` (18 call sites in skins) | `default._handle_choose_subs` → FENtastic: `ActivateWindow(SubtitleSearch)`, others: `subs_chooser.show()` | **Yes** |
 | RunScript (internal hand-off) | the download step fires itself | `action=bg_translate_picker` → `default._handle_bg_translate_picker`; `action=translate_file` → `_handle_translate_file` | **Yes** |
 | RunScript (POV badge warm) | POV source window | `action=he_avail` → `he_sub_match.run_warm` | **Yes** |
-| RunScript (settings buttons) | `settings.xml` action rows | `open_aistudio`, `test_connection`, `connect_gemini` (also frozen Wizard patch `pov_myservices`), `show_gemini_usage`, `open_tmdb_notice`, `clear_cache`, `pool_share_cache(_run)`, `purge_temp`, `engine_test`, `connect_telegram`, `logout_telegram`, `telegram_test` | **Yes** (action names) |
+| RunScript (settings buttons) | `settings.xml` action rows | `open_aistudio`, `test_connection`, `connect_gemini` (also frozen Wizard patch `pov_myservices`), `show_gemini_usage`, `open_tmdb_notice`, `clear_cache`, `pool_share_cache(_run)`, `purge_temp`, `engine_test` (the Telegram buttons `connect_telegram`, `logout_telegram`, `telegram_test` were removed at the end of Phase 1) | **Yes** (action names) |
 | Bare-name import from other interpreters | POV / Umbrella hooks append `…/resources/lib` to `sys.path` | `he_sub_match.py`: `prewarm`, `release_names`, `embedded_names`, `confirmed_releases`, `label_prefix`; stdlib only at module level | **Yes**: file must stay at `resources/lib/he_sub_match.py` |
 | Window properties read by other processes | skins / POV / Wizard | `subs.player_filename` (`subs_filename_publisher`), `MoranSubsChooserOpen`, `povil.embedded_*`, `moransubs.*` | **Yes** (byte-identical) |
 | Settings read by the Wizard | Wizard `host_repairs/kodi_utils.subs_get_*` | `use_builtin_engine`, `pov_fast_navigation` | **Yes** (ids) |
@@ -82,7 +82,7 @@
           │ subs_engine_bridge.search ─► subs_engine.engine            │  ◄── FETCHING
           │     c_get_subtitles (thread per provider, provider-down    │      (vendored DarkSubs)
           │     skip) ─► sources/{ktuvit,wizdom,opensubtitles,yify,    │
-          │     subsource,subscene,bsplayer,telegram}.get_subs         │
+          │     subsource,subscene,bsplayer}.get_subs                  │
           │     ─► sort_subtitles ─► release_match.match_pct           │  ◄── MATCH %
           │ pool.lookup (community: ktuvit / ai / ai_emb variants)     │
           │ translate._match_pct ─► release_match                      │  ◄── MATCH %
@@ -95,7 +95,7 @@
            default: ListItem(label=lang, label2=label, rating parsed from "%" in label)
                                       │  user picks → plugin://…?action=download&link=<json>
                                       ▼
-   _handle_download: subsync.cancel_pending · kodi_utils.current_subtitle_selection (token triple)
+   _handle_download: subsync.cancel_pending · sub_utils.current_subtitle_selection (token triple)
        ├─ engine+embedded ─► subs_engine_bridge.select_embedded ─► Dialog.Close
        ├─ engine_ai ─► subs_engine_bridge.download ─► becomes 'ai' link
        ├─ embedded_ai / ai ─► RunScript(bg_translate_picker) ─► Dialog.Close
@@ -121,7 +121,7 @@
      probes (mkv_probe · mp4_probe · embedded_extract cues · Gemini audio probe) · deep job queue
                                               ▼
    default: _try_next_hebrew fallback ─► _deliver_named_subtitle (player.setSubtitles, unique
-            name) or addDirectoryItem ─► kodi_utils.confirm_subtitle_sync_registration ─►
+            name) or addDirectoryItem ─► sub_utils.confirm_subtitle_sync_registration ─►
             translate.proofread_later
 
    service.py background threads: he_warm drainer (he_sub_match.run_warm) · subsync drainer
@@ -137,7 +137,7 @@
 | 1 | Invocation | `default.py` · `main` (3279), `_parse_query` (38) | argv → `action`, params | Handles both plugin and RunScript call styles |
 | 2 | Opt-out gate | `default._handle_search` (112) | `Window(10000).skip_autosub` (fresh < 90 s) | Hardcoded 90 s |
 | 3 | DarkSubs hook (dead) | `default._handle_search` (138-145), `_handle_test_connection` (2081) | imports `dark_subs_integration` | **Module missing**, the call sits in `try` |
-| 4 | Video context | `kodi_utils.current_video_info` + `subs_engine_bridge._release_ready` | player labels → `info` dict | Waits up to 15×200 ms; calls a private function across modules |
+| 4 | Video context | `sub_utils.current_video_info` + `subs_engine_bridge._release_ready` | player labels → `info` dict | Waits up to 15×200 ms; calls a private function across modules |
 | 5 | Candidate assembly | `translate.list_candidates` (1001-1616) | `info` → `list[candidate]` | About 600 lines: fetch, rank, label and policy in one function |
 | 5a | Local files | `local_subs.find_alongside`, `find_in_temp` (+ `language_detect`) | path → `(path, lang)` | Hebrew from temp deliberately refused |
 | 5b | Embedded streams | `subs_engine_bridge.embedded_candidates` (1169), snapshot `povil.embedded_snap` | player streams → embedded rows (`_pct` 101) | |
@@ -146,15 +146,15 @@
 | 5e | Ktuvit harvest | `pool.enqueue_harvest` | queue file | Side effect inside a list builder |
 | 5f | Community pool | `pool.lookup` (+ `_match_pct`) | `info` → variants | |
 | 5g | Ranking and labels | `list_candidates` 1185-1594, `_is_sdh_ext` (376), `_gender_src_rank` (370) | → ordered rows | Match % is formatted into the label |
-| 5h | Finalize | `_finalize` (833) → `he_sub_match.merge_names`; `_mark_current` (802) → `kodi_utils.get_subtitle_sync_status` | → rows + "» נוכחית" | The list builder also writes the badge cache |
+| 5h | Finalize | `_finalize` (833) → `he_sub_match.merge_names`; `_mark_current` (802) → `sub_utils.get_subtitle_sync_status` | → rows + "» נוכחית" | The list builder also writes the badge cache |
 | 6 | Render | `default._handle_search` 172-207 | rows → `ListItem`s | **Star rating is regex-parsed out of the label**; sync label appended |
-| 7 | Pick / selection | `default._handle_download` (210); `kodi_utils.current_subtitle_selection` | link → selection `{token, link_hash, stream_hash}` | A race guard that gets passed through every layer |
+| 7 | Pick / selection | `default._handle_download` (210); `sub_utils.current_subtitle_selection` | link → selection `{token, link_hash, stream_hash}` | A race guard that gets passed through every layer |
 | 8 | Dispatch by link type | `_handle_download` 247-436 | link payload `type` | 7 link types (§1.4) |
 | 9 | Resolve | `translate.resolve` (3951-7372) | link → SRT path | The single largest coupling point |
 | 9a | Delivery copy | `_rtl_delivery_copy` (632), `_reapply_rtl_fix_in_place` (549) | file → RTL copy | `subs_engine_bridge._render_hebrew_rtl_copy` is a second RTL renderer |
 | 9b | Sync gate | `_sync_hebrew_delivery` (688) → `subsync.process` (1686) | path, release → retimed path + verdict | Fail-open; `embedded_timing` bypass |
 | 9c | AI translation | `resolve` 4469-7372 | source SRT → Hebrew SRT | §1.5 lists its sub-stages |
-| 10 | Deliver | `_deliver_named_subtitle` (697), `_try_next_hebrew` (792), `addDirectoryItem` | path → Kodi | Registration confirmed through `kodi_utils.confirm_subtitle_sync_registration` |
+| 10 | Deliver | `_deliver_named_subtitle` (697), `_try_next_hebrew` (792), `addDirectoryItem` | path → Kodi | Registration confirmed through `sub_utils.confirm_subtitle_sync_registration` |
 | 11 | Post-delivery | `translate.proofread_later` (3616) | link → background job | |
 | B1 | Background AI | `default._handle_bg_translate_picker` (1108) → `translate.resolve(progressive_cb=…)` | chunks → `player.setSubtitles` swaps | About 460 lines of UI/progress closures in `default.py` |
 | B2 | Autosub | `autosub_service.autosub_on_play` (68-750) | play event → applied subtitle | Calls `list_candidates`, `subsync.rank_ready_candidates` / `diverse_human_alternatives` / `prefetch_autosub_reference`, `translate.resolve`; `ai_when_no_hebrew` policy |
@@ -179,7 +179,7 @@
 
 **Provider module contract** (the vendored engine, `engine.c_get_subtitles` / `download_sub`): module attributes `global_var: list`, `site_id: str`, `sub_color: str`; functions `get_subs(video_data[, all_lang_override])` (appends tuples to `global_var`), `download(download_data, MySubFolder) -> path`. `video_data` keys: `imdb, IMDBNumber, imdb_UniqueID, tmdb, title, OriginalTitle, TVShowTitle, year, season, episode, media_type, media_type_videoInfoTag, file_original_path, Tagline, Tagline_From_Fen, mpaa, is_local_media_playing, state`.
 
-**Selection triple** `{token, link_hash, stream_hash}`. It is created in `kodi_utils`, re-checked by `default`, `translate`, `subsync`, `autosub_service` and `subs_chooser`, and stored in Window(10000) properties.
+**Selection triple** `{token, link_hash, stream_hash}`. It is created in `sub_utils`, re-checked by `default`, `translate`, `subsync`, `autosub_service` and `subs_chooser`, and stored in Window(10000) properties.
 
 ### 1.5 Coupling audit
 
@@ -187,7 +187,7 @@
 
 | File | Fetching | Match % | AI translation | Sync | Cache | Delivery / UI | Settings / migrations |
 |---|---|---|---|---|---|---|---|
-| `default.py` | ○ engine test, Telegram | ○ star parse | ○ 460-line bg job + Gemini pairing UI | ○ cancel / registration | ○ clear cache | ● | ○ |
+| `default.py` | ○ engine test | ○ star parse | ○ 460-line bg job + Gemini pairing UI | ○ cancel / registration | ○ clear cache | ● | ○ |
 | `service.py` | | | ○ model-bump migrations | ○ drainers, delay watch | ○ prune | ○ publisher | ● 13 migrations |
 | `translate.py` | ○ list build, harvest | ○ `_match_pct`, labels | ● | ○ `_sync_hebrew_delivery`, `_embedded_aligned_source_srt`, calls `subsync._oracle_candidates` / `_download_oracle` | ○ tiers / markers | ○ labels, RTL copies | ○ policy reads |
 | `subs_engine_bridge.py` | ● | ○ `_rating_for`, release detect | | ○ timing search | ○ 3 caches | ○ RTL render, `select_embedded` | ○ engine defaults |
@@ -197,7 +197,7 @@
 | `arabic_gender.py` | ○ reference fetch through the engine | | ● | ○ **its own aligner** (`_TOL`, `_MAXOFF`, windows) | | | |
 | `release_match.py` | | ● | | ○ `AUTO_OK_TIERS` | ○ memo | | |
 | `he_sub_match.py` | ○ pool / Wizdom / OS / Ktuvit warm | ○ badge % | | | ○ 3 caches | ○ badge labels | |
-| `kodi_utils.py` | | | | ○ sync status, staged fixes | | ● selection / registration | ● settings |
+| `sub_utils.py` | | | | ○ sync status, staged fixes | | ● selection / registration | ● settings |
 | `pool.py` | ○ pool fetch, harvest | | ○ contribute, proofread variants | ○ `/sync` registry | ○ lookup cache | | |
 | `srt.py` | | | ● post-processing (3.3k lines) | ○ `_block_start` / `_block_times` | | ○ RTL | |
 | `subs_chooser.py` | ○ | ○ | ○ `_start_ai_apply` | ○ | | ● | |
@@ -205,7 +205,7 @@
 #### 1.5.2 Concrete tangles (with evidence)
 
 1. **`resolve()` as the god function** (`translate.py:3951-7372`). Its closures cover selection guarding, Gemini retries and rate pacing, content-block fallbacks, gender verification, repairs, proofread scheduling, telemetry counters and pool upload. None of them can be tested or replaced without loading all 7,372 lines.
-2. **Import cycles:** `translate ⇄ subsync`, `translate ⇄ arabic_gender` (arabic_gender imports translate), `kodi_utils ⇄ subs_engine_bridge` (`kodi_utils.py:1311`), `subsync → translate`, `he_sub_match → subs_engine_bridge`. They only work because the imports sit inside functions.
+2. **Import cycles:** `translate ⇄ subsync`, `translate ⇄ arabic_gender` (arabic_gender imports translate), `sub_utils ⇄ subs_engine_bridge` (a lazy import inside a function of `sub_utils.py`), `subsync → translate`, `he_sub_match → subs_engine_bridge`. They only work because the imports sit inside functions.
 3. **Private helpers called across modules** (scan): `translate._decode_link` ×15, `pool._post` ×5, `srt._block_start` ×4, `pool._release_from` ×4, `translate._source_id_for_ai` ×3, `translate._match_pct` ×3, `pool._is_token_like` ×3, `subsync._oracle_candidates` / `_download_oracle` (from translate), `subs_engine_bridge._release_ready` ×2, `sync_align._preflight_srt` / `_breathe`, `subsync._migrate_probe_cache` / `_sync_registry_release` (from service). These are the real interfaces, and none of them is declared as one.
 4. **Duplicated subsystems:**
    - **SRT parsing/writing:** `srt.py` (3,292 lines), `subs_engine/srt.py` (511), `_libs/pysrt`, `sync_align.parse_srt` / `dialogue_cues`.
@@ -217,8 +217,8 @@
 5. **Display strings carry data.** The % is formatted into Hebrew labels in `translate.list_candidates` / `_pool_entry`. `default.py:180` parses it back for the stars, and `_finalize` filters rows by label prefix (`startswith('תרגום')`). A label change is a behaviour change.
 6. **Sync depends on AI.** `subsync._audio_probe_reference` (733) needs `api_key` and calls Gemini, so the sync engine cannot be shipped or tested without the AI module.
 7. **AI depends on fetching and sync.** `arabic_gender` searches providers through the engine to get gender references and aligns them itself. `translate._embedded_aligned_source_srt` (2232) calls subsync internals.
-8. **`kodi_utils` is three modules in one.** It holds the settings facade, the logging/notify toolkit, and the whole subtitle-selection / registration / sync-status state machine (about 35 functions on Window(10000) properties).
-9. **`default.py` is three modules in one.** It holds the router, the delivery / background-translation runtime (`_handle_bg_translate_picker`, `_handle_translate_file`, about 1,100 lines) and the settings-action UIs (Gemini pairing window, Telegram, engine test).
+8. **`sub_utils` is three modules in one.** It holds the settings facade, the logging/notify toolkit, and the whole subtitle-selection / registration / sync-status state machine (about 35 functions on Window(10000) properties).
+9. **`default.py` is three modules in one.** It holds the router, the delivery / background-translation runtime (`_handle_bg_translate_picker`, `_handle_translate_file`, about 1,100 lines) and the settings-action UIs (Gemini pairing window, engine test).
 10. **Side effects inside the read path.** `list_candidates` queues Ktuvit harvest jobs and writes the badge cache. `_handle_search` used to patch DarkSubs.
 
 #### 1.5.3 AI translation sub-stages inside `resolve()` (what has to be separated)
@@ -252,7 +252,7 @@
 | `translate.py` module header (lines 4-20) | "we do NOT touch OpenSubtitles ourselves — DarkSubs handles sourcing" | No longer true: the built-in engine is the default |
 | `subs_engine/engine.py:740-1130` | `bing_*`, `yandex_*`, `google_machine_translate`, `machine_translate_subs`, `download_sub`, `Bing` class | Unused by the bridge (vulture: `bing_api_machine_translate`, `download_sub`) |
 | `subs_engine/general.py` | `take_title_from_focused_item`, `save_file_name`, `get_db_data`; `subs_engine/srt.py` `compose` | Unused |
-| `subs_engine/sources/telegram_impl.py` | `telegram_helper_window`, `async_upload_subtitle`; imports a missing `telegram_api` | Baseline import failure (known) |
+| `subs_engine/sources/telegram_impl.py` (deleted at the end of Phase 1, Part 5 rows 46-50) | `telegram_helper_window`, `async_upload_subtitle`; imported a missing `telegram_api` | Was the only baseline import failure |
 | `subs_engine/sources/opensubtitles.py:472` | `get_random_key` | Unused |
 | `local_subs.find_in_temp` | "SRTs dropped by other subtitle add-ons (DarkSubs…)" | Still useful for other add-ons; keep, but update the comment |
 | repo `userdata/addon_data/service.subtitles.All_Subs/`, `all_subs_plus/` | empty local folders (untracked) | Local leftovers, not in git |
@@ -264,7 +264,7 @@
 
 **Unused imports and variables** (pyflakes): `default.py:1588` (`kodi_utils`), `2284` (`srt`), `3167` (`engine`, deliberate import probe); `kodi_utils.py:9` `sys`; `release_match.py:21` `os`; `autosub_service.py:906` (deliberate preimport); `service.py:395-396` (deliberate preimport of `opensubtitles` / `ktuvit`), `service.py:545` `xbmcgui`; `subs_chooser.py:118` `payload`; `translate.py:4196` redefined `_pshare`; plus 40 hits inside the vendored engine (`xbmcplugin`, `pkgutil`, `threading`, `quote*`, `DEFAULT_REQUEST_TIMEOUT`, `struct`, `random`, unused `Addon` locals, f-strings without placeholders, invalid escape sequences `\s` / `\d` in `cache.py:51`, `general.py:193-195`, `ktuvit.py:296`, which become SyntaxErrors in a future Python).
 
-**Known defects already in `CLAUDE.md`** (still present): the `prepare_build_skin` inbound action has no handler; `source_memory.py`, `dark_subs_integration.py` and `fentastic_search_patcher.py` are missing; `manifest.json` pins the subtitle zip at 0.3.50 while the source is 0.3.74; `telegram_impl` needs `telegram_api`.
+**Known defects already in `CLAUDE.md`** (still present): the `prepare_build_skin` inbound action has no handler; `source_memory.py`, `dark_subs_integration.py` and `fentastic_search_patcher.py` are missing; `manifest.json` pins the subtitle zip at 0.3.50 while the source is 0.3.74; `telegram_impl` needed `telegram_api` (the whole Telegram source was deleted at the end of Phase 1).
 
 ### 1.7 Target modular architecture
 
@@ -304,9 +304,9 @@ service.subtitles.kodipovilai/
         │   ├── contracts.py          # VideoContext, Candidate, LinkPayload, Selection, DeliveryResult, SyncVerdict
         │   ├── link_codec.py         # ex translate._encode_link / _decode_link
         │   ├── video_context.py      # ONE playing-release derivation (replaces the 5 copies)
-        │   ├── selection.py          # token triple, ownership checks (ex kodi_utils)
+        │   ├── selection.py          # token triple, ownership checks (ex sub_utils)
         │   ├── settings.py           # typed accessors + defaults table (one place)
-        │   ├── kodi.py               # log / notify / window props (ex kodi_utils)
+        │   ├── kodi.py               # log / notify / window props (ex sub_utils)
         │   ├── utils/                # small shared helpers (text, time, files)
         │   ├── srt/                  # ONE parser + writer (ex srt.py core, sync_align.parse_srt); post-fix passes by concern
         │   └── cache/                # one cache API (namespaces, TTL, size cap; ex cache.py + the private caches)
@@ -351,7 +351,7 @@ service.subtitles.kodipovilai/
         │   ├── quick_toggles.py      # §2.2
         │   ├── chooser.py            # ex subs_chooser.py (XML name and MoranSubsChooserOpen unchanged)
         │   ├── filename_publisher.py # ex subs_filename_publisher.py (subs.player_filename unchanged)
-        │   └── settings_actions/     # gemini pairing, telegram, engine test, cache actions
+        │   └── settings_actions/     # gemini pairing, engine test, cache actions
         ├── pyxbmct/                  # bundled, chooser fallback (unchanged)
         └── telemetry.py
 ```
@@ -388,7 +388,7 @@ class VideoContext:   # built once by core.video_context
     season: str; episode: str; tvshow: str
     playing_release: str          # the ONE derivation (picked_release > tagline > label > li_filename > filepath)
     file_url: str; is_local: bool; is_live: bool
-    raw: dict                     # original kodi_utils.current_video_info() for adapters
+    raw: dict                     # original sub_utils.current_video_info() for adapters
 
 @dataclass
 class Candidate:
@@ -432,7 +432,7 @@ class SyncVerdict:
  ══════════╪══════════════════ PROVIDER ADAPTER BOUNDARY (fetching/provider_adapter.py) ═════════════════════════
            ▼
    fetching/providers/  (ex subs_engine: engine.py · sources/{ktuvit, wizdom, opensubtitles, yify, subsource,
-                         subscene, bsplayer, telegram} · _libs/{pysrt, parse_torrent_title})
+                         subscene, bsplayer} · _libs/{pysrt, parse_torrent_title})
    contract: global_var · site_id · get_subs(video_data[, all_lang_override]) · download(download_data, MySubFolder)
 ```
 
@@ -442,7 +442,7 @@ Legend: **M** move the whole file as-is (imports rewritten) · **S** split by li
 
 | Current file (lines at 0.3.96) | Phase 2 action | Target |
 |---|---|---|
-| `default.py` (3,348) | P + S | stays as a ≈50-line router; `_handle_search` → `ui/listing.py`; `_handle_download`, `_deliver_named_subtitle`, `_try_next_hebrew`, `_try_fast_download` → `delivery/kodi_player.py`; `_handle_bg_translate_picker` / `_handle_translate_file` → `ai_translation/background.py`; Gemini pairing (`_PairWindow`, `_gemini_*`), Telegram, engine test, cache buttons → `ui/settings_actions/*`; the action table → `entry/actions.py` |
+| `default.py` (3,348) | P + S | stays as a ≈50-line router; `_handle_search` → `ui/listing.py`; `_handle_download`, `_deliver_named_subtitle`, `_try_next_hebrew`, `_try_fast_download` → `delivery/kodi_player.py`; `_handle_bg_translate_picker` / `_handle_translate_file` → `ai_translation/background.py`; Gemini pairing (`_PairWindow`, `_gemini_*`), engine test, cache buttons → `ui/settings_actions/*`; the action table → `entry/actions.py` |
 | `service.py` (1,323) | P + S | stays thin; threads → `entry/service.py`; the 16 one-shot `_maybe_*` → `entry/migrations.py`; drainers → each feature's `jobs.py` |
 | `translate.py` (9,706) | S | `_encode/_decode_link` → `core/link_codec.py`; `list_candidates` → `fetching.service` + `scoring_matching/ranking.py` + `ai_translation/offers.py`; `_finalize` / `_mark_current` → `core/selection.py`; `resolve` → `pipeline.resolve` + `ai_translation/{source_prep,reuse,context,dispatch,repairs,proofread}`; `_gp_*` / `gp_later_tick` → `ai_translation/proofread/`; `_rtl_*` → `delivery/rtl.py`; harvest → `fetching/pool_client.py`; `_extract_embedded_srt` (807) → `fetching/embedded/` |
 | `subsync.py` (5,577) | S | `sync/{service,oracles,probes,verdicts,jobs}.py`; the audio probe takes a `transcriber` callable (removes the direct Gemini import) |
@@ -454,7 +454,7 @@ Legend: **M** move the whole file as-is (imports rewritten) · **S** split by li
 | `embedded_extract.py` (4,984), `embedded_mp4.py`, `mkv_probe.py`, `mp4_probe.py` | M | `fetching/embedded/` (`mkv_probe` / `mp4_probe` shared with `sync/probes` through a contract) |
 | `release_match.py` | M | `scoring_matching/release.py` |
 | `he_sub_match.py` (1,328) | **P** | stays; may call `scoring_matching` lazily, never at module level |
-| `kodi_utils.py` (1,385) | S | `core/{settings,kodi,selection}.py` |
+| `sub_utils.py` (1,375; renamed from `kodi_utils.py` at the end of Phase 1, so it is not confused with POV's `kodi_utils`) | S | `core/{settings,kodi,selection}.py` |
 | `autosub_service.py` (1,124) | S | `autosub/{player,policy}.py` |
 | `subs_chooser.py` (1,071), `subs_filename_publisher.py` | M | `ui/chooser.py`, `ui/filename_publisher.py` (strings unchanged; update `CLAUDE.md` in the same step) |
 | `gemini.py`, `gemini_pair.py`, `google_translate.py`, `gemini_quota.py` | M | `ai_translation/providers/*`, `ai_translation/quota.py` |
@@ -492,7 +492,7 @@ Implementation outline (about 60 lines; in Phase 3 it lives in `ui/quick_toggles
 
 1. A new link type `{'type': 'ui', 'op': 'toggle', 'key': 'subsync_verify'}` (or `'op': 'settings'`). Rows get `art.icon='0'` (no stars), `thumb=''` (no flag) and a `[COLOR grey]` prefix so they read as controls.
 2. In `_handle_download`, check `type == 'ui'` first, before `subsync.cancel_pending()`, `set_current_subtitle` and the selection snapshot, so a toggle never cancels the subtitle that is playing.
-3. Apply it through `kodi_utils.set_setting`. Run the proven close sequence. Then `AlarmClock(moransubs_reopen,ActivateWindow(SubtitleSearch),00:00:01,silent)` reopens the dialog after Kodi has finished tearing it down, which runs a fresh `action=search` with the new state. For `op=settings`: `Addon.OpenSettings(...)` after the close, with no reopen.
+3. Apply it through `sub_utils.set_setting`. Run the proven close sequence. Then `AlarmClock(moransubs_reopen,ActivateWindow(SubtitleSearch),00:00:01,silent)` reopens the dialog after Kodi has finished tearing it down, which runs a fresh `action=search` with the new state. For `op=settings`: `Addon.OpenSettings(...)` after the close, with no reopen.
 4. Gate the strip with a new setting `show_quick_toggles` (default on), plus a per-row list so a skin designer can hide it.
 5. Labels come from `strings.po` (new ids in the 33xxx range) and **never contain `%`**, because the star regex would read it.
 
@@ -514,7 +514,7 @@ Implementation outline (about 60 lines; in Phase 3 it lives in `ui/quick_toggles
 
 **Risks to check in Kodi:**
 - The reopen through `AlarmClock` on FENtastic / AF3 `DialogSubtitles` variants.
-- That the cached `xbmcaddon.Addon` instance (`kodi_utils.addon()`) sees a value another process wrote (service thread vs plugin invocation). The code comment says it does; a toggle depends on it.
+- That the cached `xbmcaddon.Addon` instance (`sub_utils.addon()`) sees a value another process wrote (service thread vs plugin invocation). The code comment says it does; a toggle depends on it.
 - That a pseudo-row never wins Kodi's own "first result" auto-select. Kodi does not auto-pick from this list, but autosub must keep using `list_candidates`.
 
 ### 2.3 Missing settings audit
@@ -531,7 +531,7 @@ Implementation outline (about 60 lines; in Phase 3 it lives in `ui/quick_toggles
 | `prev_context_lines` | `translate.py` | code default | AI › Performance (expert) |
 | `he_match_ktuvit` | `he_sub_match.py:785` | `true` | Matching › "badge may ask Ktuvit when nothing else has Hebrew" |
 | `he_embedded_report` | `pool.py:805` | `true` | Pool › "report built-in Hebrew tracks" |
-| `telegram_first_and_last_name` | `telegram_impl.py` | — | hidden (engine internal) |
+| `telegram_first_and_last_name` | (the Telegram source, deleted at the end of Phase 1) | — | removed |
 | `locale.subtitlelanguage`, `subtitles.languages` | `service.py` | Kodi GUI settings | not ours (correct as is) |
 
 #### 2.3.2 Declared but dead (see §1.6)
@@ -585,13 +585,13 @@ Kodi reads `level` 0 = basic, 1 = standard, 2 = advanced, 3 = expert, 4 = intern
    └─ show_quick_toggles       NEW  bool  L1  true   rows / panel of §2.2
 
 2. ספקים ואיתור / Providers & Fetching              (category id="engine", kept)
-   ├─ group sources: ktuvit, wizdom, opensubtitles, yify, subsource, subscene, bsplayer, telegram (bool L0)
+   ├─ group sources: ktuvit, wizdom, opensubtitles, yify, subsource, subscene, bsplayer (bool L0)
    ├─ max_search_time               int   L1  10
    ├─ provider_down_minutes    NEW  int   L3  10
    ├─ engine_cache_hours       NEW  int   L3  24
    ├─ embedded_translation_mode     enum  L2  auto   (moved here from Advanced)
    ├─ embedded_max_mb          NEW  int   L3  80
-   ├─ actions: engine_test, connect_telegram, logout_telegram, telegram_test
+   ├─ actions: engine_test
    └─ group engine_internal (L4, unchanged ids: language_*, all_lang, OS*, show_debug, _engine_defaults_v …)
 
 3. התאמה ותצוגה / Matching & Display                (category id="matching" NEW)
@@ -680,18 +680,85 @@ Each phase is split into steps. After each step the agent stops, writes `output.
 | Phase | Goal | Steps | Behaviour change | Exit criteria |
 |---|---|---|---|---|
 | **1. Cleanup, settings and Deletion Report** | A smaller, honest codebase and a settings screen that matches the code | 1a baseline snapshot and stub harness (scratchpad) · 1b dead-code deletion (§1.6, plus whatever a fresh vulture / pyflakes / caller scan proves dead) · 1c `settings.xml` reorganized into the 8 categories of §2.4 with comment blocks; the 9 read-but-undeclared keys declared with their code defaults; dead settings removed; `strings.po` en / he · 1d Deletion Report and statistics | Only the approved deletions and the visible settings screen | import baseline unchanged (except deleted modules); no new pyflakes message; every remaining `get_setting` key is declared; Part 5 and Part 6 filled in |
-| **2. Core refactoring and splitting** | The §1.7.2 tree; no file over ≈1,500 lines and no function over ≈300 lines except where reported | 2a `core/` (contracts, link_codec, settings / kodi / selection out of `kodi_utils`, `srt`, `cache`) · 2b `fetching/` (`subs_engine` → `fetching/providers`, bridge, embedded, local, pool_client, `provider_adapter`) · 2c `scoring_matching/` · 2d `sync/` (split `subsync`, `sync_align`) · 2e `ai_translation/` without `resolve` · 2f `translate.list_candidates` and `resolve` split (the riskiest step, last) · 2g `ui/`, `delivery/`, `autosub/`, `entry/` + `migrations.py`; `default.py` / `service.py` become thin | None (moves by line ranges, AST identity) | per step: AST identity of every moved def, import baseline, pyflakes, a repo-wide caller grep, no shim; `translate.py` deleted at the end |
+| **2. Core refactoring and splitting** | The §1.7.2 tree; no file over ≈1,500 lines and no function over ≈300 lines except where reported | 2a `core/` (contracts, link_codec, settings / kodi / selection out of `sub_utils`, `srt`, `cache`) · 2b `fetching/` (`subs_engine` → `fetching/providers`, bridge, embedded, local, pool_client, `provider_adapter`) · 2c `scoring_matching/` · 2d `sync/` (split `subsync`, `sync_align`) · 2e `ai_translation/` without `resolve` · 2f `translate.list_candidates` and `resolve` split (the riskiest step, last) · 2g `ui/`, `delivery/`, `autosub/`, `entry/` + `migrations.py`; `default.py` / `service.py` become thin | None (moves by line ranges, AST identity) | per step: AST identity of every moved def, import baseline, pyflakes, a repo-wide caller grep, no shim; `translate.py` deleted at the end |
 | **3. Wiring, testing and final statistics** | `pipeline.py` drives the lifecycle through contracts; tests guard it; the docs tell the truth | 3a `pipeline.py` orchestrator wired from `entry/` · 3b `Candidate.pct` as a number: stars come from it, the label regex is deleted · 3c quick toggles (§2.2; the one new feature; the owner confirms first) · 3d `.github/scripts/check_subs_contract.py` (stdlib, no Kodi) + golden fixtures (link codec, `release_match` scores, `list_candidates` ordering, `sync_align` on fixture pairs) + CI step · 3e Kodi test checklist for the owner · 3f final statistics, `CLAUDE.md` / this document updated | 3b: none visible; 3c: new UI rows / buttons | contract test green in CI; behaviour tests under stubs; the checklist delivered; Part 6 has the total |
 
 **Rules for every phase:** `CLAUDE.md` "SUBTITLE ADD-ON: DECOUPLED" (no shims; pinned public surface; no Wizard names), STRUCTURAL REFACTORING ONLY for behaviour (report bugs, do not fix them silently), CRLF, `output.txt`, a commit snippet per step.
 
 ## Part 5: Deletion Report
 
-Each phase appends its rows here. A row is an inactive feature, setting or block of code that was **removed**. "Revive" says what bringing it back would take, so the owner can decide. The bypassed upstream features of the Phase 0 merge are listed in `CLAUDE.md` "SKIPPED UPSTREAM FEATURES", not here.
+Each phase appends its rows here. A row is an inactive feature, setting or block of code that was **removed**. "Revive" says what bringing it back would take, so the owner can decide. The bypassed upstream features of the Phase 0 merge are listed in `CLAUDE.md` "SKIPPED UPSTREAM FEATURES", not here. Names and paths in the rows are those of the code when it was deleted: `kodi_utils.py` was renamed `sub_utils.py` at the end of Phase 1, and the Telegram files no longer exist.
 
 | # | Phase | Item | Kind (feature / setting / code / comment) | Where it was (path · function, lines) | Lines removed | Why it was inactive (evidence) | Revive: what it takes | Owner decision |
 |---|---|---|---|---|---|---|---|---|
-| — | — | *(empty until Phase 1)* | | | | | | |
+| 1 | 1 | DarkSubs hook call in `_handle_search` (`dark_subs_integration.maybe_patch_darksubs`) | feature | `default.py` · _handle_search · lines 129-145 | 18 | module `resources/lib/dark_subs_integration.py` is not shipped (the import raised ImportError into the surrounding try/except, so the block only logged a DEBUG line per search); DarkSubs was removed from the build (18435d90) | re-add `dark_subs_integration.py` (git show 77880b8:service.subtitles.kodipovilai/resources/lib/dark_subs_integration.py) and the call | pending |
+| 2 | 1 | DarkSubs hook call in `_handle_test_connection` (`dark_subs_integration.maybe_patch_darksubs`) | feature | `default.py` · _handle_test_connection · lines 2074-2084 | 11 | same missing module; the try/except swallowed the ImportError silently | see the previous row | pending |
+| 3 | 1 | `DEBRID_NOTICE_SERVICES` / `DEBRID_NOTICE_VALUES` tables + `_translate_path()` + blank gaps of cut handlers | code | `default.py` · module level (after `_handle_purge_temp`) · lines 2971-3002 | 35 | the debrid dialog moved to the Wizard (`addons/debrid_notice.py` carries its own copy of both tables); no reader in the add-on (grep, vulture 60%); `_translate_path` had no caller (the Wizard has its own copy in flow/common.py) | copy the tables back from plugin.program.kodipovilwizard/resources/libs/addons/debrid_notice.py | pending |
+| 4 | 1 | `_without()` and `_walk_all()` (helpers of the moved repair pass) | code | `service.py` · module level · lines 79-93 | 17 | no caller in the add-on (vulture 60%, grep); the Wizard keeps its own copies in host_repairs/flow/common.py, used by skin_steps.py | copy from plugin.program.kodipovilwizard/resources/libs/host_repairs/flow/common.py | pending |
+| 5 | 1 | `_prune_source_memory_once()` and its 2 call sites (start-up and the 24 h loop) | feature | `service.py` · _prune_source_memory_once · lines 162-181 | 20 | imports `resources.lib.source_memory`, a module that is not shipped (ImportError -> logged a WARNING once a day); the feature (remembered-sources store of the old POV hook) lives in the Wizard (`patches/pov_source_remember.py`, its own `source_memory/` folder) | re-add `source_memory.py` (git show 77880b8:service.subtitles.kodipovilai/resources/lib/source_memory.py) and the function | pending |
+| 6 | 1 | `TEMP_PURGE_VERSION` constant + comment (one-shot "purge old temp subs" rollout) | code | `service.py` · module level · lines 204-213 | 11 | no reader anywhere (vulture 60%, grep); the routine that used it is gone and its marker `_temp_purge_done` is read by nothing | re-add a one-shot that calls `local_subs.purge_temp_subs()` once per version | pending |
+| 7 | 1 | DarkSubs machine-translate stack: `bing_web_*`, `google_send_translate`, `google_machine_translate`, `yandex_*`, `bing_*` key feed + `bing_api_machine_translate`, `machine_translate_subs` | feature | `resources/lib/subs_engine/engine.py` · 13 functions after `get_subtitles` · lines 740-1129 | 371 | only reachable from `download_sub` (itself unreachable) through `machine_translate_subs`; no caller in the add-on, the Wizard, skins or userdata (grep); `google_translate.py` (the live Google fallback) is a separate module; the Bing key feed host (kodi7rd.github.io) no longer exists; the lazy imports `resources.modules.auto_translate.*` point at a folder that is not shipped | copy the 13 functions back from git (0.3.96) and restore `resources/modules/auto_translate` (bing_web, googletrans); needs a caller (a bridge download step) | pending |
+| 8 | 1 | `download_sub()` (DarkSubs download entry of the vendored engine) | feature | `resources/lib/subs_engine/engine.py` · download_sub · lines 1131-1245 | 115 | no caller: the bridge has its own `_download_inner` (`subs_engine_bridge.py`, its comment says it mirrors it) and calls `module.download()` directly; grep for `download_sub` finds only telegram helper names; it also held the only call sites of `telegram.upload_subtitle_to_telegram` and the only readers of the hidden settings `auto_translate`, `auto_fix_sub_punctuation`, `auto_remove_hi_tags`, `subtitle_trans_cache` | copy back from git (0.3.96) and call it from the bridge download path | pending |
+| 9 | 1 | `fix_sub_punctuation_text`, `fix_sub_punctuation_and_write`, `remove_hi_tags_and_write` (engine-side subtitle cleanup) | code | `resources/lib/subs_engine/engine.py` · section "PUNCTUATION FIX" · lines 599-735 | 134 | cascade: their only callers were `download_sub` and `machine_translate_subs`; the add-on does its own punctuation / HI cleanup (`srt.py`, `translate.py`) | copy back from git (0.3.96); they run only from `download_sub` | pending |
+| 10 | 1 | `class Bing` (Microsoft ajax translator used by `yandex_machine_translate`) | code | `resources/lib/subs_engine/engine.py` · Bing · lines 55-80 | 26 | only constructed inside the removed `yandex_machine_translate`; its endpoint (api.microsofttranslator.com ajax.svc) is retired | copy back from git (0.3.96) | pending |
+| 11 | 1 | `general.take_title_from_focused_item()` | code | `resources/lib/subs_engine/general.py` · take_title_from_focused_item · lines 268-284 | 17 | no caller anywhere (repo-wide grep, vulture 60%) | copy back from git (0.3.96) | pending |
+| 12 | 1 | `general.save_file_name()` (writes the `list_subs_cache` table of `database.db`) | code | `resources/lib/subs_engine/general.py` · save_file_name · lines 665-690 | 26 | no caller anywhere (repo-wide grep, vulture 60%); its only reader `get_db_data` is also unused | copy back from git (0.3.96) | pending |
+| 13 | 1 | `general.get_db_data()` (reads the `list_subs_cache` table) | code | `resources/lib/subs_engine/general.py` · get_db_data · lines 691-730 | 40 | no caller anywhere (repo-wide grep, vulture 60%) | copy back from git (0.3.96) | pending |
+| 14 | 1 | `subs_engine/srt.compose()` | code | `resources/lib/subs_engine/srt.py` · compose · lines 439-476 | 38 | no caller (the module `subs_engine/srt.py` itself has no importer at all, see Open Questions); the add-on uses `resources/lib/srt.py` | copy back from git (0.3.96) | pending |
+| 15 | 1 | `opensubtitles.get_random_key()` | code | `resources/lib/subs_engine/sources/opensubtitles.py` · get_random_key · lines 472-474 | 3 | no caller; the only mention is a commented-out line in `get_subs`; the live paths call `get_api_keys(shuffle_keys=True)` | copy back from git (0.3.96) | pending |
+| 16 | 1 | `telegram_impl.telegram_helper_window()` (DarkSubs "Connect" info dialog) | code | `resources/lib/subs_engine/sources/telegram_impl.py` · telegram_helper_window · lines 338-340 | 3 | no caller anywhere (repo-wide grep, vulture 60%); the add-on has its own Telegram login actions in default.py | the whole file went at the end of Phase 1 (row 46) | superseded by row 46 |
+| 17 | 1 | `telegram_impl.async_upload_subtitle()` (+ its "UPLOAD" section banner) | code | `resources/lib/subs_engine/sources/telegram_impl.py` · lines 481-498 | 18 | no caller; the only other mention is a commented-out `asyncio.run(...)` line in `upload_subtitle_to_telegram` | the whole file went at the end of Phase 1 (row 46) | superseded by row 46 |
+| 18 | 1 | `translate._build_prev_context_by_idx()` | code | `resources/lib/translate.py` · _build_prev_context_by_idx · lines 4748-4763 | 16 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%); the live path builds prev-context inline in `resolve` | copy back from git (0.3.96) | pending |
+| 19 | 1 | `subsync._remote_cue_reference()` | code | `resources/lib/subsync.py` · _remote_cue_reference · lines 691-695 | 5 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) | copy back from git (0.3.96) | pending |
+| 20 | 1 | `subsync._probe_reference_cues()` | code | `resources/lib/subsync.py` · _probe_reference_cues · lines 1326-1328 | 3 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) | copy back from git (0.3.96) | pending |
+| 21 | 1 | `subsync.proven_pool_ai_fallback()` | code | `resources/lib/subsync.py` · proven_pool_ai_fallback · lines 1653-1685 | 33 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) | copy back from git (0.3.96) | pending |
+| 22 | 1 | `subsync._pending_key()` | code | `resources/lib/subsync.py` · _pending_key · lines 4623-4624 | 2 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) | copy back from git (0.3.96) | pending |
+| 23 | 1 | `arabic_gender.prepare()` (old gender-reference entry) | code | `resources/lib/arabic_gender.py` · prepare · lines 1873-1890 | 18 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%); `translate` calls the chain iterator, its own log line "gender-ref prepare crashed" is a label only | copy back from git (0.3.96) | pending |
+| 24 | 1 | `prompt.build_arabic_gender_block()` | code | `resources/lib/prompt.py` · build_arabic_gender_block · lines 406-408 | 3 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) | copy back from git (0.3.96) | pending |
+| 25 | 1 | `cache.total_size_mb()` | code | `resources/lib/cache.py` · total_size_mb · lines 274-278 | 5 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) | copy back from git (0.3.96) | pending |
+| 26 | 1 | `mp4_probe.subtitle_reference_source()` | code | `resources/lib/mp4_probe.py` · subtitle_reference_source · lines 306-318 | 13 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) | copy back from git (0.3.96) | pending |
+| 27 | 1 | `kodi_utils.subtitle_sync_status_label()` | code | `resources/lib/kodi_utils.py` · subtitle_sync_status_label · lines 938-939 | 2 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) | copy back from git (0.3.96) | pending |
+| 28 | 1 | `kodi_utils.progress_dialog()` | code | `resources/lib/kodi_utils.py` · progress_dialog · lines 1378-1385 | 8 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) | copy back from git (0.3.96) | pending |
+| 29 | 1 | `gemini_pair.get_lan_ip()` (single-IP variant) | code | `resources/lib/gemini_pair.py` · get_lan_ip · lines 476-480 | 5 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%); the pairing server uses `get_lan_ips()` | copy back from git (0.3.96) | pending |
+| 30 | 1 | `he_sub_match._seed_from_pool()` | code | `resources/lib/he_sub_match.py` · _seed_from_pool · lines 881-929 | 49 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) (the Wizard patches load he_sub_match by bare name but only call its public API) | copy back from git (0.3.96) | pending |
+| 31 | 1 | `mkv_probe` reader method `abs_pos()` | code | `resources/lib/mkv_probe.py` · _Buf.abs_pos · lines 234-235 | 2 | no caller anywhere (repo-wide grep incl. skins, userdata, the Wizard and its patches; vulture 60%) | copy back from git (0.3.96) | pending |
+| 32 | 1 | unreachable weaker-gate tail after the `try/except` of the gender-reference gate (both branches return) | code | `resources/lib/arabic_gender.py` · map-gate function (the one ending with "hardened aligner failed; reference declined") · lines 640-661 | 22 | vulture 100%: code after a `try` whose body and `except` both return; its comment says it was kept for old external imports, and no module imports it | copy the tail back from git (0.3.96) | pending |
+| 33 | 1 | `pool.POOL_API_KEY` constant (a credential-like string, never sent) | code | `resources/lib/pool.py` · module level · lines 36-36 | 1 | vulture 60%; grep: the only occurrence in the repo is the definition (no header, no request uses it) | do not revive: deprecated on purpose in 0.2.290 (43f5d114): the Worker now requires HMAC signing (`pool.sign_headers`, `_pool_key()`); the constant was kept only "so old references don't break" | pending |
+| 34 | 1 | `arabic_gender._estimate_map()` (old global-vote aligner) | code | `resources/lib/arabic_gender.py` · _estimate_map · lines 136-148 | 13 | cascade: the only caller was the unreachable weaker-gate tail removed from the gender-reference gate (repo-wide grep: no other reference) | copy back from git (0.3.96) | pending |
+| 35 | 1 | `arabic_gender._overlap_rate()` | code | `resources/lib/arabic_gender.py` · _overlap_rate · lines 151-168 | 18 | cascade: the only caller was the unreachable weaker-gate tail removed from the gender-reference gate (repo-wide grep: no other reference) | copy back from git (0.3.96) | pending |
+| 36 | 1 | `keep_darksubs` (visible switch "Keep DarkSubs enabled") | setting | `resources/settings.xml` · 0.3.96 lines 629-636 | 8 | nothing reads it (grep: add-on, Wizard, skins, userdata); DarkSubs is not part of the build, so the switch did nothing | re-declare it and have the service honour it (needs DarkSubs back in the build) | pending |
+| 37 | 1 | `force_ai_when_auto_translate_off` (visible switch "Translate via AI even when DarkSubs auto_translate is OFF") | setting | `resources/settings.xml` · 0.3.96 lines 77-81 | 5 | only two comments mention it; nothing reads it; the setting it overrode (DarkSubs auto_translate) no longer exists | re-declare it; `translate` / `autosub_service` would need to read it again | pending |
+| 38 | 1 | DarkSubs bookkeeping markers `_darksubs_takeover_done`, `_darksubs_hook_last_fire`, `_darksubs_hook_last_outcome`, `_darksubs_autoenable_done`, `_darksubs_nag_done` | setting (hidden marker) | `resources/settings.xml` · 0.3.96 lines 402-411, 412-418, 419-425, 923-933, 941-947 | 42 | no reader and no writer anywhere (grep); the DarkSubs hook and nag were removed | re-declare when a DarkSubs-style hook is written again | pending |
+| 39 | 1 | `_force_ai_autoenable_done` marker | setting (hidden marker) | `resources/settings.xml` · 0.3.96 lines 934-940 | 7 | no reader or writer (grep); the auto-enable it tracked is gone | re-declare | pending |
+| 40 | 1 | `_addon_update_mode_seeded`, `_lists_sort_recent_v1` markers (moved Wizard features) | setting (hidden marker) | `resources/settings.xml` · 0.3.96 lines 496-507, 342-349 | 20 | markers of features that moved to the Wizard in Phase 3 (add-on update mode repair, POV list sort); no reader or writer in this add-on | re-declare | pending |
+| 41 | 1 | `_subtitle_outline_migration_v1`, `_temp_purge_done`, `_gemini_model_bump_v1` markers | setting (hidden marker) | `resources/settings.xml` · 0.3.96 lines 487-495, 299-306, 350-357 | 25 | no reader or writer in the add-on (grep); the box-to-outline migration moved to the Wizard, the temp purge routine and the v1 model bump no longer exist | re-declare together with the migration | pending |
+| 42 | 1 | `OSuser`, `OSpass` (hidden OpenSubtitles login) | setting (hidden) | `resources/settings.xml` · 0.3.96 lines 812-817, 818-823 | 12 | the only mentions are commented-out lines in `opensubtitles.get_subs`; the provider authenticates with the shared API keys | re-declare and read them in the OpenSubtitles provider | pending |
+| 43 | 1 | `strings.po` entries 32108, 32544, 32545, 32220, 32507, 32107, 32250-32254 (8 entries x 2 languages; the DarkSubs / Wyzie labels and the retired "Behavior" and "Built-in engine (DarkSubs)" headings) | setting label | `resources/language/*/strings.po` · en_gb and he_il | 0 | no longer referenced by settings.xml, code, skins or the Wizard (grep); 32108 / 32544 / 32545 belonged to the removed switches, 32220 / 32507 to groups and categories that were merged, 32107 / 32250-32254 to features that no longer exist | restore the entries from git together with the setting that uses them | pending |
+| 44 | 1 | Unused imports, locals, constants and unreachable statements (22 items) | code | `import xbmcaddon` (unused name); unused `import xbmcgui` in the SubSync delay-watch loop; unused imports / globals of the vendored engine left by the machine-translate removal (`random`, `xbmcplugin`, `pkgutil`, `sys`, `shutil`, `threading`, duplicate `urllib.parse` imports, `CachedSubFolder`, `TransFolder`, `user_dataDir`, `cache`, `DEFAULT_REQUEST_TIMEOUT`, `futures`, `trans_result`, `iconx`, `MyScriptID`, a stale chardet comment); unused local `source_dir` in `c_get_subtitles` (+ module `addonPath`); unused imports `unquote_plus`, `quote` in `subs_engine/general.py`; unused import `struct` in `opensubtitles.py`; unused local `Addon` (and its stale comment) in `opensubtitles.get_subs`; unused import `random` in `telegram_impl.py`; unused import `extract` in `telegram_impl.py`; unused import `logging` in `subs_engine/cache.py`; unused import `sys` in `subscene.py`; unused import `re` in `subsource.py`; write-only counter `refined_any` in `sync_align`; unused constant `OPENSUBTITLES_SEARCH_FALLBACK_VERSION`; unreachable `pass` after a `return` in `ktuvit.get_matching_ktuvit_name`; unused local import `kodi_utils` in `_handle_open_aistudio`; unused local import `srt` in `_handle_translate_file`; unused import `sys` in `kodi_utils.py`; dead `payload` decode block in `subs_chooser._row_item`; unused local `start_p` in `mkv_probe`; unused exception name `e` in `translate.resolve` (OverloadError handler); unused import `os` in `release_match.py` | 43 | pyflakes / vulture, each re-checked by reading the code and a repo-wide grep; nothing reads them | re-add the name if a feature needs it | pending |
+| 45 | 1 | Stale comments and docstring paragraphs about moved or removed code (10 items) | comment | comment block "THE REPAIR PASS RUNS INLINE ON MAIN" (about `_run_build_startup_repairs`, `pov_reload`, `REPAIRS_DONE_PROPERTY`, the Wizard's hot_reload); `patcher_health` tree-scan clause of the `_BACKGROUND_SETTLE_*` comment; stale "Build-edition only ... SLIM_SERVICE" paragraph of the `_maybe_default_builtin_engine` docstring; "build startup repairs" wording of the main() comment; reference to the non-existent `_ensure_darksubs_enabled()` in a main() comment; comment block about the AF3 first-launch dialog and "POV's modular debrid hook" in main(); section comment lines and blank lines between the removed functions; translate.py module header: "DarkSubs handles all sourcing" (no longer true); local_subs.py header: "DarkSubs" named as a temp-dir source; orphaned comment about the POV seasons view id marker (no setting follows it) | 67 | they described the Wizard repair pass, DarkSubs, the SLIM_SERVICE edition or functions that no longer exist | n/a | n/a |
+| 46 | 1 | The Telegram source: `telegram.py` (the engine wrapper: `login`, `logout`, `diagnose`, `get_subs`, `download`) and `telegram_impl.py` (Telethon user client, channel search, bot upload, login window) | feature | `resources/lib/subs_engine/sources/telegram.py` (153 lines) · `telegram_impl.py` (632 lines, after 25 lines went in rows 16-17 and 44) | 785 | could not load: `telegram_impl` imported `telegram_api`, which did not ship (it was part of DarkSubs' bundled `telethon_dependencies`, deleted with DarkSubs in `18435d90`), and Telethon was never vendored; the provider default was OFF (`telegram` = false, force-off in `_ENGINE_DEFAULTS`); it was the only baseline import failure | restore a vendored Telethon, your own Telegram API credentials and a decision on the channel; then `git show 4bb3184d:<path>` for both files and the rows below | owner: **deleted for good** (unneeded) |
+| 47 | 1 | Telegram handlers and routes of `default.py`: `_handle_connect_telegram`, `_handle_telegram_test`, `_handle_logout_telegram`; the `action=connect_telegram` / `logout_telegram` / `telegram_test` branches of `main()`; the `('telegram', 'telegram')` entry of the provider list in `_handle_engine_test` | feature | `default.py` · lines 2953-3014 (handlers), 3271-3276 (routes), 3126 (tuple) | 61 (file 3,283 → 3,222) | only the Telegram settings buttons called them (repo-wide grep: no skin, Wizard, patch or userdata names these actions) | `git show 4bb3184d:service.subtitles.kodipovilai/default.py` | owner: deleted |
+| 48 | 1 | Telegram settings: `telegram` (visible toggle, default false), `connect_telegram` / `logout_telegram` / `telegram_test` (visible actions in the group `telegram_tools`), `telegram_first_and_last_name` (hidden, written after a login) | setting | `resources/settings.xml` · Providers & Fetching (sources and Telegram groups) and Advanced & Debug (hidden engine group) | 65 (file 1,080 → 1,015) | their only readers / callers were in the deleted source; declared 98 → 93 (visible 60 → 56, hidden 38 → 37) | restore the blocks from git together with the source | owner: deleted |
+| 49 | 1 | `strings.po` labels `32513` (Telegram), `32519` (help), `32528`, `32529`, `32530`, `32533` (6 entries x 2 languages) | setting label | `resources/language/*/strings.po` · en_gb and he_il | 0 (entries 149 → 143 each) | referenced only by the five Telegram settings and the `telegram_tools` group (grep: settings.xml, code, skins, the Wizard) | restore with the settings | owner: deleted |
+| 50 | 1 | Telegram wiring of the vendored engine and the bridge: the `telegram` import, the `[Telegram]` site-order entry, the `format_website_source_name` branch, the `global_var` reset entry and the search thread in `engine.py`; `'telegram': 'false'` in `_ENGINE_DEFAULTS`, `'telegram'` in `_SOURCE_MODULES`, in the cache signature of the result cache and `[Telegram]` in `_PROVIDER_LABEL` in `subs_engine_bridge.py`; the stale `All_Subs` id in a `subs_chooser.py` comment | code | `subs_engine/engine.py` (7 lines; 542 → 535) · `subs_engine_bridge.py` (4 lines) | 11 | the provider could not run and had no toggle; the engine bucket variable `telegram_hebrew_machine_translated_subtitles` was renamed `hebrew_machine_translated_subtitles` (same logic) | restore with the source | owner: deleted |
+
+**Phase 1 notes on the table**
+- Line numbers are those of the 0.3.96 files before Phase 1 (`git show 4bb3184d:<path>` gives the code). "Revive: copy back from git (0.3.96)" means exactly that commit.
+- Not a removal, so not a row: 17 string literals with an invalid escape sequence (`\s`, `\d`, `\.`, `\-`, `\i`) were made raw strings in `subs_engine/cache.py` (1), `general.py` (2), `sources/ktuvit.py` (1), `_libs/parse_torrent_title/{extras,patterns,post}.py` (3 + 7 + 2) and `pyxbmct/addonwindow.py` (1). Each conversion is proven byte-identical: the `ast.dump` of every file is the same before and after. The Python 3.13 `SyntaxWarning` list is now empty.
+- Settings: 105 declared (55 visible, 50 hidden) became 93 (56 visible, 37 hidden): 15 dead ids removed (rows above) and the 5 Telegram ids removed in the wrap-up (row 48); 7 visible keys declared (`subsync_verify`, `subsync_probe`, `subsync_audio`, `subsync_autorank`, `prev_context_lines`, `he_match_ktuvit`, `he_embedded_report`; the hidden `telegram_first_and_last_name` declared in the first pass went with Telegram). 50 surviving ids changed category or group; no id, type, default, level, constraint, dependency or action changed.
+- Left on purpose (not deleted, listed in the Phase 1 report as open questions): the whole `subs_engine/srt.py` module (no importer), the DarkSubs empty-list toast in `translate.list_candidates`, `gemini_rpm` (readers disagree on its default). (The "Kodi POV IL" dialog titles and the Telegram source were settled in the follow-up and the wrap-up.)
+
+**Phase 1 follow-up (19 Nov 2026), after the first review**
+- **Label ids:** the 5 labels of `ai_when_no_hebrew` moved out of the forbidden 33000+ range: `33009`..`33013` -> `32610`..`32614` in `settings.xml` and both `strings.po` files (texts unchanged). Nothing in `settings.xml` is above 32626 now. The 9 runtime strings `33000`-`33008` (read through `sub_utils.localised`, 13 call sites) are still in that range: see the open item in `CLAUDE.md`.
+- **One brand title:** `sub_utils.DIALOG_TITLE = 'Kodi POV IL'` is now the only place of the brand title. `default.py` (36 uses through the `_title()` helper), `subs_chooser.py` (2), `autosub_service.py` (1), `subs_engine_bridge.py` (1), `subs_engine/sources/telegram.py` (1), `subs_engine/general.py` (the engine's toast title, was the add-on name from `addon.xml`), `gemini_pair.py` (the pairing page `<title>`, a `__DIALOG_TITLE__` placeholder resolved when the handler is built) and `sub_utils.notify` (default title) all read it. Titles that said "MoranSubs" now say "Kodi POV IL" (a visible change the owner asked for). `telegram_impl.py` has no brand string (its dialogs have their own Hebrew titles). Not touched on purpose: window property names (`MoranSubsChooserOpen`), user agents, log prefixes, thread names, comments.
+- **Forensics on the Part 5 items** (against the upstream repo history; full evidence in the Phase 1 follow-up report): no deleted item was a live, recoverable feature. `POOL_API_KEY` was deprecated on purpose in 0.2.290 (HMAC signing replaced the `x-api-key` header); `_remote_cue_reference` / `_probe_reference_cues` lost their call sites in the "exact-cut" sync rewrite (upstream `2ae4230f`); `_build_prev_context_by_idx` in upstream `ede224d6`; `_seed_from_pool` in `81314ec5`; the machine-translate stack was replaced by `google_translate.py` (Bing / Yandex were never wired into MoranSubs); `download_sub` and the Telegram upload were DarkSubs-only paths. Two pieces of context are worth keeping: the Telegram source depended on DarkSubs' bundled `telethon_dependencies` (199 files incl. an obfuscated `telegram_api.py`, deleted with DarkSubs in `18435d90`), and `source_memory.prune()` was never carried to the Wizard's `pov_source_remember` (the remembered-sources folder is no longer capped).
+
+**Phase 1 wrap-up (19 Nov 2026), owner decisions**
+- **Runtime strings:** the 9 strings `33000`-`33008` moved to `32630`-`32638` in both `strings.po` files (texts and CRLF unchanged) and the 12 call sites (`default.py` 8, `translate.py` 4; the earlier note said 13) read the new ids. No string id >= 33000 remains anywhere in the add-on (`settings.xml`, code, both `.po`). Two of the nine have no caller (`32630` "AI Hebrew (translated from {0})", `32636` "No source subtitles found..."); they were moved as asked, not deleted.
+- **Telegram removed** (rows 46-50): zero `telegram` / `All_Subs` names remain in code, settings or `.po`, except comments that describe the community pool Worker (it relays through a Telegram channel: `pool.py`, `service.py`, `translate.py`, one comment in `default.py`), which are about the server, not about a dependency. `LICENSE.txt` keeps its DarkSubs notice and `changelog.txt` its history. Left in place: the label tests for `HebrewMachineTranslated` in `subs_engine/engine.py`, `subs_engine_bridge.py` and `arabic_gender.py` (only the Telegram source ever produced that language tag, so the branches are now inert; a Phase 2/3 candidate, not deleted because a deletion needs its own review).
+- **Cache key:** the result-cache signature now covers 8 flags instead of 9 (the `telegram` flag is gone), so the first search after the update misses the old cached lists once.
+- **Rename:** `resources/lib/kodi_utils.py` -> `resources/lib/sub_utils.py` (1,375 lines, `DIALOG_TITLE` and every helper unchanged). 802 references in 18 files were updated (`default.py`, `service.py` and `resources/lib/*.py`, `subs_engine/general.py`); the module itself did not change (it never named itself). The old name is gone (no alias). `he_sub_match.py` keeps working: its lazy imports name `sub_utils` now.
+- **FENtastic `700068` (read-only check of `skin.fentastic`):** `700068` is a **string id of the skin's own `language/*/strings.po`** ("Show widget menu name colored border"), used once as `$LOCALIZE[700068]` in `xml/SkinSettings.xml`. It is not a `<control id>` and not an add-on string. The skin's `strings.po` holds 240 ids (168 in 31000-32999, 72 from 700010 up); 107 `$LOCALIZE[700xxx]` uses exist. The only `700xxx` control ids are 6 buttons in `Includes_VideoOsd3.xml` (`700450`, `700451`, `700452`, `700454`, `700455`, `700460`). A skin's strings are its own table, separate from an add-on's 30000-32999 range; the rule of this repository applies to add-ons' `strings.po` / `settings.xml` only. Nothing in the subtitle add-on uses a `700xxx` id.
 
 ## Part 6: Refactoring Statistics
 
@@ -719,12 +786,31 @@ Measured from the repo, never estimated. Method:
 | pyflakes messages (own code) | 13 |
 | Stub import (scratchpad harness, `xbmc*` / `chardet` / `telethon` / `pyxbmct` / `urllib3` / `qrcode` stubbed; `requests` absent) | 59 of 72 modules; the 13 failures are the bundled `pyxbmct`, the engine core and sources (they need `requests` or real paths) and `telegram_impl`; identical before and after the merge |
 
+**After Phase 1 (measured with the same method at the end of the wrap-up; the harness of Phase 1 stubs `requests` too, so the stub-import line counts 72 modules and all of them import):**
+
+| Metric | Baseline (Phase 0, as measured at the start of Phase 1) | After Phase 1 |
+|---|---|---|
+| Python files | 74 | 72 |
+| Python lines (own / bundled / total) | 55,845 / 3,546 / 59,391 (the 59,383 above was counted with `cat`, 8 lines fewer) | 53,737 / 3,546 / 57,283 |
+| `subs_engine/` lines | 8,371 | 6,713 |
+| Functions (nested included, own code) | 1,567 | 1,490 |
+| Largest files | `translate.py` 9,706 · `subsync.py` 5,577 · `embedded_extract.py` 4,984 | `translate.py` 9,687 · `subsync.py` 5,526 · `embedded_extract.py` 4,984 (`default.py` 3,283 → 3,222) |
+| Largest functions | `resolve` 3,674 · `_extract_embedded_srt` 807 · `autosub_on_play` 790 · `_handle_translate_file` 687 · `list_candidates` 616 | unchanged |
+| `settings.xml` | 1,104 lines · 105 declared (55 visible, 50 hidden) · 9 keys read but not declared | 1,015 lines · 93 declared (56 visible, 37 hidden) · 1 key read but not declared (`gemini_rpm`, conflicting defaults) |
+| pyflakes messages (own code, same file set) | 15 (the 13 above was measured before the last merge fixes) | 7 (all deliberate or intentional-pattern: 2 pre-imports in `service.py`, 1 in `autosub_service.py`, the import probe in `default.py`, 2 unused `key` locals in the bridge, the `_pshare` default) |
+| vulture candidates (>= 60%, whole add-on incl. bundled) | 102 | 64 (the rest: Kodi event methods, he_sub_match public API, bundled libraries, unused locals in the vendored providers) |
+| Stub import | 73 of 74 | **72 of 72 (100%)**: the only failure, `telegram_impl`, was deleted |
+| `compile()` | 74 of 74 | 72 of 72 |
+| Label ids in `settings.xml` | highest 33013 (5 ids >= 33000) | settings.xml highest 32626; `strings.po` highest 32638 (none >= 33000 anywhere: the 9 runtime strings moved to 32630-32638) |
+| `strings.po` entries (each language) | 143 | 143 (6 Telegram labels removed; 17 added in the first pass, 11 orphans removed; no duplicates, same ids in en_gb and he_il) |
+| Hard-coded dialog titles ('Kodi POV IL' / 'MoranSubs') | 43 literals (26 'Kodi POV IL', 17 'MoranSubs') | 1 (`sub_utils.DIALOG_TITLE`) |
+
 **Per phase** (each phase adds a row; the "Total" row is filled at the end of Phase 3):
 
 | Phase | Lines deleted | Lines moved | Lines added | Files (before → after) | Largest file | Largest function | Dead settings removed / declared | pyflakes | Notes |
 |---|---|---|---|---|---|---|---|---|---|
 | 0. Decoupling merge | 345 (subtitle add-on) | 0 | 5,855 (upstream 0.3.75-0.3.96) | 72 → 74 | `translate.py` 9,706 | `resolve` 3,674 | 0 / +1 (`_gemini_model_bump_v4`) | 13 → 13 | not taken: 2,587 `service.py` + 92 `settings.xml` upstream lines, 132-line AF3 patcher, 11-line trailer guard |
-| 1. Cleanup and settings | | | | | | | | | |
+| 1. Cleanup and settings (wrap-up included) | measured against the 0.3.96 tree (`git diff --no-index --numstat`): 2,217 Python lines deleted, 918 added; own Python 55,845 → 53,737 (net -2,108) · `settings.xml` 1,104 → 1,015 · `strings.po` 143 → 143 entries (rewritten) | 0 Python (the only move is the `kodi_utils.py` → `sub_utils.py` rename, 802 references); `settings.xml`: all blocks re-ordered, 50 changed category | 918 Python (17 raw-string conversions, 3 pre-import / probe comments, `DIALOG_TITLE` and its helpers, rewritten imports) · `strings.po` 17 new labels | 74 → 72 | `translate.py` 9,687 | `resolve` 3,674 | 20 removed (15 dead + 5 Telegram) / 7 declared | 15 → 7 | `engine.py` 1,245 → 535; Telegram source (785 lines) deleted; 1,567 → 1,490 functions; Python 3.13 SyntaxWarnings 17 → 0; stub import 72 of 72 (100%); no string id >= 33000 |
 | 2. Core refactoring | | | | | | | | | |
 | 3. Wiring and tests | | | | | | | | | |
 | **Total** | | | | | | | | | |
@@ -740,5 +826,5 @@ Measured from the repo, never estimated. Method:
 ## Appendix B: items to verify in Kodi (when the relevant phase runs)
 
 1. The native-dialog toggle row: close + `AlarmClock` reopen on FENtastic, AF3 and Estuary; no "download failed" message.
-2. A setting written by the plugin process is seen by the service thread through the cached `xbmcaddon.Addon` (`kodi_utils.addon()`).
+2. A setting written by the plugin process is seen by the service thread through the cached `xbmcaddon.Addon` (`sub_utils.addon()`).
 3. The chooser radio buttons work with a remote (focus order 100 → 210-214 → 203 → 202 → 201).

@@ -104,7 +104,7 @@ _HTML_FORM = '''<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kodi POV IL - Gemini API Key</title>
+  <title>__DIALOG_TITLE__ - Gemini API Key</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
            margin: 0; padding: 24px; background: #101820; color: #f6f1df; }
@@ -271,12 +271,22 @@ p{color:#b7c4cf}a{color:#ffd166}</style></head>
 '''
 
 
+def _dialog_title():
+    """The brand title (sub_utils.DIALOG_TITLE); imported lazily to keep this module stdlib-only."""
+    try:
+        from resources.lib.sub_utils import DIALOG_TITLE
+        return DIALOG_TITLE
+    except Exception:
+        return ''
+
+
 def _make_handler(state, html_form=_HTML_FORM):
     """Build a request-handler class that closes over `state`
     (a dict the caller polls for the submitted key) and serves
     `html_form` (defaults to the Gemini form; a caller can pass a
     different service's form -- e.g. MDBList -- to reuse this
     transport verbatim)."""
+    html_form = html_form.replace('__DIALOG_TITLE__', _dialog_title())
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def _send(self, code, body, ctype='text/html; charset=utf-8'):
@@ -471,13 +481,6 @@ def get_lan_ips():
     # never be reachable from the phone anyway, and the user
     # gets confused if we show them.
     return [ip for ip in candidates if _is_private_lan_ip(ip)]
-
-
-def get_lan_ip():
-    """Back-compat shim for callers that want just one IP -- returns
-    the first (= default-route) LAN candidate or None."""
-    ips = get_lan_ips()
-    return ips[0] if ips else None
 
 
 def find_free_port(preferred=(8765, 8766, 8767, 8768, 8769)):

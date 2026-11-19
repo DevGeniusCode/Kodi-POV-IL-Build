@@ -44,9 +44,9 @@ _subs_filename_publisher = None
 
 # Heavy work that is useful later must not compete with the first home-widget
 # wave.  This matters disproportionately on 32-bit Android boxes: two field
-# logs measured the subtitle engine's cold import at 13.1s and 19.7s, and the
-# full patch-health tree scan at 4.5-13.2s.  Both used to start while the skin
-# was opening all of its lists.  A real request still takes the fast path at
+# logs measured the subtitle engine's cold import at 13.1s and 19.7s.  It used
+# to start while the skin was opening all of its lists.  A real request still
+# takes the fast path at
 # once; only speculative/background work is delayed.
 _BACKGROUND_SETTLE_32 = 45.0
 _BACKGROUND_SETTLE_OTHER = 15.0
@@ -74,43 +74,6 @@ def _addon_version():
         return xbmcaddon.Addon().getAddonInfo('version') or ''
     except Exception:
         return ''
-
-
-def _without(stamps, skin):
-    """The `<skin>=<version>` stamps that are not this skin's, blanks dropped."""
-    return [s for s in stamps if s and not s.startswith(skin + '=')]
-
-
-def _walk_all(roots):
-    """os.walk over several roots in turn, skipping the ones that are not
-    there. Written out because `break` inside the caller's nested loops has to
-    mean "stop scanning entirely", and chaining generators is the only shape
-    that keeps that true across two roots."""
-    for root in roots:
-        if not os.path.isdir(root):
-            continue
-        for item in os.walk(root):
-            yield item
-
-
-# THE REPAIR PASS RUNS INLINE ON MAIN, ON PURPOSE. There used to be a
-# _start_build_startup_repairs() here that put _run_build_startup_repairs on a
-# daemon thread, and nothing ever called it -- main() calls the pass directly.
-# Deleted rather than wired up, because wiring it up is not a tidy-up, it is a
-# behaviour change with two dependants:
-#
-#   * pov_reload.wait_until_settled's bounds (30s, and 10s for an outage we did
-#     not cause) were chosen BECAUSE three of its four callers are steps in this
-#     inline pass, where a wait is the subtitle service not starting. Off the
-#     main thread those numbers could be far more generous -- and would have to
-#     be re-derived, not inherited.
-#   * _publish_repairs_state / REPAIRS_DONE_PROPERTY is what the wizard's
-#     hot_reload waits on before it cycles anything. Its ordering assumes the
-#     pass has finished when main() moves on.
-#
-# Moving it is a reasonable thing to want. It is not a reasonable thing to do
-# by accident, which a dead function sitting here invites.
-
 
 
 def _check_first_run_marker():
@@ -159,58 +122,25 @@ def _check_first_run_marker():
         return False
 
 
-def _prune_source_memory_once():
-    """Cap the remembered-sources store so it can never grow unbounded over
-    years of watching. Records are tiny (~340 bytes each); this keeps the most
-    recent ~2000 and drops older ones (a dropped title just shows the source
-    dialog again next time). Independent of the translation-cache prune so one
-    failing doesn't skip the other."""
-    try:
-        from resources.lib import source_memory, kodi_utils
-        n = source_memory.prune()
-        if n:
-            kodi_utils.log(
-                'source_memory prune: {0} old record(s) removed'.format(n),
-                level='INFO')
-    except Exception as e:
-        try:
-            from resources.lib import kodi_utils
-            kodi_utils.log('source_memory prune failed: {0}'.format(e),
-                           level='WARNING')
-        except Exception:
-            pass
-
-
 def _prune_once():
     try:
-        from resources.lib import cache, kodi_utils
+        from resources.lib import cache, sub_utils
         removed, freed = cache.prune()
         if removed:
-            kodi_utils.log(
+            sub_utils.log(
                 'Cache prune: {0} files removed, {1:.1f} MB freed'.format(
                     removed, freed / (1024.0 * 1024.0)),
                 level='INFO')
         else:
-            kodi_utils.log('Cache prune: nothing to remove', level='DEBUG')
+            sub_utils.log('Cache prune: nothing to remove', level='DEBUG')
     except Exception as e:
         try:
-            from resources.lib import kodi_utils
-            kodi_utils.log('Cache prune failed: {0}'.format(e),
+            from resources.lib import sub_utils
+            sub_utils.log('Cache prune failed: {0}'.format(e),
                            level='ERROR')
         except Exception:
             pass
 
-
-# Version tag of the "purge old temp subs once on next startup"
-# rollout. When it changes, the service does a one-shot purge of
-# .srt files in special://temp/ to evict the cross-movie leftovers
-# that the previous list_candidates would surface as Hebrew
-# passthrough for the wrong title.
-# Bumped to 2: v1 didn't actually fire for the first user
-# (suspected: the _temp_purge_done setting wasn't declared in
-# settings.xml so the value didn't persist). v2 declares it AND
-# re-runs once.
-TEMP_PURGE_VERSION = '2'
 
 # Version tag of the "re-apply fix_rtl_punctuation to every cached
 # translated SRT" rollout. Translations cached before v0.1.6 didn't
@@ -249,15 +179,15 @@ def _maybe_repair_rtl_cache():
     why the constant must be bumped whenever a new repair is added here, or
     every existing install skips the backfill forever."""
     try:
-        from resources.lib import kodi_utils, srt
+        from resources.lib import sub_utils, srt
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_rtl_fix_done', '') == \
+        if sub_utils.get_setting('_rtl_fix_done', '') == \
                 CACHE_RTL_FIX_VERSION:
             return
         translated_dir = os.path.join(
-            kodi_utils.cache_dir(), 'translated')
+            sub_utils.cache_dir(), 'translated')
         n_scanned = n_repaired = 0
         if os.path.isdir(translated_dir):
             for fn in os.listdir(translated_dir):
@@ -291,14 +221,14 @@ def _maybe_repair_rtl_cache():
                 except OSError:
                     try: os.remove(tmp)
                     except OSError: pass
-        kodi_utils.set_setting('_rtl_fix_done', CACHE_RTL_FIX_VERSION)
-        kodi_utils.log(
+        sub_utils.set_setting('_rtl_fix_done', CACHE_RTL_FIX_VERSION)
+        sub_utils.log(
             'RTL cache repair v{0}: scanned {1}, repaired {2}'.format(
                 CACHE_RTL_FIX_VERSION, n_scanned, n_repaired),
             level='INFO')
     except Exception as e:
         try:
-            kodi_utils.log(
+            sub_utils.log(
                 'RTL cache repair failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
@@ -418,6 +348,7 @@ def _start_he_warm_drainer(monitor):
             _pt0 = _t.time()
             from resources.lib import subs_engine_bridge as _b
             _b.ensure_engine_settings()
+            # Deliberate pre-imports (side effect only): load the two heaviest providers now, off the request path.
             from resources.lib.subs_engine.sources import opensubtitles as _o  # noqa: F401
             from resources.lib.subs_engine.sources import ktuvit as _k  # noqa: F401
             _hsm._dbg('drainer engine pre-imported in {0:.1f}s after startup '
@@ -521,8 +452,8 @@ def _start_subsync_drainer(monitor):
                     break
         except Exception as exc:
             try:
-                from resources.lib import kodi_utils
-                kodi_utils.log('subsync drainer stopped: {0}'.format(exc),
+                from resources.lib import sub_utils
+                sub_utils.log('subsync drainer stopped: {0}'.format(exc),
                                level='WARNING')
             except Exception:
                 pass
@@ -567,8 +498,7 @@ def _start_subsync_delay_watch(monitor):
                 return
             from resources.lib import subsync as _ss
             from resources.lib import pool as _pool
-            from resources.lib import kodi_utils
-            import xbmcgui
+            from resources.lib import sub_utils
             active, watched, last_delay = None, 0, 0.0
             reported = set()
             while not monitor.abortRequested():
@@ -617,7 +547,7 @@ def _start_subsync_delay_watch(monitor):
                                     rep['offset_ms'], rep['status'],
                                     origin='human')
                                 reported.add(akey)
-                                kodi_utils.log(
+                                sub_utils.log(
                                     'subsync delay-watch: human report '
                                     '({0}, {1:+.0f}ms, watched {2}s)'.format(
                                         rep['status'], rep['offset_ms'],
@@ -665,25 +595,25 @@ def _maybe_default_fast_first_chunk():
     fires once per install; if the user later turns it off manually
     we don't re-flip on subsequent startups."""
     try:
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting(
+        if sub_utils.get_setting(
                 '_fast_first_chunk_default_v2', '') == '1':
             return
         # Only flip users currently on the old default 'false' --
         # leaves any explicit 'true' alone.
-        if kodi_utils.get_setting('fast_first_chunk',
+        if sub_utils.get_setting('fast_first_chunk',
                                   'false') == 'false':
-            kodi_utils.set_setting('fast_first_chunk', 'true')
-            kodi_utils.log(
+            sub_utils.set_setting('fast_first_chunk', 'true')
+            sub_utils.log(
                 'fast_first_chunk flipped to True (default v2 '
                 'migration)', level='INFO')
-        kodi_utils.set_setting('_fast_first_chunk_default_v2', '1')
+        sub_utils.set_setting('_fast_first_chunk_default_v2', '1')
     except Exception as e:
         try:
-            kodi_utils.log(
+            sub_utils.log(
                 'fast_first_chunk migration failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
@@ -693,13 +623,13 @@ def _maybe_default_fast_first_chunk():
 def _maybe_migrate_embedded_translation_mode():
     """One-shot bridge from the two hidden booleans to the explained mode list."""
     try:
-        from resources.lib import kodi_utils
-        mode = kodi_utils.embedded_translation_mode()
-        kodi_utils.log(
+        from resources.lib import sub_utils
+        mode = sub_utils.embedded_translation_mode()
+        sub_utils.log(
             'embedded translation mode ready: {0}'.format(mode), level='INFO')
     except Exception as e:
         try:
-            kodi_utils.log(
+            sub_utils.log(
                 'embedded mode migration failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
@@ -714,23 +644,23 @@ def _maybe_default_pool_on():
     settings.xml defaults; this covers everyone who installed before the
     default flip."""
     try:
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_pool_default_on_v1', '') == '1':
+        if sub_utils.get_setting('_pool_default_on_v1', '') == '1':
             return
         # Only flip toggles still on the old default 'false'; leave an explicit
         # choice (already 'true') alone.
         for key in ('pool_use', 'pool_share'):
-            if kodi_utils.get_setting(key, 'false') == 'false':
-                kodi_utils.set_setting(key, 'true')
-        kodi_utils.set_setting('_pool_default_on_v1', '1')
-        kodi_utils.log('community pool enabled by default (migration v1)',
+            if sub_utils.get_setting(key, 'false') == 'false':
+                sub_utils.set_setting(key, 'true')
+        sub_utils.set_setting('_pool_default_on_v1', '1')
+        sub_utils.log('community pool enabled by default (migration v1)',
                        level='INFO')
     except Exception as e:
         try:
-            kodi_utils.log('pool default-on migration failed: {0}'.format(e),
+            sub_utils.log('pool default-on migration failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
@@ -747,19 +677,19 @@ def _maybe_force_gender_ref_arabic():
     if a user deliberately turns it off afterwards, that choice sticks and we
     don't re-enable on the next startup."""
     try:
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_gender_ref_on_v1', '') == '1':
+        if sub_utils.get_setting('_gender_ref_on_v1', '') == '1':
             return
-        kodi_utils.set_setting('gender_ref_arabic', 'true')
-        kodi_utils.set_setting('_gender_ref_on_v1', '1')
-        kodi_utils.log('Arabic gender reference enabled for everyone '
+        sub_utils.set_setting('gender_ref_arabic', 'true')
+        sub_utils.set_setting('_gender_ref_on_v1', '1')
+        sub_utils.log('Arabic gender reference enabled for everyone '
                        '(migration v1)', level='INFO')
     except Exception as e:
         try:
-            kodi_utils.log('gender_ref_arabic force-on migration failed: '
+            sub_utils.log('gender_ref_arabic force-on migration failed: '
                            '{0}'.format(e), level='WARNING')
         except Exception:
             pass
@@ -774,29 +704,29 @@ def _maybe_tune_gemini3_defaults():
     who deliberately picked something else keeps it. Marker-gated -> fires once;
     a later manual change sticks."""
     try:
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_gemini3_tune_v1', '') == '1':
+        if sub_utils.get_setting('_gemini3_tune_v1', '') == '1':
             return
         # temperature: bump 0.2 (old default) -> 1.0; leave any other choice.
         try:
-            t = float(kodi_utils.get_setting('temperature', '') or '0.2')
+            t = float(sub_utils.get_setting('temperature', '') or '0.2')
         except (TypeError, ValueError):
             t = 0.2
         if abs(t - 0.2) < 0.005:
-            kodi_utils.set_setting('temperature', '1.0')
+            sub_utils.set_setting('temperature', '1.0')
         # thinking: '' / '0' / 'disabled' (old default -> HIGH) -> 'medium'.
-        th = (kodi_utils.get_setting('thinking_budget', '') or '0').strip().lower()
+        th = (sub_utils.get_setting('thinking_budget', '') or '0').strip().lower()
         if th in ('', '0', 'disabled'):
-            kodi_utils.set_setting('thinking_budget', 'medium')
-        kodi_utils.set_setting('_gemini3_tune_v1', '1')
-        kodi_utils.log('Gemini 3 defaults tuned (temp 1.0 + thinking medium, '
+            sub_utils.set_setting('thinking_budget', 'medium')
+        sub_utils.set_setting('_gemini3_tune_v1', '1')
+        sub_utils.log('Gemini 3 defaults tuned (temp 1.0 + thinking medium, '
                        'migration v1)', level='INFO')
     except Exception as e:
         try:
-            kodi_utils.log('gemini3 tune migration failed: {0}'.format(e),
+            sub_utils.log('gemini3 tune migration failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
@@ -816,7 +746,7 @@ def _maybe_bump_gemini_model():
     alone, and an empty setting is left empty (translate falls back to the new
     default). Marker-gated -> fires once; a later manual pick sticks."""
     try:
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
     except Exception:
         return
     try:
@@ -825,20 +755,20 @@ def _maybe_bump_gemini_model():
         # for exactly the users who need it -- the ones already on 3.6. A new
         # id per bump is the only thing that makes a once-only migration
         # repeatable across releases.
-        if kodi_utils.get_setting('_gemini_model_bump_v2', '') == '1':
+        if sub_utils.get_setting('_gemini_model_bump_v2', '') == '1':
             return
-        cur = (kodi_utils.get_setting('model', '') or '').strip()
+        cur = (sub_utils.get_setting('model', '') or '').strip()
         new = {'gemini-3.1-flash-lite': 'gemini-3.5-flash-lite',
                'gemini-3.5-flash': 'gemini-3.8-flash',
                'gemini-3.6-flash': 'gemini-3.8-flash'}.get(cur)
         if new:
-            kodi_utils.set_setting('model', new)
-            kodi_utils.log('Gemini model bumped {0} -> {1} (migration v2)'.format(
+            sub_utils.set_setting('model', new)
+            sub_utils.log('Gemini model bumped {0} -> {1} (migration v2)'.format(
                 cur, new), level='INFO')
-        kodi_utils.set_setting('_gemini_model_bump_v2', '1')
+        sub_utils.set_setting('_gemini_model_bump_v2', '1')
     except Exception as e:
         try:
-            kodi_utils.log('gemini model bump migration failed: {0}'.format(e),
+            sub_utils.log('gemini model bump migration failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
@@ -871,22 +801,22 @@ def _maybe_bump_gemini_model_38():
     2.5 -- is a deliberate pick and is left alone, and an empty setting stays
     empty so translate.py's own default applies."""
     try:
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_gemini_model_bump_v3', '') == '1':
+        if sub_utils.get_setting('_gemini_model_bump_v3', '') == '1':
             return
         retired = ('gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash')
-        cur = (kodi_utils.get_setting('model', '') or '').strip()
+        cur = (sub_utils.get_setting('model', '') or '').strip()
         if cur in retired:
-            kodi_utils.set_setting('model', 'gemini-3.8-flash')
-            kodi_utils.log('Gemini model bumped {0} -> gemini-3.8-flash '
+            sub_utils.set_setting('model', 'gemini-3.8-flash')
+            sub_utils.log('Gemini model bumped {0} -> gemini-3.8-flash '
                            '(migration v3)'.format(cur), level='INFO')
-        kodi_utils.set_setting('_gemini_model_bump_v3', '1')
+        sub_utils.set_setting('_gemini_model_bump_v3', '1')
     except Exception as e:
         try:
-            kodi_utils.log('gemini 3.8 model bump migration failed: {0}'
+            sub_utils.log('gemini 3.8 model bump migration failed: {0}'
                            .format(e), level='WARNING')
         except Exception:
             pass
@@ -902,22 +832,22 @@ def _maybe_retire_gemini_31_flash():
     say what is already happening. The two 2.5 ids stay: Google still serves
     them to older keys. A new marker, as every bump before it."""
     try:
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_gemini_model_bump_v4', '') == '1':
+        if sub_utils.get_setting('_gemini_model_bump_v4', '') == '1':
             return
-        cur = (kodi_utils.get_setting('model', '') or '').strip()
+        cur = (sub_utils.get_setting('model', '') or '').strip()
         if cur == 'gemini-3.1-flash':
-            kodi_utils.set_setting('model', 'gemini-3.5-flash-lite')
-            kodi_utils.log('Gemini model gemini-3.1-flash -> '
+            sub_utils.set_setting('model', 'gemini-3.5-flash-lite')
+            sub_utils.log('Gemini model gemini-3.1-flash -> '
                            'gemini-3.5-flash-lite: Google no longer has it '
                            '(migration v4)', level='INFO')
-        kodi_utils.set_setting('_gemini_model_bump_v4', '1')
+        sub_utils.set_setting('_gemini_model_bump_v4', '1')
     except Exception as e:
         try:
-            kodi_utils.log('gemini 3.1 retire migration failed: {0}'
+            sub_utils.log('gemini 3.1 retire migration failed: {0}'
                            .format(e), level='WARNING')
         except Exception:
             pass
@@ -932,24 +862,24 @@ def _maybe_lower_chunk_lines():
     the rest). Only lowers values still at the OLD defaults (>=100 -> 50); a user
     who deliberately picked something smaller keeps it. Marker-gated -> once."""
     try:
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_chunk_lines_50_v1', '') == '1':
+        if sub_utils.get_setting('_chunk_lines_50_v1', '') == '1':
             return
         try:
-            cur = int(kodi_utils.get_setting('chunk_lines', '') or '100')
+            cur = int(sub_utils.get_setting('chunk_lines', '') or '100')
         except (TypeError, ValueError):
             cur = 100
         if cur >= 100:
-            kodi_utils.set_setting('chunk_lines', '50')
-            kodi_utils.log('chunk_lines lowered {0} -> 50 (block-avoidance '
+            sub_utils.set_setting('chunk_lines', '50')
+            sub_utils.log('chunk_lines lowered {0} -> 50 (block-avoidance '
                            'migration v1)'.format(cur), level='INFO')
-        kodi_utils.set_setting('_chunk_lines_50_v1', '1')
+        sub_utils.set_setting('_chunk_lines_50_v1', '1')
     except Exception as e:
         try:
-            kodi_utils.log('chunk_lines migration failed: {0}'.format(e),
+            sub_utils.log('chunk_lines migration failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
@@ -966,16 +896,16 @@ def _maybe_force_pool_share():
     prior opt-out); a later MANUAL opt-out AFTER this run sticks. New installs
     already default on via settings.xml."""
     try:
-        from resources.lib import kodi_utils
-        if kodi_utils.get_setting('_pool_share_force_v1', '') == '1':
+        from resources.lib import sub_utils
+        if sub_utils.get_setting('_pool_share_force_v1', '') == '1':
             return
-        kodi_utils.set_setting('pool_share', 'true')
-        kodi_utils.set_setting('_pool_share_force_v1', '1')
-        kodi_utils.log('pool_share force-enabled for everyone (rollout v1)',
+        sub_utils.set_setting('pool_share', 'true')
+        sub_utils.set_setting('_pool_share_force_v1', '1')
+        sub_utils.log('pool_share force-enabled for everyone (rollout v1)',
                        level='INFO')
     except Exception as e:
         try:
-            kodi_utils.log('pool_share force migration failed: {0}'.format(e),
+            sub_utils.log('pool_share force migration failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
@@ -990,33 +920,30 @@ def _maybe_default_builtin_engine():
 
     Must run BEFORE _maybe_set_default_subtitle_service() and the _engine_on
     read in main(), so the rest of THIS startup already treats the engine as on
-    (MoranSubs default).
-
-    Build-edition only: the standalone repo-channel addon ships SLIM_SERVICE
-    (no engine code), so it never runs this and stays on the OFF default."""
+    (MoranSubs default)."""
     try:
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_builtin_engine_rollout_v2', '') == '1':
+        if sub_utils.get_setting('_builtin_engine_rollout_v2', '') == '1':
             return
         # Flip the master engine toggle on (covers users still on the old
         # default 'false', AND users where it drifted off so DarkSubs came back
         # with no translation -- re-forced once via the v2 marker).
-        if kodi_utils.get_setting('use_builtin_engine', 'false') != 'true':
-            kodi_utils.set_setting('use_builtin_engine', 'true')
+        if sub_utils.get_setting('use_builtin_engine', 'false') != 'true':
+            sub_utils.set_setting('use_builtin_engine', 'true')
         # Auto-search & apply on play, like DarkSubs's autosub. Defaults to
         # 'true' already (and was hidden while the engine was off), so this is
         # normally a no-op; flip only if a tester explicitly turned it off.
-        if kodi_utils.get_setting('engine_autosub', 'true') == 'false':
-            kodi_utils.set_setting('engine_autosub', 'true')
-        kodi_utils.set_setting('_builtin_engine_rollout_v2', '1')
-        kodi_utils.log('built-in engine enabled for everyone (rollout v2)',
+        if sub_utils.get_setting('engine_autosub', 'true') == 'false':
+            sub_utils.set_setting('engine_autosub', 'true')
+        sub_utils.set_setting('_builtin_engine_rollout_v2', '1')
+        sub_utils.log('built-in engine enabled for everyone (rollout v2)',
                        level='INFO')
     except Exception as e:
         try:
-            kodi_utils.log('builtin engine rollout failed: {0}'.format(e),
+            sub_utils.log('builtin engine rollout failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
@@ -1031,8 +958,8 @@ def _maybe_set_default_subtitle_service():
     if xbmc is None:
         return
     try:
-        from resources.lib import kodi_utils
-        if not kodi_utils.get_bool('use_builtin_engine', False):
+        from resources.lib import sub_utils
+        if not sub_utils.get_bool('use_builtin_engine', False):
             return
     except Exception:
         return
@@ -1072,8 +999,8 @@ def _maybe_seed_hebrew_subtitle_prefs():
     if xbmc is None:
         return
     try:
-        from resources.lib import kodi_utils
-        if kodi_utils.get_setting('_he_subs_prefs_v1', '') == '1':
+        from resources.lib import sub_utils
+        if sub_utils.get_setting('_he_subs_prefs_v1', '') == '1':
             return
     except Exception:
         return
@@ -1125,8 +1052,8 @@ def _maybe_seed_hebrew_subtitle_prefs():
                 and pref.strip().lower() not in specials
                 and not _is_he(pref)):
             _set('locale.subtitlelanguage', 'Hebrew')
-        kodi_utils.set_setting('_he_subs_prefs_v1', '1')
-        kodi_utils.log('Hebrew subtitle preferences seeded (one-shot)',
+        sub_utils.set_setting('_he_subs_prefs_v1', '1')
+        sub_utils.log('Hebrew subtitle preferences seeded (one-shot)',
                        level='INFO')
     except Exception:
         pass
@@ -1167,8 +1094,8 @@ def main():
     if _check_first_run_marker():
         return
 
-    # Start the Hebrew-availability warm drainer FIRST -- before the seconds of
-    # build startup repairs below. Otherwise the drainer thread isn't spawned yet
+    # Start the Hebrew-availability warm drainer FIRST -- before the start-up
+    # migrations below. Otherwise the drainer thread isn't spawned yet
     # when the user plays something right after boot, so the first title's warm
     # sits queued for several seconds and misses the source window's first-entry
     # wait. It's a cheap idle poll until a job appears.
@@ -1195,7 +1122,6 @@ def main():
 
     # Initial prune.
     _prune_once()
-    _prune_source_memory_once()
 
     # Grow the shared Hebrew pool: force community-pool sharing ON for everyone
     # once (a later manual opt-out sticks). Must run before the harvest/drainer
@@ -1203,9 +1129,7 @@ def main():
     _maybe_force_pool_share()
 
     # ROLLOUT: switch everyone to MoranSubs's built-in engine (one-shot, marker-
-    # gated). Must run before _ensure_darksubs_enabled() so that when it flips
-    # the engine on, DarkSubs is disabled THIS startup. A later manual opt-out
-    # sticks (marker prevents re-forcing).
+    # gated). A later manual opt-out sticks (marker prevents re-forcing).
     _maybe_default_builtin_engine()
 
     # When the engine is on, make MoranSubs the default subtitle service so it
@@ -1257,15 +1181,6 @@ def main():
     # Lower chunk size to 50 (block-avoidance), one-shot for existing installs.
     _maybe_lower_chunk_lines()
 
-    # One-shot first-launch dialog for Arctic Fuse 3. Skin-gated +
-    # marker-gated so it only fires for users who have actually
-    # switched to AF3 (via the wizard's Switch Skin dialog or Kodi's
-    # own Interface settings) and haven't been prompted before. POV's
-    # Connect Services is opened on the user's behalf for the
-    # service(s) they pick. Best-effort: this addon doesn't own AF3's
-    # OAuth flows -- POV does.
-    # POV's modular debrid hook handles the build's startup status popups.
-
     if monitor.abortRequested():
         return
 
@@ -1281,8 +1196,8 @@ def main():
             subs_filename_publisher.SubsFilenamePublisher()
     except Exception as e:
         try:
-            from resources.lib import kodi_utils
-            kodi_utils.log(
+            from resources.lib import sub_utils
+            sub_utils.log(
                 'SubsFilenamePublisher init failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
@@ -1304,7 +1219,7 @@ def main():
     _start_pool_queue_drainer(monitor)
     _start_gp_later_runner(monitor)
     # (the Hebrew warm drainer was already started at the top of main(), before
-    # the build startup repairs, so it's alive for the first play of the session)
+    # the start-up migrations, so it's alive for the first play of the session)
 
     # 24h between passes. waitForAbort returns True when Kodi is
     # shutting down, so we just need to loop until that fires.
@@ -1313,7 +1228,6 @@ def main():
         if monitor.waitForAbort(interval_seconds):
             break
         _prune_once()
-        _prune_source_memory_once()
 
 
 # Kodi loads xbmc.service scripts by executing the module body, not by

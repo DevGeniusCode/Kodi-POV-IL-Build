@@ -293,7 +293,7 @@ def extract_subtitles_list_and_build_subtitles_list(ktuvit_subtitles_search_resp
         # Original regex:
         # subtitle_row_regex = '<div style="float.+?>(.+?)<br />.+?data-subtitle-id="(.+?)"'
         # New regex - handles "<i>XXXX</i> tags in subtitle name (Burekas fix for "כתובית מתוקנת")
-        subtitle_row_regex = '<div style="float.+?>\s*(?:<i.*?</i>\s*)?(.*?)<br />.+?data-subtitle-id="(.+?)"'
+        subtitle_row_regex = r'<div style="float.+?>\s*(?:<i.*?</i>\s*)?(.*?)<br />.+?data-subtitle-id="(.+?)"'
         extracted_subtitle_row = re.compile(subtitle_row_regex,re.DOTALL).findall(table_row)
         
         # Skip if extracted_subtitle_row is empty
@@ -481,5 +481,4 @@ def get_matching_ktuvit_name(video_data_original_title):
     except Exception as e:
         log.warning(f"DEBUG | [KTUVIT] | get_matching_ktuvit_name | Exception: {str(e)}")
         return video_data_original_title
-        pass
 #############################################################################

@@ -31,7 +31,7 @@ import threading
 import time
 import urllib.parse
 
-from . import kodi_utils
+from . import sub_utils
 
 
 # The vendored engine exposes provider results through module-level lists.
@@ -71,7 +71,7 @@ def _detect_release_name(info):
     cands = []
     # POV's captured pick is the most reliable release name -- prefer it.
     pr = (info.get('picked_release') or '').strip()
-    if kodi_utils.release_conflicts_with_episode(
+    if sub_utils.release_conflicts_with_episode(
             pr, info.get('season'), info.get('episode')):
         pr = ''
     if pr:
@@ -89,7 +89,7 @@ def _detect_release_name(info):
             cands.append(v)
     best, best_score = '', -1
     for c in cands:
-        if kodi_utils.release_conflicts_with_episode(
+        if sub_utils.release_conflicts_with_episode(
                 c, info.get('season'), info.get('episode')):
             continue
         sc = _release_score(c)
@@ -109,17 +109,17 @@ def _release_ready(info):
     the release settled -- which is why users previously had to exit + re-enter
     the subtitle list to get correct percentages."""
     if ((info.get('picked_release') or '').strip()
-            and not kodi_utils.release_conflicts_with_episode(
+            and not sub_utils.release_conflicts_with_episode(
                 info.get('picked_release'), info.get('season'),
                 info.get('episode'))):
         return True
     if ((info.get('li_filename') or '').strip()
-            and not kodi_utils.release_conflicts_with_episode(
+            and not sub_utils.release_conflicts_with_episode(
                 info.get('li_filename'), info.get('season'),
                 info.get('episode'))):
         return True
     if ((info.get('tagline') or '').strip()
-            and not kodi_utils.release_conflicts_with_episode(
+            and not sub_utils.release_conflicts_with_episode(
                 info.get('tagline'), info.get('season'),
                 info.get('episode'))):
         return True
@@ -134,7 +134,7 @@ def _release_ready(info):
 def enabled():
     """Master gate. False => this whole module is inert."""
     try:
-        return kodi_utils.get_bool('use_builtin_engine', False)
+        return sub_utils.get_bool('use_builtin_engine', False)
     except Exception:
         return False
 
@@ -167,9 +167,6 @@ _ENGINE_DEFAULTS = {
     'auto_fix_sub_punctuation': 'true',
     'auto_remove_hi_tags': 'false',
     'show_debug': 'false',
-    # Telegram channel is mostly low-quality machine translations and needs a
-    # per-user login -> OFF by default (force it off once via the version bump).
-    'telegram': 'false',
 }
 
 # Bump when _ENGINE_DEFAULTS changes so the new values are force-applied to
@@ -183,8 +180,8 @@ def ensure_engine_settings():
     settings always; force-rewrites everything once when the defaults version
     changes (so existing installs pick up new defaults like all_lang)."""
     try:
-        from resources.lib import kodi_utils
-        addon = kodi_utils.addon()
+        from resources.lib import sub_utils
+        addon = sub_utils.addon()
     except Exception:
         return
     try:
@@ -267,7 +264,7 @@ def build_video_data(info):
 # download URL's source= param. We resolve the provider module by the
 # source name parsed from the URL, so this map is only a fallback.
 _SOURCE_MODULES = (
-    'ktuvit', 'wizdom', 'telegram', 'opensubtitles',
+    'ktuvit', 'wizdom', 'opensubtitles',
     'yify', 'subsource', 'subscene', 'bsplayer',
 )
 
@@ -288,7 +285,7 @@ def _provider_module(source):
             fromlist=[source])
         return mod
     except Exception as e:
-        kodi_utils.log('subs_engine_bridge: provider import failed '
+        sub_utils.log('subs_engine_bridge: provider import failed '
                        '({0}): {1}'.format(source, e), level='WARNING')
         return None
 
@@ -389,12 +386,12 @@ def search(info, modal_progress=True, cache_only=False):
             _recent_put(info, out, prop=_CUT_PROP)
         return out
     except Exception as e:
-        kodi_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
+        sub_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
                        level='WARNING')
         # The engine is experimental and the user explicitly turned it on,
         # so make a failure visible instead of silently showing nothing.
         try:
-            kodi_utils.notify('מנוע מקורות: שגיאה — {0}'.format(
+            sub_utils.notify('מנוע מקורות: שגיאה — {0}'.format(
                 str(e)[:80]), time_ms=5000)
         except Exception:
             pass
@@ -478,9 +475,9 @@ def _cache_key(info):
     # 6h-stale results that still contain the now-disabled source.
     sig = ''
     try:
-        from resources.lib import kodi_utils
-        a = kodi_utils.addon()
-        for s in ('ktuvit', 'wizdom', 'telegram', 'opensubtitles',
+        from resources.lib import sub_utils
+        a = sub_utils.addon()
+        for s in ('ktuvit', 'wizdom', 'opensubtitles',
                   'yify', 'subsource', 'subscene', 'bsplayer', 'all_lang'):
             sig += '1' if (a.getSetting(s) or '') == 'true' else '0'
     except Exception:
@@ -577,7 +574,7 @@ def _recent_get(info, prop=_RECENT_PROP):
             or rec.get('rel', '') != _release_key(info)):
         return None
     out = rec.get('out') or []
-    kodi_utils.log('subs_engine_bridge: reusing the search from {0:.0f}s ago '
+    sub_utils.log('subs_engine_bridge: reusing the search from {0:.0f}s ago '
                    '({1} result(s)) -- not searching every source again'.format(
                        age, len(out)), level='INFO')
     return out
@@ -586,9 +583,9 @@ def _recent_get(info, prop=_RECENT_PROP):
 def _cache_dir():
     try:
         import xbmcvfs
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
         base = xbmcvfs.translatePath(
-            kodi_utils.addon().getAddonInfo('profile'))
+            sub_utils.addon().getAddonInfo('profile'))
         d = os.path.join(base, 'engine_cache')
         if not os.path.isdir(d):
             os.makedirs(d)
@@ -661,7 +658,7 @@ def search_all_languages_for_timing(info):
             _cache_put(info, out, variant='timing_all')
         return out
     except Exception as e:
-        kodi_utils.log(
+        sub_utils.log(
             'subs_engine_bridge.search_all_languages_for_timing failed: {0}'.format(e),
             level='WARNING')
         # None means the search did not prove a completed result and must not
@@ -677,7 +674,7 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
     from resources.lib.subs_engine import engine, general
 
     video_data = build_video_data(info)
-    kodi_utils.log('subs_engine_bridge: searching engine for '
+    sub_utils.log('subs_engine_bridge: searching engine for '
                    + repr({k: video_data[k] for k in
                            ('imdb', 'title', 'season', 'episode',
                             'media_type')}),
@@ -693,7 +690,7 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
             try:
                 general.break_all = False
                 general.with_dp = True
-                general.show_msg = 'MoranSubs — מחפש כתוביות'
+                general.show_msg = sub_utils.DIALOG_TITLE + ' — מחפש כתוביות'
                 progress_thread = threading.Thread(
                     target=general.show_results, args=(True,))
                 progress_thread.daemon = True
@@ -731,7 +728,7 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
             if progress_thread is not None and progress_thread.is_alive():
                 progress_thread.join(0.5)
                 if progress_thread.is_alive():
-                    kodi_utils.log(
+                    sub_utils.log(
                         'subs_engine_bridge: progress dialog did not close '
                         'within 500ms', level='WARNING')
 
@@ -822,7 +819,7 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
             '_is_mt': is_mt,
         })
 
-    kodi_utils.log('subs_engine_bridge: {0} engine results'.format(len(out)),
+    sub_utils.log('subs_engine_bridge: {0} engine results'.format(len(out)),
                    level='INFO')
     return out
 
@@ -1002,7 +999,7 @@ def have_playback_snapshot(info=None):
         snap = _snap_get()
         if info is None:
             try:
-                info = kodi_utils.current_video_info() or {}
+                info = sub_utils.current_video_info() or {}
             except Exception:
                 info = {}
         return bool(_snapshot_matches(snap, info)
@@ -1040,7 +1037,7 @@ def note_playback_streams(info, streams=None, final=False):
         if streams is None:
             streams = _wait_for_subtitle_streams(player)
         _snap_set(key, streams, sealed=final, media_key=media_key)
-        kodi_utils.log('embedded baseline ({0} stream(s)): {1}'.format(
+        sub_utils.log('embedded baseline ({0} stream(s)): {1}'.format(
             len(streams or []), list(streams or [])), level='INFO')
         # If this source ships a built-in Hebrew track, tell the pool so the
         # source screen flags it "BUILT-IN 100%" for everyone. Automatic,
@@ -1074,7 +1071,7 @@ def note_playback_streams(info, streams=None, final=False):
             # and which field it came from. Makes a release-name mismatch vs the
             # source row, or an empty release, visible in a single line.
             try:
-                kodi_utils.log(
+                sub_utils.log(
                     'embedded-report he={0} rel={1!r} ids(tmdb={2!r} imdb={3!r} '
                     's={4!r} e={5!r} mt={6!r} isep={7}) (picked={8!r} li={9!r} '
                     'fp={10!r})'.format(
@@ -1301,7 +1298,7 @@ _LANG_NORMALIZE = {
 
 
 # A release / file name that says the subtitle is a machine or AI translation.
-# Only OpenSubtitles flags that and Telegram labels its own files, so a Google
+# Only OpenSubtitles flags that, so a Google
 # or GPT Hebrew file on Wizdom, Ktuvit or SubSource counted as HUMAN Hebrew --
 # the first gender reference, the one the repair proof trusts. MT leans
 # masculine, so it "fixed" correct feminine lines (found by checking another
@@ -1329,7 +1326,6 @@ def _looks_machine_translated(*names):
 _PROVIDER_LABEL = {
     '[Ktuvit]': 'Ktuvit',
     '[Wizdom]': 'Wizdom',
-    '[Telegram]': 'Telegram',
     '[OpenSubtitles]': 'OpenSubtitles',
     '[YIFY]': 'YIFY',
     '[SubSource]': 'SubSource',
@@ -1392,9 +1388,9 @@ _CACHED_SUBS_EXTS = ('.srt', '.idx', '.sup', '.sub', '.str', '.ass', '.ssa',
 def _cached_subs_dir():
     try:
         import xbmcvfs
-        from resources.lib import kodi_utils
+        from resources.lib import sub_utils
         base = xbmcvfs.translatePath(
-            kodi_utils.addon().getAddonInfo('profile'))
+            sub_utils.addon().getAddonInfo('profile'))
         d = os.path.join(base, _CACHED_SUBS_DIRNAME)
         if not os.path.isdir(d):
             os.makedirs(d)
@@ -1406,7 +1402,7 @@ def _cached_subs_dir():
 def _cached_subs_max():
     # Honour DarkSubs's subtitle_trans_cache setting if present, else default.
     try:
-        v = int(kodi_utils.get_setting('subtitle_trans_cache', '') or 0)
+        v = int(sub_utils.get_setting('subtitle_trans_cache', '') or 0)
         if v > 0:
             return v
     except Exception:
@@ -1477,7 +1473,7 @@ def _cached_subs_store(keybase, sub_file):
             shutil.copy(sub_file, dest)
         return dest
     except Exception as e:
-        kodi_utils.log('subs_engine_bridge: cache store skipped: {0}'
+        sub_utils.log('subs_engine_bridge: cache store skipped: {0}'
                        .format(e), level='DEBUG')
         return None
 
@@ -1588,7 +1584,7 @@ def _render_hebrew_rtl_copy(sub_file, legacy_engine=False):
             raise
         return out
     except Exception as e:
-        kodi_utils.log('subs_engine_bridge: RTL display copy skipped: {0}'
+        sub_utils.log('subs_engine_bridge: RTL display copy skipped: {0}'
                        .format(e), level='DEBUG')
         return sub_file
 
@@ -1657,7 +1653,7 @@ def _ensure_utf8(path):
     try:
         text = raw.decode('cp1255')  # also decodes iso-8859-8 Hebrew correctly
     except (UnicodeDecodeError, LookupError):
-        kodi_utils.log('subs_engine_bridge: {0} is neither UTF-8 nor cp1255 -- '
+        sub_utils.log('subs_engine_bridge: {0} is neither UTF-8 nor cp1255 -- '
                        'left as-is'.format(os.path.basename(path)),
                        level='WARNING')
         return False
@@ -1665,7 +1661,7 @@ def _ensure_utf8(path):
         # Reading it as cp1255 does not produce Hebrew, so cp1255 is not what
         # this file is -- most likely a UTF-8 file with a damaged byte. Leaving
         # it alone keeps that damage to the one byte it already was.
-        kodi_utils.log('subs_engine_bridge: {0} is not valid UTF-8, but '
+        sub_utils.log('subs_engine_bridge: {0} is not valid UTF-8, but '
                        'reading it as cp1255 does not give Hebrew -- left '
                        'as-is'.format(os.path.basename(path)), level='WARNING')
         return False
@@ -1679,10 +1675,10 @@ def _ensure_utf8(path):
             os.remove(tmp)
         except OSError:
             pass
-        kodi_utils.log('subs_engine_bridge: UTF-8 rewrite failed for {0}: {1}'
+        sub_utils.log('subs_engine_bridge: UTF-8 rewrite failed for {0}: {1}'
                        .format(os.path.basename(path), e), level='WARNING')
         return False
-    kodi_utils.log('subs_engine_bridge: converted {0} from cp1255 to UTF-8 '
+    sub_utils.log('subs_engine_bridge: converted {0} from cp1255 to UTF-8 '
                    '(a provider served it unzipped, so the engine never '
                    'normalised it)'.format(os.path.basename(path)),
                    level='INFO')
@@ -1749,11 +1745,11 @@ def select_embedded(stream_index, lang=None):
                 int(stream_index))
         p.setSubtitleStream(target)
         p.showSubtitles(True)
-        kodi_utils.log('subs_engine_bridge.select_embedded: set stream {0}'
+        sub_utils.log('subs_engine_bridge.select_embedded: set stream {0}'
                        .format(target), level='INFO')
         return True
     except Exception as e:
-        kodi_utils.log('subs_engine_bridge.select_embedded failed: {0}'
+        sub_utils.log('subs_engine_bridge.select_embedded failed: {0}'
                        .format(e), level='WARNING')
         return False
 
@@ -1791,7 +1787,7 @@ def download(payload, for_delivery=True):
     try:
         return _download_inner(payload, for_delivery=for_delivery)
     except Exception as e:
-        kodi_utils.log('subs_engine_bridge.download failed ({0}): {1}'.format(
+        sub_utils.log('subs_engine_bridge.download failed ({0}): {1}'.format(
             (payload.get('source') or '?'), e), level='ERROR')
         # Log only -- no user popup. This fired on every failed provider download,
         # including background/secondary Ktuvit fetches the server "refuses"
@@ -1821,7 +1817,7 @@ def _download_inner(payload, for_delivery=True):
 
     module = _provider_module(source)
     if module is None or not hasattr(module, 'download'):
-        kodi_utils.log('subs_engine_bridge: no download() for source '
+        sub_utils.log('subs_engine_bridge: no download() for source '
                        + str(source), level='WARNING')
         # Log only (logged above) -- no user popup; this fired during background
         # resolution too and was just playback noise.
@@ -1834,7 +1830,7 @@ def _download_inner(payload, for_delivery=True):
     # with downloadable file subs.
     try:
         int(download_data.get('url', ''))
-        kodi_utils.log('subs_engine_bridge: embedded-stream pick not '
+        sub_utils.log('subs_engine_bridge: embedded-stream pick not '
                        'handled by bridge', level='INFO')
         return None
     except (ValueError, TypeError):
@@ -1872,7 +1868,7 @@ def _download_inner(payload, for_delivery=True):
                                            filename)
             hit = _cached_subs_lookup(keybase)
             if hit:
-                kodi_utils.log('subs_engine_bridge: cached file hit ({0})'
+                sub_utils.log('subs_engine_bridge: cached file hit ({0})'
                                .format(os.path.basename(hit)), level='INFO')
                 # (LAST_DOWNLOAD_FROM_CACHE is already declared global at the
                 # top of this function -- re-declaring it here is a SyntaxError.)
@@ -1883,7 +1879,7 @@ def _download_inner(payload, for_delivery=True):
                 # lives -- and keeps failing to mirror it to the pool.
                 _ensure_utf8(hit)
                 if (for_delivery
-                        and kodi_utils.get_bool(
+                        and sub_utils.get_bool(
                             'auto_fix_sub_punctuation', True)
                         and 'Hebrew' in language):
                     # Every shipped v2 entry without the local format marker
@@ -1895,13 +1891,13 @@ def _download_inner(payload, for_delivery=True):
                             'auto' if is_logical_source(hit) else True))
                 return hit
         except Exception as e:
-            kodi_utils.log('subs_engine_bridge: cache lookup skipped: {0}'
+            sub_utils.log('subs_engine_bridge: cache lookup skipped: {0}'
                            .format(e), level='DEBUG')
             keybase = None
 
     sub_file = module.download(download_data, sub_folder)
     if not sub_file or not os.path.isfile(sub_file):
-        kodi_utils.log('subs_engine_bridge: download returned no file '
+        sub_utils.log('subs_engine_bridge: download returned no file '
                        '(source={0}, got={1})'.format(source, sub_file),
                        level='WARNING')
         # Log only -- no user popup. This fires for a single failed provider
@@ -1913,7 +1909,7 @@ def _download_inner(payload, for_delivery=True):
     # archive a provider handed back on a failed download (e.g. YIFY 403).
     # Otherwise Kodi tries to load garbage and shows "download failed".
     if not _looks_like_subtitle(sub_file):
-        kodi_utils.log('subs_engine_bridge: downloaded file is not a valid '
+        sub_utils.log('subs_engine_bridge: downloaded file is not a valid '
                        'subtitle ({0})'.format(os.path.basename(sub_file)),
                        level='WARNING')
         # Log only -- no user popup. A provider (often Ktuvit, when rate-limited)
@@ -1938,7 +1934,7 @@ def _download_inner(payload, for_delivery=True):
     # The old vendored fixer is intentionally gone. One canonical MoranSubs
     # processor owns Hebrew playback, on a disposable local copy only.
     if (for_delivery
-            and kodi_utils.get_bool('auto_fix_sub_punctuation', True)
+            and sub_utils.get_bool('auto_fix_sub_punctuation', True)
             and 'Hebrew' in language):
         # "Logical source" means MoranSubs itself did not reverse these
         # bytes.  Human subtitle archives can nevertheless already contain

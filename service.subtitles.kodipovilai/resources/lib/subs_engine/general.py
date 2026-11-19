@@ -2,7 +2,7 @@ import os,time
 import xbmc,xbmcaddon,xbmcvfs,xbmcgui
 import threading
 
-from urllib.parse import  unquote_plus, unquote,  quote
+from urllib.parse import unquote
 import unicodedata
 from resources.lib.subs_engine import log
 iconx=xbmcaddon.Addon().getAddonInfo('icon')
@@ -18,7 +18,8 @@ MyScriptID = xbmcaddon.Addon().getAddonInfo('id')
 TransFolder=xbmc_tranlate_path(os.path.join(user_dataDir, 'trans_subs'))
 if not os.path.exists(TransFolder):
      os.makedirs(TransFolder)
-MyScriptName = xbmcaddon.Addon().getAddonInfo('name')
+from resources.lib.sub_utils import DIALOG_TITLE
+MyScriptName = DIALOG_TITLE
 addonPath = xbmc_tranlate_path(xbmcaddon.Addon().getAddonInfo("path"))
 global with_dp,show_msg,progress_msg
 show_msg=""
@@ -190,9 +191,9 @@ def extract_season_episode_numbers(subtitle_file_name):
 
     regex_pattern = re.compile(
         r'S[e]?(?:ason)?' + optional_separators +
-        '(?P<season_number>\d{1,2})' + optional_middle_separators +
+        r'(?P<season_number>\d{1,2})' + optional_middle_separators +
         'E[p]?(?:isode)?' + optional_separators +
-        '(?P<episode_number>\d{1,3})',
+        r'(?P<episode_number>\d{1,3})',
         re.IGNORECASE
     )
     
@@ -265,25 +266,6 @@ def get_playing_addon(playing_addon=""):
             
     return playing_addon
       
-def take_title_from_focused_item():
-    labelType = xbmc.getInfoLabel("ListItem.DBTYPE")  # movie/tvshow/season/episode
-    labelMovieTitle = xbmc.getInfoLabel("ListItem.OriginalTitle")
-    labelYear = xbmc.getInfoLabel("ListItem.Year")
-    labelTVShowTitle = xbmc.getInfoLabel("ListItem.TVShowTitle")
-    labelSeason = xbmc.getInfoLabel("ListItem.Season")
-    labelEpisode = xbmc.getInfoLabel("ListItem.Episode")
-    isItMovie = xbmc.getCondVisibility("Container.Content(movies)") or labelType == 'movie'
-    isItEpisode = xbmc.getCondVisibility("Container.Content(episodes)") or labelType == 'episode'
-
-    title = 'SearchFor...'
-    if isItMovie and labelMovieTitle and labelYear:
-        title = labelMovieTitle + " " + labelYear
-    elif isItEpisode and labelTVShowTitle and labelSeason and labelEpisode:
-        title = ("%s S%.2dE%.2d" % (labelTVShowTitle, int(labelSeason), int(labelEpisode)))
-
-    return title
-
-
 def remove_color_tags(input_string):
     log.warning(f"DEBUG | get_video_data | BEFORE remove_color_tags | input_string={input_string}")
     
@@ -661,74 +643,6 @@ def get_video_data():
     
     log.warning(f"DEBUG | get_video_data | FINAL | video_data={video_data}")
     return video_data
-
-def save_file_name(filename,language,video_data):
-
-    video_data_tagline = quote(video_data['Tagline'])
-    video_data_file_original_path = quote(video_data['file_original_path'])
-    
-    try:
-        from sqlite3 import dbapi2 as database
-    except:
-        from pysqlite2 import dbapi2 as database
-    cacheFile=os.path.join(user_dataDir,'database.db')
-    dbcon = database.connect(cacheFile)
-    dbcur = dbcon.cursor()
-    
-    dbcur.execute("CREATE TABLE IF NOT EXISTS %s ("
-                  "language TEXT, "
-                  "filename TEXT, "
-                  "video_data_tagline TEXT, "
-                  "video_data_file_original_path TEXT);" % ('list_subs_cache'))
-
-
-    dbcur.execute("SELECT * FROM list_subs_cache ")
-    list_sub = dbcur.fetchall()
-    dbcur.execute("INSERT INTO list_subs_cache Values ('{0}','{1}','{2}','{3}')".format(language,filename,video_data_tagline,video_data_file_original_path))
-
-    dbcon.commit()
-    dbcon.close()
-def get_db_data(video_data):
-
-    video_data_tagline = quote(video_data['Tagline'])
-    video_data_file_original_path = quote(video_data['file_original_path'])
-    
-    try:
-      from sqlite3 import dbapi2 as database
-    except:
-      from pysqlite2 import dbapi2 as database
-    
-    cacheFile=os.path.join(user_dataDir,'database.db')
-    dbcon = database.connect(cacheFile)
-    dbcur = dbcon.cursor()
-    dbcur.execute("CREATE TABLE IF NOT EXISTS %s ("
-                  "language TEXT, "
-                  "filename TEXT, "
-                  "video_data_tagline TEXT, "
-                  "video_data_file_original_path TEXT);" % ('list_subs_cache'))
-                  
-    dbcur.execute("SELECT * FROM list_subs_cache")
-    list_sub = dbcur.fetchall()
-    dbcur.close()
-    dbcon.close()
-    
-    all_subs={}
-    for sub_language, sub_name, tagline, file_original_path in list_sub:
-        if tagline == video_data_tagline or file_original_path == video_data_file_original_path:
-            all_subs.setdefault(sub_name, []).append(sub_language)
-            
-    last_sub_name_in_cache=''
-    last_sub_language_in_cache = ''
-    
-    # Get the LATEST written cached subtitle+language combination for current video Tagline/file path. (reversed list - first row is the last written)
-    for sub_language, sub_name, tagline, file_original_path in reversed(list_sub):
-        if tagline == video_data_tagline or file_original_path == video_data_file_original_path:
-            last_sub_name_in_cache = sub_name
-            last_sub_language_in_cache = sub_language
-            break
-    
-    return last_sub_name_in_cache,last_sub_language_in_cache,all_subs
-
 
 ################### Future Use ###########################################################
 # https://alwinesch.github.io/group__python___info_tag_video.html

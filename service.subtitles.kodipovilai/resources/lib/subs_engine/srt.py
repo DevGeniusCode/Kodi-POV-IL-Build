@@ -436,46 +436,6 @@ def _check_contiguity(srt, expected_start, actual_start, warn_only):
             raise SRTParseError(expected_start, actual_start, unmatched_content)
 
 
-def compose(
-    subtitles, reindex=True, start_index=1, strict=True, eol=None, in_place=False
-):
-    r"""
-    Convert an iterator of :py:class:`Subtitle` objects to a string of joined
-    SRT blocks.
-
-    .. doctest::
-
-        >>> from datetime import timedelta
-        >>> start = timedelta(seconds=1)
-        >>> end = timedelta(seconds=2)
-        >>> subs = [
-        ...     Subtitle(index=1, start=start, end=end, content='x'),
-        ...     Subtitle(index=2, start=start, end=end, content='y'),
-        ... ]
-        >>> compose(subs)  # doctest: +ELLIPSIS
-        '1\n00:00:01,000 --> 00:00:02,000\nx\n\n2\n00:00:01,000 --> ...'
-
-    :param subtitles: The subtitles to convert to SRT blocks
-    :type subtitles: :term:`iterator` of :py:class:`Subtitle` objects
-    :param bool reindex: Whether to reindex subtitles based on start time
-    :param int start_index: If reindexing, the index to start reindexing from
-    :param bool strict: Whether to enable strict mode, see
-                        :py:func:`Subtitle.to_srt` for more information
-    :param str eol: The end of line string to use (default "\\n")
-    :returns: A single SRT formatted string, with each input
-              :py:class:`Subtitle` represented as an SRT block
-    :param bool in_place: Whether to reindex subs in-place for performance
-                          (version <=1.0.0 behaviour)
-    :rtype: str
-    """
-    if reindex:
-        subtitles = sort_and_reindex(
-            subtitles, start_index=start_index, in_place=in_place
-        )
-
-    return "".join(subtitle.to_srt(strict=strict, eol=eol) for subtitle in subtitles)
-
-
 class SRTParseError(Exception):
     """
     Raised when part of an SRT block could not be parsed.

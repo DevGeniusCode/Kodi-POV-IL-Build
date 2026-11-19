@@ -95,22 +95,22 @@ def _wait_for_sync_check(read_state, still_ours, sleep,
     return '', steps * step
 
 
-def _toasts_on(kodi_utils):
-    """The viewer's switch for subtitle toasts (kodi_utils.notify obeys it)."""
+def _toasts_on(sub_utils):
+    """The viewer's switch for subtitle toasts (sub_utils.notify obeys it)."""
     try:
-        return (kodi_utils.get_setting('subs_notifications', 'true')
+        return (sub_utils.get_setting('subs_notifications', 'true')
                 or 'true').strip().lower() != 'false'
     except Exception:
         return True
 
 
-def ai_when_no_hebrew(kodi_utils):
+def ai_when_no_hebrew(sub_utils):
     """'auto' | 'ask' | 'manual': what the automatic subtitle does when there
     is no Hebrew at all. A user's per-video choice since 0.3.74: a translation
     costs requests, and the best foreign subtitle may not fit this release's
     timing -- another link with built-in Hebrew may be the better pick."""
     try:
-        v = (kodi_utils.get_setting('ai_when_no_hebrew', 'auto') or 'auto').strip().lower()
+        v = (sub_utils.get_setting('ai_when_no_hebrew', 'auto') or 'auto').strip().lower()
     except Exception:
         v = 'auto'
     return v if v in ('auto', 'ask', 'manual') else 'auto'
@@ -145,21 +145,21 @@ def autosub_on_play():
     the best Hebrew subtitle automatically (replacing DarkSubs's autosub).
     Runs in its own thread so it never blocks Kodi's playback callback."""
     try:
-        from resources.lib import kodi_utils, translate, subs_engine_bridge
+        from resources.lib import sub_utils, translate, subs_engine_bridge
     except Exception:
         return
     try:
-        if not kodi_utils.get_bool('use_builtin_engine', False):
+        if not sub_utils.get_bool('use_builtin_engine', False):
             return
-        if not kodi_utils.get_bool('engine_autosub', True):
+        if not sub_utils.get_bool('engine_autosub', True):
             return
-        if not kodi_utils.hebrew_subtitle_wanted():
+        if not sub_utils.hebrew_subtitle_wanted():
             # Correct to skip here -- this is the AUTOMATIC on-play search, and
             # fetching Hebrew for someone who asked for English would be
             # presumptuous. But it used to return in total silence, which is
             # how "auto-subs stopped working" became unexplainable: nothing in
             # the log said why. Say it once per playback.
-            kodi_utils.log(
+            sub_utils.log(
                 'autosub: skipped -- Kodi\'s subtitle language preference does '
                 'not name Hebrew. Add Hebrew under Settings > Player > '
                 'Language > "languages to download subtitles for" to get '
@@ -205,7 +205,7 @@ def autosub_on_play():
     try:
         # An EMPTY value is a deliberate user choice ("no exclusions") and is
         # respected; the default only applies when the setting can't be read.
-        _raw = kodi_utils.get_setting('autosub_excluded_addons',
+        _raw = sub_utils.get_setting('autosub_excluded_addons',
                                       'plugin.video.idanplus')
     except Exception:
         _raw = 'plugin.video.idanplus'
@@ -301,7 +301,7 @@ def autosub_on_play():
         # fallback candidate.
         try:
             _initial_selection_token = (
-                kodi_utils.get_subtitle_selection_token() or '')
+                sub_utils.get_subtitle_selection_token() or '')
         except Exception:
             _initial_selection_token = ''
         _run_owner = {'selection': None}
@@ -319,11 +319,11 @@ def autosub_on_play():
             owned = _run_owner.get('selection')
             try:
                 if owned:
-                    return bool(kodi_utils.subtitle_selection_matches(
+                    return bool(sub_utils.subtitle_selection_matches(
                         owned.get('token') or '',
                         owned.get('link_hash') or '',
                         owned.get('stream_hash') or ''))
-                return ((kodi_utils.get_subtitle_selection_token() or '')
+                return ((sub_utils.get_subtitle_selection_token() or '')
                         == _run_owner.get('token', _initial_selection_token))
             except Exception:
                 return False
@@ -332,10 +332,10 @@ def autosub_on_play():
             if not _autosub_owns_player():
                 return {}
             try:
-                kodi_utils.set_current_subtitle(candidate_link)
-                claimed = kodi_utils.current_subtitle_selection(
+                sub_utils.set_current_subtitle(candidate_link)
+                claimed = sub_utils.current_subtitle_selection(
                     expected_link=candidate_link)
-                if not kodi_utils.subtitle_selection_matches(
+                if not sub_utils.subtitle_selection_matches(
                         claimed.get('token') or '',
                         claimed.get('link_hash') or '',
                         claimed.get('stream_hash') or ''):
@@ -354,7 +354,7 @@ def autosub_on_play():
             from resources.lib.subs_engine import general as _eng_general
             _eng_general.break_all = False
             _eng_general.with_dp = False
-            _eng_general.show_msg = 'MoranSubs — מחפש כתוביות עברית'
+            _eng_general.show_msg = sub_utils.DIALOG_TITLE + ' — מחפש כתוביות עברית'
             _overlay_thread[0] = threading.Thread(
                 target=_eng_general.show_results, args=(False,), daemon=True)
             _overlay_thread[0].start()
@@ -435,7 +435,7 @@ def autosub_on_play():
         for _ in range(40):  # up to ~8s
             if not _autosub_owns_player():
                 return
-            info = kodi_utils.current_video_info()
+            info = sub_utils.current_video_info()
             have_id = (info.get('imdb_id') or info.get('tmdb_id')
                        or info.get('title'))
             # Also wait for the release name to settle: on an auto-advance to
@@ -536,7 +536,7 @@ def autosub_on_play():
                 try:
                     if not _autosub_owns_player():
                         return
-                    kodi_utils.set_subtitle_sync_status(
+                    sub_utils.set_subtitle_sync_status(
                         'confirmed', source='embedded',
                         selection_token=_selection.get('token') or '',
                         link_hash=_selection.get('link_hash') or '',
@@ -581,10 +581,10 @@ def autosub_on_play():
         he_list = [c for c in cands if c.get('language') == 'he']
         # 0.3.74: outside 'auto' every AI translation waits for the user --
         # one question a video, asked when the first one is reached
-        _have_key = bool((kodi_utils.get_setting('api_key', '') or '').strip())
-        _mode = (kodi_utils.get_setting('translation_mode', 'ai') or 'ai')
+        _have_key = bool((sub_utils.get_setting('api_key', '') or '').strip())
+        _mode = (sub_utils.get_setting('translation_mode', 'ai') or 'ai')
         _ai_ok = _mode != 'none'
-        _when = ai_when_no_hebrew(kodi_utils)
+        _when = ai_when_no_hebrew(sub_utils)
         _ai_offered = False      # an AI translation the user can pick instead
         _ai_answer = []          # the user's answer, once asked
 
@@ -679,9 +679,9 @@ def autosub_on_play():
             if is_embedded:
                 # resolve() switched the embedded stream and returns None -- that
                 # IS success for an embedded pick.
-                status = kodi_utils.get_subtitle_sync_status(link2)
+                status = sub_utils.get_subtitle_sync_status(link2)
                 if (status.get('state') == 'confirmed'
-                        and kodi_utils.subtitle_selection_matches(
+                        and sub_utils.subtitle_selection_matches(
                             selection.get('token') or '',
                             selection.get('link_hash') or '',
                             selection.get('stream_hash') or '')):
@@ -689,12 +689,12 @@ def autosub_on_play():
                     chosen_link = link2
                     chosen_name = 'תרגום מובנה בעברית'
                     break
-            if (path and kodi_utils.subtitle_selection_matches(
+            if (path and sub_utils.subtitle_selection_matches(
                     selection.get('token') or '',
                     selection.get('link_hash') or '',
                     selection.get('stream_hash') or '')):
                 try:
-                    if not kodi_utils.apply_subtitle_file(
+                    if not sub_utils.apply_subtitle_file(
                             path, selection=selection):
                         if not _autosub_owns_player():
                             return
@@ -728,7 +728,7 @@ def autosub_on_play():
         # (The legacy engine_force_translate toggle still forces it if set.)
         # 0.3.74: outside 'auto' the user's answer decides (asked once)
         if _when == 'auto':
-            _auto_ai = (_have_key and _ai_ok) or kodi_utils.get_bool(
+            _auto_ai = (_have_key and _ai_ok) or sub_utils.get_bool(
                 'engine_force_translate', False)
         else:
             _auto_ai = False
@@ -773,12 +773,12 @@ def autosub_on_play():
                         path = None
                     if not _autosub_owns_player():
                         return
-                    if (path and kodi_utils.subtitle_selection_matches(
+                    if (path and sub_utils.subtitle_selection_matches(
                             selection.get('token') or '',
                             selection.get('link_hash') or '',
                             selection.get('stream_hash') or '')):
                         try:
-                            if not kodi_utils.apply_subtitle_file(
+                            if not sub_utils.apply_subtitle_file(
                                     path, selection=selection):
                                 if not _autosub_owns_player():
                                     return
@@ -793,13 +793,13 @@ def autosub_on_play():
             if not _autosub_owns_player():
                 return
             try:
-                kodi_utils.set_current_subtitle('')
+                sub_utils.set_current_subtitle('')
                 # Still this run's player, now with no subtitle: the claim of
                 # the candidate that failed no longer matches the cleared
                 # selection, so without this every line below went nowhere.
                 _run_owner['selection'] = None
                 _run_owner['token'] = (
-                    kodi_utils.get_subtitle_selection_token() or '')
+                    sub_utils.get_subtitle_selection_token() or '')
             except Exception:
                 pass
             try:
@@ -841,7 +841,7 @@ def autosub_on_play():
         # the current selection actually has that verdict; the later worker
         # may still replace it with a proven alternative.
         try:
-            _sync_state = (kodi_utils.get_subtitle_sync_status(
+            _sync_state = (sub_utils.get_subtitle_sync_status(
                 chosen_link) or {}).get('state')
         except Exception:
             _sync_state = ''
@@ -871,7 +871,7 @@ def autosub_on_play():
 
         def _check_state():
             try:
-                return (kodi_utils.get_subtitle_sync_status(chosen_link)
+                return (sub_utils.get_subtitle_sync_status(chosen_link)
                         or {}).get('state') or ''
             except Exception:
                 return ''
@@ -890,14 +890,14 @@ def autosub_on_play():
         _end_state, _waited = _wait_for_sync_check(
             _check_state, _overlay_ours, _sleep_keeping_line)
         try:
-            kodi_utils.log('autosub overlay: timing check %s after %.1fs' % (
+            sub_utils.log('autosub overlay: timing check %s after %.1fs' % (
                 ('ended ' + _end_state) if _end_state
                 else 'left to another pick or a stop' if _end_state is None
                 else 'not followed further',
                 _waited))
         except Exception:
             pass
-        if _end_state == 'fixed' and _toasts_on(kodi_utils):
+        if _end_state == 'fixed' and _toasts_on(sub_utils):
             # SubSync's own "synced automatically" toast is on screen now;
             # the same words in the overlay beside it would be noise.
             return
@@ -909,7 +909,7 @@ def autosub_on_play():
                            hold=_OVERLAY_LINE_SECONDS - _waited)
     except Exception as e:
         try:
-            kodi_utils.log('autosub_on_play failed: {0}'.format(e),
+            sub_utils.log('autosub_on_play failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
@@ -956,8 +956,8 @@ def snapshot_on_play():
     if xbmc is None:
         return
     try:
-        from resources.lib import kodi_utils, subs_engine_bridge
-        if not kodi_utils.get_bool('use_builtin_engine', False):
+        from resources.lib import sub_utils, subs_engine_bridge
+        if not sub_utils.get_bool('use_builtin_engine', False):
             return          # embedded_candidates() is inert anyway
     except Exception:
         return
@@ -1004,14 +1004,14 @@ def snapshot_on_play():
         # embedded-report diagnostic reads several fields. Falling back to {}
         # (never None) keeps the .get() calls in there safe.
         try:
-            info = kodi_utils.current_video_info() or {}
+            info = sub_utils.current_video_info() or {}
         except Exception:
             info = {}
         subs_engine_bridge.note_playback_streams(info, streams, final=True)
     except Exception as e:
         try:
-            from resources.lib import kodi_utils
-            kodi_utils.log('snapshot_on_play failed: {0}'.format(e),
+            from resources.lib import sub_utils
+            sub_utils.log('snapshot_on_play failed: {0}'.format(e),
                            level='DEBUG')
         except Exception:
             pass
@@ -1049,8 +1049,8 @@ if xbmc is not None:
             except Exception:
                 pass
             try:
-                from resources.lib import kodi_utils
-                if not kodi_utils.get_bool('engine_autosub', True):
+                from resources.lib import sub_utils
+                if not sub_utils.get_bool('engine_autosub', True):
                     return
             except Exception:
                 pass
@@ -1078,10 +1078,10 @@ def start_if_enabled():
     if xbmc is None:
         return
     try:
-        from resources.lib import kodi_utils
-        if not kodi_utils.get_bool('use_builtin_engine', False):
+        from resources.lib import sub_utils
+        if not sub_utils.get_bool('use_builtin_engine', False):
             return
-        autosub = kodi_utils.get_bool('engine_autosub', True)
+        autosub = sub_utils.get_bool('engine_autosub', True)
     except Exception:
         return
     try:
@@ -1104,8 +1104,8 @@ def prewarm_engine():
     settings) in a background thread so the first subtitle search is warm.
     Fully guarded; a failure here never affects anything."""
     try:
-        from resources.lib import kodi_utils
-        if not kodi_utils.get_bool('use_builtin_engine', False):
+        from resources.lib import sub_utils
+        if not sub_utils.get_bool('use_builtin_engine', False):
             return
     except Exception:
         return
@@ -1114,6 +1114,7 @@ def prewarm_engine():
         try:
             from resources.lib import subs_engine_bridge
             subs_engine_bridge.ensure_engine_settings()
+            # Deliberate pre-import (side effect only): warm the engine off the request path.
             from resources.lib.subs_engine import engine  # noqa: F401
         except Exception:
             pass

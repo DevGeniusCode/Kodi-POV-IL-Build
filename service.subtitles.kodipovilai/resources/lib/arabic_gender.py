@@ -29,16 +29,16 @@ import threading
 import time
 
 try:
-    from resources.lib import kodi_utils
+    from resources.lib import sub_utils
 except Exception:
-    kodi_utils = None
+    sub_utils = None
 
 
 def _log(msg, level='INFO'):
-    if kodi_utils is None:
+    if sub_utils is None:
         return
     try:
-        kodi_utils.log('arabic_gender: ' + msg, level=level)
+        sub_utils.log('arabic_gender: ' + msg, level=level)
     except Exception:
         pass
 
@@ -131,41 +131,6 @@ def _best_offset(en_on, ar_on, a):
                + hist.get(k + 1, 0))
     votes = hist.get(peak - 1, 0) + hist.get(peak, 0) + hist.get(peak + 1, 0)
     return float(peak * _TOL), votes
-
-
-def _estimate_map(en, ar):
-    en_on = [c['start'] for c in en]
-    ar_on = [c['start'] for c in ar]
-    if not en_on or not ar_on:
-        return 1.0, 0.0, 0.0
-    sampled = len(en_on[::max(1, len(en_on) // _SAMPLE)])
-    best = (1.0, 0.0, -1)
-    for a in _SCALES:
-        b, v = _best_offset(en_on, ar_on, a)
-        if v > best[2]:
-            best = (a, b, v)
-    a, b, v = best
-    return a, b, (v / sampled if sampled else 0.0)
-
-
-def _overlap_rate(en, ar, a, b):
-    import bisect
-    ar_starts = [c['start'] for c in ar]
-    ar_ends = [c['end'] for c in ar]
-    ok = 0
-    for c in en:
-        es, ee = a * c['start'] + b, a * c['end'] + b
-        lo = bisect.bisect_left(ar_ends, es)
-        k = lo
-        hit = False
-        while k < len(ar) and ar_starts[k] < ee:
-            if min(ee, ar_ends[k]) - max(es, ar_starts[k]) > 0:
-                hit = True
-                break
-            k += 1
-        if hit:
-            ok += 1
-    return ok / len(en) if en else 0.0
 
 
 # ---------------- public: build the per-entry gender map --------------------
@@ -637,28 +602,6 @@ def align_one(src_text, src_blocks, ar_text, timing_text=None):
              level='WARNING')
         return None, 'hardened aligner failed; reference declined'
 
-    # Kept as dead-compatible reference code for old external imports; the
-    # production path above always returns and never reaches this weaker gate.
-    a, b, vote = _estimate_map(en, ar)
-    ov = _overlap_rate(en, ar, a, b)
-    diag = 'scale=%.4f offset=%+dms vote=%.0f%% overlap=%.0f%%' % (
-        a, int(b), vote * 100, ov * 100)
-    # Confidence gate. The MAP must be trustworthy (right framerate band + a
-    # strong offset vote), but COVERAGE may be partial: as a gender ORACLE, a
-    # reference that overlaps 65-79% of the source still hints gender for most
-    # entries -- strictly better than no reference (the un-hinted entries simply
-    # translate without a hint, exactly as if there were none). Field data (the
-    # D1 no_align overlap distribution) showed ~65% of rejections sat in this
-    # 65-79% band WITH a correct map, so the old 0.80 coverage floor was throwing
-    # away usable oracles. vote>=0.65 + the framerate band stay the real guards
-    # against a spurious alignment. MEASURED, not assumed: a true pair votes
-    # 0.742; twenty references with randomised starts vote 0.417-0.441, and
-    # nine time-REVERSED real references (same cue density, no correspondence)
-    # vote 0.439-0.441. So the floor is ~0.43, not the ~0.30 this comment
-    # used to claim -- the gate still clears it, by less than we said.
-    if not (0.90 <= a <= 1.11) or vote < 0.65 or ov < 0.65:
-        return None, 'gate FAILED (' + diag + ')'
-    return _arabic_for_blocks(src_blocks, ar, a, b), 'gate OK (' + diag + ')'
 
 
 # ---------------- the reference-language priority chain ---------------------
@@ -831,15 +774,15 @@ def _reference_candidates(info):
     cands = []
     prev_all_lang = None
     try:
-        if kodi_utils is not None:
+        if sub_utils is not None:
             try:
-                kodi_utils.set_setting('language_arab', 'true')
+                sub_utils.set_setting('language_arab', 'true')
             except Exception:
                 pass
             try:
-                prev_all_lang = kodi_utils.get_setting('all_lang', '')
+                prev_all_lang = sub_utils.get_setting('all_lang', '')
                 if (prev_all_lang or '').strip().lower() != 'true':
-                    kodi_utils.set_setting('all_lang', 'true')
+                    sub_utils.set_setting('all_lang', 'true')
                 else:
                     prev_all_lang = None  # already true -> nothing to restore
             except Exception:
@@ -857,14 +800,14 @@ def _reference_candidates(info):
     finally:
         # Always settle Arabic back OFF so it never pollutes normal searches
         # (also self-heals installs left 'true' by the old eager code).
-        if kodi_utils is not None:
+        if sub_utils is not None:
             try:
-                kodi_utils.set_setting('language_arab', 'false')
+                sub_utils.set_setting('language_arab', 'false')
             except Exception:
                 pass
             if prev_all_lang is not None:
                 try:
-                    kodi_utils.set_setting('all_lang', prev_all_lang)
+                    sub_utils.set_setting('all_lang', prev_all_lang)
                 except Exception:
                     pass
     return cands
@@ -1869,22 +1812,3 @@ def begin(info, src_text, timing_text=None, embedded=None):
                           timing_text=timing_text),
             {'reason': 'pending', 'cands': total})
 
-
-def prepare(info, src_text):
-    """Back-compat single-shot entry point (used where only the primary
-    reference is needed). Returns (map, diag) -- identical semantics to the
-    original: map is the primary aligned reference (or None), diag.reason is
-    'ok'/'no_source'/'no_arabic'/'no_align'/'crash', and diag['lang'] is the
-    chain code used on success. Implemented over begin()+plan.next()."""
-    plan, diag = begin(info, src_text)
-    if plan is None:
-        return None, diag
-    lang, mapping = plan.next()
-    cands = diag.get('cands', 0)
-    if mapping is None:
-        _log('all {0} reference candidate(s) failed alignment -> normal '
-             'translation (fallback)'.format(cands))
-        return None, {'reason': 'no_align', 'cands': cands,
-                      'diag': plan.last_diag}
-    return mapping, {'reason': 'ok', 'cands': cands, 'hinted': len(mapping),
-                     'diag': plan.last_diag, 'lang': lang}

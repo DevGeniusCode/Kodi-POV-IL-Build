@@ -303,21 +303,6 @@ def subtitle_reference(path, log=None):
     return _reference_from_index(index_bytes, log=log)
 
 
-def subtitle_reference_source(file_size, read, log=None):
-    """Return cues from a positional byte source (e.g. safe HTTP Range).
-
-    The caller owns HTTP readiness, request limits and connection cleanup.
-    This parser itself reads only box headers and at most 16 MiB of moov.
-    """
-    try:
-        index_bytes = _read_movie_index_source(file_size, read)
-    except (OSError, ValueError, struct.error, OverflowError) as exc:
-        (log or (lambda _message: None))(
-            'MP4 index probe skipped: %s' % type(exc).__name__)
-        return None
-    return _reference_from_index(index_bytes, log=log)
-
-
 # ---- audio frame-size envelope --------------------------------------------
 # AAC is variable-bitrate: the encoder spends a different number of bytes on
 # speech than on music/effects/silence.  The per-frame sizes in ``stsz`` are

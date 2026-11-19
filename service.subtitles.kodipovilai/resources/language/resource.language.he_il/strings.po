@@ -34,14 +34,6 @@ msgctxt "#32106"
 msgid "Pair with QR (scan from another device)"
 msgstr "התאם מטלפון / מכשיר אחר (QR + URL)"
 
-msgctxt "#32107"
-msgid "Test DarkSubs integration"
-msgstr "בדוק חיבור DarkSubs"
-
-msgctxt "#32108"
-msgid "Translate via AI even when DarkSubs auto_translate is OFF"
-msgstr "תרגם דרך AI גם כש-auto_translate של DarkSubs כבוי (אחרת — כתוביות לא-עבריות יישארו בשפת המקור)"
-
 msgctxt "#32200"
 msgid "Translation"
 msgstr "תרגום"
@@ -77,10 +69,6 @@ msgstr "צרפתית"
 msgctxt "#32216"
 msgid "Portuguese"
 msgstr "פורטוגזית"
-
-msgctxt "#32220"
-msgid "Behavior"
-msgstr "התנהגות"
 
 msgctxt "#32221"
 msgid "Skip translation if Hebrew subs already exist"
@@ -230,57 +218,133 @@ msgctxt "#32429"
 msgid "Disabled"
 msgstr "כבוי"
 
-msgctxt "#33000"
+# Category: General
+msgctxt "#32600"
+msgid "General"
+msgstr "כללי"
+
+msgctxt "#32601"
+msgid "Providers and fetching"
+msgstr "ספקים ואיתור"
+
+msgctxt "#32602"
+msgid "Matching and display"
+msgstr "התאמה ותצוגה"
+
+msgctxt "#32603"
+msgid "AI translation"
+msgstr "תרגום AI"
+
+msgctxt "#32604"
+msgid "Sync engine"
+msgstr "סנכרון"
+
+# Groups (reorganized settings screen)
+msgctxt "#32605"
+msgid "Gender accuracy"
+msgstr "דיוק מגדר"
+
+msgctxt "#32606"
+msgid "Performance"
+msgstr "ביצועים"
+
+msgctxt "#32607"
+msgid "Sampling and thinking"
+msgstr "דגימה וחשיבה"
+
+msgctxt "#32608"
+msgid "Diagnostics"
+msgstr "אבחון"
+
+msgctxt "#32609"
+msgid "Search"
+msgstr "חיפוש"
+
+msgctxt "#32610"
+msgid "AI translation when there is no Hebrew"
+msgstr "תרגום AI כשאין כתובית עברית"
+
+msgctxt "#32611"
+msgid "When a video starts and no Hebrew subtitle is found (embedded, human or from the community pool): translate with AI automatically, ask each time, or only when you pick a translation from the subtitle list yourself. A Hebrew subtitle that exists is always chosen automatically."
+msgstr "כשסרטון מתחיל ולא נמצאה כתובית עברית (מובנית, אנושית או מהמאגר הקהילתי): לתרגם ב-AI אוטומטית, לשאול בכל פעם, או רק כשבוחרים תרגום בעצמך מרשימת הכתוביות. כתובית עברית שכבר קיימת נבחרת תמיד אוטומטית."
+
+msgctxt "#32612"
+msgid "Automatically"
+msgstr "אוטומטית"
+
+msgctxt "#32613"
+msgid "Ask each time"
+msgstr "לשאול בכל פעם"
+
+msgctxt "#32614"
+msgid "Only when I pick it from the list"
+msgstr "רק כשאני בוחר מהרשימה"
+
+# Sync engine settings (declared; the code already read them)
+msgctxt "#32620"
+msgid "Verify and fix subtitle timing"
+msgstr "אימות ותיקון סנכרון הכתוביות"
+
+msgctxt "#32621"
+msgid "Read timing from the playing file"
+msgstr "קריאת תזמון מהקובץ המתנגן"
+
+msgctxt "#32622"
+msgid "AI audio probe (uses Gemini quota)"
+msgstr "בדיקת אודיו באמצעות AI (צורכת מכסת Gemini)"
+
+msgctxt "#32623"
+msgid "Automatic choice prefers verified timing"
+msgstr "בחירה אוטומטית מעדיפה תזמון מאומת"
+
+# Other declared settings
+msgctxt "#32624"
+msgid "Previous lines sent as context"
+msgstr "שורות קודמות המשמשות כהקשר"
+
+msgctxt "#32625"
+msgid "Badge may ask Ktuvit when nothing else has Hebrew"
+msgstr "התג רשאי לשאול את Ktuvit כשאין עברית במקור אחר"
+
+msgctxt "#32626"
+msgid "Report built-in Hebrew tracks to the pool"
+msgstr "דיווח על רצועות עברית מובנות למאגר"
+
+msgctxt "#32630"
 msgid "AI Hebrew (translated from {0})"
 msgstr "עברית AI (מתורגם מ-{0})"
 
-msgctxt "#33001"
+msgctxt "#32631"
 msgid "Translating chunk {0}/{1}..."
 msgstr "מתרגם chunk {0}/{1}..."
 
-msgctxt "#33002"
+msgctxt "#32632"
 msgid "No API key configured. Open Settings to add one."
 msgstr "אין מפתח Gemini — חבר מפתח חינמי בהגדרות התוסף (חיבור Gemini) לתרגום AI איכותי באמת בעברית."
 
-msgctxt "#33003"
+msgctxt "#32633"
 msgid "Connection successful. Model: {0}"
 msgstr "החיבור הצליח. מודל: {0}"
 
-msgctxt "#33004"
+msgctxt "#32634"
 msgid "Connection failed: {0}"
 msgstr "החיבור נכשל: {0}"
 
-msgctxt "#33005"
+msgctxt "#32635"
 msgid "Daily quota exceeded. Try again after midnight Pacific time (about 10:00 in Israel)."
 msgstr "הקווטה היומית מוצתה. נסה שוב אחרי חצות בשעון קליפורניה (בסביבות 10:00 בבוקר בישראל)."
 
-msgctxt "#33006"
+msgctxt "#32636"
 msgid "No source subtitles found in supported languages."
 msgstr "לא נמצאו כתוביות בשפות הנתמכות."
 
-msgctxt "#33007"
+msgctxt "#32637"
 msgid "Cache cleared. {0} files removed."
 msgstr "ה-cache נוקה. {0} קבצים נמחקו."
 
-msgctxt "#33008"
+msgctxt "#32638"
 msgid "Translation failed: {0}"
 msgstr "התרגום נכשל: {0}"
-
-msgctxt "#32250"
-msgid "Wyzie Subs (optional - skip if you have DarkSubs)"
-msgstr "Wyzie Subs (אופציונלי - לא חובה אם יש DarkSubs)"
-
-msgctxt "#32251"
-msgid "Claim a free Wyzie API key (opens browser)"
-msgstr "צור API key חינמי ב-Wyzie (פותח דפדפן)"
-
-msgctxt "#32252"
-msgid "Wyzie API Key (optional)"
-msgstr "Wyzie API Key (אופציונלי)"
-
-msgctxt "#32253"
-msgid "Optional. If you have DarkSubs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in DarkSubs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
-msgstr "אופציונלי - לא חובה. אם יש לך תוסף DarkSubs מותקן, אתה לא צריך את Wyzie בכלל. לחיצה על כל כתובית שאינה עברית מ-DarkSubs תפעיל אוטומטית את התרגום AI שלי. Wyzie נחוץ רק אם אין לך תוסף כתוביות אחר ואתה רוצה מקור אונליין בלחיצה אחת מתוך התוסף הזה. 1000 בקשות ליום חינמיות ב-store.wyzie.io/redeem."
 
 msgctxt "#32230"
 msgid "3.5 Flash Lite (recommended, 500/day)"
@@ -305,10 +369,6 @@ msgstr "3.8 Flash (החדש ביותר, 20 ביום בחינם)"
 msgctxt "#32235"
 msgid "Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
 msgstr "משפיע רק על Gemini 2.5 ו-3.1. גוגל ביטלה את הפרמטר הזה מ-Gemini 3.5 והלאה, ולכן במודלים חדשים יותר הוא מוסתר ולא נשלח."
-
-msgctxt "#32254"
-msgid "Test Wyzie connection"
-msgstr "בדיקת חיבור ל-Wyzie"
 
 msgctxt "#32260"
 msgid "TMDB (for gender-aware translation)"
@@ -370,10 +430,6 @@ msgctxt "#32506"
 msgid "Show Hebrew-subtitle match % on each source"
 msgstr "הצג אחוז התאמת כתוביות עברית לכל מקור"
 
-msgctxt "#32507"
-msgid "Built-in sources engine (DarkSubs)"
-msgstr "מנוע מקורות מובנה (DarkSubs)"
-
 msgctxt "#32508"
 msgid "Use the built-in sources engine (experimental)"
 msgstr "השתמש במנוע המקורות המובנה (ניסיוני)"
@@ -394,10 +450,6 @@ msgctxt "#32512"
 msgid "Wizdom"
 msgstr "Wizdom"
 
-msgctxt "#32513"
-msgid "Telegram"
-msgstr "Telegram"
-
 msgctxt "#32514"
 msgid "OpenSubtitles"
 msgstr "OpenSubtitles"
@@ -417,10 +469,6 @@ msgstr "Subscene"
 msgctxt "#32518"
 msgid "BSPlayer"
 msgstr "BSPlayer"
-
-msgctxt "#32519"
-msgid "Telegram channels (coming in a later update)"
-msgstr "ערוצי טלגרם (יגיע בעדכון הבא)"
 
 msgctxt "#32520"
 msgid "Translation mode"
@@ -454,18 +502,6 @@ msgctxt "#32527"
 msgid "When a video starts, automatically search and apply the best Hebrew subtitle (like DarkSubs). Requires the built-in engine."
 msgstr "כשסרט/פרק מתחיל, לחפש ולהחיל אוטומטית את הכתובית העברית הטובה ביותר (כמו DarkSubs). דורש את המנוע המובנה."
 
-msgctxt "#32528"
-msgid "Connect Telegram (more Hebrew subtitles)"
-msgstr "התחבר לטלגרם (עוד כתוביות עברית)"
-
-msgctxt "#32529"
-msgid "Disconnect Telegram"
-msgstr "התנתק מטלגרם"
-
-msgctxt "#32530"
-msgid "Log in to Telegram once (phone + code) to search the community subtitle channel for Hebrew subs. Requires the built-in engine."
-msgstr "התחברות חד-פעמית לטלגרם (טלפון + קוד) כדי לחפש כתוביות עברית בערוץ הקהילתי. דורש את המנוע המובנה."
-
 msgctxt "#32531"
 msgid "Force AI translation when no Hebrew exists (on play)"
 msgstr "כפיית תרגום AI כשאין עברית (בהפעלה)"
@@ -473,10 +509,6 @@ msgstr "כפיית תרגום AI כשאין עברית (בהפעלה)"
 msgctxt "#32532"
 msgid "When a video starts and no ready Hebrew subtitle is found (human or community pool), automatically AI-translate the best foreign subtitle to Hebrew. Off by default to save API requests."
 msgstr "כשסרט/פרק מתחיל ולא נמצאה כתובית עברית מוכנה (אנושית או מהמאגר), לתרגם אוטומטית ב-AI את הכתובית הזרה הטובה ביותר לעברית. כבוי כברירת מחדל כדי לחסוך בקשות API."
-
-msgctxt "#32533"
-msgid "Test Telegram connection (diagnostic)"
-msgstr "בדיקת חיבור טלגרם (אבחון)"
 
 msgctxt "#32534"
 msgid "Use my own Ktuvit account"
@@ -509,14 +541,6 @@ msgstr "הצג התראות כתוביות / תרגום"
 msgctxt "#32543"
 msgid "Hide translation toasts"
 msgstr "הודעות קופצות כמו \"מתרגם עם AI\", \"מהקאש\" וכו'. כבה כדי להסתיר את כולן."
-
-msgctxt "#32544"
-msgid "Keep DarkSubs enabled"
-msgstr "השאר את DarkSubs (חיפוש כתוביות עברית רגיל) מופעל"
-
-msgctxt "#32545"
-msgid "Keep DarkSubs enabled help"
-msgstr "כברירת מחדל רק MoranSubs פעיל כשהמנוע דולק. הפעל כדי להשאיר גם את DarkSubs/All Subs מופעל — הוא יישאר דלוק גם אחרי אתחול ועדכון."
 
 msgctxt "#32546"
 msgid "שיפור דיוק מגדר בעזרת כתובית ייחוס (ניסיוני)"
@@ -557,23 +581,3 @@ msgstr "תרגום AI: בדיקת זכר/נקבה במודל חזק"
 msgctxt "#32557"
 msgid "When an AI translation finishes (a subtitle picked from the list, or the automatic translation on play), one request to a stronger Gemini model (3.7 Flash, then 3.8, then 3.6 -- about 20 requests a day each on a free key) reads the whole title and corrects the masculine/feminine and singular/plural forms the translator got wrong (who speaks to whom). Only gendered forms change (word endings, את/אתה, הוא/היא...); a correction that touches anything else is dropped. The subtitles show as usual; the corrected file replaces them a few minutes later. When these models are busy or out of quota, the translation stays as it is. A translation made before -- from the cache or the community pool -- is proofread once, the first time it is opened (a pooled one when the subtitle it was translated from is in the list), and the corrected file goes to the pool for everyone. With a paid key this is one more request per title. Measured, of the lines it changed: 3.7 on two films fixed 56 and broke none, 3.8 on one film fixed 34 and broke 1."
 msgstr "כשתרגום AI מסתיים (כתובית שנבחרה מהרשימה, או התרגום האוטומטי בהפעלה), בקשה אחת למודל Gemini חזק יותר (Flash 3.7, אחריו 3.8 ואחריו 3.6 -- כ-20 בקשות ביום לכל אחד במפתח חינמי) קוראת את כל הכותר ומתקנת צורות זכר/נקבה ויחיד/רבים שהתרגום טעה בהן (מי מדבר אל מי). רק צורות המגדר משתנות (סיומות, את/אתה, הוא/היא...); תיקון שנוגע בכל דבר אחר נזרק. הכתוביות מוצגות כרגיל, והקובץ המתוקן מחליף אותן כעבור כמה דקות. כשהמודלים האלה עמוסים או שנגמרה להם המכסה, התרגום נשאר כמו שהוא. תרגום קודם -- מהמטמון או מהמאגר הקהילתי -- נבדק פעם אחת, כשהוא נפתח לראשונה (תרגום מהמאגר -- כשהכתובית שממנה תורגם נמצאת ברשימה), והקובץ המתוקן עובר למאגר לטובת כולם. במפתח בתשלום זו בקשה אחת נוספת לכל כותר. נמדד, מהשורות ששונו: 3.7 על שני סרטים תיקן 56 ולא שבר אף אחת, 3.8 על סרט אחד תיקן 34 ושבר אחת."
-
-msgctxt "#33009"
-msgid "AI translation when there is no Hebrew"
-msgstr "תרגום AI כשאין כתובית עברית"
-
-msgctxt "#33010"
-msgid "When a video starts and no Hebrew subtitle is found (embedded, human or from the community pool): translate with AI automatically, ask each time, or only when you pick a translation from the subtitle list yourself. A Hebrew subtitle that exists is always chosen automatically."
-msgstr "כשסרטון מתחיל ולא נמצאה כתובית עברית (מובנית, אנושית או מהמאגר הקהילתי): לתרגם ב-AI אוטומטית, לשאול בכל פעם, או רק כשבוחרים תרגום בעצמך מרשימת הכתוביות. כתובית עברית שכבר קיימת נבחרת תמיד אוטומטית."
-
-msgctxt "#33011"
-msgid "Automatically"
-msgstr "אוטומטית"
-
-msgctxt "#33012"
-msgid "Ask each time"
-msgstr "לשאול בכל פעם"
-
-msgctxt "#33013"
-msgid "Only when I pick it from the list"
-msgstr "רק כשאני בוחר מהרשימה"

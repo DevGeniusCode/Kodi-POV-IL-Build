@@ -231,10 +231,6 @@ class _Buf(object):
     def left(self):
         return self.n - self.p
 
-    def abs_pos(self):
-        return self.base + self.p
-
-
 def _read_vint(buf, keep_marker):
     """(value, length) EBML variable-int at buf.p; (None, 0) when truncated.
     keep_marker=True for element IDs, False for sizes (marker bit stripped;
@@ -749,7 +745,6 @@ def _block_frames(payload):
         prev = first
         for _ in range(n - 2):
             # signed vint delta
-            start_p = b2.p
             raw, rlen = _read_vint(b2, False)
             if raw is None:
                 return None

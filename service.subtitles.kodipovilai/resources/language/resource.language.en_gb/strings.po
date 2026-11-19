@@ -35,14 +35,6 @@ msgctxt "#32106"
 msgid "Pair with QR (scan from another device)"
 msgstr "Pair with QR (scan from another device)"
 
-msgctxt "#32107"
-msgid "Test DarkSubs integration"
-msgstr "Test DarkSubs integration"
-
-msgctxt "#32108"
-msgid "Translate via AI even when DarkSubs auto_translate is OFF"
-msgstr "Translate via AI even when DarkSubs auto_translate is OFF"
-
 # Category: Translation
 msgctxt "#32200"
 msgid "Translation"
@@ -79,10 +71,6 @@ msgstr "French"
 msgctxt "#32216"
 msgid "Portuguese"
 msgstr "Portuguese"
-
-msgctxt "#32220"
-msgid "Behavior"
-msgstr "Behavior"
 
 msgctxt "#32221"
 msgid "Skip translation if Hebrew subs already exist"
@@ -234,40 +222,132 @@ msgctxt "#32429"
 msgid "Disabled"
 msgstr "Disabled"
 
+# Category: General
+msgctxt "#32600"
+msgid "General"
+msgstr "General"
+
+msgctxt "#32601"
+msgid "Providers and fetching"
+msgstr "Providers and fetching"
+
+msgctxt "#32602"
+msgid "Matching and display"
+msgstr "Matching and display"
+
+msgctxt "#32603"
+msgid "AI translation"
+msgstr "AI translation"
+
+msgctxt "#32604"
+msgid "Sync engine"
+msgstr "Sync engine"
+
+# Groups (reorganized settings screen)
+msgctxt "#32605"
+msgid "Gender accuracy"
+msgstr "Gender accuracy"
+
+msgctxt "#32606"
+msgid "Performance"
+msgstr "Performance"
+
+msgctxt "#32607"
+msgid "Sampling and thinking"
+msgstr "Sampling and thinking"
+
+msgctxt "#32608"
+msgid "Diagnostics"
+msgstr "Diagnostics"
+
+msgctxt "#32609"
+msgid "Search"
+msgstr "Search"
+
+msgctxt "#32610"
+msgid "AI translation when there is no Hebrew"
+msgstr "AI translation when there is no Hebrew"
+
+msgctxt "#32611"
+msgid "When a video starts and no Hebrew subtitle is found (embedded, human or from the community pool): translate with AI automatically, ask each time, or only when you pick a translation from the subtitle list yourself. A Hebrew subtitle that exists is always chosen automatically."
+msgstr "When a video starts and no Hebrew subtitle is found (embedded, human or from the community pool): translate with AI automatically, ask each time, or only when you pick a translation from the subtitle list yourself. A Hebrew subtitle that exists is always chosen automatically."
+
+msgctxt "#32612"
+msgid "Automatically"
+msgstr "Automatically"
+
+msgctxt "#32613"
+msgid "Ask each time"
+msgstr "Ask each time"
+
+msgctxt "#32614"
+msgid "Only when I pick it from the list"
+msgstr "Only when I pick it from the list"
+
+# Sync engine settings (declared; the code already read them)
+msgctxt "#32620"
+msgid "Verify and fix subtitle timing"
+msgstr "Verify and fix subtitle timing"
+
+msgctxt "#32621"
+msgid "Read timing from the playing file"
+msgstr "Read timing from the playing file"
+
+msgctxt "#32622"
+msgid "AI audio probe (uses Gemini quota)"
+msgstr "AI audio probe (uses Gemini quota)"
+
+msgctxt "#32623"
+msgid "Automatic choice prefers verified timing"
+msgstr "Automatic choice prefers verified timing"
+
+# Other declared settings
+msgctxt "#32624"
+msgid "Previous lines sent as context"
+msgstr "Previous lines sent as context"
+
+msgctxt "#32625"
+msgid "Badge may ask Ktuvit when nothing else has Hebrew"
+msgstr "Badge may ask Ktuvit when nothing else has Hebrew"
+
+msgctxt "#32626"
+msgid "Report built-in Hebrew tracks to the pool"
+msgstr "Report built-in Hebrew tracks to the pool"
+
 # Runtime messages
-msgctxt "#33000"
+msgctxt "#32630"
 msgid "AI Hebrew (translated from {0})"
 msgstr "AI Hebrew (translated from {0})"
 
-msgctxt "#33001"
+msgctxt "#32631"
 msgid "Translating chunk {0}/{1}..."
 msgstr "Translating chunk {0}/{1}..."
 
-msgctxt "#33002"
+msgctxt "#32632"
 msgid "No API key configured. Open Settings to add one."
 msgstr "No Gemini API key. Add a free key in Settings -> Connect Gemini for real AI-quality Hebrew translation."
 
-msgctxt "#33003"
+msgctxt "#32633"
 msgid "Connection successful. Model: {0}"
 msgstr "Connection successful. Model: {0}"
 
-msgctxt "#33004"
+msgctxt "#32634"
 msgid "Connection failed: {0}"
 msgstr "Connection failed: {0}"
 
-msgctxt "#33005"
+msgctxt "#32635"
 msgid "Daily quota exceeded. Try again after midnight Pacific time (about 10:00 in Israel)."
 msgstr "Daily quota exceeded. Try again after midnight Pacific time (about 10:00 in Israel)."
 
-msgctxt "#33006"
+msgctxt "#32636"
 msgid "No source subtitles found in supported languages."
 msgstr "No source subtitles found in supported languages."
 
-msgctxt "#33007"
+msgctxt "#32637"
 msgid "Cache cleared. {0} files removed."
 msgstr "Cache cleared. {0} files removed."
 
-msgctxt "#33008"
+msgctxt "#32638"
 msgid "Translation failed: {0}"
 msgstr "Translation failed: {0}"
 
@@ -278,22 +358,6 @@ msgstr "Translation failed: {0}"
 # falls back to the built-in lookup (same Videos/Music bug). The
 # first attempt at this fix used 33010-33013 and reproduced the bug
 # exactly. Moved into the gap inside the Translation category.
-msgctxt "#32250"
-msgid "Wyzie Subs (optional - skip if you have DarkSubs)"
-msgstr "Wyzie Subs (optional - skip if you have DarkSubs)"
-
-msgctxt "#32251"
-msgid "Claim a free Wyzie API key (opens browser)"
-msgstr "Claim a free Wyzie API key (opens browser)"
-
-msgctxt "#32252"
-msgid "Wyzie API Key (optional)"
-msgstr "Wyzie API Key (optional)"
-
-msgctxt "#32253"
-msgid "Optional. If you have DarkSubs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in DarkSubs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
-msgstr "Optional. If you have DarkSubs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in DarkSubs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
-
 msgctxt "#32230"
 msgid "3.5 Flash Lite (recommended, 500/day)"
 msgstr "3.5 Flash Lite (recommended, 500/day)"
@@ -317,10 +381,6 @@ msgstr "3.8 Flash (newest, 20/day free)"
 msgctxt "#32235"
 msgid "Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
 msgstr "Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
-
-msgctxt "#32254"
-msgid "Test Wyzie connection"
-msgstr ""
 
 msgctxt "#32260"
 msgid "TMDB (for gender-aware translation)"
@@ -382,10 +442,6 @@ msgctxt "#32506"
 msgid "Show Hebrew-subtitle match % on each source"
 msgstr "Show Hebrew-subtitle match % on each source"
 
-msgctxt "#32507"
-msgid "Built-in sources engine (DarkSubs)"
-msgstr "Built-in sources engine (DarkSubs)"
-
 msgctxt "#32508"
 msgid "Use the built-in sources engine (experimental)"
 msgstr "Use the built-in sources engine (experimental)"
@@ -406,10 +462,6 @@ msgctxt "#32512"
 msgid "Wizdom"
 msgstr "Wizdom"
 
-msgctxt "#32513"
-msgid "Telegram"
-msgstr "Telegram"
-
 msgctxt "#32514"
 msgid "OpenSubtitles"
 msgstr "OpenSubtitles"
@@ -429,10 +481,6 @@ msgstr "Subscene"
 msgctxt "#32518"
 msgid "BSPlayer"
 msgstr "BSPlayer"
-
-msgctxt "#32519"
-msgid "Telegram channels (coming in a later update)"
-msgstr "Telegram channels (coming in a later update)"
 
 msgctxt "#32520"
 msgid "Translation mode"
@@ -466,18 +514,6 @@ msgctxt "#32527"
 msgid "When a video starts, automatically search and apply the best Hebrew subtitle (like DarkSubs). Requires the built-in engine."
 msgstr "When a video starts, automatically search and apply the best Hebrew subtitle (like DarkSubs). Requires the built-in engine."
 
-msgctxt "#32528"
-msgid "Connect Telegram (more Hebrew subtitles)"
-msgstr "Connect Telegram (more Hebrew subtitles)"
-
-msgctxt "#32529"
-msgid "Disconnect Telegram"
-msgstr "Disconnect Telegram"
-
-msgctxt "#32530"
-msgid "Log in to Telegram once (phone + code) to search the community subtitle channel for Hebrew subs. Requires the built-in engine."
-msgstr "Log in to Telegram once (phone + code) to search the community subtitle channel for Hebrew subs. Requires the built-in engine."
-
 msgctxt "#32531"
 msgid "Force AI translation when no Hebrew exists (on play)"
 msgstr "Force AI translation when no Hebrew exists (on play)"
@@ -485,10 +521,6 @@ msgstr "Force AI translation when no Hebrew exists (on play)"
 msgctxt "#32532"
 msgid "When a video starts and no ready Hebrew subtitle is found (human or community pool), automatically AI-translate the best foreign subtitle to Hebrew. Off by default to save API requests."
 msgstr "When a video starts and no ready Hebrew subtitle is found (human or community pool), automatically AI-translate the best foreign subtitle to Hebrew. Off by default to save API requests."
-
-msgctxt "#32533"
-msgid "Test Telegram connection (diagnostic)"
-msgstr "Test Telegram connection (diagnostic)"
 
 msgctxt "#32534"
 msgid "Use my own Ktuvit account"
@@ -521,14 +553,6 @@ msgstr "Show subtitle / translation notifications"
 msgctxt "#32543"
 msgid "Toast popups like \"translating with AI\", \"from cache\", etc. Turn off to hide them all."
 msgstr "Toast popups like \"translating with AI\", \"from cache\", etc. Turn off to hide them all."
-
-msgctxt "#32544"
-msgid "Keep DarkSubs (regular Hebrew subtitle search) enabled"
-msgstr "Keep DarkSubs (regular Hebrew subtitle search) enabled"
-
-msgctxt "#32545"
-msgid "By default only MoranSubs runs while the engine is on. Turn this on to keep DarkSubs/All Subs enabled too -- it stays on across restarts and updates."
-msgstr "By default only MoranSubs runs while the engine is on. Turn this on to keep DarkSubs/All Subs enabled too -- it stays on across restarts and updates."
 
 msgctxt "#32546"
 msgid "Improve gender accuracy using a reference subtitle (experimental)"
@@ -569,23 +593,3 @@ msgstr ""
 msgctxt "#32557"
 msgid "When an AI translation finishes (a subtitle picked from the list, or the automatic translation on play), one request to a stronger Gemini model (3.7 Flash, then 3.8, then 3.6 -- about 20 requests a day each on a free key) reads the whole title and corrects the masculine/feminine and singular/plural forms the translator got wrong (who speaks to whom). Only gendered forms change (word endings, את/אתה, הוא/היא...); a correction that touches anything else is dropped. The subtitles show as usual; the corrected file replaces them a few minutes later. When these models are busy or out of quota, the translation stays as it is. A translation made before -- from the cache or the community pool -- is proofread once, the first time it is opened (a pooled one when the subtitle it was translated from is in the list), and the corrected file goes to the pool for everyone. With a paid key this is one more request per title. Measured, of the lines it changed: 3.7 on two films fixed 56 and broke none, 3.8 on one film fixed 34 and broke 1."
 msgstr ""
-
-msgctxt "#33009"
-msgid "AI translation when there is no Hebrew"
-msgstr "AI translation when there is no Hebrew"
-
-msgctxt "#33010"
-msgid "When a video starts and no Hebrew subtitle is found (embedded, human or from the community pool): translate with AI automatically, ask each time, or only when you pick a translation from the subtitle list yourself. A Hebrew subtitle that exists is always chosen automatically."
-msgstr "When a video starts and no Hebrew subtitle is found (embedded, human or from the community pool): translate with AI automatically, ask each time, or only when you pick a translation from the subtitle list yourself. A Hebrew subtitle that exists is always chosen automatically."
-
-msgctxt "#33011"
-msgid "Automatically"
-msgstr "Automatically"
-
-msgctxt "#33012"
-msgid "Ask each time"
-msgstr "Ask each time"
-
-msgctxt "#33013"
-msgid "Only when I pick it from the list"
-msgstr "Only when I pick it from the list"

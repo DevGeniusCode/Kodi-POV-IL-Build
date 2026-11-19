@@ -24,9 +24,9 @@ import threading
 import zlib
 
 try:
-    from resources.lib import kodi_utils
+    from resources.lib import sub_utils
 except Exception:
-    kodi_utils = None
+    sub_utils = None
 
 try:
     from resources.lib import release_match
@@ -185,7 +185,7 @@ _ORACLE_PIECEWISE_MAX_ATTEMPTS = 12
 
 def _selection_snapshot():
     try:
-        return kodi_utils.current_subtitle_selection() or {}
+        return sub_utils.current_subtitle_selection() or {}
     except Exception:
         return {}
 
@@ -193,12 +193,12 @@ def _selection_snapshot():
 def _publish_selection_status(state, source='local', selection=None):
     """Update the current pick's tiny UI record; never performs network I/O."""
     try:
-        if kodi_utils is not None:
+        if sub_utils is not None:
             expected = selection or {}
             if not all(expected.get(k) for k in (
                     'token', 'link_hash', 'stream_hash')):
                 return False
-            return bool(kodi_utils.set_subtitle_sync_status(
+            return bool(sub_utils.set_subtitle_sync_status(
                 state, source=source,
                 selection_token=expected.get('token') or '',
                 link_hash=expected.get('link_hash') or '',
@@ -210,14 +210,14 @@ def _publish_selection_status(state, source='local', selection=None):
 
 def _log(msg, level='INFO'):
     try:
-        kodi_utils.log('subsync: ' + msg, level=level)
+        sub_utils.log('subsync: ' + msg, level=level)
     except Exception:
         pass
 
 
 def enabled():
     try:
-        return (kodi_utils.get_setting('subsync_verify', 'true') or
+        return (sub_utils.get_setting('subsync_verify', 'true') or
                 'true').strip().lower() != 'false'
     except Exception:
         return True
@@ -233,7 +233,7 @@ def playing_release(info):
                       os.path.basename(info.get('filepath') or ''),
                       info.get('title'))
         ref = next((str(value).strip() for value in candidates
-                    if value and not kodi_utils.release_conflicts_with_episode(
+                    if value and not sub_utils.release_conflicts_with_episode(
                         value, info.get('season'), info.get('episode'))), '')
         if not ref or release_match is None:
             return ''
@@ -463,7 +463,7 @@ _NEGATIVE_PROBE_TTL_S = 6 * 60 * 60
 
 def _probe_enabled():
     try:
-        return (kodi_utils.get_setting('subsync_probe', 'true') or
+        return (sub_utils.get_setting('subsync_probe', 'true') or
                 'true').strip().lower() != 'false'
     except Exception:
         return True
@@ -688,13 +688,6 @@ def _remote_reference_bundle(url):
             'track': {'source': 'matroska-cues-index'}}
 
 
-def _remote_cue_reference(url):
-    """Compatibility wrapper returning the legacy union cue list."""
-    bundle = _remote_reference_bundle(url)
-    cues = bundle.get('cues') or []
-    return cues if len(cues) >= MIN_REMOTE_CUES else None
-
-
 MIN_REMOTE_CUES = 8
 
 
@@ -745,10 +738,10 @@ def _audio_probe_reference(info, playing, second_pass=False):
     cues (used once when a promising peak failed the tight check for lack of
     reference points); it marks the cache so it never repeats."""
     try:
-        if (kodi_utils.get_setting('subsync_audio', 'true') or
+        if (sub_utils.get_setting('subsync_audio', 'true') or
                 'true').strip().lower() == 'false':
             return None
-        api_key = (kodi_utils.get_setting('api_key', '') or '').strip()
+        api_key = (sub_utils.get_setting('api_key', '') or '').strip()
         if not api_key:
             return None
         # A cache hit must obey the same local-only contract as extraction.
@@ -792,7 +785,7 @@ def _audio_probe_reference(info, playing, second_pass=False):
         whole_seconds = [0, 0]
         api_failed = False
         if segs:
-            model = (kodi_utils.get_setting('model', '') or
+            model = (sub_utils.get_setting('model', '') or
                      'gemini-3.5-flash-lite')
             for seg in segs[:3]:
                 try:
@@ -1251,7 +1244,7 @@ def prefetch_autosub_reference(info, candidates):
     registered_key = ''
     try:
         if (not _probe_enabled()
-                or (kodi_utils.get_setting('subsync_autorank', 'true') or
+                or (sub_utils.get_setting('subsync_autorank', 'true') or
                     'true').strip().lower() == 'false'):
             return False
         playing = playing_release(info)
@@ -1323,11 +1316,6 @@ def prefetch_autosub_reference(info, candidates):
         return False
 
 
-def _probe_reference_cues(info, playing):
-    """Compatibility wrapper returning the all-track union cue list."""
-    return _probe_reference_bundle(info, playing).get('cues') or None
-
-
 def _cached_reference_bundle(info):
     """Return a proven media-scoped reference without I/O beyond one JSON read."""
     cache_key = _transport_cache_key(info)
@@ -1380,7 +1368,7 @@ def _is_human_hebrew_candidate(payload):
 
 def _names_other_episode(name, info):
     try:
-        return bool(kodi_utils.release_conflicts_with_episode(
+        return bool(sub_utils.release_conflicts_with_episode(
             name, (info or {}).get('season'), (info or {}).get('episode')))
     except Exception:
         return False
@@ -1470,7 +1458,7 @@ def rank_ready_candidates(info, candidates, max_candidates=4, cached_only=False)
     Any doubt preserves the existing order.
     """
     try:
-        if (kodi_utils.get_setting('subsync_autorank', 'true') or
+        if (sub_utils.get_setting('subsync_autorank', 'true') or
                 'true').strip().lower() == 'false':
             return candidates
         playing = playing_release(info)
@@ -1650,41 +1638,6 @@ def rank_picker_candidates(info, candidates, max_candidates=4, cached_only=False
         return candidates
 
 
-def proven_pool_ai_fallback(info, candidates):
-    """Find a release-proven community AI row without fetching anything.
-
-    Human Hebrew remains autosub's first choice.  This only remembers a pool
-    alternative that may be used later if deep verification definitively fails
-    to align that human subtitle.  It does not reorder the manual picker or make
-    a provider/pool request.
-    """
-    try:
-        if release_match is None:
-            return ''
-        playing = playing_release(info)
-        if not playing:
-            return ''
-        for candidate in candidates or []:
-            if (candidate.get('language') or '').strip().lower() not in (
-                    'he', 'heb', 'hebrew'):
-                continue
-            link = candidate.get('link') or ''
-            payload = _decode_link(link) or {}
-            if payload.get('type') != 'pool':
-                continue
-            if (payload.get('pool_kind') or 'ai') == 'ktuvit':
-                continue
-            rel = (payload.get('release') or '').strip()
-            if not rel:
-                continue
-            _pct, tier, _diag = release_match.score(playing, rel)
-            if tier in release_match.AUTO_OK_TIERS:
-                return link
-    except Exception as e:
-        _log('autosub AI fallback discovery skipped: %r' % e, level='DEBUG')
-    return ''
-
-
 # ---- main entry -------------------------------------------------------------
 
 def process(info, path, delivered_release, selection=None, fallback_link='',
@@ -1713,7 +1666,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         if not playing and not (_playing_url(info)
                                 or _remote_playing_url(info)):
             _log('delivery unverified: playing release unavailable')
-            kodi_utils.stage_subtitle_delivery(
+            sub_utils.stage_subtitle_delivery(
                 path, selection=selection,
                 status='unverified', source='no-release')
             return path, None
@@ -1752,7 +1705,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                 # corrects it only on a proven >=1s shift. The same job learns
                 # the content id a later manual delay needs. Stage first: the
                 # job must only ever observe an already-staged delivery.
-                kodi_utils.stage_subtitle_delivery(
+                sub_utils.stage_subtitle_delivery(
                     path, selection=selection,
                     status='confirmed', source='release')
                 if _playing_url(info) or _remote_playing_url(info):
@@ -1793,7 +1746,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                         # Remove the original zero/global record immediately,
                         # before the delay watcher can learn or share it.
                         _clear_delivery(selection=selection)
-                    kodi_utils.stage_subtitle_sync_fix(
+                    sub_utils.stage_subtitle_sync_fix(
                         out, selection=selection, source='cache')
                     return out, {'status': status, 'applied': True,
                                  'offset_ms': cached.get('offset_ms', 0.0),
@@ -1806,7 +1759,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                 _record_delivery(info, playing, key, 1.0, 0.0,
                                  cut_signature=cut_signature,
                                  selection=selection)
-                kodi_utils.stage_subtitle_delivery(
+                sub_utils.stage_subtitle_delivery(
                     path, selection=selection,
                     status=('confirmed'
                             if status == sync_align.STATUS_CONFIRMED
@@ -1866,7 +1819,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                                          selection=selection)
                     else:
                         _clear_delivery(selection=selection)
-                    kodi_utils.stage_subtitle_sync_fix(
+                    sub_utils.stage_subtitle_sync_fix(
                         out, selection=selection, source='community',
                         notice=_fix_notice(verdict))
                     return out, verdict
@@ -1876,7 +1829,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                 _record_delivery(info, playing, key, 1.0, 0.0,
                                  cut_signature=cut_signature,
                                  selection=selection)
-                kodi_utils.stage_subtitle_delivery(
+                sub_utils.stage_subtitle_delivery(
                     path, selection=selection,
                     status='confirmed', source='community')
                 return path, dict(cv, community=True)
@@ -1890,7 +1843,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         # one -- self-healing delivery, per the plan's latency budget.
         marked = _mark_pending(key, selection=selection)
         delivery_staged = bool(
-            marked and kodi_utils.stage_subtitle_delivery(
+            marked and sub_utils.stage_subtitle_delivery(
                 path, selection=selection))
         # Publish before the job file becomes visible to the service. A fast
         # worker can only replace "checking" with its result, never have this
@@ -1908,7 +1861,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         # Remove only this selection's half-created coordination records. A
         # newer pick has another token and cannot be disturbed here.
         try:
-            kodi_utils.clear_subtitle_delivery(path, selection=selection)
+            sub_utils.clear_subtitle_delivery(path, selection=selection)
         except Exception:
             pass
         _clear_job_pending({
@@ -1921,7 +1874,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         # subtitle untouched.  Deep verification can include provider and media
         # reads; doing it synchronously here would bring the old 10-30s picker
         # freeze back precisely when the background service is unavailable.
-        kodi_utils.stage_subtitle_delivery(
+        sub_utils.stage_subtitle_delivery(
             path, selection=selection,
             status='unverified', source='queue')
         _log('deep verify deferred: service queue unavailable', level='WARNING')
@@ -1991,7 +1944,7 @@ def _delivery_prop(selection=None):
     token = expected.get('token') or expected.get('selection_token') or ''
     if not token:
         try:
-            token = kodi_utils.get_subtitle_selection_token() or ''
+            token = sub_utils.get_subtitle_selection_token() or ''
         except Exception:
             token = ''
     return _DELIVERED_PROP + ('.' + token if token else '')
@@ -2020,7 +1973,7 @@ def _record_delivery(info, playing, key, scale, offset_ms,
     try:
         import xbmcgui
         expected = selection or {}
-        if expected and not kodi_utils.subtitle_selection_matches(
+        if expected and not sub_utils.subtitle_selection_matches(
                 expected.get('token') or '',
                 expected.get('link_hash') or '',
                 expected.get('stream_hash') or ''):
@@ -2041,7 +1994,7 @@ def _record_delivery(info, playing, key, scale, offset_ms,
         raw = json.dumps(payload, ensure_ascii=False)
         prop = _delivery_prop(expected)
         win.setProperty(prop, raw)
-        if expected and not kodi_utils.subtitle_selection_matches(
+        if expected and not sub_utils.subtitle_selection_matches(
                 expected.get('token') or '',
                 expected.get('link_hash') or '',
                 expected.get('stream_hash') or ''):
@@ -4548,7 +4501,7 @@ def _selection_matches(selection):
     try:
         return bool(expected.get('token') and expected.get('link_hash')
                     and expected.get('stream_hash')
-                    and kodi_utils.subtitle_selection_matches(
+                    and sub_utils.subtitle_selection_matches(
                         expected.get('token'), expected.get('link_hash'),
                         expected.get('stream_hash')))
     except Exception:
@@ -4561,7 +4514,7 @@ def _pending_prop(selection=None):
     token = expected.get('token') or ''
     if not token:
         try:
-            token = kodi_utils.get_subtitle_selection_token() or ''
+            token = sub_utils.get_subtitle_selection_token() or ''
         except Exception:
             token = ''
     return _PENDING_PROP + ('.' + token if token else '')
@@ -4618,10 +4571,6 @@ def _pending_record(selection=None):
         return (json.loads(raw) or {}) if raw else {}
     except Exception:
         return {}
-
-
-def _pending_key():
-    return _pending_record().get('key', '')
 
 
 def _clear_job_pending(job):
@@ -4742,11 +4691,11 @@ def _apply_proven_pool_fallback(job):
     if tier not in release_match.AUTO_OK_TIERS:
         return False
 
-    old_link = kodi_utils.get_current_subtitle() or ''
+    old_link = sub_utils.get_current_subtitle() or ''
     fallback_selection = {}
     try:
-        kodi_utils.set_current_subtitle(link)
-        selection = kodi_utils.current_subtitle_selection(
+        sub_utils.set_current_subtitle(link)
+        selection = sub_utils.current_subtitle_selection(
             expected_link=link) or {}
         fallback_selection = dict(selection)
         if (selection.get('stream_hash') != (job.get('stream_hash') or '')
@@ -4757,13 +4706,13 @@ def _apply_proven_pool_fallback(job):
         path = translate.resolve(
             link, dict(job.get('info') or {}), selection=selection)
         if (not path or not _selection_matches(selection)
-                or not kodi_utils.apply_subtitle_file(
+                or not sub_utils.apply_subtitle_file(
                     path, selection=selection)):
             raise RuntimeError('fallback delivery was not acknowledged')
         _log('autosub fallback: release-proven pool AI replaced '
              'unalignable human')
         try:
-            kodi_utils.notify(
+            sub_utils.notify(
                 'הכתובית האנושית לא התאימה · הוחלה כתובית מסונכרנת',
                 time_ms=4500)
         except Exception:
@@ -4776,13 +4725,13 @@ def _apply_proven_pool_fallback(job):
             # flight. Its link is identical but its new selection token is
             # authoritative; never overwrite that manual choice on failure.
             if (old_link and fallback_selection
-                    and kodi_utils.get_current_subtitle() == link
+                    and sub_utils.get_current_subtitle() == link
                     and _selection_matches(fallback_selection)):
-                kodi_utils.set_current_subtitle(old_link)
-                restored = kodi_utils.current_subtitle_selection(
+                sub_utils.set_current_subtitle(old_link)
+                restored = sub_utils.current_subtitle_selection(
                     expected_link=old_link) or {}
                 if _selection_matches(restored):
-                    kodi_utils.set_subtitle_sync_status(
+                    sub_utils.set_subtitle_sync_status(
                         'unverified', source='fallback-failed',
                         selection_token=restored.get('token') or '',
                         link_hash=restored.get('link_hash') or '',
@@ -4866,7 +4815,7 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
         if not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature):
             cut_signature = ''
     playing = job.get('playing') or ''
-    old_link = kodi_utils.get_current_subtitle() or ''
+    old_link = sub_utils.get_current_subtitle() or ''
     attempted = 0
     seen_text = set()
     rejected_timing = job.setdefault('_rejected_timing', set())
@@ -4941,8 +4890,8 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
             # a user choice made during that work always wins.
             if not _job_matches_current(job):
                 return False
-            kodi_utils.set_current_subtitle(link, renew=True)
-            fallback_selection = kodi_utils.current_subtitle_selection(
+            sub_utils.set_current_subtitle(link, renew=True)
+            fallback_selection = sub_utils.current_subtitle_selection(
                 expected_link=link) or {}
             if (fallback_selection.get('stream_hash')
                     != (job.get('stream_hash') or '')
@@ -4979,23 +4928,23 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
                 if not delivery_path:
                     raise RuntimeError('verified correction could not be written')
                 cancel_pending()
-                if not kodi_utils.stage_subtitle_sync_fix(
+                if not sub_utils.stage_subtitle_sync_fix(
                         delivery_path, selection=fallback_selection,
                         source='tournament', notice=(
                             'הכתובית סונכרנה אוטומטית')):
                     raise RuntimeError('verified correction could not be staged')
             else:
-                if not kodi_utils.stage_subtitle_delivery(
+                if not sub_utils.stage_subtitle_delivery(
                         delivery_path, selection=fallback_selection,
                         status='confirmed', source='tournament'):
                     raise RuntimeError('verified delivery could not be staged')
-            if not kodi_utils.apply_subtitle_file(
+            if not sub_utils.apply_subtitle_file(
                     delivery_path, selection=fallback_selection):
                 raise RuntimeError('verified candidate delivery failed')
             _log('autosub tournament: applied verified human candidate %r'
                  % rel)
             try:
-                kodi_utils.notify(
+                sub_utils.notify(
                     'נבחרה אוטומטית כתובית שתזמונה אומת', time_ms=4500)
             except Exception:
                 pass
@@ -5005,9 +4954,9 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
                  level='WARNING')
             try:
                 if (old_link and fallback_selection
-                        and kodi_utils.get_current_subtitle() == link
+                        and sub_utils.get_current_subtitle() == link
                         and _selection_matches(fallback_selection)):
-                    kodi_utils.set_current_subtitle(old_link, renew=True)
+                    sub_utils.set_current_subtitle(old_link, renew=True)
             except Exception:
                 pass
             return False
@@ -5041,7 +4990,7 @@ def _announce(verdict, fresh, offset_hint=None, selection=None):
                     -off / 1000.0)
             else:
                 msg = 'הכתובית סונכרנה אוטומטית'
-            kodi_utils.notify(msg, time_ms=5000)
+            sub_utils.notify(msg, time_ms=5000)
     except Exception:
         pass
 
@@ -5126,7 +5075,7 @@ def _wait_for_delivery_ack(job, timeout_ms=3000):
         for attempt in range(steps):
             if not _job_matches_current(job):
                 return False
-            if kodi_utils.subtitle_delivery_is_applied(
+            if sub_utils.subtitle_delivery_is_applied(
                     path, selection=selection):
                 return True
             if attempt + 1 < steps:
@@ -5513,7 +5462,7 @@ def drain_queue_once():
                     # confirmation fail and abandon a good subtitle.
                     if not (job.get('identity_only') or job.get('file_only')):
                         try:
-                            kodi_utils.clear_subtitle_delivery(
+                            sub_utils.clear_subtitle_delivery(
                                 job.get('path') or '',
                                 selection=_job_selection(job))
                         except Exception:
@@ -5541,7 +5490,7 @@ def _write_fixed(orig_path, fixed_text):
         import hashlib
         digest = hashlib.sha1(
             fixed_text.encode('utf-8', 'replace')).hexdigest()[:12]
-        cache = kodi_utils.cache_dir()
+        cache = sub_utils.cache_dir()
         suffix = '.{0}.synced.he.srt'.format(digest)
         # Windows Kodi commonly runs without long-path support.  The source
         # subtitle can already have a long release name; appending our suffix

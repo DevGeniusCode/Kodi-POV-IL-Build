@@ -10,7 +10,6 @@ from resources.lib.subs_engine.extract_sub import extract
 from resources.lib.subs_engine.general import DEFAULT_REQUEST_TIMEOUT
 from resources.lib.subs_engine.general import extract_season_episode_numbers
 import xbmcvfs
-import re
 #########################################
 
 que=urllib.parse.quote_plus
