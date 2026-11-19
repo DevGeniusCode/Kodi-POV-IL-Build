@@ -10,9 +10,9 @@ Output layout (``--out``)::
     index.html                          landing page; its ONLY static <a href="*.zip"> is repository.povil-latest.zip (what Kodi's
                                         file browser lists); the Wizard zip is a JS download button, see write_landing
     .nojekyll
-    addons.xml                          every add-on's addon.xml, wrapped in <addons>
-    addons.xml.sha256                   hex sha256 of addons.xml (verified by Kodi: <checksum verify="sha256">)
-    addons.xml.md5                      hex md5 of addons.xml (for older tools; Kodi does not need it)
+    repo/addons.xml                     every add-on's addon.xml, wrapped in <addons> (NOT at the site root, see INDEX_DIR)
+    repo/addons.xml.sha256              hex sha256 of addons.xml (verified by Kodi: <checksum verify="sha256">)
+    repo/addons.xml.md5                 hex md5 of addons.xml (for older tools; Kodi does not need it)
     repository.povil-latest.zip         stable-name copies for install instructions
     plugin.program.kodipovilwizard-latest.zip
     zips/<id>/<id>-<version>.zip        the <datadir>: Kodi downloads exactly this path
@@ -61,6 +61,14 @@ STABLE_ALIASES = ("repository.povil", "repository.povil.upstream", "plugin.progr
 # repository zip is installed by the Wizard and linked nowhere.
 LANDING_LINK_ID = "repository.povil"
 LANDING_BUTTON_ID = "plugin.program.kodipovilwizard"
+
+# The repository index (addons.xml + its checksums) lives in its OWN folder, never in the folder Kodi's file browser lists (the
+# site root). Why: browsing an HTTP source makes Kodi keep that folder's listing (CDirectoryCache, DIR_CACHE_ONCE) and
+# CFile::Open() then refuses, WITHOUT any network request, every file of that folder the listing does not contain. The listing is
+# built from the <a href> links of index.html, so "addons.xml.sha256" at the root is "not there" and the repository update dies
+# at once with "CRepository: failed read '.../addons.xml.sha256'" (no CCurlFile line in the log). A folder nobody browses is not
+# in that cache. The same reason keeps zips/<id>/ and upstream/<name>/ out of the root.
+INDEX_DIR = "repo"
 
 # Files Kodi looks for next to the zips when <assets> does not name them.
 DEFAULT_ASSETS = ("icon.png", "fanart.jpg")
@@ -209,10 +217,11 @@ def check_repositories(addons: list[Addon], base_url: str) -> None:
             d = dirs[0]
             chk = d.find("checksum")
             problems = []
-            if (d.findtext("info") or "").strip().lower() != want + "addons.xml":
-                problems.append("<info> must be " + want + "addons.xml")
-            if chk is None or (chk.text or "").strip().lower() != want + "addons.xml.sha256" or chk.get("verify") != "sha256":
-                problems.append('<checksum verify="sha256"> must be ' + want + "addons.xml.sha256")
+            index_url = want + INDEX_DIR + "/addons.xml"
+            if (d.findtext("info") or "").strip().lower() != index_url:
+                problems.append("<info> must be " + index_url)
+            if chk is None or (chk.text or "").strip().lower() != index_url + ".sha256" or chk.get("verify") != "sha256":
+                problems.append('<checksum verify="sha256"> must be ' + index_url + ".sha256")
             if (d.findtext("datadir") or "").strip().lower() != want + "zips/":
                 problems.append("<datadir> must be " + want + "zips/")
             if (d.findtext("hashes") or "").strip().lower() != "sha256":
@@ -334,10 +343,11 @@ def write_index(out_dir: str, addons: list[Addon]) -> None:
     for addon in addons:
         parts.append(addon_xml_fragment(addon))
     parts.append("</addons>")
-    _write_text(os.path.join(out_dir, "addons.xml"), "\n".join(parts) + "\n")
+    index_path = os.path.join(out_dir, INDEX_DIR, "addons.xml")
+    _write_text(index_path, "\n".join(parts) + "\n")
     # Kodi trims whitespace; the bare hex digest is the most compatible form.
-    _write_text(os.path.join(out_dir, "addons.xml.md5"), _md5(os.path.join(out_dir, "addons.xml")))
-    _write_text(os.path.join(out_dir, "addons.xml.sha256"), _sha256(os.path.join(out_dir, "addons.xml")))
+    _write_text(index_path + ".md5", _md5(index_path))
+    _write_text(index_path + ".sha256", _sha256(index_path))
 
 
 def write_config(out_dir: str, base_url: str) -> dict:
@@ -423,11 +433,14 @@ def write_landing(out_dir: str, base_url: str, aliases: list[str]) -> None:
 def verify(out_dir: str, addons: list[Addon]) -> list[str]:
     """Re-read the finished site the way Kodi will. Returns a list of problems (empty = ok)."""
     problems: list[str] = []
-    index_path = os.path.join(out_dir, "addons.xml")
+    index_path = os.path.join(out_dir, INDEX_DIR, "addons.xml")
+    for stray in ("addons.xml", "addons.xml.sha256", "addons.xml.md5"):
+        if os.path.exists(os.path.join(out_dir, stray)):
+            problems.append(f"{stray} must not sit in the site root (see INDEX_DIR): Kodi's directory cache hides it after a browse")
     try:
         root = ET.parse(index_path).getroot()
     except (ET.ParseError, OSError) as exc:
-        return [f"addons.xml unreadable: {exc}"]
+        return problems + [f"{INDEX_DIR}/addons.xml unreadable: {exc}"]
 
     listed = {el.get("id"): el.get("version") for el in root.findall("addon")}
     expected = {a.id: a.version for a in addons}
@@ -435,7 +448,7 @@ def verify(out_dir: str, addons: list[Addon]) -> list[str]:
         problems.append(f"addons.xml lists {sorted(listed.items())} but expected {sorted(expected.items())}")
 
     try:
-        with open(os.path.join(out_dir, "addons.xml.md5"), "r", encoding="ascii") as fh:
+        with open(index_path + ".md5", "r", encoding="ascii") as fh:
             recorded = fh.read().strip().split()[0]
         if recorded != _md5(index_path):
             problems.append("addons.xml.md5 does not match addons.xml")
@@ -443,7 +456,7 @@ def verify(out_dir: str, addons: list[Addon]) -> list[str]:
         problems.append(f"addons.xml.md5 unreadable: {exc}")
 
     try:
-        with open(os.path.join(out_dir, "addons.xml.sha256"), "r", encoding="ascii") as fh:
+        with open(index_path + ".sha256", "r", encoding="ascii") as fh:
             if fh.read().strip().split()[0] != _sha256(index_path):
                 problems.append("addons.xml.sha256 does not match addons.xml")
     except (OSError, IndexError) as exc:

@@ -99,7 +99,7 @@ def own_upstream_prefix(repo_xml: str) -> str:
     try:
         own = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(repo_xml))), "repository.povil", "addon.xml")
         info = (parse_dirs(own)[0]["info"]).lower()
-        return info.rsplit("/addons.xml", 1)[0] + "/upstream/"
+        return info.rsplit("/repo/addons.xml", 1)[0] + "/upstream/"
     except Exception:  # noqa: BLE001
         return ""
 

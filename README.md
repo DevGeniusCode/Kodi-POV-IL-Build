@@ -56,7 +56,7 @@ pack, first-run provisioning, healing, and the runtime patches of other add-ons.
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
 │  GitHub (source of truth) ── CI: .github/scripts/gen_repo.py ──► GitHub Pages │
-│    addons.xml (+ .sha256)         zips/<id>/<id>-<ver>.zip (+ .sha256)         │
+│    repo/addons.xml (+ .sha256)    zips/<id>/<id>-<ver>.zip (+ .sha256)         │
 │    <id>-latest.zip (+ .sha256)    config/config.json + config-<ver>.zip        │
 └───────────┬─────────────────────────────────────────────┬─────────────────┘
             │ repository.povil   (our add-ons)              │ config/config.json
@@ -103,6 +103,16 @@ Kodi merges every `<dir>` of a repository add-on into one update and **fails the
 (`xbmc/addons/Repository.cpp`, `FetchIfChanged`). `repository.povil` therefore holds ONE `<dir>` (ours, `verify="sha256"`,
 `<hashes>sha256</hashes>`), and everything we do not control lives in `repository.povil.upstream`: a dead third-party server can
 stop POV from installing, never our own add-ons from updating. `gen_repo.py` enforces the split.
+
+### Why the index is not at the site root
+
+Browsing an HTTP source in Kodi's file manager makes Kodi keep that folder's listing in memory (`CDirectoryCache`,
+`DIR_CACHE_ONCE`). `CFile::Open()` then answers "no such file" **without any network request** for every file of that folder the
+listing lacks. The listing of the site root is what `index.html` links (only `repository.povil-latest.zip`), so a root-level
+`addons.xml.sha256` fails the repository update at once with `CRepository: failed read '.../addons.xml.sha256'` and no
+`CCurlFile` line in the log (seen on Kodi 21 right after installing `repository.povil` from the browsed source). `repository.povil`
+therefore reads `repo/addons.xml` + `repo/addons.xml.sha256`, and `gen_repo.verify()` fails the build if an `addons.xml*` appears
+in the root. `zips/<id>/` and `upstream/<name>/` are folders nobody browses, so they are safe; never link them from `index.html`.
 
 ### Native installs and updates
 
@@ -157,7 +167,8 @@ allow the `main` branch.
 
 ```
 index.html  .nojekyll                       landing page; plain <a href> links, which Kodi's HTTP file browser follows
-addons.xml  addons.xml.sha256  .md5         every add-on's addon.xml; the sha256 is verified by Kodi (verify="sha256")
+repo/addons.xml  .sha256  .md5              every add-on's addon.xml; the sha256 is verified by Kodi (verify="sha256"). In its own
+                                            folder ON PURPOSE (`INDEX_DIR`): see "Why the index is not at the site root" below
 <id>-latest.zip (+ .sha256)                 stable names for repository.povil, repository.povil.upstream and the Wizard
 zips/<id>/<id>-<ver>.zip (+ .sha256)        the <datadir>; every zip is verified by Kodi (<hashes>sha256</hashes>)
 zips/<id>/icon.*, fanart.*, changelog-<ver>.txt
@@ -297,7 +308,7 @@ fresh install, so they start configured.
   (`fresh_install.begin()` → no `.provisioned` marker → the install above). Master profile only; a kids profile is stopped by
   the router's child gate (the mode is not in `profiles/hooks._CHILD_ALLOWED`); nothing may be playing. Order:
   1. **Pre-flight, before anything is deleted:** `config/config.json` loads (with a sha256) and every file the Wizard itself downloads
-     (our `addons.xml`, both repository zips, the config pack) answers a one-byte ranged GET. Offline or unreachable → a Hebrew
+     (our `repo/addons.xml`, both repository zips, the config pack) answers a one-byte ranged GET. Offline or unreachable → a Hebrew
      dialog and nothing is touched. (The wipe removes the repository add-ons too; the next start bootstraps them again.)
   2. **Questions:** what to keep (nothing is pre-selected): Account Manager + POV (the add-ons and their data are excluded from the
      wipe as whole folders, as the existing keep switches do), Umbrella, `profiles.xml` (profile contents are rebuilt); then two

@@ -3,7 +3,7 @@ name: Build Kodi repository and deploy to GitHub Pages
 # Replaces the old "build zips -> rolling release -> manifest.json" pipeline.
 #
 # One run = the whole repository site:
-#   addons.xml + addons.xml.md5 + zips/<id>/<id>-<ver>.zip + config/ (userdata pack) + index.html
+#   repo/addons.xml + .md5/.sha256 + zips/<id>/<id>-<ver>.zip + config/ (userdata pack) + index.html
 # A Pages artifact replaces the entire site on every deploy, so every add-on is rebuilt every time
 # (zips are deterministic: unchanged add-ons produce identical bytes). There is no git history of zips
 # and no release asset to prune.
@@ -102,7 +102,7 @@ jobs:
           base="${SITE%/}"
           # gen_repo.STABLE_ALIASES is the single list of the <id>-latest.zip files the site publishes
           ids="$(python -c "import sys; sys.path.insert(0, '.github/scripts'); import gen_repo; print(*gen_repo.STABLE_ALIASES)")"
-          urls="$base/ $base/addons.xml $base/addons.xml.sha256 $base/addons.xml.md5"
+          urls="$base/ $base/repo/addons.xml $base/repo/addons.xml.sha256 $base/repo/addons.xml.md5"
           for id in $ids; do
             urls="$urls $base/$id-latest.zip $base/$id-latest.zip.sha256"
           done

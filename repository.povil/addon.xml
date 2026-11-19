@@ -6,6 +6,9 @@
   (xbmc/addons/Repository.cpp), so everything we do not control lives in repository.povil.upstream: a dead upstream server can
   never stop our own add-ons from updating.
 
+  The index sits in repo/, not at the site root: Kodi's file browser caches the folder it lists (the root), and a cached folder
+  makes Kodi refuse any file the listing lacks without a network request ("CRepository: failed read '...addons.xml.sha256'").
+
   <checksum verify="sha256"> makes Kodi check the index, <hashes>sha256</hashes> makes it check every zip against <zip>.sha256
   (both written by .github/scripts/gen_repo.py).
 
@@ -15,11 +18,11 @@
   at first start (provisioning/repo_bootstrap.py); a user who installed only this repository finds it listed in
   "Install from repository" -> "Kodi POV IL Repository" -> "Add-on repository".
 -->
-<addon id="repository.povil" name="Kodi POV IL Repository" version="1.0.1" provider-name="DevGeniusCode">
+<addon id="repository.povil" name="Kodi POV IL Repository" version="1.0.2" provider-name="DevGeniusCode">
     <extension point="xbmc.addon.repository" name="Kodi POV IL Repository">
         <dir>
-            <info compressed="false">https://devgeniuscode.github.io/Kodi-POV-IL-Build/addons.xml</info>
-            <checksum verify="sha256">https://devgeniuscode.github.io/Kodi-POV-IL-Build/addons.xml.sha256</checksum>
+            <info compressed="false">https://devgeniuscode.github.io/Kodi-POV-IL-Build/repo/addons.xml</info>
+            <checksum verify="sha256">https://devgeniuscode.github.io/Kodi-POV-IL-Build/repo/addons.xml.sha256</checksum>
             <datadir zip="true">https://devgeniuscode.github.io/Kodi-POV-IL-Build/zips/</datadir>
             <hashes>sha256</hashes>
         </dir>

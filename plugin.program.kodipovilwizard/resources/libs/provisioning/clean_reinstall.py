@@ -80,7 +80,7 @@ def preflight_targets(info):
     """
     from resources.libs.provisioning import repo_bootstrap
     base = CONFIG.REPO_BASE_URL
-    targets = [('addons.xml', base + '/addons.xml')]
+    targets = [('addons.xml', base + '/repo/addons.xml')]
     for addon_id in repo_bootstrap.REPOSITORY_IDS:
         targets.append((addon_id, '{0}/{1}-latest.zip'.format(base, addon_id)))
     problems = []
