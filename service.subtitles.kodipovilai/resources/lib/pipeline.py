@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # The orchestrator of the subtitle pipeline (ARCHITECTURE_SUBTITLES.md, section 1.7.3).
 #
-# A STUB IN PHASE 2: it only delegates, one line per step, to the functions the split
-# left in the feature packages. Nothing imports it yet. Phase 3 (step 3a) rewires entry/
-# to call it and turns the two functions below into the readable lifecycle
-# fetching -> scoring_matching -> ai_translation -> sync -> delivery, passing the
-# contracts of core/contracts.py instead of the implicit dicts.
+# The SINGLE ROUTE (Phase 3, step 3d): every caller outside fetching/ and ai_translation/ reaches
+# list_candidates and resolve only through the two functions below (a test of the contract check
+# enforces it). They still only delegate, one line each; the readable lifecycle
+# fetching -> scoring_matching -> ai_translation -> sync -> delivery waits for the split of
+# resolve in Phase 4.
 #
-# Both imports sit inside the functions on purpose: importing this module stays free.
+# Both imports sit inside the functions on purpose: importing this module stays free, and the
+# import cycles between the feature packages stay broken.
 
 
 def search(info, modal_progress=True, quick=False):

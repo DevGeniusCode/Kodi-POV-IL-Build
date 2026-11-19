@@ -25,7 +25,10 @@ from resources.lib.fetching.embedded.extraction import playing_video_url
 
 
 def _clean(c):
-    c.pop('_engine_kind', None)
+    kind = c.pop('_engine_kind', None)
+    # `pct` is the match number the row's label shows ('<provider> · 85%'); a built-in
+    # foreign stream shows none.
+    c['pct'] = None if kind == 'embedded_other' else c.pop('_pct', None)
     c.pop('_pct', None)
     c.pop('_is_mt', None)
     return c
@@ -121,7 +124,7 @@ def list_candidates(info, modal_progress=True, quick=False):
             }),
             'sync': 'true',
             'rating': '5',
-            'is_hi': False, 'is_hd': False,
+            'is_hi': False, 'is_hd': False, 'pct': None,
         })
 
     # Built-in sources engine (Phase B, gated by use_builtin_engine,
@@ -195,7 +198,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                     }, ensure_ascii=False)),
                     'sync': 'true', 'rating': '5',
                     'is_hi': False, 'is_hd': False,
-                    '_engine_kind': 'embedded_he', '_pct': 101,
+                    '_engine_kind': 'embedded_he', '_pct': 101, 'pct': 101,
                 })
         except Exception as e:
             kodi.log('embedded_sync row skipped: {0}'.format(e),
@@ -313,6 +316,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                 'source_lang': v.get('source_lang') or '',
             }),
             'sync': 'false', 'rating': '5', 'is_hi': False, 'is_hd': False,
+            'pct': pct if (release and pct > 0) else None,
         }
 
     # Engine human Hebrew, in the engine's own match-% order. For a LIVE Ktuvit
@@ -391,6 +395,7 @@ def list_candidates(info, modal_progress=True, quick=False):
             _slh = lang_display_he((v.get('source_lang') or 'en').strip().lower()[:2])
             _emb_base = 'תרגום מובנה AI ({0}) · מאגר קהילתי · 100%'.format(_slh)
             label = ('{0}  —  {1}'.format(_emb_base, release) if release else _emb_base)
+            pct = 100
         else:
             pct = match_pct(_video_ref, release) if release else 0
             # Only show a % when we actually have a meaningful match (a 0% almost
@@ -413,6 +418,7 @@ def list_candidates(info, modal_progress=True, quick=False):
             }),
             'sync': 'false', 'rating': '5',
             'is_hi': False, 'is_hd': False,
+            'pct': pct if (release and pct > 0) or (v.get('kind') or '') == 'ai_emb' else None,
         })
 
     # Machine-translated Hebrew from the engine.
@@ -502,7 +508,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                                       'stream_index': _emb_src.get(
                                           'stream_index')}),
                 'sync': 'true',
-                'rating': '5', 'is_hi': False, 'is_hd': False,
+                'rating': '5', 'is_hi': False, 'is_hd': False, 'pct': None,
             })
 
     for code in sorted(set(_ai_by_lang) | set(_emb_by_lang),
@@ -547,7 +553,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                     # brackets/sound cues are stripped before translation), so
                     # Kodi's hearing_imp badge would mislabel it. The SDH signal
                     # for the user is the label text above, not this flag.
-                    'is_hi': False, 'is_hd': False,
+                    'is_hi': False, 'is_hd': False, 'pct': pct,
                 })
             else:
                 # Opt-out: deliver the raw foreign sub as-is (SDH still sorts first).
@@ -586,7 +592,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                 }),
                 'sync': 'false',
                 'rating': '4' if src_lang == 'en' else '3',
-                'is_hi': False, 'is_hd': False,
+                'is_hi': False, 'is_hd': False, 'pct': None,
                 '_payload': {'source_lang': src_lang,
                              'local_path': local_path},
             })

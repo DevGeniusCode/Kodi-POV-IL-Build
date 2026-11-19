@@ -210,33 +210,36 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   the 6 Gemini helpers of `default.py` lost their module argument and the 3 gender-reference window helpers of `arabic_gender` (now `gender_reference`) lost their `sa` argument (both import what they
   use); modules that were passed around as arguments now pass `core.settings` / `fetching.service`; optional-import fallbacks (`x = None`) keep their pattern under the new names;
   `he_sub_match`'s flat fallback imports `scoring_matching.release`; `globals()['_status']` became `progress._status`; `_FLAG_DIR` and the gender-reference standalone-load paths
-  follow their files. NOT DONE, on purpose, reported in the ARCHITECTURE document and deferred to Phase 4 by the owner (19 Nov 2026), except `core/utils/` (Phase 3 audits it) and the two `entry/` tables (Phase 4 step 4d): the split of `ai_translation.service.resolve` (3,650 lines; its 27 closures capture the
+  follow their files. NOT DONE, on purpose, reported in the ARCHITECTURE document and deferred to Phase 4 by the owner (19 Nov 2026), except the two `entry/` tables (Phase 4 step 4d): the split of `ai_translation.service.resolve` (3,650 lines; its 27 closures capture the
   mutable state of the call and no golden harness with recorded Gemini / Google replies exists), of `list_candidates` (605), `_extract_embedded_srt` (807), `autosub_on_play` (799),
   `_handle_translate_file` (690), `_handle_bg_translate_picker` (458); the splits of `embedded_extract.py` (4,986) and `gender_reference.py` (1,819), because both are stdlib-only and loadable
-  on their own by design; `core/utils/`; the action table of `entry/actions.py` and the `migrations.py` table (the 15 `_maybe_*` and the 3 start hooks moved as plain functions). Duplicate
+  on their own by design; the action table of `entry/actions.py` and the `migrations.py` table (the 15 `_maybe_*` and the 3 start hooks moved as plain functions). Duplicate
   subsystems (5 SRT parsers, 2 aligners, 6+ caches, 5 playing-release derivations, 2 `_decode_link`, 3 `_breathe`) stand side by side for Phase 3 / the owner. Verified: stub import 138 of 138
   (`python -I`, one interpreter per module), `compile()` 138 of 138 with warnings as errors, pyflakes 7 -> 4 (the 3 intentional pre-imports were replaced by `provider_adapter` calls), cross-module API scan
   clean, AST identity 2,388 top-level statements with the intended differences listed, 311 golden cases (link codec, SRT passes, release scores, settings and selection state machine, `sync_align`
   on fixture pairs, translate helpers) identical to the pristine tree, 26 Gemini-helper scenarios and 19 entry-point actions (every `default.py` action) identical, `settings.xml` / both `strings.po`
   untouched and consistent, no string id >= 33000. Kodi has not been tested: see the checklist in the report.
 
-- **SUBTITLE PHASES 3 AND 4: PLAN (owner decisions, 19 Nov 2026, after Phase 2; the runnable Phase 3 prompt and the Phase 4 plan are in `PHASE_2_AND_3_PROMPTS.md`).**
-  Phase 3 (next): 3.0 preparation (sha256 of `he_sub_match.py`, import lists of the standalone modules, the `list_candidates` ordering golden case Phase 2 never had); 3a core hygiene (break the `core/kodi.py` <->
-  `core/settings.py` cycle through a leaf `core/addon.py`, so `log` / `notify` need no function-level import; every private name imported or used by another module becomes public, about 319 names in 63 modules,
-  except the frozen `fetching/pool_client._lookup_raw`; the Phase 2 removal of the `sa` argument of the 3 `gender_reference` window helpers is ACCEPTED); 3b the 5 "playing release" derivations (Priority #1) become one
-  function in `core/video_context.py`, per-caller results kept wherever the copies disagree and every divergence reported to the owner; 3c the other duplicates in order (RTL renderers, SRT parsers, caches,
-  `_decode_link`, `_breathe`) only where provably identical, then the `core/utils/` audit (removed from the target tree and the docs unless something needs it); 3d `pipeline.py` as the single route to the whole
-  `list_candidates` / `resolve`; 3e the match % as a number; 3f quick toggles (owner switch, default NOT APPROVED); 3g the committed contract test, the pure-function golden harness and CI; 3h the Kodi checklist; 3i
-  statistics, docs and the Phase 4 prompt. Phase 3 keeps `he_sub_match.py` byte-identical and leaves `embedded_extract`, `gender_reference` and `scoring_matching/release` with their stdlib-only design; its step 3.0 also checks whether anything outside the
-  add-on imports `embedded_extract` / `gender_reference` directly (nothing did on 19 Nov 2026; the only outside users of the add-on's code are the 4 Wizard patches that load `he_sub_match`).
-  WHY SEPARATE: the work is split into Phase 3 (internal deduplication and cleanup) and Phase 4 (monolith decomposition and cross-add-on integrations) to keep the blast radius small and so that Phase 3's deduplication
-  shrinks the giant functions (the duplicate SRT / RTL / release-detection helpers `resolve` calls) before they are sliced.
-  Phase 4 (planned, runnable prompt written at the end of Phase 3): (1) `he_sub_match.py` (1,281 lines; imported by bare name by POV / Umbrella through the Wizard patches `patches_config`, `pov_prewarm`,
+- **SUBTITLE PHASE 3 COMPLETE (19 Nov 2026; 3f quick toggles skipped, owner switch NOT APPROVED).** Hygiene, deduplication, wiring and a permanent safety net (`ARCHITECTURE_SUBTITLES.md` Part 4 "Phase 3 result", Part 6,
+  Appendix C). 3a: leaf `core/addon.py` (ADDON_ID + the cached `xbmcaddon.Addon`) breaks the `core.kodi` <-> `core.settings` cycle (no function-level import of this add-on in either); 316 cross-module private names in 62 modules are public
+  (`link_codec.encode_link` / `decode_link`, `kodi.home_window`, ...; 8 qualified because of collisions); the only names still imported or read across modules while private are the frozen `fetching/pool_client._lookup_raw` and
+  `he_sub_match._dbg` / `_warm_queue_dir` (frozen file); the removal of the `sa` argument from the 3 `gender_reference` window helpers (Phase 2) is ACCEPTED. 3b: the playing release is ONE function,
+  `core.video_context.release_name(info, policy)`, with 6 named policies (`picker`, `chooser`, `sync`, `scored`, `pool`, `source`; owner decision: keep all six exactly as they were, 83 of 120 fixtures differ between them, documented in Part 4) and
+  ONE token test `core.video_context.looks_like_token(s, blank=False)`. 3c: merged only the timecode-pair regex fragment (`core/srt/blocks.TC_PAIR`) and `core/cache/profile_dir.profile_subdir`; `to_ms` / `_tc_ms`, `ms_to_stamp` / `fmt_tc`,
+  the two `decode_link`, the 3 RTL renderers and the `_breathe` copies stay side by side (they differ; Part 4 table); `core/utils/` was audited and NOT created. 3d: `pipeline.search` / `pipeline.resolve` are the single route to `list_candidates` / `resolve`
+  (nobody else imports `fetching.service` / `ai_translation.service`). 3e: every candidate row carries `pct` and the native dialog's stars come from it. 3g: `.github/scripts/check_subs_contract.py` + `.github/scripts/subs_contract/`
+  (fixtures, the golden harness with 1,188 cases) + `.github/workflows/subs-contract.yml` (`windows-latest`); Phase 4 updates `baseline.json` in the same change that edits `he_sub_match.py` or a standalone module. Verified: stub import 140 of 140,
+  pyflakes 4 (unchanged), identity of every moved / renamed def, 26 + 19 scenarios identical, `he_sub_match.py` byte-identical. Kodi has not been tested (checklist: Appendix C). Proposed, not done: bump the add-on version and add a changelog entry
+  (Kodi only updates an add-on when its version rises).
+- **SUBTITLE PHASE 4: PLAN (owner decisions, 19 Nov 2026; the runnable prompt is `PHASE_4_PROMPT.md`).**
+  Phase 4: (1) `he_sub_match.py` (1,281 lines; imported by bare name by POV / Umbrella through the Wizard patches `patches_config`, `pov_prewarm`,
   `pov_sub_match_v2`, `umbrella_he_match`) becomes a thin facade with the exact public API (`prewarm`, `release_names`, `embedded_names`, `confirmed_releases`, `label_prefix`) delegating to `scoring_matching/` and
   `fetching/`, plus a dedicated audit of the Wizard patches / repairs (`host_repairs/flow/umbrella_steps.py`...), the skin hooks (FENtastic, Estuary, AF3) and the POV / Umbrella hooks, only with owner approval, each a
   separate labelled change; (2) `resolve` (3,650 lines, 27 closures) gets a golden harness with recorded Gemini / Google conversations, an explicit state object, and is split along its link-type branches (then the other
   functions over 300 lines, the lifecycle of §1.7.3 in `pipeline.py` and the two `entry/` tables); (3) `embedded_extract` (4,986) and `gender_reference` (1,819) drop the single-file standalone constraint (decided
   19 Nov 2026) and are split into modular sub-files; the TOTAL statistics close the refactor.
+  Pattern for the remaining duplicates (owner, 19 Nov 2026): "Unified Core + Thin Wrappers" (one pure core, thin wrappers that keep their I/O and policy): ONE pure RTL text-transformation core in `delivery/rtl.py` behind the 3 delivery / file wrappers; ONE `breathe` in `core/kodi.py`
+  once `embedded_extract` is unlocked; `gender_reference`'s private SRT parser / aligner merged into `core/srt/` and `sync/align/`.
 
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
@@ -280,7 +283,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   the change (dead-code deletion and the `settings.xml` reorganization are approved; every deletion is logged in the Deletion
   Report of `ARCHITECTURE_SUBTITLES.md`); (b) at the end of every subtitle phase the "Refactoring Statistics" section of
   `ARCHITECTURE_SUBTITLES.md` is updated (lines / files / functions deleted, moved, added; the largest files and functions);
-  (c) nothing naming the Wizard, `uservar`, `povil_icons` or build markers may re-enter it (Phase 3 decoupling); dialog / toast / progress titles come from `DIALOG_TITLE` in `resources/lib/core/kodi.py`, never a literal; the add-on's own helper modules are `resources/lib/core/{kodi,settings,selection}.py` (never named `kodi_utils`, which is POV's module and the Wizard's); (d) the
+  (c) nothing naming the Wizard, `uservar`, `povil_icons` or build markers may re-enter it (Phase 3 decoupling); dialog / toast / progress titles come from `DIALOG_TITLE` in `resources/lib/core/kodi.py`, never a literal; the add-on's own helper modules are `resources/lib/core/{addon,kodi,settings,selection}.py` (never named `kodi_utils`, which is POV's module and the Wizard's); (d) the
   external public surface below stays byte-identical, because other add-ons, skins and the Wizard call it; (e) through Subtitle Phase 3, `he_sub_match.py` stays byte-identical and `fetching/embedded/embedded_extract.py`, `ai_translation/context/gender_reference.py` and `scoring_matching/release.py` keep their stdlib-only / standalone design (Phase 4 may change them). The "left for
   clean upstream merges" items of the Open Notes are now ordinary cleanup candidates. Public surface: Kodi hooks
   (`xbmc.subtitle.module` = `default.py`, `xbmc.service` = `service.py`, `subtitles.tv` / `subtitles.movie` in `guisettings.xml`
@@ -296,6 +299,10 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `pov_fast_navigation` (`pov_language_invoker_guard`) from it, and only through
   `host_repairs/kodi_utils.subs_get_*`; it names the add-on id only as an existence / required-add-on reference
   (`build/wizard_actions`, `fresh_install`, `auto_install`, `build_profiles`, `pyc_warm`, `clear`, `manifest.json`).
+- **SUBTITLE ADD-ON: PUBLIC NAMES, SINGLE ROUTE, CONTRACT TEST (Subtitle Phase 3).** No module imports or reads a `_name` of another module (a name another module needs is public in its home), except the frozen `fetching/pool_client._lookup_raw` and the two
+  `he_sub_match` names listed in `.github/scripts/subs_contract/baseline.json`. Everything outside `fetching/` and `ai_translation/` reaches `list_candidates` / `resolve` only through `resources/lib/pipeline.py`. The playing release comes only from
+  `core.video_context.release_name(info, policy)` (a new caller picks one of the six policies; never write a seventh copy) and the token test from `core.video_context.looks_like_token`. `core/addon.py` stays a leaf (it imports nothing of this add-on).
+  Run `python .github/scripts/check_subs_contract.py` before every subtitle change is reported done (it needs Windows `os.path` for the golden part; `--static` skips the interpreter part).
 - **HOME ROUTES COME BEFORE THE CHILD GATE:** `Router.dispatch` answers the Onyx modes (`favourites_row`, `favourite_run`,
   `pvr_row`, `pvr_play`, `hero_details`, `hero_warm`) and `tonight`, `search_provider`, `debrid_notice_settings` BEFORE
   `profile_hooks.deny_in_child_profile`: the Onyx modules apply the child policy themselves, and the other three were
@@ -313,7 +320,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   cross-module API scan (names exist, signatures fit); repo-wide grep of callers (skins, `userdata/`, other add-ons) for old
   paths and strings; behavior tests under the stubs for any new code. Compare each against the snapshot. Baselines: Wizard
   171 of 172 `resources/` modules import (Phase 7 stub harness) (only `patches/pov_combined_discover`, needs POV's `indexers`); subtitle add-on: with
-  `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, every module imports (the Telegram source was deleted, so `telegram_impl` no longer fails): 138 of 138 modules (Subtitle Phase 2 harness; 72 of 72 before the split, `requests` stubbed too, one fresh `python -I` per module, `service` counted as importing when it starts its main loop).
+  `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, every module imports (the Telegram source was deleted, so `telegram_impl` no longer fails): 140 of 140 modules (Subtitle Phase 3 harness, also run by `.github/scripts/check_subs_contract.py`; 138 of 138 before Phase 3 added `core/addon.py` and `core/cache/profile_dir.py`; 72 of 72 before the Phase 2 split, `requests` stubbed too, one fresh `python -I` per module, `service` counted as importing when it starts its main loop).
 - **WORKFLOW:** stop after each step; the user reviews and commits. No version bump or changelog per step.
 - **LINE ENDINGS:** sources and docs use CRLF (a file that is LF stays LF).
 - **Output Mirroring:** For every single response you generate in this project, you MUST automatically write your full, exact textual response into a file named `output.txt` in the root directory. Overwrite the file completely each time (do not append).

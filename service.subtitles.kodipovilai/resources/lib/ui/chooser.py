@@ -104,7 +104,7 @@ _LEGEND = ('[COLOR FFB8D6E8]דגל = שפת הכתובית[/COLOR]   '
            '[COLOR FFE0A040]כתום = שפה זרה (תתורגם)[/COLOR]')
 
 
-def _row_item(c, info, translate, xbmcgui):
+def _row_item(c, info, xbmcgui):
     """Build a list row with a REAL flag icon (resources/media/flags) for the
     subtitle's language -- images render on every skin, unlike the old box
     glyphs. Foreign-language rows also get a Hebrew language tag in the text so
@@ -308,14 +308,14 @@ def _show_pyxbmct():
     except Exception:
         return False
     try:
-        from resources.lib.fetching import service
+        from resources.lib import pipeline
         from resources.lib.core import kodi, selection, video_context
     except Exception:
         return False
 
     info = video_context.current_video_info()
     try:
-        cands = service.list_candidates(info, modal_progress=False) or []
+        cands = pipeline.search(info, modal_progress=False) or []
     except Exception as e:
         _log('list_candidates failed: {0}'.format(e), level='WARNING')
         cands = []
@@ -362,7 +362,7 @@ def _show_pyxbmct():
                                     _itemTextXOffset=12)
             self.placeControl(self.lst, 2, 0, rowspan=6, columnspan=2)
             self.lst.addItems(
-                [_row_item(c, info, service, xbmcgui) for c in self.items])
+                [_row_item(c, info, xbmcgui) for c in self.items])
             self.connect(self.lst, self.on_pick)
             # Full native Kodi subtitle search/download -- for users who want the
             # regular "download subtitles" flow, not just this picker. Skin-
@@ -448,7 +448,7 @@ def _show_pyxbmct():
             c = self.items[i]
             self._set_head('[B]מוריד...[/B]')
             try:
-                from resources.lib.ai_translation import service as _t
+                from resources.lib import pipeline
                 from resources.lib.ai_translation.proofread import gp_jobs
                 from resources.lib.core import link_codec
                 link = c.get('link') or ''
@@ -521,7 +521,7 @@ def _show_pyxbmct():
                 # Ready Hebrew subs (passthrough / pool / human engine): quick
                 # download -> apply and CLOSE the window. On failure, keep it
                 # open so the user can pick another.
-                path = _t.resolve(
+                path = pipeline.resolve(
                     link, self.info, selection=timing_selection)
                 if (path and os.path.isfile(path) and _still_current()):
                     if selection.apply_subtitle_file(
@@ -569,7 +569,7 @@ def _show_pyxbmct():
 
 # ---------------- rich WindowXMLDialog chooser (Tal-style, all skins) --------
 
-def _classify(c, info, translate):
+def _classify(c, info):
     """Split a candidate into the fields the window XML renders: a bold main
     line, a dim secondary line, a match-% string, a colour, and a flag image."""
     import re as _re
@@ -624,7 +624,7 @@ def _deliver_pick(c, info, close_cb):
     pyxbmct on_pick: embedded -> switch stream; AI -> close + background
     translate; ready Hebrew -> resolve + apply. close_cb() closes the window."""
     try:
-        from resources.lib.ai_translation import service as _t
+        from resources.lib import pipeline
         from resources.lib.ai_translation.proofread import gp_jobs
         from resources.lib.core import kodi, selection, link_codec
         link = c.get('link') or ''
@@ -677,7 +677,7 @@ def _deliver_pick(c, info, close_cb):
             close_cb()
             _start_ai_apply(link, info)
             return
-        path = _t.resolve(link, info, selection=timing_selection)
+        path = pipeline.resolve(link, info, selection=timing_selection)
         if path and os.path.isfile(path) and _still_current():
             if selection.apply_subtitle_file(
                     path, selection=timing_selection):
@@ -753,12 +753,13 @@ def _is_ai_row(c):
         return False
 
 
-def _chooser_items(info, translate, quick=False):
+def _chooser_items(info, quick=False):
     """The chooser's rows: list_candidates, the timing rank when it has a
     human Hebrew row to work on, and only rows that can be picked."""
     try:
-        cands = translate.list_candidates(info, modal_progress=False,
-                                          quick=quick) or []
+        from resources.lib import pipeline
+        cands = pipeline.search(info, modal_progress=False,
+                                quick=quick) or []
     except Exception as e:
         _log('list_candidates failed: {0}'.format(e), level='WARNING')
         cands = []
@@ -861,7 +862,6 @@ def _show():
     except Exception:
         return False
     try:
-        from resources.lib.fetching import service
         from resources.lib.core import kodi, video_context
     except Exception:
         return False
@@ -879,7 +879,7 @@ def _show():
     _notice = _searching_notice()
     try:
         info = video_context.current_video_info()
-        items = _chooser_items(info, service, quick=True)
+        items = _chooser_items(info, quick=True)
         pending = bool(info.pop('_list_pending', False))
     finally:
         _close_notice(_notice)
@@ -945,7 +945,7 @@ def _show():
                             '[COLOR FF9AA0A6]{0}[/COLOR]'.format(c['filename'])))
                         continue
                     label, label2, pct, col, flag = _classify(
-                        c, self.info, self.translate)
+                        c, self.info)
                     # Bake colours into the label text (BBCode): per-row
                     # <textcolor>$INFO[...]</textcolor> is unreliable in Kodi,
                     # so the row colour lives in the label string itself.
@@ -974,7 +974,7 @@ def _show():
                 import time
                 t = time.monotonic()
                 try:
-                    items = _chooser_items(dict(self.info), self.translate)
+                    items = _chooser_items(dict(self.info))
                 except Exception as e:
                     _log('chooser background list failed: {0}'.format(e),
                          level='WARNING')
@@ -1059,7 +1059,6 @@ def _show():
         w.pending = pending
         w.started = False
         w.lock = threading.Lock()
-        w.translate = service
         w.doModal()
         del w
         _resume_after_chooser(_paused)

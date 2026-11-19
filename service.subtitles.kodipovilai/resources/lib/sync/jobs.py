@@ -256,8 +256,8 @@ def _apply_proven_pool_fallback(job):
                 or not selection_matches(selection)):
             raise RuntimeError('fallback selection/stream changed')
         # Lazy import avoids the translate -> subsync module cycle.
-        from resources.lib.ai_translation import service
-        path = service.resolve(
+        from resources.lib import pipeline
+        path = pipeline.resolve(
             link, dict(job.get('info') or {}), selection=selection)
         if (not path or not selection_matches(selection)
                 or not core_selection.apply_subtitle_file(
@@ -454,8 +454,8 @@ def apply_verified_human_fallback(job, cache_only=False, reference=None):
                     or not selection_matches(fallback_selection)
                     or not _job_stream_is_current(job)):
                 raise RuntimeError('tournament selection/stream changed')
-            from resources.lib.ai_translation import service
-            path = service.resolve(
+            from resources.lib import pipeline
+            path = pipeline.resolve(
                 link, info, selection=fallback_selection)
             if not path or not selection_matches(fallback_selection):
                 raise RuntimeError('verified candidate resolve failed')

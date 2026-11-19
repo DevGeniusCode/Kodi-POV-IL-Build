@@ -21,8 +21,7 @@ def autosub_on_play():
     the best Hebrew subtitle automatically (replacing DarkSubs's autosub).
     Runs in its own thread so it never blocks Kodi's playback callback."""
     try:
-        from resources.lib.ai_translation import service
-        from resources.lib.fetching import service as fetching_service
+        from resources.lib import pipeline
         from resources.lib.ai_translation import progress
         from resources.lib.ai_translation.proofread import gp_jobs
         from resources.lib.fetching.embedded import extraction
@@ -435,7 +434,7 @@ def autosub_on_play():
         # Non-modal search (the overlay above is the progress). list_candidates
         # returns everything in priority order; the first 'he' row is the best
         # Hebrew (embedded > human > pool > MT).
-        cands = fetching_service.list_candidates(info, modal_progress=False)
+        cands = pipeline.search(info, modal_progress=False)
         if not _autosub_owns_player():
             return
         # (list_candidates already queued every human Ktuvit release for the
@@ -553,7 +552,7 @@ def autosub_on_play():
                 selection = _claim_candidate(link2)
                 if not selection:
                     return
-                path = service.resolve(
+                path = pipeline.resolve(
                     link2, info, selection=selection,
                     fallback_links=[link for link in _human_fallbacks
                                     if link != link2])
@@ -652,7 +651,7 @@ def autosub_on_play():
                         selection = _claim_candidate(ai_link)
                         if not selection:
                             return
-                        path = service.resolve(
+                        path = pipeline.resolve(
                             ai_link, info, selection=selection)
                     except Exception:
                         path = None

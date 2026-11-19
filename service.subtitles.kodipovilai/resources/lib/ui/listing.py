@@ -22,7 +22,7 @@ def handle_search(handle, params):
             return
     except Exception:
         pass
-    from resources.lib.fetching import service
+    from resources.lib import pipeline
     from resources.lib.core import video_context
 
     info = video_context.current_video_info()
@@ -46,22 +46,21 @@ def handle_search(handle, params):
     safe_log('search: ' + repr({k: v for k, v in info.items() if v}))
 
     try:
-        candidates = service.list_candidates(info)
+        candidates = pipeline.search(info)
     except Exception as e:
         safe_log('list_candidates crashed: {0}'.format(e), level='ERROR')
         candidates = []
 
-    import re as _re_rating
     for c in candidates:
         try:
             label = c.get('filename', 'AI Hebrew')
             # Star rating (0-5) reflects the match % so Tal's DialogSubtitles
             # shows a meaningful star count (101%/100% -> 5 stars, 60% -> 3...).
-            # No % in the label (e.g. an AI-translate-from-foreign action) -> use
+            # No % (pct is None: e.g. an AI-translate-from-foreign action) -> use
             # the candidate's own rating, defaulting high (it's a good option).
-            _m = _re_rating.search(r'(\d{1,3})%', label)
-            if _m:
-                _stars = int(round(min(100, int(_m.group(1))) / 20.0))
+            _pct = c.get('pct')
+            if _pct is not None:
+                _stars = int(round(min(100, int(_pct)) / 20.0))
                 _stars = max(1, min(5, _stars))
                 _rating = str(_stars)
             else:

@@ -43,7 +43,7 @@ def decode_selection_b64(value):
 
 def handle_download(handle, params):
     """User picked one of our entries -- deliver the SRT path."""
-    from resources.lib.ai_translation import service
+    from resources.lib import pipeline
     from resources.lib.ai_translation.proofread import gp_jobs
     from resources.lib.ai_translation import source_prep
     from resources.lib.core import kodi, selection as core_selection, settings, video_context, link_codec
@@ -317,7 +317,7 @@ def handle_download(handle, params):
             pass
 
     try:
-        path = service.resolve(
+        path = pipeline.resolve(
             link, info, progress_cb=report, selection=_timing_selection)
     except Exception as e:
         safe_log('resolve crashed: {0}'.format(e), level='ERROR')
@@ -632,8 +632,7 @@ def _try_next_hebrew(failed_link, info, owner_selection=None):
     resolves the next non-AI, non-embedded Hebrew entries (engine human / pool /
     passthrough) until one downloads. AI (slow) and embedded (no file) are
     skipped here. Returns a path or None. Bounded so it can't hang."""
-    from resources.lib.ai_translation import service
-    from resources.lib.fetching import service as fetching_service
+    from resources.lib import pipeline
     from resources.lib.core import kodi, selection as core_selection, link_codec
     try:
         failed = link_codec.decode_link(failed_link) or {}
@@ -645,7 +644,7 @@ def _try_next_hebrew(failed_link, info, owner_selection=None):
     if failed.get('source'):
         failed_sources.add(failed.get('source'))
     try:
-        candidates = fetching_service.list_candidates(info, modal_progress=False)
+        candidates = pipeline.search(info, modal_progress=False)
     except Exception:
         return None
     tried = 0
@@ -693,7 +692,7 @@ def _try_next_hebrew(failed_link, info, owner_selection=None):
             owned = dict(selection or {})
             if not _owns_current():
                 return None
-            path = service.resolve(
+            path = pipeline.resolve(
                 link2, info, selection=selection)
         except Exception:
             path = None

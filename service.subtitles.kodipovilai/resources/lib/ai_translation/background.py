@@ -45,7 +45,7 @@ def handle_bg_translate_picker(params):
     involved in the native-picker path."""
     import base64
     try:
-        from resources.lib.ai_translation import service
+        from resources.lib import pipeline
         from resources.lib.core import kodi, selection as core_selection, video_context, link_codec
     except Exception as e:
         safe_log('bg_translate_picker import failed: {0}'.format(e),
@@ -411,7 +411,7 @@ def handle_bg_translate_picker(params):
 
     _resolved = None
     try:
-        _resolved = service.resolve(
+        _resolved = pipeline.resolve(
             link, info, progressive_cb=on_phase,
             extract_progress_cb=_extract_progress,
             selection=_timing_selection)
@@ -512,7 +512,7 @@ def handle_translate_file(params):
     """
     import base64
     try:
-        from resources.lib.ai_translation import service
+        from resources.lib import pipeline
         from resources.lib.core import kodi, selection as core_selection, settings, video_context
     except Exception as e:
         safe_log('translate_file: import failed: {0}'.format(e),
@@ -680,7 +680,7 @@ def handle_translate_file(params):
 
     if not fast_mode:
         try:
-            translated_path = service.resolve(
+            translated_path = pipeline.resolve(
                 link, info, progress_cb=report,
                 selection=_timing_selection)
         except Exception as e:
@@ -1106,7 +1106,7 @@ def handle_translate_file(params):
     translated_path = None
     try:
         try:
-            translated_path = service.resolve(
+            translated_path = pipeline.resolve(
                 link, info, progress_cb=report,
                 progressive_cb=on_phase,
                 selection=_timing_selection)
