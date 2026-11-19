@@ -126,6 +126,9 @@ def apply_live_defaults(defaults_path=None):
                                       {'setting': key, 'value': value}) is not True:
             raise RuntimeError('Fresh setting was rejected: ' + key)
     from resources.libs.profiles import build_skin
+    # A language setting above reloads the skin on Kodi's GUI thread; let that reload finish before the skin itself
+    # changes, so the two reloads (and the retention dialog after the second) never overlap.
+    build_skin.gui_barrier()
     if not build_skin.activate(target_skin):
         return False
     # A manual completion runs inside the Wizard menu. That is not evidence
@@ -181,8 +184,14 @@ def seed_fresh_home_shortcuts():
     entrypoints.ensure()
 
 
-def finalize():
-    """Return success only after media, patches and the live home are ready."""
+def finalize(view=None):
+    """Return success only after media, patches and the live home are ready.
+
+    `view` is the caller's install window (gui/install_progress). It is closed right before Kodi's language and skin change:
+    every skin load destroys and rebuilds all windows, and the window's ticker thread rewrites its controls every 0.3 s,
+    so it must be gone (ticker joined, window closed) before the first reload. The top-right banner is Kodi's own
+    DialogProgressBG and stays.
+    """
     from resources.libs.provisioning import addon_state, provisioner
     from resources.libs.patch_engine import PatchEngine
     from resources.libs import db
@@ -217,6 +226,10 @@ def finalize():
                                        'malformed')):
         raise RuntimeError('Fresh source patches are incomplete')
     db.fix_metas()
+    if view is not None:
+        from resources.libs.gui import install_progress
+        provisioner.mark_step(view, provisioner.FINALIZE_ROW, 'done')
+        install_progress.close_window(view, True)
     if not apply_live_defaults():
         logging.log('[FreshInstall] home not confirmed; retaining completion marker',
                     level=xbmc.LOGWARNING)

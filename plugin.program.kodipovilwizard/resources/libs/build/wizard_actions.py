@@ -112,7 +112,7 @@ class Wizard:
         provisioner.set_stage(None, view, provisioner.STAGE_FINALIZE)
         provisioner.mark_step(view, provisioner.FINALIZE_ROW, 'active')
         try:
-            if not fresh_install.finalize():
+            if not fresh_install.finalize(view=view):
                 install_progress.close_window(view, False)
                 self.dialog.ok(CONFIG.ADDONTITLE, 'ההתקנה ממתינה להשלמה. אשר את הסקין או נסה שוב.')
                 return

@@ -12,6 +12,7 @@ import importlib.util
 import json
 import os
 import threading
+import time
 import uuid
 import xml.etree.ElementTree as ET
 
@@ -26,6 +27,13 @@ LAYOUT_DEFAULTS = ('addon_data/script.fentastic.helper/cpath_cache.db',
                    'addon_data/skin.estuary/settings.xml',
                    'addon_data/skin.arctic.fuse.3/settings.xml')
 _confirm_lock = threading.Lock()
+
+# Kodi builds the skin-retention dialog (DialogConfirm.xml) on its GUI thread right after the new skin loads. Touching the
+# dialog's controls from a Python thread while that happens crashed Kodi 21.3 (access violation, kodi.exe, 80 ms after
+# "skin loaded"). The confirmer therefore only acts on a dialog it has seen for DIALOG_SETTLE seconds. Kodi's own question
+# times out after 10 s, so the delay costs nothing.
+DIALOG_SETTLE = 0.5
+_dialog_seen_at = None
 
 
 def close_switch_menu():
@@ -113,11 +121,19 @@ def confirm_requested_skin(target):
 
 
 def _confirm_requested_skin(target):
+    global _dialog_seen_at
     home = xbmcgui.Window(10000)
     if (home.getProperty('POVIL.RequestedSkin') != target or
             home.getProperty('POVIL.SkinConfirmed') == target or
             xbmcgui.getCurrentWindowDialogId() != 10100 or
             not xbmc.getCondVisibility('Window.IsVisible(yesnodialog)')):
+        _dialog_seen_at = None
+        return False
+    now = time.monotonic()
+    if _dialog_seen_at is None:
+        _dialog_seen_at = now
+        return False
+    if now - _dialog_seen_at < DIALOG_SETTLE:
         return False
     try:
         # Kodi's label wrapper returns its Python-side strText, which is empty
@@ -138,6 +154,18 @@ def _confirm_requested_skin(target):
     home.setProperty('POVIL.SkinConfirmed', target)
     xbmc.executebuiltin('SendClick(10100,11)')
     return True
+
+
+def gui_barrier():
+    """Return once Kodi's GUI thread has handled everything that was queued before this call.
+
+    A language or skin setting changed through JSON-RPC takes effect on the GUI thread a moment later (a ReloadSkin; the log
+    shows it about 0.2 s after the setting). A builtin run with wait=True goes through the same queue and returns only after
+    it ran, so an earlier ReloadSkin has finished by then. Call it between two changes that each reload the skin, and before
+    anything that reads or draws GUI controls. Assumption, not yet checked in Kodi: the queue is first-in first-out.
+    """
+    xbmc.executebuiltin('SetProperty(POVIL.GuiBarrier,1,home)', True)
+    xbmc.executebuiltin('ClearProperty(POVIL.GuiBarrier,home)', True)
 
 
 def persist_live_settings():
@@ -161,6 +189,8 @@ def activate(target):
     if monitor.abortRequested():
         return False
     changed = xbmc.getSkinDir() != target
+    global _dialog_seen_at
+    _dialog_seen_at = None
     if changed:
         selected = rpc('Settings.GetSettingValue', dict(setting='lookandfeel.skin'))['value']
         if selected == target:

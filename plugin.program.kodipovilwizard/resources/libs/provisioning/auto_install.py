@@ -102,7 +102,7 @@ def fresh_build_auto_install_if_needed():
         _progress_call(progress, 'begin_indeterminate', 'finalize')
         provisioner.set_stage(progress, view, provisioner.STAGE_FINALIZE)
         provisioner.mark_step(view, provisioner.FINALIZE_ROW, 'active')
-        completed = fresh_install.finalize()
+        completed = fresh_install.finalize(view=view)
         provisioner.mark_step(view, provisioner.FINALIZE_ROW, 'done' if completed else 'failed')
         if completed:
             _progress_call(progress, 'complete', 'finalize')
