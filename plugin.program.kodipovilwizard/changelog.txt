@@ -1,3 +1,6 @@
+0.5.4
+- Active-skin update guard (host_repairs/flow/skin_gui_guard.py, wired into the update watcher): Kodi 21.3 unloaded skin.fentastic to install 1.0.35 in the background, never loaded it again and left a frozen screen (the GUI thread's last log line was "Unloaded skin"). The watcher now watches every catalog skin; when the active skin was updated and the GUI has no window a few seconds after the install settled, it posts ReloadSkin() and then ActivateWindow(home). The GUI is probed with a timeout, so a hung GUI cannot take the watcher down; the log line says whether the GUI was "none" (recoverable) or "hung" (a real deadlock, which no script can undo).
+
 0.5.3
 - Fresh install, end of setup: the install window is closed (its ticker thread stopped) before Kodi changes the language and the skin, and a barrier on the GUI queue separates the two skin reloads. Kodi 21.3 crashed (access violation) when its skin-retention question appeared while the window was still open; the Wizard now also waits 0.5 s before it reads or clicks that question.
 - Repository index moved to repo/addons.xml (repository.povil 1.0.2): Kodi 21 kept the browsed site root in its directory cache and refused addons.xml.sha256 without a request.

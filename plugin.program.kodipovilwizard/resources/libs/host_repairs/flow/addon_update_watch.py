@@ -16,6 +16,10 @@ PatchEngine registry patches (POV, Umbrella, Idan Plus, Arctic Fuse 3) with the 
      runtime patchers. The repairs' own writes (the POV guard rewrites addon.xml) are stamped afterwards, so they never count as
      an update.
 
+Skins are watched too (every skin of skin_catalog). They carry no patch of ours; the repair is skin_gui_guard.recover: Kodi
+unloads the ACTIVE skin to update it, and on 19 Nov 2026 it never loaded it again (frozen GUI). If the GUI has no window some
+seconds after the update settled, ReloadSkin() (and ActivateWindow(home)) are posted. The AF3 repair does the same first.
+
 It stands down while the clean reinstall is wiping Kodi, while a fresh install is still provisioning (its finalize step runs the
 whole PatchEngine itself) and, for POV, while POV patching is switched off.
 """
@@ -24,6 +28,7 @@ import re
 import threading
 import time
 
+from resources.libs.host_repairs.flow import skin_gui_guard
 from resources.libs.host_repairs.flow.pov_steps import _skip_pov_patchers
 from resources.libs.host_repairs.flow.startup_pass import _maybe_patch_pov_language_invoker
 
@@ -84,7 +89,9 @@ def _tree_stamp(addon_id):
 def _kodi_installing():
     try:
         import xbmc
-        return bool(xbmc.getCondVisibility('Window.IsActive(extendedprogressdialog)'))
+        # asked with a timeout: while Kodi swaps the active skin the GUI may not answer at all, and the poll loop must survive that
+        answered, value = skin_gui_guard.ask(lambda: xbmc.getCondVisibility('Window.IsActive(extendedprogressdialog)'))
+        return bool(value) if answered else False
     except Exception:
         return False
 
@@ -126,6 +133,7 @@ def _repair_idanplus():
 
 
 def _repair_af3():
+    skin_gui_guard.recover('skin.arctic.fuse.3')   # Kodi may have left the GUI without a skin after updating it
     stats = _engine('skin.arctic.fuse.3')
     from resources.libs.host_repairs.flow.af3_steps import (
         _maybe_patch_af3_dialog_subtitles, _maybe_patch_af3_home, _maybe_patch_hub_search)
@@ -151,9 +159,26 @@ HOSTS = (
 )
 
 
+def _skin_guard(skin_id):
+    def repair():
+        return skin_gui_guard.recover(skin_id)
+    return repair
+
+
+def _hosts():
+    """HOSTS plus every other skin of the catalog (their repair is only the GUI guard)."""
+    try:
+        from resources.libs.skins import skin_catalog
+        known = set(host[0] for host in HOSTS)
+        return HOSTS + tuple((sid, _skin_guard(sid), None) for sid in skin_catalog.ids() if sid not in known)
+    except Exception:
+        return HOSTS
+
+
 class AddonUpdateWatch(object):
     def __init__(self):
-        self._seen = {addon_id: _stamp(addon_id) for addon_id, _repair, _skip in HOSTS}
+        self._hosts = _hosts()
+        self._seen = {addon_id: _stamp(addon_id) for addon_id, _repair, _skip in self._hosts}
 
     def _settle(self, addon_id, monitor):
         """Wait until the add-on's folder and addon.xml stop changing and Kodi is not installing. Returns (settled, addon.xml stamp)."""
@@ -174,7 +199,7 @@ class AddonUpdateWatch(object):
         try:
             if _busy():
                 return repaired
-            for addon_id, repair, skip in HOSTS:
+            for addon_id, repair, skip in self._hosts:
                 if monitor.abortRequested():
                     break
                 if _stamp(addon_id) == self._seen.get(addon_id):
