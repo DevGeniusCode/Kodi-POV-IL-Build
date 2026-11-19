@@ -224,15 +224,15 @@ def _windowed_built(en, ar, s, ws, ok):
     for w, k in zip(ws, ok):
         if not k:
             continue
-        if groups and abs(w['offset_ms'] - srt_cues._median(
+        if groups and abs(w['offset_ms'] - srt_cues.cues_median(
                 [x['offset_ms'] for x in groups[-1]])) < _WIN_GROUP_MS:
             groups[-1].append(w)
         else:
             groups.append([w])
-    offsets = [srt_cues._median([w['offset_ms'] for w in g]) for g in groups]
+    offsets = [srt_cues.cues_median([w['offset_ms'] for w in g]) for g in groups]
     if len(groups) == 1:
-        return [{'offset_ms': offsets[0]}], piecewise._map_cues_global(ar, s, offsets[0])
-    cuts = piecewise._optimize_piecewise_boundaries(en, ar, s, groups, offsets)
+        return [{'offset_ms': offsets[0]}], piecewise.map_cues_global(ar, s, offsets[0])
+    cuts = piecewise.optimize_piecewise_boundaries(en, ar, s, groups, offsets)
     if cuts is None:
         return None
     segments = []
@@ -245,7 +245,7 @@ def _windowed_built(en, ar, s, ws, ok):
                                   + (ar[c]['start'] - off) / s) / 2.0
             seg['cand_from_ms'] = (ar[c - 1]['end'] + ar[c]['start']) / 2.0
         segments.append(seg)
-    return segments, piecewise._map_cues_piecewise(ar, s, segments)
+    return segments, piecewise.map_cues_piecewise(ar, s, segments)
 
 
 def _windowed_plan(en, ar, gate_scale):
@@ -261,14 +261,14 @@ def _windowed_plan(en, ar, gate_scale):
         scales.append(float(gate_scale))
     found = []
     for order, s in enumerate(scales):
-        estimate._breathe()
-        b, _votes = estimate._best_offset([c['start'] for c in en],
-                                    [c['start'] for c in ar], s, common._MAXOFF)
-        ws = piecewise._local_windows(en, ar, s, center_offset=b)
+        estimate.breathe()
+        b, _votes = estimate.best_offset([c['start'] for c in en],
+                                    [c['start'] for c in ar], s, common.MAXOFF)
+        ws = piecewise.piecewise_local_windows(en, ar, s, center_offset=b)
         if len(ws) < _WIN_MIN_WINDOWS:
             return None, None, None, 'windowed: %d windows' % len(ws)
-        strong = [w['vote'] >= piecewise._LOCAL_MIN_VOTE
-                  and w['overlap'] >= piecewise._LOCAL_MIN_OVERLAP for w in ws]
+        strong = [w['vote'] >= piecewise.LOCAL_MIN_VOTE
+                  and w['overlap'] >= piecewise.LOCAL_MIN_OVERLAP for w in ws]
         weak = [w['vote'] >= _WIN_WEAK[0] and w['overlap'] >= _WIN_WEAK[1]
                 for w in ws]
         ok = []
@@ -298,7 +298,7 @@ def _windowed_plan(en, ar, gate_scale):
     for level in sorted(set(f[0] for f in found), reverse=True):
         best = None
         for _lvl, order, cover, s, ws, ok in [f for f in found if f[0] == level]:
-            estimate._breathe()
+            estimate.breathe()
             built = _windowed_built(en, ar, s, ws, ok)
             if built is None:
                 why = 'windowed: no cut placement'
@@ -308,7 +308,7 @@ def _windowed_plan(en, ar, gate_scale):
             if ov < _WIN_MIN_OVERLAP:
                 why = 'windowed: overlap %.0f%%' % (100 * ov)
                 continue
-            tight = verify._tight_agreement(en, fixed, 1.0, 0.0) or 0.0
+            tight = verify.tight_agreement(en, fixed, 1.0, 0.0) or 0.0
             key = (round(tight, 3), -order)
             if best is None or key > best[0]:
                 best = (key, cover, s, ws, ok, segments, ov, tight)
@@ -418,7 +418,7 @@ def _gate_windows(en, ar, s, segments):
     def offset_at(t):
         return float(segments[min(bisect.bisect_right(bounds, t),
                                   len(segments) - 1)].get('offset_ms') or 0.0)
-    ws = piecewise._local_windows(en, ar, s,
+    ws = piecewise.piecewise_local_windows(en, ar, s,
                            center_offset=float(segments[0].get('offset_ms') or 0.0))
     starts = [c['start'] for c in ar]
     ends = [c['end'] for c in ar]
@@ -429,8 +429,8 @@ def _gate_windows(en, ar, s, segments):
                 en[ws[i + 1]['begin']]['start'] if i + 1 < len(ws)
                 else float('inf'))
         d = abs(w['offset_ms'] - offset_at(w['center_ms']))
-        if ((w['vote'] >= piecewise._LOCAL_MIN_VOTE
-                and w['overlap'] >= piecewise._LOCAL_MIN_OVERLAP
+        if ((w['vote'] >= piecewise.LOCAL_MIN_VOTE
+                and w['overlap'] >= piecewise.LOCAL_MIN_OVERLAP
                 and d < _WIN_SAME_MS)
                 or (w['vote'] >= _WIN_WEAK[0] and w['overlap'] >= _WIN_WEAK[1]
                     and d < _WIN_TIGHT_MS)):
@@ -558,7 +558,7 @@ def align_one(src_text, src_blocks, ar_text, timing_text=None):
             # the oracle's own windowed fallback (above) -- not for a file
             # the gate refused as malformed before measuring anything
             if (gate_diag.startswith('preflight')
-                    or len(en) < common._LOCAL_MIN_REF_CUES
+                    or len(en) < common.LOCAL_MIN_REF_CUES
                     or len(ar) < common.MIN_CUES):
                 return None, gate_diag
             plan = _windowed_plan(en, ar, verdict.get('scale'))
@@ -689,7 +689,7 @@ _TOTAL_DOWNLOAD_BUDGET = 50
 _REFERENCE_DEADLINE_S = 60.0
 
 
-def _chain_lang_of(cand):
+def chain_lang_of(cand):
     """Map an engine candidate to its chain language code, or None if the
     candidate's language isn't in the chain (or is unusable as an oracle)."""
     # A machine/AI-translated sub in ANY language is a POISONED oracle (MT
@@ -750,7 +750,7 @@ def _reference_candidates(info):
         reused = bridge.reusable_results(info) or []
     except Exception:
         reused = []
-    if any(isinstance(c, dict) and _chain_lang_of(c) not in (None, 'he')
+    if any(isinstance(c, dict) and chain_lang_of(c) not in (None, 'he')
            for c in reused):
         _log('gender reference: candidates from the search moments ago '
              '({0})'.format(len(reused)))
@@ -759,7 +759,7 @@ def _reference_candidates(info):
     # was the one cut): kept, but the other languages are searched for too --
     # an out-of-sync Hebrew subtitle often fails to align.
     reused_he = [c for c in reused
-                 if isinstance(c, dict) and _chain_lang_of(c) == 'he']
+                 if isinstance(c, dict) and chain_lang_of(c) == 'he']
     # That search leaves its slowest provider running, and until it ends the
     # engine refuses every search: this one came moments later and found
     # nothing at all. Measured in Kodi (2 Nov 2026): every search after a cut
@@ -885,7 +885,7 @@ def _download_candidate(c):
     try:
         from resources.lib.fetching.embedded import streams
         from resources.lib.core import link_codec
-        payload = link_codec._decode_link(c.get('link') or '')
+        payload = link_codec.decode_link(c.get('link') or '')
         if not payload:
             return None
         # Reference analysis needs logical text, not the player-rendered RTL copy.
@@ -1555,7 +1555,7 @@ def _gg():
 _HPG = []
 
 
-def _hpg():
+def gender_reference_hpg():
     """he_person_gender, as a package module or (standalone load) its file."""
     if _HPG:
         return _HPG[0]
@@ -1593,7 +1593,7 @@ def person_roles_fixed(body, roles, ref_text=None):
     # in a repair the older addressee rule below let through.
     if _SLASH_FORM.search(body or ''):
         return False
-    hpg = _hpg()
+    hpg = gender_reference_hpg()
     if hpg is not None and hpg.fixed(body, roles, ref_text):
         return True
     # With the Hebrew reference at hand, a rewrite that still contradicts it
@@ -1630,7 +1630,7 @@ def person_gender_conflicts(blocks, ref_map, lang):
     out = {}
     if not ref_map:
         return out
-    hpg = _hpg()
+    hpg = gender_reference_hpg()
     if hpg is None:
         return out
     for block in blocks:
@@ -1750,7 +1750,7 @@ def begin(info, src_text, timing_text=None, embedded=None):
     by_lang = {}
     try:
         for c in all_cands:
-            lang = _chain_lang_of(c)
+            lang = chain_lang_of(c)
             if lang and len(by_lang.setdefault(lang, [])) < _PER_LANG_LIMIT:
                 by_lang[lang].append(c)
     except Exception as e:

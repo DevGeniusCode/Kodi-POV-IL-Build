@@ -6,8 +6,8 @@ import os
 import time
 from resources.lib.core import kodi, settings
 import re as _re_forced
-from resources.lib.scoring_matching.ranking import _lang_display_he
-from resources.lib.ai_translation.policy import _embedded_translation_policy
+from resources.lib.scoring_matching.ranking import lang_display_he
+from resources.lib.ai_translation.policy import embedded_translation_policy
 from resources.lib.ai_translation import progress
 
 
@@ -18,7 +18,7 @@ from resources.lib.ai_translation import progress
 _EMBEDDED_MISS = {}
 
 
-def _note_embedded_miss(reason):
+def note_embedded_miss(reason):
     if reason == 'busy':
         return      # not a miss: the same track is being read already, and
                     # its own toast says so (0.3.83)
@@ -55,7 +55,7 @@ def _named_forced(name, title_text):
     return bool(m) and m.group(0).lower() not in (title_text or '').lower()
 
 
-def _external_for_unreadable_embedded(info, lang):
+def external_for_unreadable_embedded(info, lang):
     """The 'AI translation' payload (type engine_ai) for the external subtitle
     in `lang` -- else English -- that best matches the playing release, or
     None. For an embedded track that cannot be read from the stream. A file
@@ -63,7 +63,7 @@ def _external_for_unreadable_embedded(info, lang):
     try:
         from resources.lib.sync import oracles, service
         from resources.lib.scoring_matching import release as scoring_matching_release
-        cands = oracles._oracle_candidates(info) or []
+        cands = oracles.oracle_candidates(info) or []
     except Exception:
         return None
     try:
@@ -95,7 +95,7 @@ def _external_for_unreadable_embedded(info, lang):
     return out
 
 
-def _playing_video_url(info):
+def playing_video_url(info):
     """URL/path of the file being played -- a direct http(s) stream (debrid) or
     a local file; '' for HLS/plugin:// or when unavailable. Mirrors the probe-
     URL logic subsync uses, so embedded extraction reads the same bytes the
@@ -154,13 +154,13 @@ def _embedded_staircase_source(info, playing, ref, rejected, abort):
     try:
         from resources.lib.sync.probes import bundle as probes_bundle
         from resources.lib.sync.align import common, retime, verify
-        bundle = probes_bundle._cached_reference_bundle(info)
+        bundle = probes_bundle.cached_reference_bundle(info)
         if not (bundle and bundle.get('track_cues')):
             return None, None
         for release, text in rejected[:_STAIRCASE_TRIES]:
             if abort():
                 return None, None
-            verdict = probes_bundle._verify_file_bundle(bundle, text, playing)[0]
+            verdict = probes_bundle.verify_file_bundle(bundle, text, playing)[0]
             if not verdict or verdict.get('status') != common.STATUS_FIXABLE:
                 continue
             try:
@@ -187,7 +187,7 @@ def _embedded_staircase_source(info, playing, ref, rejected, abort):
     return None, None
 
 
-def _embedded_aligned_source_srt(
+def embedded_aligned_source_srt(
         info, src_lang, progress_cb=None, allow_http=True,
         strict_lang=False, include_he=False):
     """FAST, debrid-safe source SRT for the embedded-AI path.
@@ -223,7 +223,7 @@ def _embedded_aligned_source_srt(
     try:
         import time as _time
         _t0 = _time.time()
-        url = _playing_video_url(info)
+        url = playing_video_url(info)
         if not url:
             return None, None
         try:
@@ -347,7 +347,7 @@ def _embedded_aligned_source_srt(
         # extract.
         _p(10, 100, 'מחפש כתובית מקור תואמת...')
         try:
-            all_cands = oracles._oracle_candidates(info, include_he=include_he)
+            all_cands = oracles.oracle_candidates(info, include_he=include_he)
         except Exception:
             all_cands = []
         try:
@@ -462,7 +462,7 @@ def _embedded_aligned_source_srt(
                     _yielded = True
                     break
                 try:
-                    src_text = oracles._download_oracle(c.get('payload'))
+                    src_text = oracles.download_oracle(c.get('payload'))
                 except Exception:
                     src_text = ''
                 if not src_text or src_text.count('-->') < 8:
@@ -539,7 +539,7 @@ def _embedded_aligned_source_srt(
 _EMBEDDED_TEXT_ORDER = ('en', 'es', 'de', 'fr', 'pt')
 
 
-def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
+def extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                           progress_cb=None, allow_http=True, steps=None,
                           cancelled=None, why=None, reference=None):
     """Extract the playing file's embedded `src_lang` subtitle track to a temp
@@ -573,8 +573,8 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # (a local name on purpose: every toast below, in the nested
         # functions too, goes through it)
         _status = ((lambda *a, **k: None) if reference is not None
-                   else progress._status)
-        url = _playing_video_url(info)
+                   else progress.status)
+        url = playing_video_url(info)
         if not url:
             kodi.log('embedded: no probeable playing url', level='INFO')
             return None
@@ -1256,16 +1256,16 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # Hebrew lines are being read -- not after the whole track.
                 why['lang_used'] = used
                 try:
-                    if (embedded_extract._lang_key(used)
-                            != embedded_extract._lang_key(src_lang)):
+                    if (embedded_extract.lang_key(used)
+                            != embedded_extract.lang_key(src_lang)):
                         kodi.log(
                             'embedded_ai: the {0} embedded subtitle is a '
                             'picture, not text -- reading the {1} embedded '
                             'track instead'.format(src_lang, used), level='INFO')
                         _status('AI: הכתובית המובנית ב{0} היא תמונה ולא טקסט — '
                                 'מתרגם מהכתובית המובנית ב{1}'.format(
-                                    _lang_display_he(src_lang),
-                                    _lang_display_he(used)), time_ms=6000)
+                                    lang_display_he(src_lang),
+                                    lang_display_he(used)), time_ms=6000)
                 except Exception:
                     pass
 
@@ -1318,7 +1318,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # flag to the same condition as the message keeps the two
                 # honest, and the timestamp bounds anything that still slips
                 # through -- a picker consumes it within seconds, never later.
-                if not progress._QUIET and reference is None:
+                if not progress.QUIET and reference is None:
                     try:
                         import time as _tt
                         import xbmcgui as _g
@@ -1392,7 +1392,7 @@ _EMB_REF_PROBE_S = 15.0
 _EMB_REF_BUDGET_S = 90.0
 
 
-def _embedded_reference(info, source_lang, cancelled=None):
+def embedded_reference(info, source_lang, cancelled=None):
     """(tracks, read) for arabic_gender.begin(embedded=...), or None when the
     playing file may not be read for a reference (the setting, the embedded
     mode, no direct stream). tracks() lists the file's text subtitle tracks
@@ -1401,15 +1401,15 @@ def _embedded_reference(info, source_lang, cancelled=None):
     try:
         if not settings.get_bool(_EMB_REF_SETTING, _EMB_REF_DEFAULT):
             return None
-        policy = _embedded_translation_policy()
-        url = _playing_video_url(info)
+        policy = embedded_translation_policy()
+        url = playing_video_url(info)
         if not url or not policy.get('enabled'):
             return None
         remote = '://' in url
         if remote and not policy.get('allow_http'):
             return None
         from resources.lib.fetching.embedded import embedded_extract
-        own = embedded_extract._lang_key(source_lang)
+        own = embedded_extract.lang_key(source_lang)
     except Exception:
         return None
 
@@ -1427,7 +1427,7 @@ def _embedded_reference(info, source_lang, cancelled=None):
         return [t for t in found
                 if t.get('is_text') and not t.get('forced')
                 and not t.get('signs')
-                and embedded_extract._lang_key(t.get('lang')) != own]
+                and embedded_extract.lang_key(t.get('lang')) != own]
 
     slow = {'said': False}
 
@@ -1459,8 +1459,8 @@ def _embedded_reference(info, source_lang, cancelled=None):
             return late
 
         try:
-            path = _extract_embedded_srt(
-                info, embedded_extract._lang_key(track.get('lang')),
+            path = extract_embedded_srt(
+                info, embedded_extract.lang_key(track.get('lang')),
                 track_num=track.get('num'), deadline_s=_EMB_REF_DEADLINE_S,
                 allow_http=True, cancelled=cancelled, reference=too_slow)
             if path and os.path.isfile(path):

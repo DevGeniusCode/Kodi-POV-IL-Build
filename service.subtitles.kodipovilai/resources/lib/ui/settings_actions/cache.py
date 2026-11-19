@@ -10,28 +10,28 @@ try:
 except ImportError:
     # Allow `python -m default --action=search` for local debug.
     xbmc = xbmcgui = xbmcplugin = xbmcvfs = None
-from resources.lib.ui.dialogs import _safe_log, _title
+from resources.lib.ui.dialogs import safe_log, dialogs_title
 
 
-def _handle_clear_cache(_params):
+def handle_clear_cache(_params):
     """Wipe all cached translations + metadata."""
     try:
         from resources.lib.core.cache import translation_cache
         from resources.lib.core import kodi
     except Exception as e:
-        xbmcgui.Dialog().ok(_title(), 'Internal error: {0}'.format(e))
+        xbmcgui.Dialog().ok(dialogs_title(), 'Internal error: {0}'.format(e))
         return
     confirm = xbmcgui.Dialog().yesno(
-        _title(),
+        dialogs_title(),
         'נקה את כל ה-cache של התרגומים?\n(תרגומים עתידיים יתבצעו מחדש.)',
     )
     if not confirm:
         return
     n = translation_cache.clear_all()
-    xbmcgui.Dialog().ok(_title(), kodi.localised(32637, n))
+    xbmcgui.Dialog().ok(dialogs_title(), kodi.localised(32637, n))
 
 
-def _handle_pool_share_cache(_params):
+def handle_pool_share_cache(_params):
     """Button handler for "share my cached translations". Confirms with the
     user, then hands the actual work to a SEPARATE detached RunScript
     (action=pool_share_cache_run) so the settings UI is freed immediately and
@@ -42,19 +42,19 @@ def _handle_pool_share_cache(_params):
         from resources.lib.fetching import pool_client
         from resources.lib.core import kodi, settings
     except Exception as e:
-        xbmcgui.Dialog().ok(_title(), 'Internal error: {0}'.format(e))
+        xbmcgui.Dialog().ok(dialogs_title(), 'Internal error: {0}'.format(e))
         return
 
     # Run-lock on the global home window (visible across processes) so an
     # accidental double click can't start two background runs.
     win = xbmcgui.Window(10000)
     if win.getProperty('ai_subs.pool_migrating') == '1':
-        xbmcgui.Dialog().ok(_title(), 'שיתוף המטמון כבר פועל ברקע.')
+        xbmcgui.Dialog().ok(dialogs_title(), 'שיתוף המטמון כבר פועל ברקע.')
         return
 
     if not pool_client.share_enabled():
         if not xbmcgui.Dialog().yesno(
-                _title(),
+                dialogs_title(),
                 'שיתוף למאגר הקהילתי כבוי. להפעיל אותו עכשיו ולשתף את כל '
                 'התרגומים שבמטמון?'):
             return
@@ -64,7 +64,7 @@ def _handle_pool_share_cache(_params):
             pass
 
     if not xbmcgui.Dialog().yesno(
-            _title(),
+            dialogs_title(),
             'לשתף ברקע את כל תרגומי ה-AI ששמורים אצלך במטמון אל המאגר '
             'הקהילתי?\nאפשר להמשיך להשתמש בקודי בזמן זה. פעולה חד-פעמית; '
             'כפילויות נמנעות אוטומטית.'):
@@ -80,11 +80,11 @@ def _handle_pool_share_cache(_params):
                           time_ms=5000)
     except Exception as e:
         win.clearProperty('ai_subs.pool_migrating')
-        _safe_log('pool_share_cache dispatch failed: {0}'.format(e),
+        safe_log('pool_share_cache dispatch failed: {0}'.format(e),
                   level='ERROR')
 
 
-def _handle_pool_share_cache_run(_params):
+def handle_pool_share_cache_run(_params):
     """Background worker for the cache migration (launched detached by
     _handle_pool_share_cache). Shows a non-modal progress banner and a final
     toast -- no modal dialog, so it never interrupts the user. Releases the
@@ -103,7 +103,7 @@ def _handle_pool_share_cache_run(_params):
     progress = None
     try:
         progress = xbmcgui.DialogProgressBG()
-        progress.create(_title(), 'משתף תרגומים למאגר...')
+        progress.create(dialogs_title(), 'משתף תרגומים למאגר...')
     except Exception:
         progress = None
 
@@ -112,7 +112,7 @@ def _handle_pool_share_cache_run(_params):
             return
         try:
             pct = int(done * 100 / max(1, total))
-            progress.update(pct, _title(),
+            progress.update(pct, dialogs_title(),
                             'משתף תרגומים למאגר ({0}/{1})'.format(done, total))
         except Exception:
             pass
@@ -128,7 +128,7 @@ def _handle_pool_share_cache_run(_params):
         submitted, skipped, total = pool_contribute.share_cache(
             progress_cb=report, should_cancel=cancelled)
     except Exception as e:
-        _safe_log('pool_share_cache_run crashed: {0}'.format(e),
+        safe_log('pool_share_cache_run crashed: {0}'.format(e),
                   level='ERROR')
     finally:
         win.clearProperty('ai_subs.pool_migrating')
@@ -146,7 +146,7 @@ def _handle_pool_share_cache_run(_params):
             pass
 
 
-def _handle_purge_temp(_params):
+def handle_purge_temp(_params):
     """Wipe ALL .srt files in special://temp/. Used to clear out
     stale subtitle leftovers from previous movies that Kodi keeps
     in temp and would otherwise leak into the next movie's
@@ -154,9 +154,9 @@ def _handle_purge_temp(_params):
     try:
         from resources.lib.fetching import local
     except Exception as e:
-        xbmcgui.Dialog().ok(_title(), 'Internal error: {0}'.format(e))
+        xbmcgui.Dialog().ok(dialogs_title(), 'Internal error: {0}'.format(e))
         return
     n = local.purge_temp_subs()
     xbmcgui.Dialog().ok(
-        _title(),
+        dialogs_title(),
         'נמחקו {0} קבצי כתוביות מ-temp.'.format(n))

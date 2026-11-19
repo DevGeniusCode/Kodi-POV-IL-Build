@@ -12,14 +12,14 @@ try:
 except ImportError:
     # Allow `python -m default --action=search` for local debug.
     xbmc = xbmcgui = xbmcplugin = xbmcvfs = None
-from resources.lib.ai_translation.background import _handle_bg_translate_picker, _handle_translate_file
-from resources.lib.delivery.kodi_player import _handle_download
-from resources.lib.entry.actions import _handle_choose_subs, _handle_he_avail
-from resources.lib.ui.dialogs import _safe_log
-from resources.lib.ui.listing import _handle_manualsearch, _handle_search
-from resources.lib.ui.settings_actions.cache import _handle_clear_cache, _handle_pool_share_cache, _handle_pool_share_cache_run, _handle_purge_temp
-from resources.lib.ui.settings_actions.engine import _handle_engine_test
-from resources.lib.ui.settings_actions.gemini import _handle_connect_gemini, _handle_open_aistudio, _handle_open_tmdb_notice, _handle_show_gemini_usage, _handle_test_connection
+from resources.lib.ai_translation.background import handle_bg_translate_picker, handle_translate_file
+from resources.lib.delivery.kodi_player import handle_download
+from resources.lib.entry.actions import handle_choose_subs, handle_he_avail
+from resources.lib.ui.dialogs import safe_log
+from resources.lib.ui.listing import handle_manualsearch, handle_search
+from resources.lib.ui.settings_actions.cache import handle_clear_cache, handle_pool_share_cache, handle_pool_share_cache_run, handle_purge_temp
+from resources.lib.ui.settings_actions.engine import handle_engine_test
+from resources.lib.ui.settings_actions.gemini import handle_connect_gemini, handle_open_aistudio, handle_open_tmdb_notice, handle_show_gemini_usage, handle_test_connection
 
 
 def _parse_query():
@@ -61,7 +61,7 @@ def _parse_query():
 
 def main():
     if xbmc is None:
-        _safe_log('default.py invoked outside Kodi -- nothing to do',
+        safe_log('default.py invoked outside Kodi -- nothing to do',
                   level='WARNING')
         return
 
@@ -75,45 +75,45 @@ def main():
 
     try:
         if action == 'search':
-            _handle_search(handle, params)
+            handle_search(handle, params)
         elif action == 'manualsearch':
-            _handle_manualsearch(handle, params)
+            handle_manualsearch(handle, params)
         elif action == 'download':
-            _handle_download(handle, params)
+            handle_download(handle, params)
         elif action == 'open_aistudio':
-            _handle_open_aistudio(params)
+            handle_open_aistudio(params)
         elif action == 'test_connection':
-            _handle_test_connection(params)
+            handle_test_connection(params)
         elif action == 'connect_gemini':
-            _handle_connect_gemini(params)
+            handle_connect_gemini(params)
         elif action == 'show_gemini_usage':
-            _handle_show_gemini_usage(params)
+            handle_show_gemini_usage(params)
         elif action == 'open_tmdb_notice':
-            _handle_open_tmdb_notice(params)
+            handle_open_tmdb_notice(params)
         elif action == 'clear_cache':
-            _handle_clear_cache(params)
+            handle_clear_cache(params)
         elif action == 'pool_share_cache':
-            _handle_pool_share_cache(params)
+            handle_pool_share_cache(params)
         elif action == 'pool_share_cache_run':
-            _handle_pool_share_cache_run(params)
+            handle_pool_share_cache_run(params)
         elif action == 'purge_temp':
-            _handle_purge_temp(params)
+            handle_purge_temp(params)
         elif action == 'translate_file':
-            _handle_translate_file(params)
+            handle_translate_file(params)
         elif action == 'bg_translate_picker':
-            _handle_bg_translate_picker(params)
+            handle_bg_translate_picker(params)
         elif action == 'he_avail':
-            _handle_he_avail(params)
+            handle_he_avail(params)
         elif action == 'engine_test':
-            _handle_engine_test(params)
+            handle_engine_test(params)
         elif action == 'choose_subs':
-            _handle_choose_subs(params)
+            handle_choose_subs(params)
         else:
-            _safe_log('unknown action: ' + action, level='WARNING')
+            safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:
                 xbmcplugin.endOfDirectory(handle)
     except Exception as e:
-        _safe_log('main crashed: {0}'.format(e), level='ERROR')
+        safe_log('main crashed: {0}'.format(e), level='ERROR')
         try:
             if handle >= 0:
                 xbmcplugin.endOfDirectory(handle)

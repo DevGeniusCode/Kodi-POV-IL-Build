@@ -17,7 +17,7 @@ _LEAK_RESCUE_BUDGET = 6.0
 _LEAK_RESCUE_TIMEOUT = 4
 
 
-def _rescue_reasoning_leaks(text, source=None, source_lang='auto'):
+def rescue_reasoning_leaks(text, source=None, source_lang='auto'):
     """(text, n): `text` with each cue that carries the model's working
     replaced by the model's own Hebrew answer in it -- the line its working
     settled on, else the draft it opened with (it knew the speaker's gender;
@@ -52,7 +52,7 @@ def _rescue_reasoning_leaks(text, source=None, source_lang='auto'):
         how = {'model': 0, 'google': 0, 'source': 0}
         for i in bad:
             lines = blocks[i].split('\n')
-            if len(lines) < 3 or not srt_blocks._TIMECODE_RE.match(lines[1].strip()):
+            if len(lines) < 3 or not srt_blocks.TIMECODE_RE.match(lines[1].strip()):
                 continue
             body = srt_blocks.block_text_only(blocks[i]) or ''
             line = postfix_cleanup.strip_leaked_speaker_prefix(sources[i] or '').strip()
@@ -60,7 +60,7 @@ def _rescue_reasoning_leaks(text, source=None, source_lang='auto'):
             kind = 'model'
             if not answer and line:
                 heb = _google_lines(line.split('\n'), source_lang, deadline)
-                if heb and srt_blocks._HEB_RE.search(''.join(heb)):
+                if heb and srt_blocks.HEB_RE.search(''.join(heb)):
                     answer, kind = '\n'.join(heb), 'google'
             if not answer and line:
                 answer, kind = line, 'source'

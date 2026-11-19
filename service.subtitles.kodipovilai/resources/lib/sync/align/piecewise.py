@@ -5,17 +5,17 @@
 import bisect
 import math
 import statistics
-from resources.lib.core.srt.cues import _median, _preflight_cues, _preflight_srt, dialogue_cues
-from resources.lib.sync.align.common import MAX_PLAUSIBLE_OFFSET_MS, MIN_CUES, MIN_OVERLAP, SCALE_MAX, SCALE_MIN, STATUS_FIXABLE, _LOCAL_MIN_REF_CUES, _MAXOFF, _MICRO_MAX_SEGMENTS, _MICRO_MAX_STEP_MS, _MICRO_MIN_STEP_MS, _PIECEWISE_MIN_GAIN, _REGION_FINE_MIN_GAIN, _TOL, _UNIQUE_MIN
-from resources.lib.sync.align.estimate import _best_offset
-from resources.lib.sync.align.regions import _region_fine_plan, _region_free_plan, _region_piecewise_plan
-from resources.lib.sync.align.verify import _nearest_onset_distance, _tight_agreement, _timing_score, _unique_match_metrics, overlap_rate
+from resources.lib.core.srt.cues import cues_median, preflight_cues, preflight_srt, dialogue_cues
+from resources.lib.sync.align.common import MAX_PLAUSIBLE_OFFSET_MS, MIN_CUES, MIN_OVERLAP, SCALE_MAX, SCALE_MIN, STATUS_FIXABLE, LOCAL_MIN_REF_CUES, MAXOFF, MICRO_MAX_SEGMENTS, MICRO_MAX_STEP_MS, MICRO_MIN_STEP_MS, PIECEWISE_MIN_GAIN, REGION_FINE_MIN_GAIN, TOL, UNIQUE_MIN
+from resources.lib.sync.align.estimate import best_offset
+from resources.lib.sync.align.regions import region_fine_plan, region_free_plan, region_piecewise_plan
+from resources.lib.sync.align.verify import nearest_onset_distance, tight_agreement, timing_score, unique_match_metrics, overlap_rate
 
 
 PIECEWISE_MIN_STEP_MS = 5000
 _LOCAL_MAX_WINDOWS = 15
-_LOCAL_MIN_VOTE = 0.65
-_LOCAL_MIN_OVERLAP = 0.65
+LOCAL_MIN_VOTE = 0.65
+LOCAL_MIN_OVERLAP = 0.65
 _PIECEWISE_MAX_SEGMENTS = 4
 _LOCAL_RADIUS_MS = 150000
 _LOCAL_SAME_PLATEAU_MS = 1500
@@ -34,14 +34,14 @@ _REGION_FINE_AGREE_MS = 300.0
 _REGION_FINE_AGREE_SHARE = 0.92
 
 
-def _local_windows(ref, cand, scale, max_offset_ms=None, center_offset=0.0):
+def piecewise_local_windows(ref, cand, scale, max_offset_ms=None, center_offset=0.0):
     """Cheap local offset estimates at one already-selected scale.
 
     The reference is partitioned once, so the work is roughly one additional
     scale evaluation rather than another full FPS search.  Returned offsets use
     the same direction as estimate(): candidate ~= scale*reference + offset.
     """
-    if len(ref) < _LOCAL_MIN_REF_CUES or len(cand) < MIN_CUES:
+    if len(ref) < LOCAL_MIN_REF_CUES or len(cand) < MIN_CUES:
         return []
     count = len(ref)
     window_count = min(_LOCAL_MAX_WINDOWS, max(3, count // 20))
@@ -53,7 +53,7 @@ def _local_windows(ref, cand, scale, max_offset_ms=None, center_offset=0.0):
     # excluding the aliases.
     center_offset = float(center_offset or 0.0)
     cand_on = [c['start'] - center_offset for c in cand]
-    max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
+    max_off = MAXOFF if max_offset_ms is None else max_offset_ms
     local_radius = min(max_off, _LOCAL_RADIUS_MS)
     windows = []
     for wi in range(window_count):
@@ -62,12 +62,12 @@ def _local_windows(ref, cand, scale, max_offset_ms=None, center_offset=0.0):
         subset = ref[begin:end]
         if len(subset) < MIN_CUES:
             continue
-        offset, votes = _best_offset(
+        offset, votes = best_offset(
             [c['start'] for c in subset], cand_on, scale, local_radius)
         offset += center_offset
         vote = votes / len(subset)
         overlap = overlap_rate(subset, cand, scale, offset)
-        tight = _tight_agreement(subset, cand, scale, offset)
+        tight = tight_agreement(subset, cand, scale, offset)
         windows.append({
             'window': wi, 'begin': begin, 'end': end,
             'center_ms': statistics.fmean(c['start'] for c in subset),
@@ -77,25 +77,25 @@ def _local_windows(ref, cand, scale, max_offset_ms=None, center_offset=0.0):
     return windows
 
 
-def _trusted_local_windows(windows):
+def trusted_local_windows(windows):
     return [w for w in windows
-            if w['vote'] >= _LOCAL_MIN_VOTE
-            and w['overlap'] >= _LOCAL_MIN_OVERLAP]
+            if w['vote'] >= LOCAL_MIN_VOTE
+            and w['overlap'] >= LOCAL_MIN_OVERLAP]
 
 
-def _local_spread(windows):
+def piecewise_local_spread(windows):
     groups, trusted = _group_local_offsets(windows)
     if len(trusted) < 2:
         return None
     if len(groups) < 2:
         return 0.0
-    offsets = [_median([w['offset_ms'] for w in group]) for group in groups]
+    offsets = [cues_median([w['offset_ms'] for w in group]) for group in groups]
     return max(offsets) - min(offsets)
 
 
 def _group_local_offsets(windows):
     """Contiguous sustained timing plateaus; isolated boundary aliases drop."""
-    trusted = _trusted_local_windows(windows)
+    trusted = trusted_local_windows(windows)
     if len(trusted) < max(4, int(0.60 * len(windows))):
         return [], trusted
     groups = []
@@ -104,7 +104,7 @@ def _group_local_offsets(windows):
             groups.append([w])
             continue
         current = groups[-1]
-        if abs(w['offset_ms'] - _median(
+        if abs(w['offset_ms'] - cues_median(
                 [x['offset_ms'] for x in current])) < _LOCAL_SAME_PLATEAU_MS:
             current.append(w)
         else:
@@ -123,8 +123,8 @@ def _group_local_offsets(windows):
             left = groups[i - 1] if i > 0 else None
             right = groups[i + 1] if i + 1 < len(groups) else None
             if left and right:
-                lm = _median([x['offset_ms'] for x in left])
-                rm = _median([x['offset_ms'] for x in right])
+                lm = cues_median([x['offset_ms'] for x in left])
+                rm = cues_median([x['offset_ms'] for x in right])
                 own = float(group[0]['offset_ms'])
                 if abs(lm - rm) < _LOCAL_SAME_PLATEAU_MS:
                     # The singleton is the alias; preserve the two agreeing
@@ -143,7 +143,7 @@ def _group_local_offsets(windows):
     return groups, trusted
 
 
-def _smooth_drift_refinement(windows, scale):
+def smooth_drift_refinement(windows, scale):
     """Infer a continuous scale correction from sustained local offsets.
 
     Discrete 23.976/24/25/29.97/30 ratios cover normal FPS conversions, but a
@@ -153,7 +153,7 @@ def _smooth_drift_refinement(windows, scale):
     alias windows; the refit is offered only with strong linear evidence and is
     still subjected to every ordinary global/local acceptance gate afterward.
     """
-    trusted = _trusted_local_windows(windows)
+    trusted = trusted_local_windows(windows)
     if (len(trusted) < 5
             or len(trusted) < max(5, int(0.60 * len(windows)))):
         return None
@@ -166,12 +166,12 @@ def _smooth_drift_refinement(windows, scale):
               if xs[j] != xs[i]]
     if not slopes:
         return None
-    robust_slope = _median(slopes)
-    intercept = _median([y - robust_slope * x for x, y in zip(xs, ys)])
+    robust_slope = cues_median(slopes)
+    intercept = cues_median([y - robust_slope * x for x, y in zip(xs, ys)])
     residuals = [y - (robust_slope * x + intercept)
                  for x, y in zip(xs, ys)]
-    residual_mid = _median(residuals)
-    mad = _median([abs(r - residual_mid) for r in residuals])
+    residual_mid = cues_median(residuals)
+    mad = cues_median([abs(r - residual_mid) for r in residuals])
     limit = max(750.0, 3.5 * mad)
     kept = [(x, y) for x, y, residual in zip(xs, ys, residuals)
             if abs(residual - residual_mid) <= limit]
@@ -196,7 +196,7 @@ def _smooth_drift_refinement(windows, scale):
             'retained': len(kept), 'total': len(trusted)}
 
 
-def _optimize_piecewise_boundaries(ref, cand, scale, groups, offsets):
+def optimize_piecewise_boundaries(ref, cand, scale, groups, offsets):
     """Find ordered cut points using timestamps only, never subtitle text.
 
     Each candidate cue is scored under every supported plateau by nearest
@@ -217,7 +217,7 @@ def _optimize_piecewise_boundaries(ref, cand, scale, groups, offsets):
         for cue in cand:
             mapped_s = (cue['start'] - offset) / scale
             mapped_e = (cue['end'] - offset) / scale
-            nearest = _nearest_onset_distance(ref_on, mapped_s)
+            nearest = nearest_onset_distance(ref_on, mapped_s)
             overlap = False
             j = bisect.bisect_left(ref_ends, mapped_s)
             while j < len(ref) and ref_starts[j] < mapped_e:
@@ -231,8 +231,8 @@ def _optimize_piecewise_boundaries(ref, cand, scale, groups, offsets):
 
     allowed = []
     for left, right in zip(groups, groups[1:]):
-        left_off = _median([w['offset_ms'] for w in left])
-        right_off = _median([w['offset_ms'] for w in right])
+        left_off = cues_median([w['offset_ms'] for w in left])
+        right_off = cues_median([w['offset_ms'] for w in right])
         lo_time = scale * left[-1]['center_ms'] + left_off
         hi_time = scale * right[0]['center_ms'] + right_off
         lo, hi = sorted((lo_time, hi_time))
@@ -281,7 +281,7 @@ def _optimize_piecewise_boundaries(ref, cand, scale, groups, offsets):
     return None if best is None else best[1]
 
 
-def _map_cues_piecewise(cand, scale, segments):
+def map_cues_piecewise(cand, scale, segments):
     boundaries = [s['cand_from_ms'] for s in segments[1:]]
     out = []
     for cue in cand:
@@ -293,7 +293,7 @@ def _map_cues_piecewise(cand, scale, segments):
     return out
 
 
-def _map_cues_global(cand, scale, offset):
+def map_cues_global(cand, scale, offset):
     return [dict(cue,
                  start=(cue['start'] - offset) / scale,
                  end=(cue['end'] - offset) / scale)
@@ -310,7 +310,7 @@ def _micro_core_windows(windows):
     residual then removes only gross aliases.  This is still proposal evidence,
     never an acceptance decision.
     """
-    trusted = _trusted_local_windows(windows)
+    trusted = trusted_local_windows(windows)
     if (len(trusted) < _MICRO_MIN_WINDOWS
             or len(trusted) < int(math.ceil(
                 _MICRO_MIN_CORE_RATIO * len(windows)))):
@@ -322,11 +322,11 @@ def _micro_core_windows(windows):
               if xs[j] != xs[i]]
     if not slopes:
         return []
-    slope = _median(slopes)
-    intercept = _median([y - slope * x for x, y in zip(xs, ys)])
+    slope = cues_median(slopes)
+    intercept = cues_median([y - slope * x for x, y in zip(xs, ys)])
     residuals = [y - (slope * x + intercept) for x, y in zip(xs, ys)]
-    middle = _median(residuals)
-    mad = _median([abs(value - middle) for value in residuals])
+    middle = cues_median(residuals)
+    mad = cues_median([abs(value - middle) for value in residuals])
     limit = max(2500.0, 5.0 * mad)
     core = [w for w, residual in zip(trusted, residuals)
             if abs(residual - middle) <= limit]
@@ -342,7 +342,7 @@ def _micro_plateau_groups(windows):
     groups = []
     for window in core:
         if (not groups
-                or abs(window['offset_ms'] - _median(
+                or abs(window['offset_ms'] - cues_median(
                     [item['offset_ms'] for item in groups[-1]]))
                 >= _MICRO_SAME_PLATEAU_MS):
             groups.append([window])
@@ -362,15 +362,15 @@ def _micro_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
     until a separate holdout/independent-family validator approves it.
     """
     scale = 1.0
-    max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
-    center_offset, _votes = _best_offset(
+    max_off = MAXOFF if max_offset_ms is None else max_offset_ms
+    center_offset, _votes = best_offset(
         [c['start'] for c in ref], [c['start'] for c in cand], scale, max_off)
-    windows = _local_windows(
+    windows = piecewise_local_windows(
         ref, cand, scale, max_offset_ms=max_offset_ms,
         center_offset=center_offset)
     groups, core = _micro_plateau_groups(windows)
     info = {'windows': windows, 'core': core, 'groups': groups}
-    if not (3 <= len(groups) <= _MICRO_MAX_SEGMENTS):
+    if not (3 <= len(groups) <= MICRO_MAX_SEGMENTS):
         return None, info
     # Boundary regions must be sustained, and at most one short middle act may
     # be represented by a single window.  Consensus will independently confirm
@@ -380,7 +380,7 @@ def _micro_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
     if sum(1 for group in groups if len(group) == 1) > 1:
         return None, info
 
-    offsets = [_median([w['offset_ms'] for w in group])
+    offsets = [cues_median([w['offset_ms'] for w in group])
                for group in groups]
     if any(abs(offset) > MAX_PLAUSIBLE_OFFSET_MS for offset in offsets):
         return None, info
@@ -388,9 +388,9 @@ def _micro_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
              for i in range(len(offsets) - 1)]
     if not steps:
         return None, info
-    direction = 1.0 if _median(steps) > 0 else -1.0
-    if any(direction * step < _MICRO_MIN_STEP_MS
-           or abs(step) > _MICRO_MAX_STEP_MS for step in steps):
+    direction = 1.0 if cues_median(steps) > 0 else -1.0
+    if any(direction * step < MICRO_MIN_STEP_MS
+           or abs(step) > MICRO_MAX_STEP_MS for step in steps):
         return None, info
     if max(offsets) - min(offsets) < 3000.0:
         return None, info
@@ -402,20 +402,20 @@ def _micro_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
             < timeline_start + 0.75 * timeline_span):
         return None, info
 
-    cuts = _optimize_piecewise_boundaries(
+    cuts = optimize_piecewise_boundaries(
         ref, cand, scale, groups, offsets)
     if cuts is None:
         return None, info
-    return _micro_verdict_from_cuts(
+    return micro_verdict_from_cuts(
         ref, cand, cuts, offsets, info,
         vote=min(w['vote'] for w in core),
         label='embedded-track consensus proposal',
         min_overlap=min_overlap, max_offset_ms=max_offset_ms)
 
 
-def _micro_verdict_from_cuts(ref, cand, cuts, offsets, info, vote, label,
+def micro_verdict_from_cuts(ref, cand, cuts, offsets, info, vote, label,
                              min_overlap=MIN_OVERLAP, max_offset_ms=None,
-                             min_gain=_PIECEWISE_MIN_GAIN):
+                             min_gain=PIECEWISE_MIN_GAIN):
     """Shared acceptance tail for both short-edit planners.
 
     Whatever proposed the plateaus, the same region-size, ordering, residual,
@@ -462,23 +462,23 @@ def _micro_verdict_from_cuts(ref, cand, cuts, offsets, info, vote, label,
         if region_end - region_start < 60000.0:
             return None, info
 
-    fixed = _map_cues_piecewise(cand, scale, segments)
+    fixed = map_cues_piecewise(cand, scale, segments)
     if (len(fixed) != len(cand)
             or any(c['end'] <= c['start'] for c in fixed)
             or any(fixed[i]['start'] < fixed[i - 1]['start']
                    for i in range(1, len(fixed)))):
         return None, info
-    post_windows = _local_windows(
+    post_windows = piecewise_local_windows(
         ref, fixed, 1.0, max_offset_ms=max_offset_ms, center_offset=0.0)
     post_core = _micro_core_windows(post_windows)
     if len(post_core) < _MICRO_MIN_WINDOWS:
         return None, info
     post_offsets = [w['offset_ms'] for w in post_core]
     post_residual = max(post_offsets) - min(post_offsets)
-    before_score = _timing_score(ref, cand)
-    after_score = _timing_score(ref, fixed)
+    before_score = timing_score(ref, cand)
+    after_score = timing_score(ref, fixed)
     after_overlap = overlap_rate(ref, fixed, 1.0, 0.0)
-    after_unique, unique_median, unique_p95 = _unique_match_metrics(
+    after_unique, unique_median, unique_p95 = unique_match_metrics(
         ref, fixed, 1.0, 0.0)
     if (post_residual > _MICRO_POST_RESIDUAL_MS
             or after_overlap < max(0.85, min_overlap)
@@ -520,7 +520,7 @@ def _micro_verdict_from_cuts(ref, cand, cuts, offsets, info, vote, label,
     return verdict, info
 
 
-def _snap_piecewise_boundaries(verdict, cand_all):
+def snap_piecewise_boundaries(verdict, cand_all):
     """Move each cut within its dialogue gap so it is valid for ALL cues.
 
     Planners place cuts between dialogue cues only, yet ``apply_verdict``
@@ -607,16 +607,16 @@ _FINE_PLANNER = 'region-fine'
 _FREE_PLANNER = 'region-free'
 # Planners whose folds are compared line by line and scored on the map each
 # fold built, with the lower 'materially better' bar.
-_FINE_PLANNERS = (_region_fine_plan, _region_free_plan)
+_FINE_PLANNERS = (region_fine_plan, region_free_plan)
 
 
 def _piecewise_planner(name):
     if name == 'region':
-        return _region_piecewise_plan
+        return region_piecewise_plan
     if name == 'region-fine':
-        return _region_fine_plan
+        return region_fine_plan
     if name == _FREE_PLANNER:
-        return _region_free_plan
+        return region_free_plan
     return _micro_piecewise_plan
 
 
@@ -646,14 +646,14 @@ def micro_piecewise_proposal(ref_cues, cand_srt_text,
     free-direction mode after that (see _region_piecewise_plan); only for a
     caller whose proof does not rest on this one reference.
     """
-    ref, ref_error = _preflight_cues(ref_cues)
+    ref, ref_error = preflight_cues(ref_cues)
     if ref_error:
         return None
-    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
+    cand_all, cand_error = preflight_srt(cand_srt_text, True)
     if cand_error:
         return None
     cand = dialogue_cues(cand_all)
-    if len(ref) < _LOCAL_MIN_REF_CUES or len(cand) < _LOCAL_MIN_REF_CUES:
+    if len(ref) < LOCAL_MIN_REF_CUES or len(cand) < LOCAL_MIN_REF_CUES:
         return None
     verdict = None
     shared = {}
@@ -767,14 +767,14 @@ def validate_micro_piecewise(ref_cues, cand_srt_text, proposal=None,
     full map across the whole timeline. Duplicate Matroska tracks therefore
     cannot masquerade as independent evidence.
     """
-    ref, ref_error = _preflight_cues(ref_cues)
+    ref, ref_error = preflight_cues(ref_cues)
     if ref_error:
         return None
-    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
+    cand_all, cand_error = preflight_srt(cand_srt_text, True)
     if cand_error:
         return None
     cand = dialogue_cues(cand_all)
-    if len(ref) < 3 * _LOCAL_MIN_REF_CUES or len(cand) < _LOCAL_MIN_REF_CUES:
+    if len(ref) < 3 * LOCAL_MIN_REF_CUES or len(cand) < LOCAL_MIN_REF_CUES:
         return None
     full = proposal
     if full is None:
@@ -801,7 +801,7 @@ def validate_micro_piecewise(ref_cues, cand_srt_text, proposal=None,
         if later and later.get('validation_required'):
             validated = _holdout_validate(
                 ref, cand, later, planner, max_offset_ms)
-    return _snap_piecewise_boundaries(validated, cand_all)
+    return snap_piecewise_boundaries(validated, cand_all)
 
 
 def _holdout_validate(ref, cand, full, planner, max_offset_ms=None):
@@ -809,8 +809,8 @@ def _holdout_validate(ref, cand, full, planner, max_offset_ms=None):
         float(item.get('ref_from_ms'))
         for item in (full.get('segments') or [])[1:]
         if item.get('ref_from_ms') is not None]
-    min_gain = (_REGION_FINE_MIN_GAIN if planner in _FINE_PLANNERS
-                else _PIECEWISE_MIN_GAIN)
+    min_gain = (REGION_FINE_MIN_GAIN if planner in _FINE_PLANNERS
+                else PIECEWISE_MIN_GAIN)
     passed = []
     for fold in range(5):
         train = [cue for index, cue in enumerate(ref) if index % 5 != fold]
@@ -838,19 +838,19 @@ def _holdout_validate(ref, cand, full, planner, max_offset_ms=None):
         # The cue-level planner fits every plateau on the very cues being
         # held out, so for it the map rebuilt WITHOUT them is what must
         # explain them: a genuinely out-of-sample score.
-        scored = (fold_plan if planner is _region_piecewise_plan
+        scored = (fold_plan if planner is region_piecewise_plan
                   or planner in _FINE_PLANNERS else full)
-        fixed = _map_cues_piecewise(
+        fixed = map_cues_piecewise(
             cand, scored.get('scale', 1.0), scored.get('segments') or [])
         if (len(fixed) != len(cand)
                 or any(c['end'] <= c['start'] for c in fixed)
                 or any(fixed[index]['start'] < fixed[index - 1]['start']
                        for index in range(1, len(fixed)))):
             continue
-        before_score = _timing_score(holdout, cand)
-        after_score = _timing_score(holdout, fixed)
+        before_score = timing_score(holdout, cand)
+        after_score = timing_score(holdout, fixed)
         after_overlap = overlap_rate(holdout, fixed, 1.0, 0.0)
-        after_unique, _median_ms, p95_ms = _unique_match_metrics(
+        after_unique, _median_ms, p95_ms = unique_match_metrics(
             holdout, fixed, 1.0, 0.0)
         if (after_overlap < 0.85 or after_unique < 0.72
                 or p95_ms is None or p95_ms > 800.0
@@ -881,7 +881,7 @@ def _holdout_validate(ref, cand, full, planner, max_offset_ms=None):
 
 def evaluate_piecewise_family(ref_cues, cand_srt_text, verdict,
                               max_offset_ms=None,
-                              min_gain=_PIECEWISE_MIN_GAIN):
+                              min_gain=PIECEWISE_MIN_GAIN):
     """Out-of-family validation/veto metrics for an already frozen map.
 
     This does not refit a single parameter.  It asks whether a map learned from
@@ -893,27 +893,27 @@ def evaluate_piecewise_family(ref_cues, cand_srt_text, verdict,
     A second FAMILY carries the proof and keeps the default; a lane that only
     has to show the reference is native to the file may ask for less.
     """
-    ref, ref_error = _preflight_cues(ref_cues)
-    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
+    ref, ref_error = preflight_cues(ref_cues)
+    cand_all, cand_error = preflight_srt(cand_srt_text, True)
     if ref_error or cand_error or not verdict:
         return None
     cand = dialogue_cues(cand_all)
     segments = list(verdict.get('segments') or [])
-    if len(ref) < _LOCAL_MIN_REF_CUES or not cand or not segments:
+    if len(ref) < LOCAL_MIN_REF_CUES or not cand or not segments:
         return None
-    fixed = _map_cues_piecewise(
+    fixed = map_cues_piecewise(
         cand, float(verdict.get('scale') or 1.0), segments)
     if (len(fixed) != len(cand)
             or any(c['end'] <= c['start'] for c in fixed)
             or any(fixed[index]['start'] < fixed[index - 1]['start']
                    for index in range(1, len(fixed)))):
         return None
-    before_score = _timing_score(ref, cand)
-    after_score = _timing_score(ref, fixed)
+    before_score = timing_score(ref, cand)
+    after_score = timing_score(ref, fixed)
     after_overlap = overlap_rate(ref, fixed, 1.0, 0.0)
-    after_unique, median_ms, p95_ms = _unique_match_metrics(
+    after_unique, median_ms, p95_ms = unique_match_metrics(
         ref, fixed, 1.0, 0.0)
-    post_windows = _local_windows(
+    post_windows = piecewise_local_windows(
         ref, fixed, 1.0, max_offset_ms=max_offset_ms, center_offset=0.0)
     post_core = _micro_core_windows(post_windows)
     post_residual = None
@@ -936,12 +936,12 @@ def evaluate_piecewise_family(ref_cues, cand_srt_text, verdict,
             'post_core': len(post_core), 'post_windows': len(post_windows)}
 
 
-def _piecewise_plan(ref, cand, scale, min_overlap, max_offset_ms=None,
+def piecewise_plan(ref, cand, scale, min_overlap, max_offset_ms=None,
                     _refined=False):
-    max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
-    center_offset, _votes = _best_offset(
+    max_off = MAXOFF if max_offset_ms is None else max_offset_ms
+    center_offset, _votes = best_offset(
         [c['start'] for c in ref], [c['start'] for c in cand], scale, max_off)
-    windows = _local_windows(
+    windows = piecewise_local_windows(
         ref, cand, scale, max_offset_ms=max_offset_ms,
         center_offset=center_offset)
     groups, trusted = _group_local_offsets(windows)
@@ -962,18 +962,18 @@ def _piecewise_plan(ref, cand, scale, min_overlap, max_offset_ms=None,
                     slopes.append((group[-1]['offset_ms']
                                    - group[0]['offset_ms']) / dx)
         if slopes:
-            correction = _median(slopes)
+            correction = cues_median(slopes)
             if 0.00005 <= abs(correction) <= 0.02:
-                return _piecewise_plan(
+                return piecewise_plan(
                     ref, cand, scale + correction, min_overlap,
                     max_offset_ms=max_offset_ms, _refined=True)
 
-    offsets = [_median([w['offset_ms'] for w in group])
+    offsets = [cues_median([w['offset_ms'] for w in group])
                for group in groups]
     if any(abs(offset) > MAX_PLAUSIBLE_OFFSET_MS for offset in offsets):
         return None, info
     if min(abs(offsets[i + 1] - offsets[i])
-           for i in range(len(offsets) - 1)) < PIECEWISE_MIN_STEP_MS - _TOL:
+           for i in range(len(offsets) - 1)) < PIECEWISE_MIN_STEP_MS - TOL:
         return None, info
     for i, group in enumerate(groups):
         if len(group) >= 2:
@@ -983,7 +983,7 @@ def _piecewise_plan(ref, cand, scale, min_overlap, max_offset_ms=None,
         if not edge or w['vote'] < 0.85 or w['overlap'] < 0.85:
             return None, info
 
-    cuts = _optimize_piecewise_boundaries(
+    cuts = optimize_piecewise_boundaries(
         ref, cand, scale, groups, offsets)
     if cuts is None:
         return None, info
@@ -1006,26 +1006,26 @@ def _piecewise_plan(ref, cand, scale, min_overlap, max_offset_ms=None,
             'offset_ms': offset,
         })
 
-    fixed = _map_cues_piecewise(cand, scale, segments)
+    fixed = map_cues_piecewise(cand, scale, segments)
     if (len(fixed) != len(cand)
             or any(c['end'] <= c['start'] for c in fixed)
             or any(fixed[i]['start'] < fixed[i - 1]['start']
                    for i in range(1, len(fixed)))):
         return None, info
-    post_windows = _local_windows(
+    post_windows = piecewise_local_windows(
         ref, fixed, 1.0, max_offset_ms=max_offset_ms, center_offset=0.0)
-    post_trusted = _trusted_local_windows(post_windows)
-    post_spread = _local_spread(post_windows)
+    post_trusted = trusted_local_windows(post_windows)
+    post_spread = piecewise_local_spread(post_windows)
     after_overlap = overlap_rate(ref, fixed, 1.0, 0.0)
-    after_unique, _unique_median, _unique_p95 = _unique_match_metrics(
+    after_unique, _unique_median, _unique_p95 = unique_match_metrics(
         ref, fixed, 1.0, 0.0)
-    before_score = _timing_score(ref, cand)
-    after_score = _timing_score(ref, fixed)
+    before_score = timing_score(ref, cand)
+    after_score = timing_score(ref, fixed)
     # The candidate must become globally/local-consistent and materially better
     # than leaving it untouched.  A successful engine score alone is never an
     # acceptance decision.
     if (after_overlap < max(0.80, min_overlap)
-            or after_unique < _UNIQUE_MIN
+            or after_unique < UNIQUE_MIN
             or len(post_trusted) < max(3, int(0.60 * len(post_windows)))
             or (post_spread is not None and post_spread > 1200)
             or after_score < before_score + 0.05):

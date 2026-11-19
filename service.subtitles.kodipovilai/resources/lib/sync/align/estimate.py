@@ -5,8 +5,8 @@
 import bisect
 import collections
 import time
-from resources.lib.core.srt.cues import _median
-from resources.lib.sync.align.common import SCALE_MAX, SCALE_MIN, _LOCAL_MIN_REF_CUES, _MAXOFF, _TOL
+from resources.lib.core.srt.cues import cues_median
+from resources.lib.sync.align.common import SCALE_MAX, SCALE_MIN, LOCAL_MIN_REF_CUES, MAXOFF, TOL
 
 
 # ---- gate thresholds (mirroring arabic_gender's production values) --------
@@ -37,7 +37,7 @@ _breath = [0.0]
 YIELD = None
 
 
-def _breathe():
+def breathe():
     now = time.monotonic()
     if now - _breath[0] >= _BREATHE_SLICE:
         time.sleep(0.001)
@@ -46,14 +46,14 @@ def _breathe():
             YIELD()
 
 
-def _best_offset(ref_on, cand_on, a, max_off=_MAXOFF):
+def best_offset(ref_on, cand_on, a, max_off=MAXOFF):
     step = max(1, len(ref_on) // _SAMPLE)
     sampled = ref_on[::step]
     hist = collections.Counter()
     left, right = bisect.bisect_left, bisect.bisect_right
-    tol = float(_TOL)
+    tol = float(TOL)
     for e in sampled:
-        _breathe()
+        breathe()
         pe = a * e
         lo = left(cand_on, pe - max_off)
         hi = right(cand_on, pe + max_off)
@@ -77,7 +77,7 @@ def _best_offset(ref_on, cand_on, a, max_off=_MAXOFF):
     # +/-250ms -- enough to over/under-shoot a real fix by up to half a second
     # (field: a +1500ms bin fix left subs ~0.5s early). Take the MEDIAN of the
     # actual per-ref-cue deltas closest to the peak center -> sub-50ms offset.
-    center = peak * _TOL
+    center = peak * TOL
     deltas = []
     for e in sampled:
         pe = a * e
@@ -86,7 +86,7 @@ def _best_offset(ref_on, cand_on, a, max_off=_MAXOFF):
         for j in (i - 1, i):
             if 0 <= j < len(cand_on):
                 d = cand_on[j] - pe
-                if abs(d - center) <= 1.5 * _TOL and (
+                if abs(d - center) <= 1.5 * TOL and (
                         best_d is None or abs(d - center) < abs(best_d - center)):
                     best_d = d
         if best_d is not None:
@@ -108,7 +108,7 @@ def _data_scale_candidates(ref_cues, cand_cues):
     a continuous arbitrary clock drift.  Every proposal still has to win the
     histogram and pass unique/global/local/post-transform gates.
     """
-    if len(ref_cues) < _LOCAL_MIN_REF_CUES or len(cand_cues) < _LOCAL_MIN_REF_CUES:
+    if len(ref_cues) < LOCAL_MIN_REF_CUES or len(cand_cues) < LOCAL_MIN_REF_CUES:
         return []
     fractions = [i / 10.0 for i in range(1, 10)]
 
@@ -134,7 +134,7 @@ def _data_scale_candidates(ref_cues, cand_cues):
     proposals = []
     for values in (local_slopes, pair_slopes):
         if values:
-            proposal = round(_median(values), 6)
+            proposal = round(cues_median(values), 6)
             if SCALE_MIN <= proposal <= SCALE_MAX:
                 proposals.append(proposal)
     return list(dict.fromkeys(proposals))
@@ -151,7 +151,7 @@ def _adaptive_scale_candidates(ref_cues, cand_cues, max_offset_ms=None):
     deterministic sample, then returns only the strongest scales for the normal
     FULL gate. It is proposal-only: it cannot accept anything by itself.
     """
-    if len(ref_cues) < _LOCAL_MIN_REF_CUES or len(cand_cues) < _LOCAL_MIN_REF_CUES:
+    if len(ref_cues) < LOCAL_MIN_REF_CUES or len(cand_cues) < LOCAL_MIN_REF_CUES:
         return []
 
     def sample(values, cap):
@@ -170,7 +170,7 @@ def _adaptive_scale_candidates(ref_cues, cand_cues, max_offset_ms=None):
     # while bounding a pathological file.
     ref_on = sample([float(c['start']) for c in ref_cues], 120)
     cand_on = sample([float(c['start']) for c in cand_cues], 2400)
-    max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
+    max_off = MAXOFF if max_offset_ms is None else max_offset_ms
     scored = {}
 
     def scan(scales):
@@ -178,7 +178,7 @@ def _adaptive_scale_candidates(ref_cues, cand_cues, max_offset_ms=None):
             scale = round(float(value), 6)
             if scale in scored or not (SCALE_MIN <= scale <= SCALE_MAX):
                 continue
-            offset, votes = _best_offset(ref_on, cand_on, scale, max_off)
+            offset, votes = best_offset(ref_on, cand_on, scale, max_off)
             scored[scale] = (votes, offset)
 
     def leaders(limit=4):
@@ -212,7 +212,7 @@ def estimate(ref_cues, cand_cues, scales=None, max_offset_ms=None):
     if not ref_on or not cand_on:
         return 1.0, 0.0, 0.0
     sampled = len(ref_on[::max(1, len(ref_on) // _SAMPLE)])
-    max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
+    max_off = MAXOFF if max_offset_ms is None else max_offset_ms
     best = (1.0, 0.0, -1)
     # Try scales nearest-to-1.0 FIRST and require a STRICTLY better vote to
     # switch away: neighbouring FPS ratios (e.g. 23.976/24 = 0.999) can tie
@@ -225,7 +225,7 @@ def estimate(ref_cues, cand_cues, scales=None, max_offset_ms=None):
 
     def consider(values, current):
         for candidate_scale in sorted(values, key=lambda s: abs(s - 1.0)):
-            candidate_offset, candidate_votes = _best_offset(
+            candidate_offset, candidate_votes = best_offset(
                 ref_on, cand_on, candidate_scale, max_off)
             if candidate_votes > current[2]:
                 current = (candidate_scale, candidate_offset, candidate_votes)
@@ -237,7 +237,7 @@ def estimate(ref_cues, cand_cues, scales=None, max_offset_ms=None):
         # majority there is no FPS drift to find: skip the dozen other scale
         # histograms -- the bulk of SubSync's CPU on weak TV boxes. Every
         # downstream gate still runs on the result.
-        offset1, votes1 = _best_offset(ref_on, cand_on, 1.0, max_off)
+        offset1, votes1 = best_offset(ref_on, cand_on, 1.0, max_off)
         best = (1.0, offset1, votes1)
         if sampled and votes1 / sampled >= _IDENTITY_SHORTCUT_VOTE:
             return 1.0, offset1, votes1 / sampled

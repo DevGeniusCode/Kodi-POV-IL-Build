@@ -2805,11 +2805,11 @@ def cue_reference_profile(url_or_path, head_bytes=DEFAULT_HEAD_BYTES,
                     b'ftyp', b'moov', b'wide', b'mdat', b'free', b'skip'):
                 try:
                     from resources.lib.fetching.embedded import mp4_probe
-                    index = mp4_probe._read_movie_index_source(
+                    index = mp4_probe.read_movie_index_source(
                         src.total, src.read,
                         max_bytes=(_MP4_REMOTE_INDEX_BYTES if src.is_http
                                    else None))
-                    reference = mp4_probe._reference_from_index(
+                    reference = mp4_probe.reference_from_index(
                         index, log=_log) or {}
                     if not reference.get('track_cues'):
                         # The same index carries the audio frame sizes: a
@@ -3337,7 +3337,7 @@ _ISO639_ROWS = (
 _ISO639_CANON = {alias: row[0] for row in _ISO639_ROWS for alias in row}
 
 
-def _lang_key(code):
+def lang_key(code):
     """Canonical ISO 639-1 key for a language code, so 'es' and 'spa' (and 'de'/
     'ger', 'ja'/'jpn', ...) compare equal. Strips any region/script suffix
     ('pt-BR' -> 'pt', 'zh_Hans' -> 'zh') and lowercases; returns the mapped
@@ -3388,9 +3388,9 @@ def _choose_track(src, subs, track_num, lang, other_text, on_track, _log):
     'no_text' when there is none. Shared by the Matroska and MP4 paths."""
     track = _pick_track(subs, track_num, lang, prefer_sdh=True)
     if track is None and track_num is None and lang:
-        want_key = _lang_key(lang)
+        want_key = lang_key(lang)
         if any(_is_bitmap_codec(t['codec']) and not t['forced']
-               and _lang_key(t['lang']) == want_key for t in subs):
+               and lang_key(t['lang']) == want_key for t in subs):
             # The picked language's subtitle here is a picture, not text
             # (owner's log, 14 Nov 2026: South Park S04E04 MULTI WEB
             # 2160p, English was S_HDMV/PGS, French was text; the pick
@@ -3401,12 +3401,12 @@ def _choose_track(src, subs, track_num, lang, other_text, on_track, _log):
             # language that is not here at all is not a picture: as before.
             texts = [t for t in subs
                      if _is_text_codec(t['codec']) and not t['forced']
-                     and _lang_key(t['lang']) not in ('he', want_key)]
+                     and lang_key(t['lang']) not in ('he', want_key)]
             if other_text and texts:
-                order = [_lang_key(c) for c in other_text]
+                order = [lang_key(c) for c in other_text]
 
                 def _rank(t):
-                    k = _lang_key(t['lang'])
+                    k = lang_key(t['lang'])
                     # a track with no language of its own defaults to
                     # 'eng': its real language is unknown -- after the
                     # tagged ones (review)
@@ -3418,7 +3418,7 @@ def _choose_track(src, subs, track_num, lang, other_text, on_track, _log):
                 track = texts[0]
                 if on_track is not None:
                     try:
-                        on_track(_lang_key(track['lang']) or track['lang'])
+                        on_track(lang_key(track['lang']) or track['lang'])
                     except Exception:
                         pass
                 _log('the %s subtitle is a picture (the file has: %s) -- '
@@ -3447,7 +3447,7 @@ def _pick_track(subs, track_num, lang, prefer_sdh=False):
                 return t
         return None
     if lang:
-        want = _lang_key(lang)
+        want = lang_key(lang)
         pref = (lang or '').strip().lower()[:2]
 
         def _lang_match(tl):
@@ -3455,7 +3455,7 @@ def _pick_track(subs, track_num, lang, prefer_sdh=False):
             if not tl:
                 return False
             # Canonical ISO 639-1/2B/2T equivalence (es<->spa, de<->ger, ...).
-            if want and _lang_key(tl) == want:
+            if want and lang_key(tl) == want:
                 return True
             # Prefix fallback ONLY for a code we don't recognise. A RECOGNISED
             # code whose canonical differs from `want` is a definitively
@@ -3868,9 +3868,9 @@ def _extract_srt_mp4(src, track_num, lang, other_text, on_track, deadline_s,
         n = lines.get(t['num'])
         if n is None or t['forced']:
             continue
-        key = _lang_key(t['lang'])
+        key = lang_key(t['lang'])
         most = max(lines.get(o['num'], 0) for o in subs
-                   if _lang_key(o['lang']) == key)
+                   if lang_key(o['lang']) == key)
         if n < 200 and most >= 5 * max(1, n):
             t['forced'] = True
     track = _choose_track(src, subs, track_num, lang, other_text, on_track, log)

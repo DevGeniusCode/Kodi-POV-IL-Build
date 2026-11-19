@@ -8,17 +8,18 @@ import re
 BLOCK_SEPARATOR = re.compile(r'\r?\n\r?\n')
 # Also strip ALL-CAPS speaker prefixes like "MABEL: ..." that are
 # common in HI subs but redundant for translation.
-_SPEAKER_RE = re.compile(
+SPEAKER_RE = re.compile(
     r'^[A-Z][A-Z0-9 \'\.\-]{1,30}:\s*'
 )
-_INDEX_RE = re.compile(r'^\d+$')
-_TIMECODE_RE = re.compile(
-    r'^\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}\s*-->\s*'
-    r'\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}'
-)
+INDEX_RE = re.compile(r'^\d+$')
+# One timecode pair, "00:01:02,500 --> 00:01:04,000", with its eight numeric fields captured; the three
+# timecode regexes of core/srt (here and cues.TIME_RE) are built from it.
+TC_PAIR = (r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*'
+           r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})')
+TIMECODE_RE = re.compile('^' + TC_PAIR)
 # Punctuation that goes at the end of a Hebrew sentence but the AI
 # sometimes outputs at the start.
-_TRAILING_PUNCT_CHARS = '.,;:!?…'
+TRAILING_PUNCT_CHARS = '.,;:!?…'
 
 
 # Invisible BiDi / direction-control / BOM characters that Gemini
@@ -28,7 +29,7 @@ _TRAILING_PUNCT_CHARS = '.,;:!?…'
 # before checking, then drop them entirely from the output (they're
 # noise for SRT rendering -- Kodi handles RTL via the text content
 # alone).
-_INVISIBLE_BIDI = (
+INVISIBLE_BIDI = (
     '‎'  # LRM
     '‏'  # RLM
     '‪'  # LRE
@@ -47,8 +48,8 @@ _INVISIBLE_BIDI = (
 # fix_rtl_punctuation). RLE forces a right-to-left BASE direction for the wrapped
 # run regardless of the renderer's paragraph base; PDF ends it. Both are in
 # _INVISIBLE_BIDI above, so the wrap is idempotent (a re-run strips them first).
-_RLE = '‫'   # RIGHT-TO-LEFT EMBEDDING
-_PDF = '‬'   # POP DIRECTIONAL FORMATTING
+RLE = '‫'   # RIGHT-TO-LEFT EMBEDDING
+PDF = '‬'   # POP DIRECTIONAL FORMATTING
 
 
 # --- entries the model welded together -------------------------------------
@@ -88,13 +89,13 @@ def _has_text_line(lines, lo, hi):
     """
     for j in range(lo, min(hi, len(lines))):
         s = lines[j].strip()
-        if not s or _TIMECODE_RE.match(s):
+        if not s or TIMECODE_RE.match(s):
             continue
-        if _INDEX_RE.match(s):
+        if INDEX_RE.match(s):
             k = j + 1
             while k < len(lines) and not lines[k].strip():
                 k += 1
-            if k < len(lines) and _TIMECODE_RE.match(lines[k].strip()):
+            if k < len(lines) and TIMECODE_RE.match(lines[k].strip()):
                 continue          # a header, not something the viewer reads
         return True
     return False
@@ -103,7 +104,7 @@ def _has_text_line(lines, lo, hi):
 def _split_welded_block(block):
     """Split a block that carries a LATER entry's header inside its text."""
     lines = block.split('\n')
-    tc_at = [i for i, ln in enumerate(lines) if _TIMECODE_RE.match(ln.strip())]
+    tc_at = [i for i, ln in enumerate(lines) if TIMECODE_RE.match(ln.strip())]
     if len(tc_at) < 2:
         return [block]
     cuts, prev = [], 0
@@ -113,7 +114,7 @@ def _split_welded_block(block):
         # last line of the previous cue, which is the same defect one line
         # smaller.
         start = i
-        if i and _INDEX_RE.match(lines[i - 1].strip()):
+        if i and INDEX_RE.match(lines[i - 1].strip()):
             # ...UNLESS taking that line leaves the entry we are closing with
             # no text at all. Then the digits are not the next entry's index,
             # they are this entry's ONLY line of dialogue -- a score, a house
@@ -168,16 +169,14 @@ def parse_blocks(text):
 # this is what guarantees the minimum-duration floor can never be pushed past
 # the ceiling and re-create the overlap the ceiling exists to prevent.
 
-_TIME_PAIR_RE = re.compile(
-    r'^(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*'
-    r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})(.*)$')
+_TIME_PAIR_RE = re.compile('^' + TC_PAIR + '(.*)$')
 
 
 def _tc_ms(h, m, sec, ms):
     return h * 3600000 + m * 60000 + sec * 1000 + ms
 
 
-def _fmt_tc(ms):
+def fmt_tc(ms):
     if ms < 0:
         ms = 0
     h, rem = divmod(int(ms), 3600000)
@@ -186,15 +185,15 @@ def _fmt_tc(ms):
     return '{0:02d}:{1:02d}:{2:02d},{3:03d}'.format(h, m, s, msec)
 
 
-def _block_timecode_index(lines):
+def block_timecode_index(lines):
     """Index of the timecode line inside a block's lines, or -1."""
     for i, ln in enumerate(lines[:3]):
-        if _TIMECODE_RE.match(ln.strip()):
+        if TIMECODE_RE.match(ln.strip()):
             return i
     return -1
 
 
-def _block_times(block):
+def block_times(block):
     """(start_ms, end_ms, trailing) for a block, or None when it has no
     parsable timecode line."""
     for ln in block.split('\n')[:3]:
@@ -205,12 +204,12 @@ def _block_times(block):
     return None
 
 
-def _block_start(block):
-    t = _block_times(block)
+def block_start(block):
+    t = block_times(block)
     return None if t is None else t[0]
 
 
-def _block_declared_index(block):
+def block_declared_index(block):
     """The numeric SRT index attached to a block, or None.
 
     A generated block may begin directly with a timecode after dropping its
@@ -219,7 +218,7 @@ def _block_declared_index(block):
     """
     try:
         lines = block.split('\n')
-        ti = _block_timecode_index(lines)
+        ti = block_timecode_index(lines)
         if ti > 0 and lines[ti - 1].strip().isdigit():
             return int(lines[ti - 1].strip())
         return None
@@ -227,13 +226,13 @@ def _block_declared_index(block):
         return None
 
 
-def _rebuild_block(src_block, out_block):
+def rebuild_block(src_block, out_block):
     """out_block's text under src_block's index + timecode. None if either
     block isn't SRT-shaped (caller keeps the original)."""
     src_lines = src_block.split('\n')
     out_lines = out_block.split('\n')
-    si = _block_timecode_index(src_lines)
-    oi = _block_timecode_index(out_lines)
+    si = block_timecode_index(src_lines)
+    oi = block_timecode_index(out_lines)
     if si < 0 or oi < 0:
         return None
     return '\n'.join(src_lines[:si + 1] + out_lines[oi + 1:])
@@ -290,11 +289,11 @@ def count_entries(text):
 # up the Extended-B hole, so this list is now verified against the full
 # character database rather than assembled by hand.
 _HEBREW_CH = u'\u0590-\u05ff\ufb1d-\ufb4f'
-_HAS_HEBREW_RE = re.compile(u'[' + _HEBREW_CH + u']')
+HAS_HEBREW_RE = re.compile(u'[' + _HEBREW_CH + u']')
 
 
 # Markup and explicitly quoted literals are data, not alphabet-slip evidence.
-_PROTECTED_RE = re.compile(
+PROTECTED_RE = re.compile(
     r"<!--.*?-->|</?[A-Za-z][A-Za-z0-9:_-]*(?:[^<>\"']|\"[^\"]*\"|'[^']*')*>"
     r'|"[^"\n]*"|“[^”\n]*”|«[^»\n]*»', re.DOTALL)
 
@@ -309,4 +308,4 @@ _PROTECTED_RE = re.compile(
 # class into a range STARTING AT U+05B4 -- one that swallows Arabic, CJK and
 # the Latin ligatures. That exact mistake was made in this file and caught by
 # a test. Do not replace these with the characters they stand for.
-_HEB_RE = re.compile('[\u0590-\u05FF\uFB1D-\uFB4F]')
+HEB_RE = re.compile('[\u0590-\u05FF\uFB1D-\uFB4F]')

@@ -11,12 +11,12 @@ try:
 except ImportError:
     # Allow `python -m default --action=search` for local debug.
     xbmc = xbmcgui = xbmcplugin = xbmcvfs = None
-from resources.lib.ui.dialogs import _title
+from resources.lib.ui.dialogs import dialogs_title
 
 
 # ---- RunScript handlers (settings buttons) --------------------------
 
-def _handle_open_aistudio(_params):
+def handle_open_aistudio(_params):
     """Open the AI Studio key-creation page in the user's browser
     when they tap "Get a free Gemini API key" in settings."""
     url = 'https://aistudio.google.com/apikey'
@@ -29,7 +29,7 @@ def _handle_open_aistudio(_params):
     # it down manually.
     try:
         xbmcgui.Dialog().ok(
-            _title(),
+            dialogs_title(),
             'פתח בדפדפן:\n{0}\n\nצור API key (חינמי), העתק, '
             'והדבק בשדה "Gemini API Key" בהגדרות.'.format(url),
         )
@@ -38,7 +38,7 @@ def _handle_open_aistudio(_params):
 
 
 
-def _handle_connect_gemini(_params):
+def handle_connect_gemini(_params):
     """Full Gemini auth flow invoked from POV's My Services menu
     (or from anywhere via RunScript). Provides two onboarding
     paths -- pair-from-phone via local HTTP server, or type the
@@ -50,7 +50,7 @@ def _handle_connect_gemini(_params):
         from resources.lib.core import settings
     except Exception as e:
         try:
-            xbmcgui.Dialog().ok(_title(),
+            xbmcgui.Dialog().ok(dialogs_title(),
                                 'Internal error: {0}'.format(e))
         except Exception:
             pass
@@ -98,7 +98,7 @@ def _gemini_menu_existing(gemini, gemini_pair, current_key):
         return
     if choice == 3:
         confirm = xbmcgui.Dialog().yesno(
-            _title(), 'למחוק את ה-Gemini API key?')
+            dialogs_title(), 'למחוק את ה-Gemini API key?')
         if confirm:
             settings.set_setting('api_key', '')
             kodi.notify('Gemini key נמחק', time_ms=3000)
@@ -112,7 +112,7 @@ def _show_gemini_usage():
         from resources.lib.core import settings
     except Exception as e:
         try:
-            xbmcgui.Dialog().ok(_title(),
+            xbmcgui.Dialog().ok(dialogs_title(),
                                 'Internal error: {0}'.format(e))
         except Exception:
             pass
@@ -139,7 +139,7 @@ def _show_gemini_usage():
         pass
 
 
-def _handle_show_gemini_usage(_params):
+def handle_show_gemini_usage(_params):
     """RunScript entry point so the dialog can be opened from
     anywhere, e.g. a remote shortcut."""
     _show_gemini_usage()
@@ -382,7 +382,7 @@ def _gemini_pair_flow(gemini, gemini_pair):
         ps = gemini_pair.PairServer()
     except Exception as e:
         xbmcgui.Dialog().ok(
-            _title(),
+            dialogs_title(),
             'נכשלה הפעלת שרת התאמה: {0}\n\n'
             'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'
             .format(str(e)[:80]))
@@ -503,13 +503,13 @@ def _url_quote(s):
         return s
 
 
-def _handle_test_connection(_params):
+def handle_test_connection(_params):
     """User clicked "Test connection" in settings."""
     try:
         from resources.lib.ai_translation.providers import gemini
         from resources.lib.core import kodi, settings
     except Exception as e:
-        xbmcgui.Dialog().ok(_title(), 'Internal error: {0}'.format(e))
+        xbmcgui.Dialog().ok(dialogs_title(), 'Internal error: {0}'.format(e))
         return
 
     api_key = settings.get_setting('api_key', '')
@@ -517,25 +517,25 @@ def _handle_test_connection(_params):
               or 'gemini-3.5-flash-lite'
 
     if not api_key:
-        xbmcgui.Dialog().ok(_title(), kodi.localised(32632))
+        xbmcgui.Dialog().ok(dialogs_title(), kodi.localised(32632))
         return
 
     try:
         matched = gemini.test_key(api_key, model=model)
-        xbmcgui.Dialog().ok(_title(),
+        xbmcgui.Dialog().ok(dialogs_title(),
                             kodi.localised(32633, matched))
     except gemini.InvalidKey as e:
-        xbmcgui.Dialog().ok(_title(),
+        xbmcgui.Dialog().ok(dialogs_title(),
                             kodi.localised(32634, str(e)[:120]))
     except gemini.GeminiError as e:
-        xbmcgui.Dialog().ok(_title(),
+        xbmcgui.Dialog().ok(dialogs_title(),
                             kodi.localised(32634, str(e)[:120]))
     except Exception as e:
-        xbmcgui.Dialog().ok(_title(),
+        xbmcgui.Dialog().ok(dialogs_title(),
                             kodi.localised(32634, str(e)[:120]))
 
 
-def _handle_open_tmdb_notice(_params):
+def handle_open_tmdb_notice(_params):
     """Explain the current TMDB state. Since v0.2.13 the addon
     ships with a bundled fallback key from the upstream
     tmdbhelper project, so gender-aware translation works out of
@@ -545,7 +545,7 @@ def _handle_open_tmdb_notice(_params):
     try:
         from resources.lib.ai_translation.context import tmdb_helper
     except Exception as e:
-        xbmcgui.Dialog().ok(_title(), 'Internal error: {0}'.format(e))
+        xbmcgui.Dialog().ok(dialogs_title(), 'Internal error: {0}'.format(e))
         return
 
     try:
@@ -571,4 +571,4 @@ def _handle_open_tmdb_notice(_params):
         'הוא יוחל אוטומטית מאותו רגע, בלי '
         'restart, וידרוס את ה-key המובנה.'
     )
-    xbmcgui.Dialog().ok(_title() + ' — TMDB', body)
+    xbmcgui.Dialog().ok(dialogs_title() + ' — TMDB', body)

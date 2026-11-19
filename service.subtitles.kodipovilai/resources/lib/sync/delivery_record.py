@@ -8,7 +8,7 @@ try:
     from resources.lib.core import kodi, selection as core_selection, settings, video_context
 except Exception:
     kodi = core_selection = settings = video_context = None
-from resources.lib.sync.common import _INFO_KEYS
+from resources.lib.sync.common import INFO_KEYS
 
 
 _DELIVERED_PROP = 'subsync.delivered'
@@ -25,11 +25,11 @@ def _delivery_prop(selection=None):
     return _DELIVERED_PROP + ('.' + token if token else '')
 
 
-def _clear_delivery(selection=None):
+def clear_delivery(selection=None):
     """Discard scalar delay-learning state after a non-global delivery."""
-    from resources.lib.sync.jobs import _selection_matches
+    from resources.lib.sync.jobs import selection_matches
     try:
-        if selection and not _selection_matches(selection):
+        if selection and not selection_matches(selection):
             return False
         import xbmcgui
         win = xbmcgui.Window(10000)
@@ -41,7 +41,7 @@ def _clear_delivery(selection=None):
         return False
 
 
-def _record_delivery(info, playing, key, scale, offset_ms,
+def record_delivery(info, playing, key, scale, offset_ms,
                      cut_signature='', mode='global', selection=None):
     """Remember what we just delivered (and any applied fix), so the service's
     delay watcher can turn the viewer's manual subtitle-delay into a HUMAN
@@ -63,7 +63,7 @@ def _record_delivery(info, playing, key, scale, offset_ms,
             'selection_token': expected.get('token') or '',
             'selection_hash': expected.get('link_hash') or '',
             'stream_hash': expected.get('stream_hash') or '',
-            'info': {k: info.get(k) for k in _INFO_KEYS
+            'info': {k: info.get(k) for k in INFO_KEYS
                      if isinstance(info.get(k), (str, int, float, bool))},
         }
         win = xbmcgui.Window(10000)
@@ -84,12 +84,12 @@ def _record_delivery(info, playing, key, scale, offset_ms,
 
 def current_delivery_record():
     """Return delay-learning state only for the exact live selection/cut."""
-    from resources.lib.sync.jobs import _selection_matches
-    from resources.lib.sync.service import _selection_snapshot
+    from resources.lib.sync.jobs import selection_matches
+    from resources.lib.sync.service import selection_snapshot
     try:
         import xbmcgui
-        selection = _selection_snapshot()
-        if not _selection_matches(selection):
+        selection = selection_snapshot()
+        if not selection_matches(selection):
             return None
         win = xbmcgui.Window(10000)
         raw = win.getProperty(_delivery_prop(selection)) or ''

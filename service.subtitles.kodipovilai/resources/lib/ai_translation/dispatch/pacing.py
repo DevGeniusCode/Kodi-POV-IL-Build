@@ -15,27 +15,27 @@ from resources.lib.core.srt import blocks as srt_blocks, timing
 # interval between request STARTS" caps the rate just under the limit so we almost
 # never hit 429. Module scope so it holds across the ThreadPoolExecutor workers AND
 # across two titles translating at once (they share one API key's RPM budget).
-_GEMINI_RATE_LOCK = threading.Lock()
-_GEMINI_NEXT_SLOT = [0.0]
+GEMINI_RATE_LOCK = threading.Lock()
+GEMINI_NEXT_SLOT = [0.0]
 
 
-def _gemini_rate_gate(min_interval):
+def gemini_rate_gate(min_interval):
     """Block until this thread's reserved slot, spacing all Gemini request STARTS
     >= min_interval seconds apart process-wide. No-op when min_interval <= 0."""
     if min_interval <= 0:
         return
-    with _GEMINI_RATE_LOCK:
+    with GEMINI_RATE_LOCK:
         now = time.monotonic()
-        slot = _GEMINI_NEXT_SLOT[0]
+        slot = GEMINI_NEXT_SLOT[0]
         if slot < now:
             slot = now
-        _GEMINI_NEXT_SLOT[0] = slot + min_interval
+        GEMINI_NEXT_SLOT[0] = slot + min_interval
     delay = slot - time.monotonic()
     if delay > 0:
         time.sleep(delay)
 
 
-def _gemini_free_rpm_cap(model):
+def gemini_free_rpm_cap(model):
     """Requests-per-minute ceiling for the FREE Gemini tier, by model family.
 
     Flash-Lite's free RPM is ~15, so we pace at 14. Regular Flash's free RPM
@@ -51,14 +51,14 @@ def _gemini_free_rpm_cap(model):
     return 4
 
 
-class _IntegrityRejected(gemini.FilteredResponse):
+class IntegrityRejected(gemini.FilteredResponse):
     """A reply the output checks refused (a self-edit, an echoed source cue,
     a lost negation, no Hebrew). The ladder retries it as it does a content
     block, but it is no block: it does not start a chunk's block budget
     (_BlockClock)."""
 
 
-class _BlockClock(object):
+class BlockClock(object):
     """A chunk's budget in the AI translation (resolve's _translate_one).
 
     It is there for one pathology: a chunk fighting content blocks
@@ -88,7 +88,7 @@ class _BlockClock(object):
     def block(self, cause=None):
         """A content block: the budget starts now (once per chunk). Not for
         an output-check rejection (`cause`, _IntegrityRejected)."""
-        if self.until is None and not isinstance(cause, _IntegrityRejected):
+        if self.until is None and not isinstance(cause, IntegrityRejected):
             self.until = time.monotonic() + self.budget
 
     def waited(self, seconds):
@@ -108,7 +108,7 @@ class _BlockClock(object):
         return self.calls > self.max_calls + (self.max_calls // 2 if grace else 0)
 
 
-def _is_mostly_hebrew(text, min_ratio=0.30):
+def is_mostly_hebrew(text, min_ratio=0.30):
     """True if a meaningful share of TEXT's letters are Hebrew.
 
     Two uses: (1) validating a TRANSLATION -- catches the two ways a weak model
@@ -140,13 +140,13 @@ def _is_mostly_hebrew(text, min_ratio=0.30):
     return (he / letters) >= min_ratio
 
 
-def _answered(source_blocks, response):
+def answered(source_blocks, response):
     """How many requested entries a reply answers: blocks whose start time is
     one the chunk asked for (srt.align_blocks), not paragraphs of any kind."""
     return len(timing.align_blocks(source_blocks, srt_blocks.parse_blocks(response)))
 
 
-def _is_untranslated_chunk_response(source_blocks, response_blocks):
+def is_untranslated_chunk_response(source_blocks, response_blocks):
     """Catch a substantial Gemini reply with no Hebrew dialogue at all.
 
     A whole source-language chunk can have valid SRT indices/times and still be
@@ -170,7 +170,7 @@ def _is_untranslated_chunk_response(source_blocks, response_blocks):
     return letters >= 60
 
 
-def _thinking_params(raw, for_model):
+def thinking_params(raw, for_model):
     """(thinking level, thinking budget) for `for_model` from the stored
     'thinking_budget' setting."""
     level, budget = None, None
@@ -196,7 +196,7 @@ def _thinking_params(raw, for_model):
     return level, budget
 
 
-def _source_context_for_subchunk(chunks, idx, ch, prev_context_lines):
+def source_context_for_subchunk(chunks, idx, ch, prev_context_lines):
     """Immediate source-cue tail before a worker or recursively split child.
 
     The parallel workers still depend only on source text. A split child must
@@ -221,7 +221,7 @@ def _source_context_for_subchunk(chunks, idx, ch, prev_context_lines):
             for text in [srt_blocks.block_text_only(block)] if text]
 
 
-def _chunk_dispatch_order(chunks, playback_ms):
+def chunk_dispatch_order(chunks, playback_ms):
     """Put the visible part of a seeked video first without changing cue order.
 
     Worker indices and the final SRT remain in source order.  Only the order in
@@ -233,8 +233,8 @@ def _chunk_dispatch_order(chunks, playback_ms):
         return ordinary
     try:
         position = int(playback_ms)
-        starts = [srt_blocks._block_start(chunk[0]) for chunk in chunks if chunk]
-        ends = [srt_blocks._block_times(chunk[-1]) for chunk in chunks if chunk]
+        starts = [srt_blocks.block_start(chunk[0]) for chunk in chunks if chunk]
+        ends = [srt_blocks.block_times(chunk[-1]) for chunk in chunks if chunk]
         if (len(starts) != len(chunks) or len(ends) != len(chunks)
                 or any(value is None for value in starts + ends)
                 or position < starts[0] or position > ends[-1][1]):

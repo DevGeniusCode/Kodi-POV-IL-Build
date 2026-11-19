@@ -10,7 +10,7 @@ try:
 except ImportError:
     # Allow `python -m default --action=search` for local debug.
     xbmc = xbmcgui = xbmcplugin = xbmcvfs = None
-from resources.lib.ui.dialogs import _safe_log
+from resources.lib.ui.dialogs import safe_log
 
 
 # _he_avail_store AND ITS HE_AVAIL_CACHE PATH USED TO LIVE HERE. Both were
@@ -26,7 +26,7 @@ from resources.lib.ui.dialogs import _safe_log
 # have brought both back. he_sub_match._store_avail is the one writer.
 
 
-def _handle_he_avail(params):
+def handle_he_avail(params):
     """Background warm of the source-screen "HEB NN%" badge -- runs in
     MoranSubs's own process (fire-and-forget), so NOTHING here blocks POV's
     source window. It gathers every Hebrew-availability source and writes the
@@ -56,10 +56,10 @@ def _handle_he_avail(params):
         from resources.lib import he_sub_match as _hsm
         _hsm.run_warm(info)
     except Exception as e:
-        _safe_log('he_avail crashed: {0}'.format(e), level='WARNING')
+        safe_log('he_avail crashed: {0}'.format(e), level='WARNING')
 
 
-def _handle_choose_subs(params):
+def handle_choose_subs(params):
     """Open the subtitle chooser for the player's 'בחר כתוביות' button.
 
     On FENtastic we open Kodi's NATIVE subtitle window -- that's Tal's own
@@ -80,7 +80,7 @@ def _handle_choose_subs(params):
             xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
             return
         except Exception as e:
-            _safe_log('open SubtitleSearch failed: {0}'.format(e),
+            safe_log('open SubtitleSearch failed: {0}'.format(e),
                       level='WARNING')
     # Other skins -> our rich custom window.
     opened = False
@@ -88,7 +88,7 @@ def _handle_choose_subs(params):
         from resources.lib.ui import chooser
         opened = chooser.show()
     except Exception as e:
-        _safe_log('choose_subs failed: {0}'.format(e), level='WARNING')
+        safe_log('choose_subs failed: {0}'.format(e), level='WARNING')
     if not opened and xbmc is not None:
         try:
             xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')

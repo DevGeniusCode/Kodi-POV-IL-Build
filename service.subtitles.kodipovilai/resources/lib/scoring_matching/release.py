@@ -117,7 +117,7 @@ _CUT_EDITIONS = frozenset({'extended', 'unrated', 'directors'})
 # PRECOMPUTED ONCE, not per call. parse() used to build seven sets on every
 # invocation -- one per source class plus the PROPER set -- and it is called
 # twice for every scored pair. See the memo note below for why that mattered.
-_SOURCE_SETS = tuple((cls, frozenset(toks)) for cls, toks in _SOURCE_CLASSES)
+SOURCE_SETS = tuple((cls, frozenset(toks)) for cls, toks in _SOURCE_CLASSES)
 _PROPER_SET = frozenset(_PROPER_TOKENS)
 _DOTS_RE = re.compile(r'\.+')
 _GROUP_RE = re.compile(r'[a-z0-9]+')
@@ -247,7 +247,7 @@ def _parse(name):
         r = m.group(1).lower()
         out['resolution'] = _RES_MAP.get(r, r if r.endswith('p') else '')
 
-    for cls, cls_tokens in _SOURCE_SETS:
+    for cls, cls_tokens in SOURCE_SETS:
         if tokset & cls_tokens:
             out['source'] = cls
             break
@@ -276,7 +276,7 @@ def _parse(name):
     # source ("1080p.AMZN.WEB-DL") or directly before the source
     # ("AMZN.WEB-DL.1080p"). An episode title after SxxEyy ("Max.Out") or a
     # movie title ("Mad.Max") is never a service.
-    is_source = [any(t in cls_tokens for _c, cls_tokens in _SOURCE_SETS)
+    is_source = [any(t in cls_tokens for _c, cls_tokens in SOURCE_SETS)
                  for t in toks]
     first_tech = next((i for i, t in enumerate(toks)
                        if _RES_RE.fullmatch(t) or is_source[i]), None)
@@ -317,7 +317,7 @@ def _parse(name):
         # must not get group 'alive' and then be trusted by containment.
         tech = [i for i, t in enumerate(toks)
                 if _RES_RE.fullmatch(t) or t in _CODEC_MAP
-                or any(t in cls_tokens for _c, cls_tokens in _SOURCE_SETS)]
+                or any(t in cls_tokens for _c, cls_tokens in SOURCE_SETS)]
         if tech and tech[-1] < len(toks) - 1:
             cand = toks[-1]
     if (cand and cand not in _NOT_GROUP and cand not in _HYPHEN_TECH

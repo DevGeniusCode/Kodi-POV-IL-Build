@@ -94,7 +94,7 @@ def _post_sdh(rel):
         req = _urlreq.Request(
             pool_client.POOL_URL + '/sdh',
             data=json.dumps({'rel': rel}).encode('utf-8'),
-            headers=pool_client._post_headers('/sdh'), method='POST')
+            headers=pool_client.post_headers('/sdh'), method='POST')
         _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
     except Exception:
         pass
@@ -149,7 +149,7 @@ def refresh_shared_sdh(force=False):
         cur = _load()
         if not force and (_now() - float(cur.get('at') or 0)) < _TTL:
             return False
-        raw = pool_client._get('/sdh', {})
+        raw = pool_client.get('/sdh', {})
         if isinstance(raw, (bytes, bytearray)):
             raw = raw.decode('utf-8', 'replace')
         data = json.loads(raw)

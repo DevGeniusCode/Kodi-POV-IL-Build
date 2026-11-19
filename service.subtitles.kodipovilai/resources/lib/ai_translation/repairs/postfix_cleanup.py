@@ -3,7 +3,7 @@
 # Post-fix: annotations, speaker prefixes, niqqud, stutters, broken line breaks, sound cues.
 
 import re
-from resources.lib.core.srt.blocks import _HAS_HEBREW_RE, _HEB_RE, _INDEX_RE, _INVISIBLE_BIDI, _SPEAKER_RE, _TIMECODE_RE, _TRAILING_PUNCT_CHARS, _block_timecode_index, parse_blocks, stitch_blocks
+from resources.lib.core.srt.blocks import HAS_HEBREW_RE, HEB_RE, INDEX_RE, INVISIBLE_BIDI, SPEAKER_RE, TIMECODE_RE, TRAILING_PUNCT_CHARS, block_timecode_index, parse_blocks, stitch_blocks
 
 
 # Hearing-impaired annotations. Two flavours:
@@ -87,11 +87,11 @@ def drop_model_notes(block):
     """Remove translator-note lines from one SRT block (keeps index/timecode,
     keeps at least one text line)."""
     lines = (block or '').split('\n')
-    ti = _block_timecode_index(lines)
+    ti = block_timecode_index(lines)
     if ti < 0:
         return block
     text = lines[ti + 1:]
-    hebrew = any(_HAS_HEBREW_RE.search(l) for l in text)
+    hebrew = any(HAS_HEBREW_RE.search(l) for l in text)
     kept = [l for l in text if not (_MODEL_NOTE.match(l)
                                     or (hebrew and _NAME_NOTE.match(l)))]
     if not kept or len(kept) == len(text):
@@ -131,10 +131,10 @@ def strip_hi_annotations(text, keep_speaker_prefixes=False):
             stripped = line.strip()
             if not stripped:
                 continue
-            if _INDEX_RE.match(stripped):
+            if INDEX_RE.match(stripped):
                 kept_lines.append(line)
                 continue
-            if _TIMECODE_RE.match(stripped):
+            if TIMECODE_RE.match(stripped):
                 kept_lines.append(line)
                 continue
             # text line -- strip bracketed sound cues. Speaker prefixes are
@@ -142,7 +142,7 @@ def strip_hi_annotations(text, keep_speaker_prefixes=False):
             # drops them from its output; see the docstring).
             cleaned = _BRACKET_RE.sub('', line)
             if not keep_speaker_prefixes:
-                cleaned = _SPEAKER_RE.sub('', cleaned)
+                cleaned = SPEAKER_RE.sub('', cleaned)
             # collapse whitespace runs that the strips may have
             # left behind
             cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
@@ -160,8 +160,8 @@ def strip_hi_annotations(text, keep_speaker_prefixes=False):
         # only keep the block if there's actual dialogue text left
         # (more than just the index + timecode)
         text_lines = [ln for ln in kept_lines
-                      if ln.strip() and not _INDEX_RE.match(ln.strip())
-                      and not _TIMECODE_RE.match(ln.strip())]
+                      if ln.strip() and not INDEX_RE.match(ln.strip())
+                      and not TIMECODE_RE.match(ln.strip())]
         if text_lines and len(kept_lines) >= 3:
             out_blocks.append('\n'.join(kept_lines))
     return '\r\n\r\n'.join(out_blocks) + '\r\n' if out_blocks else ''
@@ -209,7 +209,7 @@ def strip_leaked_speaker_prefix(text, hebrew_only=False):
 # (RLE ... PDF), so this still works on a file that has already been through
 # the RTL pass -- the live path runs before it, the repair paths do not.
 _HE_TAG_RE = re.compile(
-    u'^(?P<pre>[ \t' + _INVISIBLE_BIDI + u']*'
+    u'^(?P<pre>[ \t' + INVISIBLE_BIDI + u']*'
     u'(?:<[^>\n]{1,40}>[ \t]*)?(?:-[ \t]*)?)'
     u'[\u05d0-\u05ea][\u0590-\u05f4 \t\'"]{0,20}?'
     u'[ \t]*:[ \t]*(?=\\S)')
@@ -232,7 +232,7 @@ _TITLE_TAG_STOP = frozenset((
     'First', 'Second', 'Third', 'Last', 'Also', 'Plus', 'Previously', 'Next',
     'Translation', 'Caution', 'Attention', 'Danger', 'Admit', 'Face', 'Okay'))
 _LATIN_TITLE_TAG_RE = re.compile(
-    u'^(?P<pre>[ \t' + _INVISIBLE_BIDI + u']*'
+    u'^(?P<pre>[ \t' + INVISIBLE_BIDI + u']*'
     u'(?:<[^>\n]{1,40}>[ \t]*)?(?:-[ \t]*)?)'
     u"(?P<name>[A-Z][a-z][A-Za-z'\\-]*(?: [A-Z][a-z][A-Za-z'\\-]*)?)"
     u'[ \t]*:[ \t]*(?=\\S)')
@@ -279,8 +279,8 @@ def strip_hebrew_speaker_prefix(text, source_text):
         names = _title_tag_names(source_text)
         for blk in parse_blocks(source_text):
             lines = blk.split('\n')
-            if (len(lines) < 3 or not _INDEX_RE.match(lines[0].strip())
-                    or not _TIMECODE_RE.match(lines[1].strip())):
+            if (len(lines) < 3 or not INDEX_RE.match(lines[0].strip())
+                    or not TIMECODE_RE.match(lines[1].strip())):
                 continue
             n = int(lines[0].strip())
             if n in seen:
@@ -292,7 +292,7 @@ def strip_hebrew_speaker_prefix(text, source_text):
                 s = ln.strip()
                 if s.startswith('-'):
                     s = s[1:].lstrip()
-                if _SPEAKER_RE.match(s):
+                if SPEAKER_RE.match(s):
                     at.add(i)
                 else:
                     tm = _TITLE_TAG_RE.match(s)
@@ -313,12 +313,12 @@ def strip_hebrew_speaker_prefix(text, source_text):
         idx_at, dup = {}, set()
         for i, line in enumerate(lines_all):
             s = line.strip()
-            if not _INDEX_RE.match(s):
+            if not INDEX_RE.match(s):
                 continue
             j = i + 1
             while j < len(lines_all) and not lines_all[j].strip():
                 j += 1
-            if j < len(lines_all) and _TIMECODE_RE.match(lines_all[j].strip()):
+            if j < len(lines_all) and TIMECODE_RE.match(lines_all[j].strip()):
                 n = int(s)
                 if n in idx_at.values():
                     dup.add(n)
@@ -366,7 +366,7 @@ def strip_hebrew_speaker_prefix(text, source_text):
                 expect_tc = False
             else:
                 pos += 1
-                if licensed and pos in tags_at and _HAS_HEBREW_RE.search(body):
+                if licensed and pos in tags_at and HAS_HEBREW_RE.search(body):
                     m = _HE_TAG_RE.match(body)
                     if not m:
                         # the model copied the Title-case tag as it was
@@ -382,7 +382,7 @@ def strip_hebrew_speaker_prefix(text, source_text):
                     tag = m.group(0)[len(m.group('pre')):] if m else ''
                     if m and len(tag.split(':')[0].split()) <= _HE_TAG_WORDS:
                         rest = body[m.end():]
-                        if _HAS_HEBREW_RE.search(rest):
+                        if HAS_HEBREW_RE.search(rest):
                             body = m.group('pre') + rest
             out.append(body + cr)
         return '\n'.join(out)
@@ -474,10 +474,10 @@ def _mend_two_lines(one, two):
     # "<i>?שלום") is left alone: a word put in front of it, or moved out from
     # behind it, would strand the mark mid-line.
     if (a[-1] in _LINE_ENDS_CLAUSE
-            or _CUE_TAG_RE.sub('', a).lstrip()[:1] in _TRAILING_PUNCT_CHARS
-            or b[0] in _TRAILING_PUNCT_CHARS or b[0] in '<{'):
+            or _CUE_TAG_RE.sub('', a).lstrip()[:1] in TRAILING_PUNCT_CHARS
+            or b[0] in TRAILING_PUNCT_CHARS or b[0] in '<{'):
         return None
-    if not _HEB_RE.search(a) or not _HEB_RE.search(b):
+    if not HEB_RE.search(a) or not HEB_RE.search(b):
         return None
     words = a.split(' ')
     moved = []
@@ -486,12 +486,12 @@ def _mend_two_lines(one, two):
             break                       # "קודם כל" (first of all) stays one phrase
         moved.insert(0, words.pop())
     # All or nothing: half a fix ("שהם / כבר הגיעו") is no better.
-    if not moved or words[-1] in _BREAK_BEFORE or not _HEB_RE.search(words[-1]):
+    if not moved or words[-1] in _BREAK_BEFORE or not HEB_RE.search(words[-1]):
         return None
     lead, rest = (u'♪ ', b[1:].lstrip()) if b.startswith(u'♪') else ('', b)
     # "♪ <i>..." / "♪ ?...": the words would land between the note and the
     # tag or the misplaced mark.
-    if rest[:1] in _TRAILING_PUNCT_CHARS + '<{':
+    if rest[:1] in TRAILING_PUNCT_CHARS + '<{':
         return None
     if rest.split(' ')[0].rstrip(u',.;:!?…') in _CLAUSE_OPENERS:
         return None
@@ -511,7 +511,7 @@ def mend_line_breaks(text):
         out, changed = [], 0
         for block in parse_blocks(text):
             lines = block.split('\n')
-            ti = _block_timecode_index(lines)
+            ti = block_timecode_index(lines)
             body = lines[ti + 1:] if ti >= 0 else []
             mended = (_mend_two_lines(body[0].rstrip('\r'), body[1].rstrip('\r'))
                       if len(body) == 2 else None)
@@ -558,7 +558,7 @@ def drop_untranslated_sound_cues(text, source_text):
         latin_lines = mixed_lines = 0
         for block in parse_blocks(source_text):
             lines = block.split('\n')
-            ti = _block_timecode_index(lines)
+            ti = block_timecode_index(lines)
             if ti < 0:
                 continue
             text_lines = [_cue_line(l) for l in lines[ti + 1:]]
@@ -576,7 +576,7 @@ def drop_untranslated_sound_cues(text, source_text):
         out, changed = [], False
         for block in parse_blocks(text):
             lines = block.split('\n')
-            ti = _block_timecode_index(lines)
+            ti = block_timecode_index(lines)
             cues = by_start.get(lines[ti].strip()[:12]) if ti >= 0 else None
             if not cues:
                 out.append(block)

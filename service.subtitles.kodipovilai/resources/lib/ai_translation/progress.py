@@ -10,18 +10,18 @@ from resources.lib.core import kodi
 # scattered success toasts here are suppressed to avoid double messaging. Error
 # toasts still fire. Mirrors DarkSubs, which shows status only in its on-play
 # overlay, never as toasts.
-_QUIET = False
+QUIET = False
 
 
 def set_quiet(value):
-    global _QUIET
-    _QUIET = bool(value)
+    global QUIET
+    QUIET = bool(value)
 
 
-def _status(msg, **kwargs):
+def status(msg, **kwargs):
     """Success / informational status. Suppressed during auto-on-play (the
     overlay shows it instead); a normal toast otherwise."""
-    if _QUIET:
+    if QUIET:
         return
     try:
         kodi.notify(msg, **kwargs)
@@ -29,7 +29,7 @@ def _status(msg, **kwargs):
         pass
 
 
-def _still_playing():
+def still_playing():
     try:
         import xbmc as _x
         return bool(_x.Player().isPlayingVideo())
@@ -37,7 +37,7 @@ def _still_playing():
         return False
 
 
-def _current_playback_ms():
+def current_playback_ms():
     try:
         import xbmc
         player = xbmc.Player()

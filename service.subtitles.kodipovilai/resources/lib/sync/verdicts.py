@@ -124,7 +124,7 @@ _MAX_VERDICTS = 400
 # short-edit map with its own other-language tracks, the cue-level planner
 # keeps sub-second act steps, and a track tagged 'en-US' is read as English.
 # Every UNKNOWN stored for such a file must recompute.
-_VERDICT_VERSION = 30
+VERDICT_VERSION = 30
 # A community sync record with a shift larger than this is only APPLIED blindly
 # when a human confirmed it. A large AUTO (machine-computed) offset can be a
 # poisoned share (field: a spurious -20.3s file-probe verdict reached the
@@ -145,7 +145,7 @@ def _verdict_path():
         return ''
 
 
-def _cache_key(sub_text, playing, cut_signature=''):
+def cache_key(sub_text, playing, cut_signature=''):
     h = hashlib.sha1(sub_text.encode('utf-8', 'replace')).hexdigest()[:16]
     sig = (cut_signature or '').strip().lower()
     if re.fullmatch(r'cut1:[0-9a-f]{32}', sig):
@@ -154,7 +154,7 @@ def _cache_key(sub_text, playing, cut_signature=''):
     return h + '|' + rel
 
 
-def _load_verdicts():
+def load_verdicts():
     path = _verdict_path()
     if not path or not os.path.isfile(path):
         return {}
@@ -165,20 +165,20 @@ def _load_verdicts():
         return {}
 
 
-def _store_verdict(key, verdict):
-    from resources.lib.sync.service import _log
+def store_verdict(key, verdict):
+    from resources.lib.sync.service import log
     path = _verdict_path()
     if not path:
         return
     try:
-        data = _load_verdicts()
+        data = load_verdicts()
         # Piecewise verdicts carry their validation certificate.  Dropping it
         # made apply_verdict correctly refuse a cached map on the next play.
         # Verdict dictionaries contain only small JSON-safe scalar/list data;
         # preserve that proof instead of reducing every record to a global
         # offset-shaped subset.
         entry = dict(verdict or {})
-        entry.update({'ts': time.time(), 'v': _VERDICT_VERSION,
+        entry.update({'ts': time.time(), 'v': VERDICT_VERSION,
                       'status': verdict.get('status'),
                       'scale': verdict.get('scale', 1.0),
                       'offset_ms': verdict.get('offset_ms', 0.0),
@@ -196,10 +196,10 @@ def _store_verdict(key, verdict):
             json.dump(data, f, ensure_ascii=False)
         os.replace(tmp, path)
     except Exception as e:
-        _log('verdict store failed: %r' % e, level='WARNING')
+        log('verdict store failed: %r' % e, level='WARNING')
 
 
-def _sync_registry_release(playing, cut_signature=''):
+def sync_registry_release(playing, cut_signature=''):
     """Backward-compatible exact-cut namespace for the existing Worker key."""
     sig = (cut_signature or '').strip().lower()
     if re.fullmatch(r'cut1:[0-9a-f]{32}', sig):
@@ -207,18 +207,18 @@ def _sync_registry_release(playing, cut_signature=''):
     return playing
 
 
-def _community_verdict(info, key, playing, cut_signature=''):
+def community_verdict(info, key, playing, cut_signature=''):
     """A community /sync record for this (subtitle, release) pair, converted
     to a local-verdict dict -- or None. Never raises, never blocks (the map
     was stashed by the picker's pool lookup; at worst ONE throttled lookup)."""
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     try:
         from resources.lib.fetching import pool_client as _pool
         sm = _pool.sync_map(info)
         if not sm:
             return None
         sub_hash = key.split('|', 1)[0]
-        registry_release = _sync_registry_release(playing, cut_signature)
+        registry_release = sync_registry_release(playing, cut_signature)
         ent = sm.get(sub_hash + '|' +
                      _pool.worker_norm_release(registry_release))
         if not isinstance(ent, dict):
@@ -241,14 +241,14 @@ def _community_verdict(info, key, playing, cut_signature=''):
         # (poisoned-record guard) -- fall through to the locally-gated
         # deep-verify instead. Human-confirmed records apply at any magnitude.
         if abs(off) > _COMMUNITY_AUTO_MAX_OFFSET_MS and human < 1:
-            _log('community record skipped (large auto offset %+dms, no human '
+            log('community record skipped (large auto offset %+dms, no human '
                  'confirmation) -- deferring to local verify' % int(off),
                  level='DEBUG')
             return None
         return {'status': common.STATUS_FIXABLE, 'scale': scale,
                 'offset_ms': off, 'diag': diag}
     except Exception as e:
-        _log('community verdict failed: %r' % e, level='DEBUG')
+        log('community verdict failed: %r' % e, level='DEBUG')
         return None
 
 
@@ -337,20 +337,20 @@ def store_human_verdict(report):
             'mode': 'global',
             'diag': 'human-confirmed exact media cut',
         }
-        _store_verdict(key, verdict)
+        store_verdict(key, verdict)
         return True
     except Exception:
         return False
 
 
-def _verdict_strength(item):
-    from resources.lib.sync.validators import _track_language_rank
+def verdict_strength(item):
+    from resources.lib.sync.validators import track_language_rank
     verdict = item.get('verdict') or {}
     return (
         1 if verdict.get('status') == common.STATUS_CONFIRMED else 0,
         float(verdict.get('overlap') or 0.0),
         float(verdict.get('vote') or 0.0),
         float(verdict.get('unique') or 0.0),
-        -_track_language_rank(item.get('track') or {}),
+        -track_language_rank(item.get('track') or {}),
         len(item.get('cues') or []),
     )

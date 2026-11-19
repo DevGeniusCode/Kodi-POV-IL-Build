@@ -1,6 +1,6 @@
 # MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
 # SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
-# Kodi plumbing: the add-on handle, paths, localised strings, the log and the toast.
+# Kodi plumbing: paths, localised strings, the log and the toast (the add-on handle is core/addon.py).
 # One brand title for every dialog (DIALOG_TITLE).
 
 import os
@@ -19,14 +19,12 @@ except ImportError:
     xbmcaddon = None
     xbmcvfs = None
     xbmcgui = None
+from resources.lib.core import addon as core_addon, settings
 
-
-ADDON_ID = 'service.subtitles.kodipovilai'
 
 # The brand title shown in every dialog, progress bar, toast and HTML page title of this
 # add-on. Change it here and nowhere else.
 DIALOG_TITLE = 'Kodi POV IL'
-_ADDON = None
 
 # notify() fires each GUI toast on a short-lived daemon thread so a wedged GUI
 # can never stall the caller (see notify()). This bounds how many such threads
@@ -41,28 +39,9 @@ _notify_lock = threading.Lock()
 _notify_pending = [0]
 
 
-def addon():
-    # Cache the Addon() instance. Constructing xbmcaddon.Addon() re-parses and
-    # re-validates the addon's ENTIRE settings.xml against Kodi's settings
-    # schema every single time (visible in the Kodi log as a burst of
-    # "error reading <control>/<dependency> tag" warnings) -- with 100+
-    # settings and a few schema quirks, that's real, repeated work. This
-    # module has 100+ call sites (get_setting/set_setting/get_bool/...), and
-    # a periodic background loop calls into one of them roughly once a
-    # minute for the life of the Kodi session, so a fresh Addon() per call
-    # meant a full settings.xml reparse every single time, indefinitely.
-    # The Addon() handle itself doesn't go stale -- getSetting/setSetting
-    # always read/write the live store -- so one cached instance is safe to
-    # reuse for the life of the process, across threads.
-    global _ADDON
-    if _ADDON is None:
-        _ADDON = xbmcaddon.Addon(ADDON_ID)
-    return _ADDON
-
-
 def localised(strid, *args):
     try:
-        s = addon().getLocalizedString(strid)
+        s = core_addon.addon().getLocalizedString(strid)
     except Exception:
         s = ''
     if not s:
@@ -79,8 +58,8 @@ def addon_profile_path():
     """Path to the addon's per-user data dir
     (.kodi/userdata/addon_data/<id>/). Created if missing."""
     if not KODI_AVAILABLE:
-        return os.path.join(os.path.expanduser('~'), '.kodi-test', ADDON_ID)
-    p = xbmcvfs.translatePath('special://profile/addon_data/' + ADDON_ID + '/')
+        return os.path.join(os.path.expanduser('~'), '.kodi-test', core_addon.ADDON_ID)
+    p = xbmcvfs.translatePath('special://profile/addon_data/' + core_addon.ADDON_ID + '/')
     if not os.path.isdir(p):
         try:
             os.makedirs(p)
@@ -121,8 +100,7 @@ def safe_release_filename(release, fallback=''):
 def log(msg, level='INFO'):
     """Log to Kodi's log at the appropriate level. Honours the
     addon's log_level setting -- anything below that is suppressed."""
-    from resources.lib.core.settings import get_setting
-    cfg_level = get_setting('log_level', 'INFO').upper()
+    cfg_level = settings.get_setting('log_level', 'INFO').upper()
     order = {'DEBUG': 0, 'INFO': 1, 'WARNING': 2, 'ERROR': 3}
     if order.get(level.upper(), 1) < order.get(cfg_level, 1):
         return
@@ -136,20 +114,19 @@ def log(msg, level='INFO'):
         'ERROR': xbmc.LOGERROR,
     }.get(level.upper(), xbmc.LOGINFO)
     try:
-        xbmc.log('[{0}] {1}'.format(ADDON_ID, msg), level=kodi_level)
+        xbmc.log('[{0}] {1}'.format(core_addon.ADDON_ID, msg), level=kodi_level)
     except Exception:
         pass
 
 
 def notify(msg, title=None, icon=None, time_ms=4000):
-    from resources.lib.core.settings import get_setting
     if not KODI_AVAILABLE:
         print('NOTIFY:', title, '-', msg)
         return
     # User master switch (like DarkSubs): hide all subtitle/translation toasts
     # when turned off. Default ON, so nothing changes unless the user opts out.
     try:
-        if (get_setting('subs_notifications', 'true')
+        if (settings.get_setting('subs_notifications', 'true')
                 or 'true').strip().lower() == 'false':
             return
     except Exception:
@@ -158,7 +135,7 @@ def notify(msg, title=None, icon=None, time_ms=4000):
         if title is None:
             title = DIALOG_TITLE
         if icon is None:
-            icon = xbmcvfs.translatePath('special://home/addons/' + ADDON_ID + '/icon.png')
+            icon = xbmcvfs.translatePath('special://home/addons/' + core_addon.ADDON_ID + '/icon.png')
         # Force RTL paragraph direction. The previous version used
         # U+200F (RLM) as a prefix -- that's just a strong-RTL
         # invisible character that BIASES the BiDi algorithm but
@@ -218,7 +195,7 @@ def notify(msg, title=None, icon=None, time_ms=4000):
         pass
 
 
-def _home_window():
+def home_window():
     try:
         return xbmcgui.Window(10000) if KODI_AVAILABLE else None
     except Exception:

@@ -7,7 +7,7 @@ import json
 import os
 import urllib.parse
 from resources.lib.core.cache import translation_cache
-from resources.lib.core import kodi, settings
+from resources.lib.core import kodi, settings, video_context
 from resources.lib.fetching import local
 # Community subtitle pool (optional, gated by settings, OFF by default).
 # Imported defensively: a problem here must never break translation.
@@ -16,12 +16,12 @@ try:
     from resources.lib.fetching import pool_client, pool_harvest
 except Exception:
     pool_contribute = pool_client = pool_harvest = None
-from resources.lib.core.link_codec import _decode_link, _encode_link
-from resources.lib.scoring_matching.badges import _finalize
-from resources.lib.scoring_matching.ranking import _gender_src_rank, _is_same_source, _is_sdh_ext, _lang_display, _lang_display_he, _looks_like_token, _match_pct, _release_from_path
-from resources.lib.ai_translation.policy import _embedded_translation_policy, _enabled_sources
-from resources.lib.ai_translation.source_prep import _source_id_for_ai
-from resources.lib.fetching.embedded.extraction import _playing_video_url
+from resources.lib.core.link_codec import decode_link, encode_link
+from resources.lib.scoring_matching.badges import finalize
+from resources.lib.scoring_matching.ranking import gender_src_rank, is_same_source, is_sdh_ext, lang_display, lang_display_he, match_pct
+from resources.lib.ai_translation.policy import embedded_translation_policy, enabled_sources
+from resources.lib.ai_translation.source_prep import source_id_for_ai
+from resources.lib.fetching.embedded.extraction import playing_video_url
 
 
 def _clean(c):
@@ -39,7 +39,7 @@ def _norm_rel(s):
 def _pool_release(v):
     r = (v.get('release') or '').strip()
     # Reject debrid URL / token "releases" stored by older shares.
-    return '' if (r and _looks_like_token(r)) else r
+    return '' if (r and video_context.looks_like_token(r)) else r
 
 
 def list_candidates(info, modal_progress=True, quick=False):
@@ -78,7 +78,7 @@ def list_candidates(info, modal_progress=True, quick=False):
     tmdb_id = (info.get('tmdb_id') or '').strip()
     season  = info.get('season') or ''
     episode = info.get('episode') or ''
-    sources = _enabled_sources()
+    sources = enabled_sources()
 
     # Collect candidate source files from the two filesystem
     # locations we look at. By-language dicts, so first match wins
@@ -115,7 +115,7 @@ def list_candidates(info, modal_progress=True, quick=False):
         results.append({
             'filename': os.path.basename(alongside['he']),
             'language': 'he',
-            'link': _encode_link({
+            'link': encode_link({
                 'type': 'passthrough', 'path': alongside['he'],
                 'release': os.path.basename(alongside['he']),
             }),
@@ -185,7 +185,7 @@ def list_candidates(info, modal_progress=True, quick=False):
             _emb_he = next((c for c in engine_embedded
                             if c.get('_engine_kind') == 'embedded_he'), None)
             if _emb_he is not None and (engine_human or engine_mt):
-                _emb_pl = _decode_link(_emb_he.get('link') or '') or {}
+                _emb_pl = decode_link(_emb_he.get('link') or '') or {}
                 engine_embedded.insert(0, {
                     'filename': 'עברית מסונכרנת למובנה · 101%',
                     'language': 'he',
@@ -210,7 +210,7 @@ def list_candidates(info, modal_progress=True, quick=False):
             if pool_contribute is not None and pool_client.share_enabled():
                 _kt = 0
                 for c in engine_human:
-                    pl = _decode_link(c.get('link') or '') or {}
+                    pl = decode_link(c.get('link') or '') or {}
                     if (pl.get('type') == 'engine' and not pl.get('embedded')
                             and (pl.get('source') or '').strip().lower()
                             == 'ktuvit'
@@ -277,11 +277,7 @@ def list_candidates(info, modal_progress=True, quick=False):
         # here the lookup and the stored release could differ for the SAME file
         # (when picked_release/tagline/label are all blank), which would make the
         # embedded same-source gate wrongly hide the viewer's OWN item on replay.
-        _video_ref = (info.get('picked_release') or info.get('tagline')
-                      or info.get('label')
-                      or _release_from_path(info.get('li_filename'))
-                      or os.path.basename(filepath)
-                      or info.get('title') or '')
+        _video_ref = video_context.release_name(info, 'picker')
         try:
             _pool_variants = pool_client.lookup(info)
         except Exception:
@@ -299,7 +295,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                 _ktuvit_pool_by_rel.setdefault(_norm_rel(r), v)
 
     def _pool_entry(v, release):
-        pct = _match_pct(_video_ref, release) if release else 0
+        pct = match_pct(_video_ref, release) if release else 0
         if release and pct > 0:
             label = 'כתובית · מאגר · {0}%  —  {1}'.format(pct, release)
         elif release:
@@ -310,7 +306,7 @@ def list_candidates(info, modal_progress=True, quick=False):
             'filename': label, 'language': 'he',
             # 'release' rides in the link so resolve() can tier-check the
             # pool sub against the playing release (SubSync S2 verify/fix).
-            'link': _encode_link({
+            'link': encode_link({
                 'type': 'pool', 'hash': v.get('hash'),
                 'release': release or '',
                 'pool_kind': v.get('kind') or 'ai',
@@ -326,7 +322,7 @@ def list_candidates(info, modal_progress=True, quick=False):
     _used_pool_rels = set()
     for c in engine_human:
         have_hebrew = True
-        pl = _decode_link(c.get('link') or '') or {}
+        pl = decode_link(c.get('link') or '') or {}
         is_ktuvit = (pl.get('type') == 'engine'
                      and (pl.get('source') or '').strip().lower() == 'ktuvit')
         fn = c.get('filename') or ''
@@ -361,11 +357,11 @@ def list_candidates(info, modal_progress=True, quick=False):
         # Embedded variant -> eligible ONLY for its own (exact) source.
         if (v.get('kind') or '') != 'ai_emb':
             return True
-        return _is_same_source(_video_ref, _pool_release(v))
+        return is_same_source(_video_ref, _pool_release(v))
 
     def _ai_sort_key(v):
         rel = _pool_release(v)
-        pct = _match_pct(_video_ref, rel) if rel else 0
+        pct = match_pct(_video_ref, rel) if rel else 0
         is_emb = (v.get('kind') or '') == 'ai_emb'
         # Embedded items lead (0). Among the (tied at 100%) embedded items for
         # THIS source, order by the source language's gender strength -- the most
@@ -377,7 +373,7 @@ def list_candidates(info, modal_progress=True, quick=False):
         # what's shown and ranked -- a missing source_lang ties with explicit
         # 'en', and 'pt-BR'/'pt-PT' tie-break identically.
         src = (v.get('source_lang') or 'en').strip().lower()[:2]
-        g = _gender_src_rank(src) if is_emb else 1
+        g = gender_src_rank(src) if is_emb else 1
         return (0 if is_emb else 1, g, -pct, src)
 
     for v in sorted(_ai_variants, key=_ai_sort_key):
@@ -392,11 +388,11 @@ def list_candidates(info, modal_progress=True, quick=False):
             # embedded translations of the same release the list is ordered by
             # that language's gender accuracy (strong-gender first), so showing it
             # makes the order legible ("מובנה AI (ספרדית)" ranks above "(אנגלית)").
-            _slh = _lang_display_he((v.get('source_lang') or 'en').strip().lower()[:2])
+            _slh = lang_display_he((v.get('source_lang') or 'en').strip().lower()[:2])
             _emb_base = 'תרגום מובנה AI ({0}) · מאגר קהילתי · 100%'.format(_slh)
             label = ('{0}  —  {1}'.format(_emb_base, release) if release else _emb_base)
         else:
-            pct = _match_pct(_video_ref, release) if release else 0
+            pct = match_pct(_video_ref, release) if release else 0
             # Only show a % when we actually have a meaningful match (a 0% almost
             # always means we couldn't read the video's release name, not a real
             # zero -- showing "0%" is misleading).
@@ -409,7 +405,7 @@ def list_candidates(info, modal_progress=True, quick=False):
         results.append({
             'filename': label,
             'language': 'he',
-            'link': _encode_link({
+            'link': encode_link({
                 'type': 'pool', 'hash': v.get('hash'),
                 'release': release or '',
                 'pool_kind': v.get('kind') or 'ai',
@@ -444,10 +440,10 @@ def list_candidates(info, modal_progress=True, quick=False):
     _emb_by_lang = {}
     for c in embedded_foreign:
         _emb_by_lang.setdefault(c.get('language') or '?', []).append(c)
-    _emb_policy = _embedded_translation_policy()
+    _emb_policy = embedded_translation_policy()
     _emb_mode_available = _emb_policy['enabled']
     if _emb_policy['mode'] == 'local_only':
-        _emb_url = _playing_video_url(info)
+        _emb_url = playing_video_url(info)
         _emb_mode_available = bool(
             _emb_url
             and not _emb_url.lower().startswith(('http://', 'https://')))
@@ -496,12 +492,12 @@ def list_candidates(info, modal_progress=True, quick=False):
             # it on the embedded_ai link so the pick can show this embedded track
             # NATIVELY (instant, already synced) while the Hebrew is extracted+
             # translated in the background.
-            _emb_src = _decode_link(c.get('link') or '') or {}
+            _emb_src = decode_link(c.get('link') or '') or {}
             results.append({
                 'filename': 'תרגום מובנה → עברית (AI) · {0}'.format(
-                    _lang_display(code)),
+                    lang_display(code)),
                 'language': 'he',
-                'link': _encode_link({'type': 'embedded_ai',
+                'link': encode_link({'type': 'embedded_ai',
                                       'src_lang': code,
                                       'stream_index': _emb_src.get(
                                           'stream_index')}),
@@ -522,8 +518,8 @@ def list_candidates(info, modal_progress=True, quick=False):
         # best match %. Decode the engine link ONCE here (reused below).
         _lang_cands = []
         for c in _ai_by_lang.get(code, []):
-            _s = _decode_link(c.get('link') or '') or {}
-            _sdh = _is_sdh_ext(c, _s.get('filename') or '')
+            _s = decode_link(c.get('link') or '') or {}
+            _sdh = is_sdh_ext(c, _s.get('filename') or '')
             _lang_cands.append((c, _s, _sdh))
         _lang_cands.sort(key=lambda t: (not t[2], -t[0].get('_pct', 0)))
         for c, src, _sdh in _lang_cands:
@@ -544,7 +540,7 @@ def list_candidates(info, modal_progress=True, quick=False):
                 results.append({
                     'filename': _label,
                     'language': code,
-                    'link': _encode_link(src),
+                    'link': encode_link(src),
                     'sync': 'false',
                     'rating': c.get('rating', '3'),
                     # NOT is_hi: the DELIVERED Hebrew is plain dialogue (the HI
@@ -559,7 +555,7 @@ def list_candidates(info, modal_progress=True, quick=False):
 
     skip_when_hebrew = settings.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
-        return _finalize(info, results)
+        return finalize(info, results)
 
     # 2. For each enabled source language, surface ONE "translate
     #    this" entry from a local source:
@@ -576,14 +572,14 @@ def list_candidates(info, modal_progress=True, quick=False):
         local_path = alongside.get(src_lang) or in_temp.get(src_lang)
         if local_path:
             seen_langs.add(src_lang)
-            source_label = _lang_display(src_lang)
+            source_label = lang_display(src_lang)
             source_origin = ('local file' if alongside.get(src_lang)
                              else 'loaded by another addon')
             ai_entries.append({
                 'filename': 'AI Hebrew (translate {0} {1})'.format(
                     source_label, source_origin),
                 'language': 'he',
-                'link': _encode_link({
+                'link': encode_link({
                     'type': 'ai',
                     'source_lang': src_lang,
                     'local_path': local_path,
@@ -603,7 +599,7 @@ def list_candidates(info, modal_progress=True, quick=False):
     for entry in ai_entries:
         payload = entry.pop('_payload', {})
         try:
-            src_id = _source_id_for_ai(payload)
+            src_id = source_id_for_ai(payload)
             if src_id:
                 # Same tier as the DOWNLOAD path uses (_try_fast_download,
                 # also untiered) -- deliberately, and NOT the same tier as
@@ -646,4 +642,4 @@ def list_candidates(info, modal_progress=True, quick=False):
              'in_temp_count': len(in_temp)}),
             level='WARNING')
 
-    return _finalize(info, results)
+    return finalize(info, results)

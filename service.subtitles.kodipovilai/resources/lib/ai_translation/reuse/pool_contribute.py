@@ -7,7 +7,7 @@ import json
 import os
 import threading
 import time
-from resources.lib.core import kodi, settings
+from resources.lib.core import kodi, settings, video_context
 try:
     import urllib.request as _urlreq
     import urllib.parse as _urlparse
@@ -16,7 +16,7 @@ except ImportError:        # pragma: no cover
     _urlreq = None
     _urlparse = None
     _urlerr = None
-from resources.lib.fetching.pool_client import KTUVIT_LOGICAL_SOURCE_TAG, POOL_URL, _QUEUE_MAX_AGE_SEC, _has_id, _is_token_like, _lookup_params_from_body, _lookup_raw, _params, _post_headers, _release_from, share_enabled, worker_norm_release
+from resources.lib.fetching.pool_client import KTUVIT_LOGICAL_SOURCE_TAG, POOL_URL, QUEUE_MAX_AGE_SEC, has_id, lookup_params_from_body, _lookup_raw, pool_client_params, post_headers, share_enabled, worker_norm_release
 
 
 # HTTP status codes the Worker returns BEFORE it reads the request body (auth /
@@ -57,11 +57,11 @@ def report_sync(info, sub_hash, release, scale, offset_ms, status,
     try:
         if _urlreq is None or not share_enabled():
             return
-        p = _params(info)
-        if not _has_id(p) or not (sub_hash or '').strip():
+        p = pool_client_params(info)
+        if not has_id(p) or not (sub_hash or '').strip():
             return
         rel = (release or '').strip()
-        if not rel or _is_token_like(rel):
+        if not rel or video_context.looks_like_token(rel, True):
             return
         # De-dupe AUTO reports (human fixes always go through): if we already
         # shared this exact verdict recently, skip -- the Worker has it.
@@ -91,7 +91,7 @@ def report_sync(info, sub_hash, release, scale, offset_ms, status,
             try:
                 data = json.dumps(body).encode('utf-8')
                 req = _urlreq.Request(POOL_URL + '/syncrep', data=data,
-                                      headers=_post_headers('/syncrep'))
+                                      headers=post_headers('/syncrep'))
                 _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
                 kodi.log(
                     'pool syncrep sent ({0}, {1}, {2:+d}ms, {3})'.format(
@@ -115,7 +115,7 @@ def _pool_has_hash(body, source_hash):
     if not source_hash:
         return False
     try:
-        data = _lookup_raw(_lookup_params_from_body(body))   # request-cached
+        data = _lookup_raw(lookup_params_from_body(body))   # request-cached
         variants = data.get('variants') or []
         return any(v.get('hash') == source_hash for v in variants)
     except Exception:
@@ -130,7 +130,7 @@ def _pool_has_proofread(body, source_hash):
     if not source_hash:
         return False
     try:
-        data = _lookup_raw(_lookup_params_from_body(body))   # request-cached
+        data = _lookup_raw(lookup_params_from_body(body))   # request-cached
         return any(v.get('hash') == source_hash and v.get('gp')
                    for v in data.get('variants') or [])
     except Exception:
@@ -152,7 +152,7 @@ def _pool_has_ktuvit_release(body):
         wanted = worker_norm_release(body.get('release') or '')
         if not wanted:
             return False
-        data = _lookup_raw(_lookup_params_from_body(body))
+        data = _lookup_raw(lookup_params_from_body(body))
         for v in data.get('variants') or []:
             if ((v.get('kind') or 'ai') == 'ktuvit'
                     and worker_norm_release(v.get('release') or '') == wanted):
@@ -202,7 +202,7 @@ def _pool_at_capacity(body):
     contribution would only be 429'd (toomany). Uses the request-cached /lookup
     (no extra network). Best-effort: any error returns False so we just upload."""
     try:
-        data = _lookup_raw(_lookup_params_from_body(body))
+        data = _lookup_raw(lookup_params_from_body(body))
         return len(data.get('variants') or []) >= _MAX_VARIANTS
     except Exception:
         return False
@@ -273,7 +273,7 @@ def _post(body, marker_path=None):
         req = _urlreq.Request(
             POOL_URL + '/contribute',
             data=json.dumps(body).encode('utf-8'),
-            headers=_post_headers('/contribute'),
+            headers=post_headers('/contribute'),
             method='POST')
         _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
     except Exception as e:
@@ -318,8 +318,8 @@ def _build_body(info, source_hash, source_lang, srt_text,
     down, and loads instantly from the channel). `release_override`, when given,
     is used as the release name instead of deriving one from `info` -- the
     engine already knows the exact Ktuvit release filename."""
-    p = _params(info)
-    if not _has_id(p):
+    p = pool_client_params(info)
+    if not has_id(p):
         return None
     # For episodes the pool/Telegram post wants the SERIES name, not the
     # episode title. Kodi's VideoPlayer.Title is the episode label (e.g. POV's
@@ -330,9 +330,9 @@ def _build_body(info, source_hash, source_lang, srt_text,
     title = (show if (p['type'] == 'episode' and show)
              else (info.get('title') or '').strip())
     if release_override:
-        rel = '' if _is_token_like(release_override) else release_override
+        rel = '' if video_context.looks_like_token(release_override, True) else release_override
     else:
-        rel = _release_from(info)  # already filters token-like names
+        rel = video_context.release_name(info, 'pool')  # already filters token-like names
     body = {
         'tmdb_id': p['tmdb'], 'imdb_id': p['imdb'], 'type': p['type'],
         'season': p['season'], 'episode': p['episode'], 'lang': 'he',
@@ -475,11 +475,11 @@ def report_embedded(info):
             pass
         if _urlreq is None:
             return
-        p = _params(info)
-        if not _has_id(p):
+        p = pool_client_params(info)
+        if not has_id(p):
             return
-        rel = _release_from(info)
-        if not rel or _is_token_like(rel):
+        rel = video_context.release_name(info, 'pool')
+        if not rel or video_context.looks_like_token(rel, True):
             return
         key = '{0}:{1}:{2}:{3}:{4}'.format(
             p['tmdb'] or p['imdb'], p['type'], p['season'], p['episode'],
@@ -497,7 +497,7 @@ def report_embedded(info):
                 req = _urlreq.Request(
                     POOL_URL + '/embedded',
                     data=json.dumps(body).encode('utf-8'),
-                    headers=_post_headers('/embedded'),
+                    headers=post_headers('/embedded'),
                     method='POST')
                 _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
                 # Mark locally only on a successful send, so a failed report
@@ -525,8 +525,8 @@ def report_ktuvit(info, names):
     try:
         if _urlreq is None:
             return
-        p = _params(info)
-        if not _has_id(p):
+        p = pool_client_params(info)
+        if not has_id(p):
             return
         clean = []
         seen = set()
@@ -547,7 +547,7 @@ def report_ktuvit(info, names):
                 req = _urlreq.Request(
                     POOL_URL + '/ktuvit',
                     data=json.dumps(body).encode('utf-8'),
-                    headers=_post_headers('/ktuvit'),
+                    headers=post_headers('/ktuvit'),
                     method='POST')
                 _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
             except Exception as e:
@@ -894,7 +894,7 @@ def _post_sync(body):
         req = _urlreq.Request(
             POOL_URL + '/contribute',
             data=json.dumps(body).encode('utf-8'),
-            headers=_post_headers('/contribute'),
+            headers=post_headers('/contribute'),
             method='POST')
         resp = _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
         try:
@@ -967,7 +967,7 @@ def drain(throttle=None, should_cancel=None, max_sends=40):
                 break
             # Age out jobs that can never resolve so the queue can't grow forever.
             try:
-                if now - os.path.getmtime(fp) > _QUEUE_MAX_AGE_SEC:
+                if now - os.path.getmtime(fp) > QUEUE_MAX_AGE_SEC:
                     os.remove(fp)
                     continue
             except OSError:

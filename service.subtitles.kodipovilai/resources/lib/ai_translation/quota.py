@@ -87,7 +87,7 @@ def _pacific_offset(utc):
     return datetime.timedelta(hours=-7 if starts <= utc < ends else -8)
 
 
-def _today_utc(now=None):
+def today_utc(now=None):
     """The quota day: today's date in Pacific time, when Google resets
     the free daily limit. (The name predates the switch from UTC.)"""
     utc = now or datetime.datetime.utcnow()
@@ -129,7 +129,7 @@ def note_request(model):
         if not is_tracked(model) or settings is None:
             return
         model = _norm(model)
-        today = _today_utc()
+        today = today_utc()
         with _LOCK:
             last_date = (settings.get_setting(SETTING_DATE, '') or '').strip()
             last_model = _stored_model()
@@ -153,7 +153,7 @@ def note_exhausted(model):
     try:
         if settings is not None:
             settings.set_setting(SETTING_EXHAUSTED,
-                                   '{0} {1}'.format(_today_utc(), _norm(model)))
+                                   '{0} {1}'.format(today_utc(), _norm(model)))
     except Exception:
         pass
 
@@ -164,7 +164,7 @@ def exhausted_today(model):
         if settings is None:
             return False
         stored = (settings.get_setting(SETTING_EXHAUSTED, '') or '').split()
-        return stored == [_today_utc(), _norm(model)]
+        return stored == [today_utc(), _norm(model)]
     except Exception:
         return False
 
@@ -174,7 +174,7 @@ def get_today_usage(model=None):
     returns a dict; on storage failure, count is 0. `model` defaults to
     whichever model the stored count belongs to, so the limit shown
     matches the model that was actually used."""
-    today = _today_utc()
+    today = today_utc()
     count = 0
     stored = _stored_model()
     target = _norm(model) or stored

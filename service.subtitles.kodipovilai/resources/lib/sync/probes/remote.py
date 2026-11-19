@@ -11,7 +11,7 @@ except Exception:
     kodi = core_selection = settings = video_context = None
 
 
-def _probe_enabled():
+def probe_enabled():
     try:
         return (settings.get_setting('subsync_probe', 'true') or
                 'true').strip().lower() != 'false'
@@ -19,7 +19,7 @@ def _probe_enabled():
         return True
 
 
-def _playing_url(info):
+def playing_url(info):
     """Return a local playing file suitable for automatic probing.
 
     Never open extra HTTP media connections alongside Kodi playback: range
@@ -27,7 +27,7 @@ def _playing_url(info):
     the player itself. Cached references are consulted before this gate.
     Subtitle-provider oracle downloads do not use this media path.
     """
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     url = _media_url(info)
     clean = (url or '').split('|')[0].strip()
     low = clean.lower()
@@ -38,14 +38,14 @@ def _playing_url(info):
         # would scope corrections to the manifest rather than the video.
         return ''
     if low.startswith(('http://', 'https://')):
-        _log('remote media probing skipped to protect playback')
+        log('remote media probing skipped to protect playback')
         return ''
     if os.path.isfile(clean):
         return clean
     return ''
 
 
-def _remote_playing_url(info):
+def remote_playing_url(info):
     """Direct HTTP(S) Matroska URL, stripped of Kodi's `|Header=...` suffix.
 
     HLS/DASH manifests are not byte-addressable media files and never enter the
@@ -62,12 +62,12 @@ def _remote_playing_url(info):
     return ''
 
 
-def _current_stream_url():
+def current_stream_url():
     """The stream Kodi is playing now, without Kodi's header suffix."""
-    return _current_stream_transport().split('|')[0].strip()
+    return current_stream_transport().split('|')[0].strip()
 
 
-def _current_stream_transport():
+def current_stream_transport():
     """Exact Kodi transport, including its content-selecting header suffix."""
     try:
         import xbmc
@@ -91,7 +91,7 @@ def _media_url(info):
         pinned = ''
     if pinned:
         return pinned
-    current = _current_stream_transport()
+    current = current_stream_transport()
     if current:
         return current
     try:
@@ -100,7 +100,7 @@ def _media_url(info):
         return ''
 
 
-def _transport_cache_key(info):
+def transport_cache_key(info):
     """Opaque session/file key for the probe cache; never stores a URL token."""
     try:
         value = _media_url(info)
@@ -124,23 +124,23 @@ def _transport_cache_key(info):
         return ''
 
 
-def _local_cut_signature(info):
+def local_cut_signature(info):
     """Cheap three-sample content identity for a local playing file."""
-    from resources.lib.sync.service import _log
-    path = _playing_url(info)
+    from resources.lib.sync.service import log
+    path = playing_url(info)
     if not path:
         return ''
     try:
         from resources.lib.fetching.embedded import embedded_extract
         return embedded_extract.media_cut_signature(
             path, allow_http=False,
-            log=lambda m: _log('cut-id: ' + m)) or ''
+            log=lambda m: log('cut-id: ' + m)) or ''
     except Exception as e:
-        _log('local cut-id failed: %r' % e, level='DEBUG')
+        log('local cut-id failed: %r' % e, level='DEBUG')
         return ''
 
 
-def _remote_probe_ready(max_wait_s=8.0, expected_url=''):
+def remote_probe_ready(max_wait_s=8.0, expected_url=''):
     """Wait in the background until playback is stable enough for tiny reads."""
     try:
         import xbmc
@@ -149,7 +149,7 @@ def _remote_probe_ready(max_wait_s=8.0, expected_url=''):
         while time.monotonic() < deadline:
             if not player.isPlayingVideo():
                 return False
-            if expected_url and _current_stream_url() != expected_url:
+            if expected_url and current_stream_url() != expected_url:
                 return False
             try:
                 played = float(player.getTime() or 0.0)
@@ -165,7 +165,7 @@ def _remote_probe_ready(max_wait_s=8.0, expected_url=''):
         return False
 
 
-def _starts_to_cues(starts):
+def starts_to_cues(starts):
     points = sorted({int(x) for x in (starts or []) if int(x) >= 0})
     cues = []
     for i, start in enumerate(points):
@@ -175,7 +175,7 @@ def _starts_to_cues(starts):
     return cues
 
 
-def _remote_reference_bundle(url):
+def remote_reference_bundle(url):
     """Per-track video reference + cut id via bounded container-index reads.
 
     This deliberately does not extract subtitle text or scan media clusters.
@@ -183,14 +183,14 @@ def _remote_reference_bundle(url):
     validates byte ranges and trips on provider pressure.  Failure is a silent
     miss; the selected subtitle remains untouched.
     """
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     ready_started = time.monotonic()
-    if not url or not _remote_probe_ready(expected_url=url):
-        _log('remote-cues: playback not ready after %.2fs'
+    if not url or not remote_probe_ready(expected_url=url):
+        log('remote-cues: playback not ready after %.2fs'
              % (time.monotonic() - ready_started))
         return {'probe_error': True}
     started = time.monotonic()
-    _log('remote-cues: playback ready in %.2fs'
+    log('remote-cues: playback ready in %.2fs'
          % (started - ready_started))
 
     def abort():
@@ -199,7 +199,7 @@ def _remote_reference_bundle(url):
         try:
             import xbmc
             return (not xbmc.Player().isPlayingVideo()
-                    or _current_stream_url() != url)
+                    or current_stream_url() != url)
         except Exception:
             return False
 
@@ -208,28 +208,28 @@ def _remote_reference_bundle(url):
         reader = getattr(embedded_extract, 'cue_reference_profile', None)
         if reader is not None:
             raw = reader(url, allow_http=True, abort_cb=abort,
-                         log=lambda m: _log('remote-cues: ' + m)) or {}
+                         log=lambda m: log('remote-cues: ' + m)) or {}
         else:  # older in-memory module after a quick update
             starts = embedded_extract.cue_reference_times(
                 url, allow_http=True, abort_cb=abort,
-                log=lambda m: _log('remote-cues: ' + m))
+                log=lambda m: log('remote-cues: ' + m))
             raw = {'starts': starts or [], 'track_starts': [],
                    'legacy_single_track': True}
     except Exception as e:
-        _log('remote cue-index probe failed after %.2fs: %r'
+        log('remote cue-index probe failed after %.2fs: %r'
              % (time.monotonic() - started, e), level='WARNING')
         return {'probe_error': True}
-    _log('remote-cues: index read in %.2fs (%d request(s), %d byte(s))'
+    log('remote-cues: index read in %.2fs (%d request(s), %d byte(s))'
          % (time.monotonic() - started, int(raw.get('requests') or 0),
             int(raw.get('bytes') or 0)))
-    cues = _starts_to_cues(raw.get('starts') or [])
+    cues = starts_to_cues(raw.get('starts') or [])
     profiles = []
     for item in raw.get('track_starts') or []:
-        tc = _starts_to_cues(item.get('starts') or [])
+        tc = starts_to_cues(item.get('starts') or [])
         if tc:
             profiles.append({'track': item.get('track') or {}, 'cues': tc})
     if cues:
-        _log('remote-cues: %d union cues / %d independent track(s) ready'
+        log('remote-cues: %d union cues / %d independent track(s) ready'
              % (len(cues), len(profiles)))
     return {'cues': cues, 'track_cues': profiles,
             'tracks': raw.get('tracks') or [],

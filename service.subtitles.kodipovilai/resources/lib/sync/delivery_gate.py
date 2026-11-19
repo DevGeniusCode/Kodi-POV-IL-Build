@@ -5,7 +5,7 @@
 from resources.lib.core import kodi, selection as core_selection
 
 
-def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False,
+def sync_hebrew_delivery(info, path, source_release='', embedded_timing=False,
                           selection=None, fallback_link='', fallback_links=None):
     """Run any file-based Hebrew subtitle through the ordinary timing gate.
 

@@ -11,7 +11,7 @@ try:
     import xbmc
 except ImportError:
     xbmc = None
-from resources.lib.entry.migrations import _maybe_bump_gemini_model, _maybe_bump_gemini_model_38, _maybe_default_builtin_engine, _maybe_default_fast_first_chunk, _maybe_default_pool_on, _maybe_force_gender_ref_arabic, _maybe_force_pool_share, _maybe_lower_chunk_lines, _maybe_migrate_embedded_translation_mode, _maybe_repair_rtl_cache, _maybe_retire_gemini_31_flash, _maybe_seed_hebrew_subtitle_prefs, _maybe_set_default_subtitle_service, _maybe_tune_gemini3_defaults
+from resources.lib.entry.migrations import maybe_bump_gemini_model, maybe_bump_gemini_model_38, maybe_default_builtin_engine, maybe_default_fast_first_chunk, maybe_default_pool_on, maybe_force_gender_ref_arabic, maybe_force_pool_share, maybe_lower_chunk_lines, maybe_migrate_embedded_translation_mode, maybe_repair_rtl_cache, maybe_retire_gemini_31_flash, maybe_seed_hebrew_subtitle_prefs, maybe_set_default_subtitle_service, maybe_tune_gemini3_defaults
 
 
 ADDON_ID = 'service.subtitles.kodipovilai'
@@ -331,7 +331,7 @@ def _start_subsync_drainer(monitor):
                 # Split the old one-file probe cache now, at startup, rather
                 # than at the first episode's first lookup (a one-time parse
                 # of up to ~11 MB that holds the interpreter lock).
-                cache._migrate_probe_cache()
+                cache.migrate_probe_cache()
             except Exception:
                 pass
             while not monitor.abortRequested():
@@ -431,7 +431,7 @@ def _start_subsync_delay_watch(monitor):
                                 verdicts.store_human_verdict(rep)
                                 _pool.report_sync(
                                     rep.get('info') or {}, rep['sub_hash'],
-                                    verdicts._sync_registry_release(
+                                    verdicts.sync_registry_release(
                                         rep['release'],
                                         rep.get('cut_signature') or ''),
                                     rep['scale'],
@@ -547,16 +547,16 @@ def main():
     # Grow the shared Hebrew pool: force community-pool sharing ON for everyone
     # once (a later manual opt-out sticks). Must run before the harvest/drainer
     # below so it mirrors Ktuvit subs to the pool already this session.
-    _maybe_force_pool_share()
+    maybe_force_pool_share()
 
     # ROLLOUT: switch everyone to MoranSubs's built-in engine (one-shot, marker-
     # gated). A later manual opt-out sticks (marker prevents re-forcing).
-    _maybe_default_builtin_engine()
+    maybe_default_builtin_engine()
 
     # When the engine is on, make MoranSubs the default subtitle service so it
     # opens/searches first in the dialog.
-    _maybe_set_default_subtitle_service()
-    _maybe_seed_hebrew_subtitle_prefs()
+    maybe_set_default_subtitle_service()
+    maybe_seed_hebrew_subtitle_prefs()
 
 
     # Pre-warm the built-in sources engine (only when the user enabled it) so
@@ -566,41 +566,41 @@ def main():
     # One-shot RTL punctuation repair of any cached translations
     # that were written before the post-processor caught their
     # specific edge case. Marker-gated so it only runs once.
-    _maybe_repair_rtl_cache()
+    maybe_repair_rtl_cache()
 
     # One-shot: flip `fast_first_chunk` default from off -> on for
     # existing users on the old default. Marker-gated.
-    _maybe_default_fast_first_chunk()
+    maybe_default_fast_first_chunk()
 
     # Preserve the legacy embedded toggles, then make the explained mode selector
     # canonical. Runs for both build and standalone installations.
-    _maybe_migrate_embedded_translation_mode()
+    maybe_migrate_embedded_translation_mode()
 
     # One-shot: turn the community pool ON (pull + share) for existing users
     # still on the old default-off. New installs get it via settings.xml
     # defaults. Marker-gated so a later manual opt-out sticks.
-    _maybe_default_pool_on()
+    maybe_default_pool_on()
 
     # One-shot: turn the Arabic-gender-reference setting ON for everyone (it
     # tested clean and lifts gender accuracy a lot). Forced once; a later manual
     # opt-out sticks. Marker-gated.
-    _maybe_force_gender_ref_arabic()
+    maybe_force_gender_ref_arabic()
 
     # One-shot: move existing users to the validated Gemini 3 translation
     # settings (temperature 1.0 + thinking medium). Marker-gated; respects a
     # deliberate manual choice.
-    _maybe_tune_gemini3_defaults()
+    maybe_tune_gemini3_defaults()
     # One-shot: bump the superseded default models to their same-quota
     # successors (3.1-flash-lite -> 3.5-flash-lite, 3.5/3.6-flash -> 3.8-flash).
-    _maybe_bump_gemini_model()
+    maybe_bump_gemini_model()
     # And again for 3.8, which replaced 3.7 in the picker. Runs after the line
     # above so a device still on 3.5-flash lands on 3.8 in ONE boot rather than
     # two; it does not DEPEND on that order, because its retired set covers the
     # older ids as well.
-    _maybe_bump_gemini_model_38()
-    _maybe_retire_gemini_31_flash()
+    maybe_bump_gemini_model_38()
+    maybe_retire_gemini_31_flash()
     # Lower chunk size to 50 (block-avoidance), one-shot for existing installs.
-    _maybe_lower_chunk_lines()
+    maybe_lower_chunk_lines()
 
     if monitor.abortRequested():
         return

@@ -7,13 +7,13 @@ from resources.lib.core.cache import translation_cache
 from resources.lib.core import kodi, settings
 from resources.lib.ai_translation.repairs import postfix_cleanup, postfix_glyphs, postfix_leaks, postfix_rtl
 from resources.lib.core.srt import blocks as srt_blocks, classify, timing
-from resources.lib.ai_translation.dispatch.pacing import _is_mostly_hebrew
-from resources.lib.delivery.rtl import _reapply_rtl_fix_in_place
+from resources.lib.ai_translation.dispatch.pacing import is_mostly_hebrew
+from resources.lib.delivery.rtl import reapply_rtl_fix_in_place
 
 
 # Aborts that keep the finished AI chunks and send only the rest to Google
 # (_google_fill_and_save). 'cancelled' and 'invalid_key' are not here.
-_GOOGLE_FILL_ABORTS = ('quota', 'ratelimit', 'overload', 'error', 'crash')
+GOOGLE_FILL_ABORTS = ('quota', 'ratelimit', 'overload', 'error', 'crash')
 _GOOGLE_FALLBACK_WHY = {
     'quota': 'מכסת ה-AI היומית נגמרה',
     'ratelimit': 'AI: עומס זמני חורג',
@@ -25,7 +25,7 @@ _GOOGLE_FALLBACK_WHY = {
 
 # ---- download / translate -------------------------------------------
 
-def _google_rescue(blocks, source_lang):
+def google_rescue(blocks, source_lang):
     """The rung between "Gemini refuses this text" and "ship it in English".
 
     Every stage above this one is still Gemini, and a safety block is
@@ -85,7 +85,7 @@ def _google_rescue(blocks, source_lang):
         return None
 
 
-def _google_fill_missing(missing, source_lang):
+def google_fill_missing(missing, source_lang):
     """Google Translate for entries a chunk is about to keep in English (its
     budget spent, the reply still without them): one request per ~3,000
     characters. Returns only the blocks that came back with Hebrew, on the
@@ -109,7 +109,7 @@ def _google_fill_missing(missing, source_lang):
         return []
 
 
-def _is_google_translated(path):
+def is_google_translated(path):
     """True if this cached translation was produced by Google Translate (a
     sidecar '<path>.google' marker is written next to it). Such machine
     translations must NEVER be shared to the community pool.
@@ -130,7 +130,7 @@ def _is_google_translated(path):
         return True
 
 
-def _preview_clean(blocks, src_text):
+def preview_clean(blocks, src_text):
     """The cleaners the live preview runs over merged chunk blocks (see the
     chunk_ready note in translate()): every Hebrew line here is our model's
     reply or Google's, and untranslated source carries no Hebrew, so each
@@ -149,7 +149,7 @@ def _preview_clean(blocks, src_text):
                                         src_text))))))))))
 
 
-def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
+def google_fill_and_save(chunks, done_by_index, src_text, source_lang,
                           translated, info, reason='', google_chunks=None):
     """Keep the chunks Gemini finished and let Google translate only the rest.
 
@@ -165,7 +165,7 @@ def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
     here fails."""
     missing = [i for i in range(1, len(chunks) + 1) if i not in done_by_index]
     if not done_by_index or not missing:
-        return _google_translate_and_save(src_text, source_lang, translated,
+        return google_translate_and_save(src_text, source_lang, translated,
                                           info, reason=reason)
     try:
         missing_blocks = [b for i in missing for b in chunks[i - 1]]
@@ -185,7 +185,7 @@ def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
             kodi.log('google fill returned {0} of {1} entries -- translating '
                            'the whole file with Google'.format(
                                len(filled), len(missing_blocks)), level='WARNING')
-            return _google_translate_and_save(src_text, source_lang, translated,
+            return google_translate_and_save(src_text, source_lang, translated,
                                               info, reason=reason)
         # The AI cleaners run on the AI part only: they are written for our
         # model's slips, and the read repair and srt.may_carry_arabic_leak
@@ -193,7 +193,7 @@ def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
         # the film's own text). Index-keyed, so the subset keeps its numbers.
         ai_blocks = [postfix_cleanup.drop_model_notes(b) for i in sorted(done_by_index)
                      for b in done_by_index[i]]
-        cleaned = srt_blocks.parse_blocks(_preview_clean(ai_blocks, src_text))
+        cleaned = srt_blocks.parse_blocks(preview_clean(ai_blocks, src_text))
         if len(cleaned) != len(ai_blocks):
             cleaned = ai_blocks
         merged, ai_at, cursor = [], 0, 0
@@ -206,19 +206,19 @@ def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
                 cursor += len(chunks[i - 1])
         text = timing.clamp_cue_durations(
             postfix_glyphs.normalize_glyphs(srt_blocks.stitch_blocks(merged)))
-        if not _is_mostly_hebrew(text):
-            return _google_translate_and_save(src_text, source_lang, translated,
+        if not is_mostly_hebrew(text):
+            return google_translate_and_save(src_text, source_lang, translated,
                                               info, reason=reason)
         translation_cache.save_text(translated, text)
         try:
             open(translated + '.google', 'w').close()  # keep it out of the pool
         except Exception:
             pass
-        _reapply_rtl_fix_in_place(translated)
+        reapply_rtl_fix_in_place(translated)
     except Exception as e:
         kodi.log('google fill failed ({0}) -- translating the whole file '
                        'with Google'.format(e), level='WARNING')
-        return _google_translate_and_save(src_text, source_lang, translated,
+        return google_translate_and_save(src_text, source_lang, translated,
                                           info, reason=reason)
     kodi.log('{0}: kept {1} of {2} chunk(s) from Gemini; the other {3} '
                    'entr(ies) are Google Translate{4}'.format(
@@ -232,13 +232,13 @@ def _google_fill_and_save(chunks, done_by_index, src_text, source_lang,
     return translated
 
 
-def _google_cache_upgradeable(path):
+def google_cache_upgradeable(path):
     """True when a cached file is a Google fallback that AI can now replace:
     AI mode, a key, and today's quota not known to be used up. Without this a
     quota or rate-limit night left a title on Google Translate for good --
     the file is Hebrew, so it was served as "from cache" on every watch."""
     try:
-        if not path or not os.path.isfile(path) or not _is_google_translated(path):
+        if not path or not os.path.isfile(path) or not is_google_translated(path):
             return False
         if (settings.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
             return False
@@ -254,7 +254,7 @@ def _google_cache_upgradeable(path):
         return False
 
 
-def _clear_google_marker(path):
+def clear_google_marker(path):
     """An AI translation now owns `path`; a '.google' sidecar left from an
     earlier fallback would keep it out of the pool and re-translate it."""
     try:
@@ -263,7 +263,7 @@ def _clear_google_marker(path):
         pass
 
 
-def _google_translate_and_save(src_text, source_lang, translated, info,
+def google_translate_and_save(src_text, source_lang, translated, info,
                                reason=''):
     """Translate src_text to Hebrew with Google Translate and save it to the
     cache path `translated`. Marks it Google-translated (sidecar) so it is
@@ -291,7 +291,7 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
             open(translated + '.google', 'w').close()  # keep it out of the pool
         except Exception:
             pass
-        _reapply_rtl_fix_in_place(translated)
+        reapply_rtl_fix_in_place(translated)
     except Exception as e:
         kodi.log('google save failed: {0}'.format(e), level='WARNING')
         return None

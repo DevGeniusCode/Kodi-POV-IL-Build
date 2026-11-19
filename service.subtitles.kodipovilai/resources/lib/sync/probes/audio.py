@@ -9,8 +9,8 @@ try:
     from resources.lib.core import kodi, selection as core_selection, settings, video_context
 except Exception:
     kodi = core_selection = settings = video_context = None
-from resources.lib.sync.probes.cache import _PROBE_CACHE_VERSION, _probe_cache_path, _read_probe_entry, _write_probe_cache
-from resources.lib.sync.probes.remote import _playing_url, _transport_cache_key
+from resources.lib.sync.probes.cache import PROBE_CACHE_VERSION, probe_cache_path, read_probe_entry, write_probe_cache
+from resources.lib.sync.probes.remote import playing_url, transport_cache_key
 
 
 _AUDIO_PROMPT = (
@@ -27,7 +27,7 @@ _AUDIO_PROMPT = (
 _AUDIO_PASS2_POSITIONS = (0.36, 0.62)
 
 
-def _audio_probe_reference(info, playing, second_pass=False):
+def audio_probe_reference(info, playing, second_pass=False):
     """LAST-RESORT reference (S5): speech intervals from the playing file's
     own AUDIO, timestamped by Gemini (user's existing key). Only reached when
     there is no matching sub in any DB AND no embedded subtitle track. AAC
@@ -37,7 +37,7 @@ def _audio_probe_reference(info, playing, second_pass=False):
     second_pass=True samples ADDITIONAL positions and MERGES with the cached
     cues (used once when a promising peak failed the tight check for lack of
     reference points); it marks the cache so it never repeats."""
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     try:
         if (settings.get_setting('subsync_audio', 'true') or
                 'true').strip().lower() == 'false':
@@ -48,25 +48,25 @@ def _audio_probe_reference(info, playing, second_pass=False):
         # A cache hit must obey the same local-only contract as extraction.
         # A release-keyed entry could belong to a different cut, or be reused
         # by a remote stream carrying the same release label.
-        url = _playing_url(info)
+        url = playing_url(info)
         if not url:
             return None
-        transport_key = _transport_cache_key(info)
+        transport_key = transport_cache_key(info)
         if not transport_key:
             return None
         rel_key = 'audio2:' + transport_key
-        cpath = _probe_cache_path()
+        cpath = probe_cache_path()
         prior = []
         if cpath:
-            ent = _read_probe_entry(rel_key)
-            if ent is not None and ent.get('pv') != _PROBE_CACHE_VERSION:
+            ent = read_probe_entry(rel_key)
+            if ent is not None and ent.get('pv') != PROBE_CACHE_VERSION:
                 ent = None   # older engine (un-rebased origin) -- redo
             if ent is not None:
                 # Sorted on the way in too: entries cached before the sort
                 # below would otherwise keep failing the in-order preflight.
                 prior = sorted(ent.get('cues') or [], key=lambda c: c['start'])
                 if not second_pass:
-                    _log('audio: cache %s for %r'
+                    log('audio: cache %s for %r'
                          % ('hit (%d cues)' % len(prior) if prior
                             else 'negative', rel_key))
                     return prior or None
@@ -81,7 +81,7 @@ def _audio_probe_reference(info, playing, second_pass=False):
             url,
             positions=(_AUDIO_PASS2_POSITIONS if second_pass
                        else (0.22, 0.50, 0.78)),
-            log=lambda m: _log('audio: ' + m))
+            log=lambda m: log('audio: ' + m))
         cues = []
         whole_seconds = [0, 0]
         api_failed = False
@@ -97,7 +97,7 @@ def _audio_probe_reference(info, playing, second_pass=False):
                     # Quota/key/network failure is TRANSIENT: stop burning
                     # further calls now, and do NOT cache a negative below --
                     # tomorrow's refreshed quota should get a fresh chance.
-                    _log('audio: gemini failed: %r' % e, level='WARNING')
+                    log('audio: gemini failed: %r' % e, level='WARNING')
                     api_failed = True
                     break
                 m = re.search(r'\[.*\]', txt or '', re.DOTALL)
@@ -127,7 +127,7 @@ def _audio_probe_reference(info, playing, second_pass=False):
                     if not (c['start'] in _seen_starts or _seen_starts.add(c['start']))]
             # NG measured whole-second times from general Flash models; a reply
             # that is mostly whole seconds can rarely pass the tight check.
-            _log('audio: %d speech cues from %d segment(s), %d of %d starts on a '
+            log('audio: %d speech cues from %d segment(s), %d of %d starts on a '
                  'whole second' % (len(cues), len(segs), whole_seconds[0], whole_seconds[1]))
         if api_failed and not cues:
             return None   # transient -- no negative cache, retry next time
@@ -143,11 +143,11 @@ def _audio_probe_reference(info, playing, second_pass=False):
             cues = merged
         if cpath:
             entry = {'ts': time.time(), 'cues': cues,
-                     'pv': _PROBE_CACHE_VERSION}
+                     'pv': PROBE_CACHE_VERSION}
             if second_pass:
                 entry['pass2'] = True
-            _write_probe_cache(rel_key, entry)
+            write_probe_cache(rel_key, entry)
         return cues or None
     except Exception as e:
-        _log('audio reference failed: %r' % e, level='WARNING')
+        log('audio reference failed: %r' % e, level='WARNING')
         return None

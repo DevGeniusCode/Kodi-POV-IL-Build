@@ -21,10 +21,10 @@ try:
 except Exception:
     srt_cues = common = piecewise = retime = verify = None
 from resources.lib.sync.common import MIN_REMOTE_CUES
-from resources.lib.sync.oracles import _decode_link, _download_oracle, _oracle_candidates
-from resources.lib.sync.probes.cache import _PROBE_CACHE_VERSION, _probe_cache_path, _read_probe_entry, _write_probe_cache
-from resources.lib.sync.probes.remote import _current_stream_url, _local_cut_signature, _playing_url, _probe_enabled, _remote_playing_url, _remote_probe_ready, _remote_reference_bundle, _starts_to_cues, _transport_cache_key
-from resources.lib.sync.verdicts import _verdict_strength
+from resources.lib.sync.oracles import decode_link, download_oracle, oracle_candidates
+from resources.lib.sync.probes.cache import PROBE_CACHE_VERSION, probe_cache_path, read_probe_entry, write_probe_cache
+from resources.lib.sync.probes.remote import current_stream_url, local_cut_signature, playing_url, probe_enabled, remote_playing_url, remote_probe_ready, remote_reference_bundle, starts_to_cues, transport_cache_key
+from resources.lib.sync.verdicts import verdict_strength
 
 
 _NEGATIVE_PROBE_TTL_S = 6 * 60 * 60
@@ -45,7 +45,7 @@ def _pack_envelope(envelope):
         return None
 
 
-def _bundle_envelope(bundle):
+def bundle_envelope(bundle):
     """The playing file's audio envelope (values unpacked), or None."""
     packed = (bundle or {}).get('envelope')
     if not isinstance(packed, dict):
@@ -60,7 +60,7 @@ def _bundle_envelope(bundle):
         return None
 
 
-def _envelope_diag(check):
+def envelope_diag(check):
     check = check or {}
     return ('audio envelope %s (trusted %d/%d, polarity %+d, plateaus %s%s)'
             % (check.get('status', 'unknown'), int(check.get('trusted') or 0),
@@ -74,7 +74,7 @@ _PROBE_LOCK = threading.RLock()
 _PREFETCH_KEYS = set()
 
 
-def _probe_reference_bundle(info, playing):
+def probe_reference_bundle(info, playing):
     # Autosub may begin this same exact-file read while its first subtitle is
     # downloading.  The service worker must reuse that result, never send a
     # second set of Range requests to the playback provider.
@@ -89,19 +89,19 @@ def _probe_reference_bundle_unlocked(info, playing):
     release label.  Its content signature then scopes timing verdicts and human
     corrections to the exact media bytes.
     """
-    from resources.lib.sync.service import _log
-    if not _probe_enabled():
+    from resources.lib.sync.service import log
+    if not probe_enabled():
         return {}
-    cache_key = _transport_cache_key(info)
-    cpath = _probe_cache_path()
-    ent = _read_probe_entry(cache_key) if cache_key else None
-    if ent is not None and ent.get('pv') != _PROBE_CACHE_VERSION:
+    cache_key = transport_cache_key(info)
+    cpath = probe_cache_path()
+    ent = read_probe_entry(cache_key) if cache_key else None
+    if ent is not None and ent.get('pv') != PROBE_CACHE_VERSION:
         ent = None
     if ent:
         has_ref = isinstance(ent.get('cues'), list) and bool(ent.get('cues'))
         has_sig = bool(ent.get('cut_signature'))
         if has_ref:
-            _log('probe: media cache hit (%d cues, %d track(s), cut=%s)'
+            log('probe: media cache hit (%d cues, %d track(s), cut=%s)'
                  % (len(ent.get('cues') or []),
                     len(ent.get('track_cues') or []),
                     'yes' if has_sig else 'no'))
@@ -117,7 +117,7 @@ def _probe_reference_bundle_unlocked(info, playing):
             return ent if (ent.get('cut_signature')
                            or ent.get('envelope')) else {}
 
-    local_url = _playing_url(info)
+    local_url = playing_url(info)
     if local_url:
         try:
             with open(local_url, 'rb') as media_file:
@@ -126,15 +126,15 @@ def _probe_reference_bundle_unlocked(info, playing):
                                b'mdat', b'free', b'skip'):
                 from resources.lib.fetching.embedded import mp4_probe
                 res = mp4_probe.subtitle_reference(
-                    local_url, log=lambda m: _log('probe: ' + m)) or {}
+                    local_url, log=lambda m: log('probe: ' + m)) or {}
                 if not res.get('track_cues'):
                     # Only a file without timed text needs the audio envelope;
                     # re-reading a local index costs nothing.
                     try:
                         res['envelope'] = mp4_probe.audio_envelope_source(
                             None, None,
-                            index_data=mp4_probe._read_movie_index(local_url),
-                            log=lambda m: _log('probe: ' + m))
+                            index_data=mp4_probe.read_movie_index(local_url),
+                            log=lambda m: log('probe: ' + m))
                     except Exception:
                         pass
             else:
@@ -145,12 +145,12 @@ def _probe_reference_bundle_unlocked(info, playing):
                     from resources.lib.fetching.embedded import embedded_extract
                     raw = embedded_extract.cue_reference_profile(
                         local_url, allow_http=False,
-                        log=lambda m: _log('probe: ' + m)) or {}
-                    cues = _starts_to_cues(raw.get('starts') or [])
+                        log=lambda m: log('probe: ' + m)) or {}
+                    cues = starts_to_cues(raw.get('starts') or [])
                     if len(cues) >= MIN_REMOTE_CUES:
                         track_cues = [
                             {'track': item.get('track') or {},
-                             'cues': _starts_to_cues(item.get('starts') or [])}
+                             'cues': starts_to_cues(item.get('starts') or [])}
                             for item in raw.get('track_starts') or []]
                         res = {'cues': cues, 'track_cues': track_cues,
                                'tracks': raw.get('tracks') or [],
@@ -159,20 +159,20 @@ def _probe_reference_bundle_unlocked(info, playing):
                 if not res:
                     from resources.lib.fetching.embedded import mkv_probe
                     res = mkv_probe.subtitle_reference(
-                        local_url, log=lambda m: _log('probe: ' + m)) or {}
+                        local_url, log=lambda m: log('probe: ' + m)) or {}
         except Exception:
             res = {}
         res['cut_signature'] = (res.get('cut_signature') or
-                                _local_cut_signature(info))
+                                local_cut_signature(info))
     else:
-        remote_url = _remote_playing_url(info)
+        remote_url = remote_playing_url(info)
         if not remote_url:
-            _log('probe: no probeable playing url')
+            log('probe: no probeable playing url')
             return {}
-        res = _remote_reference_bundle(remote_url)
+        res = remote_reference_bundle(remote_url)
 
     bundle = {
-        'ts': time.time(), 'pv': _PROBE_CACHE_VERSION,
+        'ts': time.time(), 'pv': PROBE_CACHE_VERSION,
         'cues': res.get('cues') or [],
         'track_cues': res.get('track_cues') or [],
         'tracks': res.get('tracks') or [],
@@ -189,7 +189,7 @@ def _probe_reference_bundle_unlocked(info, playing):
     # subtitle track.  In particular, an early prefetch must never poison the
     # negative cache and prevent the ordinary deep worker from retrying.
     if cpath and cache_key and not res.get('probe_error'):
-        _write_probe_cache(cache_key, bundle)
+        write_probe_cache(cache_key, bundle)
     return bundle
 
 
@@ -201,24 +201,24 @@ def prefetch_autosub_reference(info, candidates):
     No provider subtitle search, audio read or Gemini call is started here.
     The deep worker shares _PROBE_LOCK and the same cache entry.
     """
-    from resources.lib.sync.candidates import _is_human_hebrew_candidate
-    from resources.lib.sync.service import _log, playing_release
+    from resources.lib.sync.candidates import is_human_hebrew_candidate
+    from resources.lib.sync.service import log, playing_release
     registered_key = ''
     try:
-        if (not _probe_enabled()
+        if (not probe_enabled()
                 or (settings.get_setting('subsync_autorank', 'true') or
                     'true').strip().lower() == 'false'):
             return False
         playing = playing_release(info)
-        if not playing or _cached_reference_bundle(info):
+        if not playing or cached_reference_bundle(info):
             return False
         humans = []
         for candidate in candidates or []:
             if (candidate.get('language') or '').strip().lower() not in (
                     'he', 'heb', 'hebrew'):
                 continue
-            payload = _decode_link(candidate.get('link') or '') or {}
-            if _is_human_hebrew_candidate(payload):
+            payload = decode_link(candidate.get('link') or '') or {}
+            if is_human_hebrew_candidate(payload):
                 humans.append((candidate, payload))
             if len(humans) >= 2:
                 break
@@ -230,15 +230,15 @@ def prefetch_autosub_reference(info, candidates):
         _pct, tier, _diag = scoring_matching_release.score(playing, release)
         if tier in scoring_matching_release.AUTO_OK_TIERS:
             return False
-        local_url = _playing_url(info)
-        remote_url = '' if local_url else _remote_playing_url(info)
+        local_url = playing_url(info)
+        remote_url = '' if local_url else remote_playing_url(info)
         if not (local_url or remote_url):
             return False
-        key = _transport_cache_key(info)
+        key = transport_cache_key(info)
         if not key:
             return False
         with _PROBE_LOCK:
-            if key in _PREFETCH_KEYS or _cached_reference_bundle(info):
+            if key in _PREFETCH_KEYS or cached_reference_bundle(info):
                 return False
             _PREFETCH_KEYS.add(key)
             registered_key = key
@@ -249,19 +249,19 @@ def prefetch_autosub_reference(info, candidates):
             try:
                 # Waiting for playback stability must not poison the negative
                 # cache.  The ordinary deep worker can still retry later.
-                if remote_url and not _remote_probe_ready(
+                if remote_url and not remote_probe_ready(
                         max_wait_s=18.0, expected_url=remote_url):
-                    _log('autosub reference prefetch: playback not ready '
+                    log('autosub reference prefetch: playback not ready '
                          'after %.2fs' % (time.monotonic() - started))
                     return
-                if remote_url and _current_stream_url() != remote_url:
+                if remote_url and current_stream_url() != remote_url:
                     return
-                bundle = _probe_reference_bundle(frozen, playing)
-                _log('autosub reference prefetch: %.2fs, %d cue(s)'
+                bundle = probe_reference_bundle(frozen, playing)
+                log('autosub reference prefetch: %.2fs, %d cue(s)'
                      % (time.monotonic() - started,
                         len(bundle.get('cues') or [])))
             except Exception as e:
-                _log('autosub reference prefetch failed: %r' % e,
+                log('autosub reference prefetch failed: %r' % e,
                      level='DEBUG')
             finally:
                 with _PROBE_LOCK:
@@ -274,18 +274,18 @@ def prefetch_autosub_reference(info, candidates):
         if registered_key:
             with _PROBE_LOCK:
                 _PREFETCH_KEYS.discard(registered_key)
-        _log('autosub reference prefetch skipped: %r' % e, level='DEBUG')
+        log('autosub reference prefetch skipped: %r' % e, level='DEBUG')
         return False
 
 
-def _cached_reference_bundle(info):
+def cached_reference_bundle(info):
     """Return a proven media-scoped reference without I/O beyond one JSON read."""
-    cache_key = _transport_cache_key(info)
+    cache_key = transport_cache_key(info)
     if not cache_key:
         return {}
-    ent = _read_probe_entry(cache_key)
+    ent = read_probe_entry(cache_key)
     if (not isinstance(ent, dict)
-            or ent.get('pv') != _PROBE_CACHE_VERSION
+            or ent.get('pv') != PROBE_CACHE_VERSION
             or not ent.get('cues')):
         return {}
     return ent
@@ -298,9 +298,9 @@ def _verify_profile(profile, text, bitmap_events=False, **kwargs):
     and refused when they disagree); when that reaches no decision the classic
     comparison runs exactly as before, so no earlier answer can be lost.  Only
     one track pays for the second pass -- each costs ~2x the classic check."""
-    from resources.lib.sync.validators import _track_codec_family
+    from resources.lib.sync.validators import track_codec_family
     cues = profile.get('cues') or []
-    if bitmap_events and _track_codec_family(profile.get('track') or {}) == 'pgs':
+    if bitmap_events and track_codec_family(profile.get('track') or {}) == 'pgs':
         try:
             verdict = verify.verify_cues(cues, text, ref_events=True,
                                              **kwargs)
@@ -325,12 +325,12 @@ def _distinct_track_families(profiles):
     text before bitmap, Hebrew/English first, denser tracks first, at most
     _MAX_FILE_FAMILIES of them.
     """
-    from resources.lib.sync.validators import _onset_coverage, _track_language_rank
+    from resources.lib.sync.validators import onset_coverage, track_language_rank
     def rank(profile):
         track = profile.get('track') or {}
         codec = str(track.get('codec') or '').upper()
         return (0 if codec.startswith('S_TEXT') else 1,
-                _track_language_rank(track),
+                track_language_rank(track),
                 -len(profile.get('cues') or []))
     def same_lane(left, right):
         # Redundant only when the onsets coincide IN PLACE. A lane with the
@@ -339,8 +339,8 @@ def _distinct_track_families(profiles):
         # veto need to see.
         a = left.get('cues') or []
         b = right.get('cues') or []
-        return (_onset_coverage(a, b) >= 0.90
-                and _onset_coverage(b, a) >= 0.90)
+        return (onset_coverage(a, b) >= 0.90
+                and onset_coverage(b, a) >= 0.90)
     kept = []
     for profile in sorted(profiles or [], key=rank):
         try:
@@ -354,14 +354,14 @@ def _distinct_track_families(profiles):
     return kept
 
 
-def _file_timeline_conflict(bundle, text):
+def file_timeline_conflict(bundle, text):
     """Plateaus proving ``text`` is not on one clock with the playing file.
 
     Only the preferred complete track is consulted (text before bitmap,
     Hebrew/English first, non-forced); one representative suffices and an
     odd commentary/forced track can never veto on its own.
     """
-    from resources.lib.sync.validators import _track_span
+    from resources.lib.sync.validators import track_span
     finder = getattr(verify, 'timeline_conflict', None)
     if finder is None or not text:
         return None
@@ -372,7 +372,7 @@ def _file_timeline_conflict(bundle, text):
             continue
         profiles.append({'track': track, 'cues': profile.get('cues') or []})
     if not profiles:
-        envelope = _bundle_envelope(bundle)
+        envelope = bundle_envelope(bundle)
         checker = getattr(verify, 'envelope_check', None)
         if envelope is None or checker is None:
             return None
@@ -386,9 +386,9 @@ def _file_timeline_conflict(bundle, text):
         if check.get('status') == 'conflict':
             return check.get('plateaus') or [(0.0, int(check['trusted']))]
         return None
-    longest = max(_track_span(item) for item in profiles)
+    longest = max(track_span(item) for item in profiles)
     complete = [item for item in profiles
-                if _track_span(item) >= 0.90 * longest]
+                if track_span(item) >= 0.90 * longest]
     preferred = _distinct_track_families(complete)[:1]
     for profile in preferred:
         try:
@@ -422,7 +422,7 @@ def _envelope_accepts(envelope, before, fixed_text, allow_near=False):
     return check
 
 
-def _envelope_hypothesis_search(info, text, envelope, before, early_job=None,
+def envelope_hypothesis_search(info, text, envelope, before, early_job=None,
                                 state=None):
     """Let the playing file's own audio choose among provider timelines.
 
@@ -434,11 +434,11 @@ def _envelope_hypothesis_search(info, text, envelope, before, early_job=None,
     single near-zero envelope plateau is kept.  The release name plays no
     part, so an unnamed or mislabelled MP4 is handled the same way.
     """
-    from resources.lib.sync.jobs import _job_matches_current
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.jobs import job_matches_current
+    from resources.lib.sync.service import log
     started = time.monotonic()
     try:
-        cands = _oracle_candidates(info) or []
+        cands = oracle_candidates(info) or []
     except Exception:
         cands = []
 
@@ -479,10 +479,10 @@ def _envelope_hypothesis_search(info, text, envelope, before, early_job=None,
         if (downloads >= _ENVELOPE_MAX_DOWNLOADS
                 or time.monotonic() - started > _ENVELOPE_SEARCH_S):
             break
-        if early_job and not _job_matches_current(early_job):
+        if early_job and not job_matches_current(early_job):
             return None
         downloads += 1
-        oracle_text = _download_oracle(candidate.get('payload') or {})
+        oracle_text = download_oracle(candidate.get('payload') or {})
         if not oracle_text.strip():
             state['transient'] = True
             continue
@@ -538,7 +538,7 @@ def _envelope_hypothesis_search(info, text, envelope, before, early_job=None,
                 'envelope_offset_ms': float(check.get('offset_ms') or 0.0),
                 'validation_primary_oracle': candidate.get('release') or '',
                 'diag': ('%s; %s; was %s' % (
-                    verdict.get('diag', ''), _envelope_diag(check),
+                    verdict.get('diag', ''), envelope_diag(check),
                     (before or {}).get('status', '?'))),
             })
             if proof.get('validation_required'):
@@ -546,22 +546,22 @@ def _envelope_hypothesis_search(info, text, envelope, before, early_job=None,
             try:
                 fixed_text = retime.apply_verdict(text, proof)
             except Exception as e:
-                _log('audio-envelope hypothesis from %r refused: %r'
+                log('audio-envelope hypothesis from %r refused: %r'
                      % (candidate.get('release') or '?', e))
                 continue
             if fixed_text and fixed_text.strip():
-                _log('audio envelope chose the timeline proposed by %r '
+                log('audio envelope chose the timeline proposed by %r '
                      '(%d download(s), %.1fs)'
                      % (candidate.get('release') or '?', downloads,
                         time.monotonic() - started))
                 return proof, fixed_text
-    _log('audio-envelope hypothesis search: no proposal landed on the '
+    log('audio-envelope hypothesis search: no proposal landed on the '
          "file's clock (%d download(s), %.1fs)"
          % (downloads, time.monotonic() - started))
     return None
 
 
-def _verify_file_bundle(bundle, text, playing=None):
+def verify_file_bundle(bundle, text, playing=None):
     """Judge independent embedded tracks; abstain when they are all too sparse.
 
     A CONFIRMED track wins over a shifted track because it proves the candidate
@@ -572,7 +572,7 @@ def _verify_file_bundle(bundle, text, playing=None):
     one that says WEB the text-lane proof is not used (_text_lane_file).
     Returns ``(verdict, label, cue_count)``.
     """
-    from resources.lib.sync.validators import _guard_soft_probe_shift, _maps_agree, _probe_gate_kwargs, _text_lane_file, _track_codec_family, _track_span, _validated_micro_piecewise
+    from resources.lib.sync.validators import guard_soft_probe_shift, validators_maps_agree, probe_gate_kwargs, text_lane_file, track_codec_family, track_span, validated_micro_piecewise
     raw_profiles = []
     for profile in (bundle or {}).get('track_cues') or []:
         cues = profile.get('cues') or []
@@ -589,10 +589,10 @@ def _verify_file_bundle(bundle, text, playing=None):
     # Complete and non-forced first: a sparse forced (signs) track would only
     # ever answer UNKNOWN.
     pgs_profiles = [profile for profile in raw_profiles
-                    if _track_codec_family(profile.get('track') or {}) == 'pgs']
+                    if track_codec_family(profile.get('track') or {}) == 'pgs']
     events_profile = max(pgs_profiles, key=lambda profile: (
         0 if (profile.get('track') or {}).get('forced') else 1,
-        _track_span(profile), len(profile.get('cues') or [])),
+        track_span(profile), len(profile.get('cues') or [])),
         default=None)
 
     # A zero-shift answer can be settled cheaply before testing every FPS
@@ -604,7 +604,7 @@ def _verify_file_bundle(bundle, text, playing=None):
     identity_checked = []
     for profile in raw_profiles:
         cues = profile['cues']
-        kwargs = dict(_probe_gate_kwargs(cues))
+        kwargs = dict(probe_gate_kwargs(cues))
         kwargs.update({'scales': (1.0,), 'allow_piecewise': False})
         try:
             verdict = _verify_profile(
@@ -618,8 +618,8 @@ def _verify_file_bundle(bundle, text, playing=None):
                           if item['verdict'].get('status')
                           == common.STATUS_CONFIRMED]
     if identity_confirmed:
-        chosen = max(identity_confirmed, key=_verdict_strength)
-        verdict = _guard_soft_probe_shift(chosen['verdict'], 'FILE PROBE')
+        chosen = max(identity_confirmed, key=verdict_strength)
+        verdict = guard_soft_probe_shift(chosen['verdict'], 'FILE PROBE')
         if verdict.get('status') == common.STATUS_CONFIRMED:
             track = chosen['track']
             return (verdict, 'FILE TRACK #%s %s' % (
@@ -639,10 +639,10 @@ def _verify_file_bundle(bundle, text, playing=None):
              if item['verdict'].get('status') in (
                  common.STATUS_CONFIRMED,
                  common.STATUS_FIXABLE)]
-    validated_piecewise = (None if quick else _validated_micro_piecewise(
-        all_profiles, text, text_lanes=_text_lane_file(bundle, playing)))
+    validated_piecewise = (None if quick else validated_micro_piecewise(
+        all_profiles, text, text_lanes=text_lane_file(bundle, playing)))
     if validated_piecewise is not None:
-        verdict = _guard_soft_probe_shift(
+        verdict = guard_soft_probe_shift(
             validated_piecewise['verdict'], 'FILE PROBE')
         track = validated_piecewise.get('track') or {}
         label = 'FILE TRACK VALIDATED #%s %s' % (
@@ -656,7 +656,7 @@ def _verify_file_bundle(bundle, text, playing=None):
         try:
             verdict = _verify_profile(
                 profile, text, bitmap_events=profile is events_profile,
-                **_probe_gate_kwargs(cues))
+                **probe_gate_kwargs(cues))
         except Exception:
             continue
         profiles.append({'track': profile.get('track') or {},
@@ -670,11 +670,11 @@ def _verify_file_bundle(bundle, text, playing=None):
                  if p['verdict'].get('status')
                  == common.STATUS_CONFIRMED]
     if confirmed:
-        chosen = max(confirmed, key=_verdict_strength)
+        chosen = max(confirmed, key=verdict_strength)
     elif accepted:
-        chosen = max(accepted, key=_verdict_strength)
+        chosen = max(accepted, key=verdict_strength)
         conflicts = [p for p in accepted
-                     if not _maps_agree(chosen['verdict'], p['verdict'])]
+                     if not validators_maps_agree(chosen['verdict'], p['verdict'])]
         if conflicts:
             summary = ', '.join(
                 '#%s/%s %+dms' % (
@@ -690,14 +690,14 @@ def _verify_file_bundle(bundle, text, playing=None):
     elif profiles:
         # At least one real track had enough evidence and all refused.  A union
         # must not manufacture confidence that no constituent track possessed.
-        chosen = max(profiles, key=_verdict_strength)
+        chosen = max(profiles, key=verdict_strength)
     elif (bundle or {}).get('legacy_single_track'):
         union = (bundle or {}).get('cues') or []
         if len(union) < MIN_REMOTE_CUES:
             return None, 'FILE PROBE', 0
         verdict = verify.verify_cues(
-            union, text, **_probe_gate_kwargs(union))
-        verdict = _guard_soft_probe_shift(verdict, 'FILE PROBE')
+            union, text, **probe_gate_kwargs(union))
+        verdict = guard_soft_probe_shift(verdict, 'FILE PROBE')
         return verdict, 'FILE LEGACY TRACK', len(union)
     else:
         # Several individually sparse tracks are not evidence for one shared
@@ -705,7 +705,7 @@ def _verify_file_bundle(bundle, text, playing=None):
         # unrelated editorial lead/lag, so the safe answer is to abstain.
         return None, 'FILE TRACKS TOO SPARSE', 0
 
-    verdict = _guard_soft_probe_shift(chosen['verdict'], 'FILE PROBE')
+    verdict = guard_soft_probe_shift(chosen['verdict'], 'FILE PROBE')
     track = chosen.get('track') or {}
     label = 'FILE TRACK #%s %s' % (track.get('num', '?'),
                                    track.get('lang') or '?')

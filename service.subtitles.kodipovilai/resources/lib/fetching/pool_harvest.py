@@ -6,7 +6,7 @@ import json
 import os
 import time
 from resources.lib.core import kodi
-from resources.lib.fetching.pool_client import _QUEUE_MAX_AGE_SEC
+from resources.lib.fetching.pool_client import QUEUE_MAX_AGE_SEC
 try:
     from resources.lib.ai_translation.reuse import pool_contribute
     from resources.lib.fetching import pool_client, pool_harvest
@@ -108,7 +108,7 @@ def harvest_jobs(limit=None):
     out = []
     for fp in files:
         try:
-            if now - os.path.getmtime(fp) > _QUEUE_MAX_AGE_SEC:
+            if now - os.path.getmtime(fp) > QUEUE_MAX_AGE_SEC:
                 os.remove(fp)
                 continue
         except OSError:

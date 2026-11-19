@@ -9,11 +9,11 @@ from resources.lib.ai_translation.providers import gemini
 from resources.lib.core import kodi, selection as core_selection, settings
 from resources.lib.ai_translation.context import prompt
 from resources.lib.core.srt import blocks as srt_blocks
-from resources.lib.ai_translation.dispatch.pacing import _gemini_free_rpm_cap, _gemini_rate_gate, _thinking_params
-from resources.lib.ai_translation.progress import _status
-from resources.lib.ai_translation.providers.google_flow import _preview_clean
-from resources.lib.ai_translation.providers.model_fallback import _FALLBACK_MODEL
-from resources.lib.fetching.embedded.extraction import _playing_video_url
+from resources.lib.ai_translation.dispatch.pacing import gemini_free_rpm_cap, gemini_rate_gate, thinking_params
+from resources.lib.ai_translation.progress import status
+from resources.lib.ai_translation.providers.google_flow import preview_clean
+from resources.lib.ai_translation.providers.model_fallback import FALLBACK_MODEL
+from resources.lib.fetching.embedded.extraction import playing_video_url
 
 
 # --- An embedded track shown in steps while it is still being read ---------
@@ -134,7 +134,7 @@ def _srt_start_ms(block):
     return None
 
 
-def _unique_starts(blocks):
+def unique_starts(blocks):
     """Each block's start (ms), None where it has none or shares it with
     another block: a start is what ties a line of the view to a line of the
     full translation, so it has to name one line."""
@@ -158,7 +158,7 @@ def _has_hebrew(text):
     return any('֐' <= ch <= '׿' for ch in (text or ''))
 
 
-def _with_steps_preview(blocks, he):
+def with_steps_preview(blocks, he):
     """`blocks` (source cues the full job has not translated yet) with the
     Hebrew the viewer already has for them. `he` is {start ms: text}."""
     if not he:
@@ -441,7 +441,7 @@ class _EmbeddedSteps(object):
         if self._closed:
             return
         blocks = srt_blocks.parse_blocks(srt_text or '')
-        starts = _unique_starts(blocks)
+        starts = unique_starts(blocks)
         read = set(s for s in (_srt_start_ms(b) for b in blocks)
                    if s is not None)
         with self._lock:
@@ -632,7 +632,7 @@ class _EmbeddedSteps(object):
                 ends = [s for s in (_srt_start_ms(b) for b in source[-3:])
                         if s is not None]
             try:
-                self._show(_preview_clean(blocks, srt_blocks.stitch_blocks(source)))
+                self._show(preview_clean(blocks, srt_blocks.stitch_blocks(source)))
                 self.shown = self.on_screen = True
                 self._view_end = max(ends) if ends else None
             except Exception as e:
@@ -689,7 +689,7 @@ class _EmbeddedSteps(object):
             self._view()          # takes _show_lock itself; _may_show decides
 
 
-class _StepsScreen(object):
+class StepsScreen(object):
     """Where the views of an embedded track read in steps go, and what the
     full job's own events must look like after them.
 
@@ -721,7 +721,7 @@ class _StepsScreen(object):
         first, self.shown = not self.shown, True
         if self._handler is not None:
             if first:
-                _status('AI: הדקות הקרובות מתורגמות, ההמשך בדרך',
+                status('AI: הדקות הקרובות מתורגמות, ההמשך בדרך',
                         time_ms=4000)
                 self._handler('first_ready', {
                     'fallback_text': text, 'source_id': self.source_id,
@@ -769,17 +769,17 @@ def _steps_translator(info, source_lang, cancelled):
     twenty a day. One request a batch, one more after a busy answer; anything
     else leaves the lines in their source language -- the full job has the
     retries, the fallbacks and the checks."""
-    from resources.lib.ai_translation.proofread.gp_run import _title_cast
+    from resources.lib.ai_translation.proofread.gp_run import title_cast
     try:
         if (settings.get_setting('translation_mode', 'ai') or 'ai') != 'ai':
             return None
         api_key = settings.get_setting('api_key', '')
         if not api_key:
             return None
-        model = _FALLBACK_MODEL
-        chosen = (settings.get_setting('model', _FALLBACK_MODEL)
-                  or _FALLBACK_MODEL)
-        level, budget = _thinking_params(
+        model = FALLBACK_MODEL
+        chosen = (settings.get_setting('model', FALLBACK_MODEL)
+                  or FALLBACK_MODEL)
+        level, budget = thinking_params(
             (settings.get_setting('thinking_budget', 'medium')
              or 'medium').strip().lower(), model)
         temperature = settings.get_float('temperature', 1.0)
@@ -788,7 +788,7 @@ def _steps_translator(info, source_lang, cancelled):
             rpm = settings.get_int('gemini_rpm', 0)
             interval = (60.0 / rpm) if rpm > 0 else 0.0
         else:
-            cap = _gemini_free_rpm_cap(model)
+            cap = gemini_free_rpm_cap(model)
             interval = 60.0 / max(1, min(
                 settings.get_int('gemini_rpm', cap), cap))
     except Exception as e:
@@ -803,7 +803,7 @@ def _steps_translator(info, source_lang, cancelled):
             season = info.get('season') or ''
             episode = info.get('episode') or ''
             try:
-                cast, title, year = _title_cast(info, imdb_id, season, episode)
+                cast, title, year = title_cast(info, imdb_id, season, episode)
             except Exception:
                 cast, title, year = [], info.get('title') or '', info.get(
                     'year') or ''
@@ -829,7 +829,7 @@ def _steps_translator(info, source_lang, cancelled):
         for attempt in (0, 1):
             if cancelled():
                 return None
-            _gemini_rate_gate(interval)
+            gemini_rate_gate(interval)
             if cancelled():
                 # the gate can hold a request for seconds
                 return None
@@ -882,11 +882,11 @@ def _steps_translator(info, source_lang, cancelled):
     return translate
 
 
-def _embedded_steps(info, lang, show, cancelled, restore=None):
+def embedded_steps(info, lang, show, cancelled, restore=None):
     """An _EmbeddedSteps for the playing film, or None when it should be
     read in one pass as before: not a stream, or under fifteen minutes."""
     try:
-        if '://' not in (_playing_video_url(info) or ''):
+        if '://' not in (playing_video_url(info) or ''):
             return None
         import xbmc as _x
 

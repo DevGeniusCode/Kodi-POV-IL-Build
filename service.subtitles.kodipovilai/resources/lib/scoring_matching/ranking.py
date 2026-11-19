@@ -3,37 +3,7 @@
 # Ranking helpers of the subtitle list: release-name match %, the same-source test, the SDH
 # and gender-source ranks and the language names shown in the rows.
 
-import os
-# Community subtitle pool (optional, gated by settings, OFF by default).
-# Imported defensively: a problem here must never break translation.
-try:
-    from resources.lib.fetching import pool_client
-except Exception:
-    pool_client = None
-
-
-def _looks_like_token(s):
-    """True if a string is a debrid URL / token / bare UUID rather than a real
-    subtitle release name (used to hide garbage pool 'release' names)."""
-    import re as _re
-    s = (s or '').strip()
-    if not s:
-        return False
-    low = s.lower()
-    if 'token=' in low or '://' in low or '?' in low or '&' in low:
-        return True
-    # bare UUID, e.g. 499157df-d49d-4c1b-96f9-920866a2354a
-    if _re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-'
-                     r'[0-9a-f]{4}-[0-9a-f]{12}', low):
-        return True
-    # long hex blob with no spaces/dots (a hash, not a release name)
-    if (len(s) >= 24 and '.' not in s and ' ' not in s
-            and _re.fullmatch(r'[0-9a-f-]+', low)):
-        return True
-    return False
-
-
-def _match_pct(video_name, sub_name):
+def match_pct(video_name, sub_name):
     """Release-name match % via the ONE structured scorer (release_match,
     SubSync S1): exact release=100, same group+source ~90, cross-source
     (WEB vs BluRay) capped low -- so the picker %, the source-screen badge
@@ -62,30 +32,7 @@ def _match_pct(video_name, sub_name):
         return 0
 
 
-def _release_from_path(p):
-    """Release name from a PATH field (li_filename / filepath): basename with the
-    last extension stripped, or '' when it's a debrid URL / token / UUID. Mirrors
-    pool._release_from's path handling (same _is_token_like guard) so the lookup-
-    side release derivation matches the CONTRIBUTION side -- otherwise a
-    token-like li_filename would win the _video_ref or-chain with garbage and the
-    embedded same-source gate would diverge for the very same file. Never raises."""
-    base = os.path.basename((p or '').strip())
-    if '.' in base:
-        base = base.rsplit('.', 1)[0]
-    if not base:
-        return ''
-    try:
-        if pool_client is not None:
-            return '' if pool_client._is_token_like(base) else base
-    except Exception:
-        pass
-    low = base.lower()
-    if ('token=' in low or '://' in low or '?' in low or '&' in low):
-        return ''
-    return base
-
-
-def _is_same_source(video_name, sub_name):
+def is_same_source(video_name, sub_name):
     """True only when the two release names are the SAME source (normalized
     identical -- release_match's TIER_EXACT). Used to gate embedded-sourced pool
     variants: an embedded translation is synced to ONE specific source's timing,
@@ -101,14 +48,14 @@ def _is_same_source(video_name, sub_name):
         return False
 
 
-def _lang_display(code):
+def lang_display(code):
     return {
         'en': 'English', 'es': 'Spanish', 'fr': 'French',
         'de': 'German', 'pt': 'Portuguese', 'he': 'Hebrew',
     }.get(code, code or 'Unknown')
 
 
-def _lang_display_he(code):
+def lang_display_he(code):
     """Hebrew language name for user-facing notifications (English name / the raw
     code when unknown)."""
     return {
@@ -118,7 +65,7 @@ def _lang_display_he(code):
         'no': 'נורווגית', 'fi': 'פינית', 'pl': 'פולנית', 'tr': 'טורקית',
         'ja': 'יפנית', 'ko': 'קוריאנית', 'zh': 'סינית', 'el': 'יוונית',
         'cs': 'צ׳כית', 'hi': 'הינדי', 'ro': 'רומנית', 'uk': 'אוקראינית',
-    }.get(code, _lang_display(code))
+    }.get(code, lang_display(code))
 
 
 # Source-language gender-marking strength, for ordering embedded pool
@@ -138,13 +85,13 @@ _GENDER_STRONG_SRC = frozenset((
 ))
 
 
-def _gender_src_rank(source_lang):
+def gender_src_rank(source_lang):
     """0 for a source language that marks speaker gender (best Hebrew gender on
     reference-gap lines), 1 for weakly/non-gendered (en/de/nl/...). Lower first."""
     return 0 if (source_lang or 'en').strip().lower()[:2] in _GENDER_STRONG_SRC else 1
 
 
-def _is_sdh_ext(cand, release):
+def is_sdh_ext(cand, release):
     """True when an EXTERNAL subtitle is SDH in the sense that MATTERS here --
     it carries speaker labels, so it is genuinely the more gender-accurate
     source. Two reliable signals only: a WHOLE-TOKEN 'sdh' / 'hearing impaired'

@@ -10,12 +10,12 @@ from resources.lib.core import kodi, settings
 from resources.lib.ai_translation.repairs import postfix_leaks
 from resources.lib.core.srt import blocks as srt_blocks
 from resources.lib.ai_translation.context import tmdb_helper
-from resources.lib.ai_translation.dispatch.pacing import _is_mostly_hebrew
-from resources.lib.ai_translation.proofread.gp_state import _gp_done, _gp_hebrew_ref, _gp_mark, _gp_models, _gp_models_left, _gp_settle, _gp_stats, _gp_try_mark, _gp_trying
-from resources.lib.ai_translation.providers.google_flow import _is_google_translated
+from resources.lib.ai_translation.dispatch.pacing import is_mostly_hebrew
+from resources.lib.ai_translation.proofread.gp_state import gp_done, gp_hebrew_ref, gp_mark, gp_models, gp_models_left, gp_settle, gp_stats, gp_try_mark, gp_trying
+from resources.lib.ai_translation.providers.google_flow import is_google_translated
 
 
-def _proofread_due(path, source_text, progressive_cb, marker=None,
+def proofread_due(path, source_text, progressive_cb, marker=None,
                    held=False, info=None):
     """Whether an opened translation gets the proofread now: from the list
     (a live preview to swap in), the setting on, a key, not proofread before
@@ -29,21 +29,21 @@ def _proofread_due(path, source_text, progressive_cb, marker=None,
         if not (progressive_cb is not None
                 and settings.get_bool('gender_proofread', True)
                 and (settings.get_setting('api_key', '') or '').strip()
-                and os.path.isfile(path) and not _gp_done(marker or path)
-                and (held or not _gp_trying(marker or path))
-                and not _is_google_translated(path)
+                and os.path.isfile(path) and not gp_done(marker or path)
+                and (held or not gp_trying(marker or path))
+                and not is_google_translated(path)
                 and (source_text is None
                      or (source_text
-                         and not _is_mostly_hebrew(source_text, min_ratio=0.60)))):
+                         and not is_mostly_hebrew(source_text, min_ratio=0.60)))):
             return False
-        if _gp_hebrew_ref(path, info):
-            return bool(_gp_models_left(True))
-        return bool(_gp_models_left())
+        if gp_hebrew_ref(path, info):
+            return bool(gp_models_left(True))
+        return bool(gp_models_left())
     except Exception:
         return False
 
 
-def _proofread_stopper(source_id, cancelled):
+def proofread_stopper(source_id, cancelled):
     """stopped() for a proofread: Kodi exits, the job is obsolete, or the
     viewer moved on to another subtitle."""
     def stopped():
@@ -105,7 +105,7 @@ _GP_BUSY_ROUNDS = 3
 _GP_JOB_BUDGET = 1800
 
 
-def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
+def run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
                           background=False, rounds=True, hebrew_ref=False):
     """(blocks with gender_proofread's corrections applied, report). The
     blocks come back as they are when no model answers. `src_text` is the
@@ -117,7 +117,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
     report = {}
     try:
         from resources.lib.ai_translation.proofread import gender_proofread
-        _models = _gp_models(hebrew_ref)
+        _models = gp_models(hebrew_ref)
         # no new model after this: a viewer waits for the swap (a background
         # proofread has longer)
         _start = time.monotonic()
@@ -252,7 +252,7 @@ def _run_gender_proofread(blocks, src_text, api_key, model, cast, stopped,
     return blocks, report
 
 
-def _title_cast(info, imdb_id, season, episode):
+def title_cast(info, imdb_id, season, episode):
     """(cast, title, year) for the translation prompt and the gender
     proofread."""
     # Cast metadata, cached per title -- and per EPISODE: an episode's guest
@@ -316,7 +316,7 @@ def _title_cast(info, imdb_id, season, episode):
     return cast, title, year
 
 
-def _proofread_opened(path, source_text, source_id, release, progressive_cb,
+def proofread_opened(path, source_text, source_id, release, progressive_cb,
                       deliver, cancelled, info, share=None, shown_already=False,
                       mark_path=None, later=None, hebrew_ref=False):
     """An older AI translation opened from the list, proofread once.
@@ -330,7 +330,7 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
     next to `path`. `later`: where the pool keeps it (gp_later's 'share'), for
     a proofread no model answered and the service asks again. Returns the
     delivered path; None when nothing changed on a file shown already."""
-    from resources.lib.ai_translation.proofread.gp_jobs import _gp_later_add
+    from resources.lib.ai_translation.proofread.gp_jobs import gp_later_add
     if not source_text:
         # no source: the model could not tell who speaks to whom
         return None if shown_already else deliver(path)
@@ -344,8 +344,8 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
     if not shown:
         return None if shown_already else delivered
     marker = mark_path or path
-    _gp_try_mark(marker, True)
-    stopped = _proofread_stopper(source_id, cancelled)
+    gp_try_mark(marker, True)
+    stopped = proofread_stopper(source_id, cancelled)
     # first_ready also tells the job which translation it carries (a job with
     # no id adopts the first one it is sent); chunk_ready puts it on screen.
     first = (('first_ready', {'fallback_text': shown}),)
@@ -364,10 +364,10 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
         model = settings.get_setting('model', 'gemini-3.5-flash-lite') \
             or 'gemini-3.5-flash-lite'
         imdb_id = (info.get('imdb_id') or '').strip()
-        cast = _title_cast(info, imdb_id, info.get('season') or '',
+        cast = title_cast(info, imdb_id, info.get('season') or '',
                            info.get('episode') or '')[0]
         blocks = srt_blocks.parse_blocks(translation_cache.load_text(path) or '')
-        proofed, report = _run_gender_proofread(
+        proofed, report = run_gender_proofread(
             blocks, source_text, settings.get_setting('api_key', '') or '',
             model, cast, stopped, background=shown_already,
             hebrew_ref=hebrew_ref)
@@ -382,17 +382,17 @@ def _proofread_opened(path, source_text, source_id, release, progressive_cb,
                     report.get('applied', 0)), time_ms=4000)
         # answered, nothing sent or the viewer moved on: no pause before the
         # next open; a reply of no use: a week
-        _gp_settle((marker,), report, stopped)
+        gp_settle((marker,), report, stopped)
         if not report.get('model'):
             # 3.7 busy, out of today's quota, or the viewer moved on: the
             # service asks again later
-            _gp_later_add(report, path, source_text, info, share=later,
+            gp_later_add(report, path, source_text, info, share=later,
                           marker=marker)
         if report.get('model'):
-            _gp_mark(marker, report)
+            gp_mark(marker, report)
             if share is not None:
                 share(final if final is not None else (translation_cache.load_text(path) or ''),
-                      _gp_stats(report))
+                      gp_stats(report))
     except Exception as e:
         final = None
         kodi.log('gender proofread of an opened translation failed: '

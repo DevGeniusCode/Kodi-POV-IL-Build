@@ -6,11 +6,11 @@ import json
 import urllib.parse
 
 
-def _encode_link(payload):
+def encode_link(payload):
     return urllib.parse.quote(json.dumps(payload, ensure_ascii=False))
 
 
-def _decode_link(link):
+def decode_link(link):
     try:
         return json.loads(urllib.parse.unquote(link))
     except (ValueError, TypeError):

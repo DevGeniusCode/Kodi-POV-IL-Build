@@ -21,7 +21,7 @@ class VideoContext:
     season: str = ''
     episode: str = ''
     tvshow: str = ''
-    playing_release: str = ''     # the ONE derivation: picked_release > tagline > label > li_filename > filepath
+    playing_release: str = ''     # core.video_context.release_name(info, policy): one function, named policies (see there)
     file_url: str = ''
     is_local: bool = False
     is_live: bool = False

@@ -3,7 +3,7 @@
 # Post-fix: foreign glyphs inside Hebrew (Latin, Arabic, Greek) and glyph normalisation.
 
 import re
-from resources.lib.core.srt.blocks import _HAS_HEBREW_RE, _INVISIBLE_BIDI, _PDF, _PROTECTED_RE, _RLE
+from resources.lib.core.srt.blocks import HAS_HEBREW_RE, INVISIBLE_BIDI, PDF, PROTECTED_RE, RLE
 from resources.lib.core.srt.classify import is_google_translated
 
 
@@ -120,9 +120,9 @@ def _transliterate_glued_run(run, before, after, ate_space):
         if not core or len(core) > _MAX_GLUED_RUN:
             return None
         # must be glued to Hebrew on at least one side
-        ends_word = bool(tail) or not (after and _HAS_HEBREW_RE.match(after))
-        touches = ((before and _HAS_HEBREW_RE.match(before))
-                   or (not tail and after and _HAS_HEBREW_RE.match(after)))
+        ends_word = bool(tail) or not (after and HAS_HEBREW_RE.match(after))
+        touches = ((before and HAS_HEBREW_RE.match(before))
+                   or (not tail and after and HAS_HEBREW_RE.match(after)))
         if not touches:
             return None
         out = []
@@ -147,7 +147,7 @@ def _transliterate_glued_run(run, before, after, ate_space):
 def _map_unprotected(text, transform):
     """Keep protected bytes and node-boundary whitespace exactly as supplied."""
     out=[];start=0
-    for match in _PROTECTED_RE.finditer(text):
+    for match in PROTECTED_RE.finditer(text):
         part=text[start:match.start()]
         if part.strip():
             left=part[:len(part)-len(part.lstrip())]
@@ -163,7 +163,7 @@ def _map_unprotected(text, transform):
     return ''.join(out)
 
 
-def _self_contained_markup(text):
+def self_contained_markup(text):
     """Removing a prefix may not strand an opening/closing tag elsewhere."""
     from html.parser import HTMLParser
     class Balance(HTMLParser):
@@ -183,7 +183,7 @@ def _self_contained_markup(text):
 
 def _clean_arabic_from_line(body):
     """Repair visible unquoted text; preserve markup and quoted literals."""
-    if _PROTECTED_RE.search(body):
+    if PROTECTED_RE.search(body):
         return _map_unprotected(body, _clean_arabic_from_line)
     # Replace a run with a SPACE when it stood between words, but with NOTHING
     # when it sat INSIDE one. A field report showed a single Arabic letter glued
@@ -214,7 +214,7 @@ def _clean_arabic_from_line(body):
     # control anywhere in the line, which glued words together across a
     # legitimate space-padded RLM or BOM ("יש 50<RLM> דולר" -> "יש 50<RLM>דולר").
     # Those are zero-width, so the damage is visible in the rendered subtitle.
-    _wrap = _RLE + _PDF
+    _wrap = RLE + PDF
     cleaned = re.sub(r'^([' + _wrap + r']*)[ \t]+', r'\1', cleaned)
     cleaned = re.sub(r'[ \t]+([' + _wrap + r']*)$', r'\1', cleaned)
     cleaned = cleaned.strip()
@@ -267,7 +267,7 @@ def fold_foreign_in_hebrew_word(text):
     """
     if not text:
         return text
-    if _PROTECTED_RE.search(text):
+    if PROTECTED_RE.search(text):
         return _map_unprotected(text, fold_foreign_in_hebrew_word)
     try:
         if not _FOREIGN_RUN_RE.search(text):
@@ -276,18 +276,18 @@ def fold_foreign_in_hebrew_word(text):
         for line in text.split('\n'):
             cr = '\r' if line.endswith('\r') else ''
             body = line[:-1] if cr else line
-            if _HAS_HEBREW_RE.search(body):
+            if HAS_HEBREW_RE.search(body):
                 def _sub(m, _b=body):
                     run = m.group(0)
                     if len(run) > _MAX_FOREIGN_RUN:
                         return run
                     before = _b[m.start() - 1:m.start()] if m.start() else ''
                     after = _b[m.end():m.end() + 1]
-                    if not ((before and _HAS_HEBREW_RE.match(before))
-                            or (after and _HAS_HEBREW_RE.match(after))):
+                    if not ((before and HAS_HEBREW_RE.match(before))
+                            or (after and HAS_HEBREW_RE.match(after))):
                         return run
                     he = [_FOREIGN2HE[c] for c in run]
-                    if not (after and _HAS_HEBREW_RE.match(after)):
+                    if not (after and HAS_HEBREW_RE.match(after)):
                         he[-1] = _HE_FINAL.get(he[-1], he[-1])
                     return u''.join(he)
                 body = _FOREIGN_RUN_RE.sub(_sub, body)
@@ -319,7 +319,7 @@ def fold_stray_latin_letter(text):
     Adds Hebrew and removes nothing else. Never raises."""
     if not text:
         return text
-    if _PROTECTED_RE.search(text):
+    if PROTECTED_RE.search(text):
         return _map_unprotected(text, fold_stray_latin_letter)
     try:
         if not _STRAY_LATIN_RE.search(text):
@@ -410,7 +410,7 @@ def strip_leaked_arabic(text):
     """
     if not text:
         return text
-    if _PROTECTED_RE.search(text):
+    if PROTECTED_RE.search(text):
         return _map_unprotected(text, strip_leaked_arabic)
     try:
         if not _HAS_ARABIC_RE.search(text):
@@ -420,12 +420,12 @@ def strip_leaked_arabic(text):
             cr = '\r' if line.endswith('\r') else ''
             body = line[:-1] if cr else line
             if (_HAS_ARABIC_RE.search(body)
-                    and _HAS_HEBREW_RE.search(body)):
+                    and HAS_HEBREW_RE.search(body)):
                 cleaned = _clean_arabic_from_line(body)
                 # Only accept the rewrite if the Hebrew came through it. Any
                 # other outcome means the cleanup misread the line, and the
                 # original is always the safer answer.
-                if cleaned and _HAS_HEBREW_RE.search(cleaned):
+                if cleaned and HAS_HEBREW_RE.search(cleaned):
                     body = cleaned
             out.append(body + cr)
         return '\n'.join(out)
@@ -444,7 +444,7 @@ _ZERO_WIDTH = '\u200B\u200C\u200D'   # ZWSP, ZWNJ, ZWJ
 # The Hebrew presentation-form block. NFC handles most of it; the compatibility
 # forms in it need NFKC, which is why this range is picked out by itself.
 _HEB_PRESENTATION_RE = re.compile('[\uFB1D-\uFB4F]')
-_INVISIBLE_RE = re.compile('[' + re.escape(_INVISIBLE_BIDI + _ZERO_WIDTH) + ']')
+_INVISIBLE_RE = re.compile('[' + re.escape(INVISIBLE_BIDI + _ZERO_WIDTH) + ']')
 
 
 def normalize_glyphs(text):

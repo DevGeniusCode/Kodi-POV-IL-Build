@@ -4,8 +4,8 @@
 # (he_sub_match) and the "currently applied" marking.
 
 from resources.lib.core import selection as core_selection
-from resources.lib.core.link_codec import _decode_link
-from resources.lib.scoring_matching.ranking import _looks_like_token
+from resources.lib.core.link_codec import decode_link
+from resources.lib.core.video_context import looks_like_token
 
 
 # ---- search ----------------------------------------------------------
@@ -41,7 +41,7 @@ def _mark_current(results):
     return results
 
 
-def _finalize(info, results):
+def finalize(info, results):
     """Write-through the real Hebrew releases this live search found into the
     source-screen badge cache (so the poster % matches the picker), then apply
     the 'currently applied' marking. Every list_candidates return goes through
@@ -51,13 +51,13 @@ def _finalize(info, results):
         for c in results:
             if c.get('language') != 'he':
                 continue
-            pl = _decode_link(c.get('link') or '') or {}
+            pl = decode_link(c.get('link') or '') or {}
             t = pl.get('type')
             # Real downloadable Hebrew releases only -- skip embedded streams
             # and the synthetic "AI translate" / "current" display entries.
             if t in ('passthrough', 'pool', 'engine') and not pl.get('embedded'):
                 nm = (c.get('filename') or '').strip()
-                if nm and not _looks_like_token(nm) and '» נוכחית' not in nm \
+                if nm and not looks_like_token(nm) and '» נוכחית' not in nm \
                         and not nm.startswith('תרגום'):
                     he_names.append(nm)
         if he_names:

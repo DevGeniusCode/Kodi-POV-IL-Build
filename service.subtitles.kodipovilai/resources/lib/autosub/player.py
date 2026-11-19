@@ -8,7 +8,7 @@ try:
     import xbmc
 except ImportError:
     xbmc = None
-from resources.lib.autosub.policy import _AI_ROW_TYPES, _CHECKED_HEADINGS, _EMBEDDED_MISS_LINES, _LOADED_HEADINGS, _OVERLAY_LINE_SECONDS, _ask_ai_translation, _toasts_on, _wait_for_sync_check, ai_when_no_hebrew
+from resources.lib.autosub.policy import AI_ROW_TYPES, CHECKED_HEADINGS, EMBEDDED_MISS_LINES, LOADED_HEADINGS, OVERLAY_LINE_SECONDS, ask_ai_translation, toasts_on, wait_for_sync_check, ai_when_no_hebrew
 
 
 STATE = {'last_file': None, 'busy': False, 'player': None, 'snap_file': None,
@@ -328,7 +328,7 @@ def autosub_on_play():
             # (and caching) before it's ready yields 0% matches. Once we have
             # both an id/title AND a release name, proceed.
             try:
-                have_release = bridge._release_ready(info)
+                have_release = bridge.release_ready(info)
             except Exception:
                 have_release = True
             if have_id and have_release:
@@ -475,8 +475,8 @@ def autosub_on_play():
 
         def _is_ai_row(row):
             try:
-                return (link_codec._decode_link(row.get('link') or '')
-                        or {}).get('type') in _AI_ROW_TYPES
+                return (link_codec.decode_link(row.get('link') or '')
+                        or {}).get('type') in AI_ROW_TYPES
             except Exception:
                 return False
 
@@ -492,7 +492,7 @@ def autosub_on_play():
                             '[COLOR lightblue]אין כתובית עברית — לתרגם?[/COLOR]')
                     except Exception:
                         pass
-                _ai_answer.append(_ask_ai_translation(google=_mode == 'google'))
+                _ai_answer.append(ask_ai_translation(google=_mode == 'google'))
                 if (_ai_answer[0] and _eng_general is not None
                         and _autosub_owns_player()):
                     try:
@@ -514,7 +514,7 @@ def autosub_on_play():
         for c in he_list[:12]:
             link2 = c.get('link') or ''
             try:
-                pl = link_codec._decode_link(link2) or {}
+                pl = link_codec.decode_link(link2) or {}
             except Exception:
                 pl = {}
             src = pl.get('source')
@@ -535,7 +535,7 @@ def autosub_on_play():
                 # to this loop, and the row sorts to the FRONT of he_list --
                 # first pick, by default, on an ordinary install.
                 continue
-            if _when != 'auto' and pl.get('type') in _AI_ROW_TYPES:
+            if _when != 'auto' and pl.get('type') in AI_ROW_TYPES:
                 _ai_offered = True
                 if not _autosub_owns_player():
                     return
@@ -621,7 +621,7 @@ def autosub_on_play():
             if not applied:
                 for c in cands:
                     try:
-                        p2 = link_codec._decode_link(c.get('link') or '')
+                        p2 = link_codec.decode_link(c.get('link') or '')
                     except Exception:
                         p2 = None
                     if p2 and p2.get('type') == 'engine_ai':
@@ -637,7 +637,7 @@ def autosub_on_play():
         if not applied and _auto_ai:
             for c in cands:
                 try:
-                    p2 = link_codec._decode_link(c.get('link') or '')
+                    p2 = link_codec.decode_link(c.get('link') or '')
                 except Exception:
                     p2 = None
                 if p2 and p2.get('type') == 'engine_ai':
@@ -694,8 +694,8 @@ def autosub_on_play():
             if _miss is not None:
                 # the video's own subtitle was the pick and gave nothing
                 _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]\n'
-                               '[COLOR lightblue]' + _EMBEDDED_MISS_LINES.get(
-                                   _miss, _EMBEDDED_MISS_LINES['']) + '[/COLOR]',
+                               '[COLOR lightblue]' + EMBEDDED_MISS_LINES.get(
+                                   _miss, EMBEDDED_MISS_LINES['']) + '[/COLOR]',
                                hold=7.0)
             elif (_ai_offered and _when != 'auto' and _have_key and _ai_ok
                     and _ai_answer[:1] != [True]):
@@ -740,7 +740,7 @@ def autosub_on_play():
 
         if _sync_state != 'checking' or _eng_general is None:
             _final_overlay(_status_line(
-                _LOADED_HEADINGS.get(_sync_state, 'כתובית נטענה')))
+                LOADED_HEADINGS.get(_sync_state, 'כתובית נטענה')))
             return
         # The check is still running, and a subtitle made for another cut can
         # be seconds off until its fix arrives.  The line used to leave after
@@ -748,7 +748,7 @@ def autosub_on_play():
         # after the picture started, the fix at 9.5 s), so a viewer looking at
         # an unsynced subtitle had nothing saying that anything was still
         # happening.  It now stays until the check ends, then says how.
-        _checking_line = _status_line(_LOADED_HEADINGS['checking'])
+        _checking_line = _status_line(LOADED_HEADINGS['checking'])
         if not _autosub_owns_player():
             return          # a stale run never writes into the next overlay
         if not _overlay_show(_checking_line):
@@ -772,7 +772,7 @@ def autosub_on_play():
             xbmc.sleep(int(seconds * 1000))
             _overlay_keep(_checking_line)
 
-        _end_state, _waited = _wait_for_sync_check(
+        _end_state, _waited = wait_for_sync_check(
             _check_state, _overlay_ours, _sleep_keeping_line)
         try:
             kodi.log('autosub overlay: timing check %s after %.1fs' % (
@@ -782,16 +782,16 @@ def autosub_on_play():
                 _waited))
         except Exception:
             pass
-        if _end_state == 'fixed' and _toasts_on(settings):
+        if _end_state == 'fixed' and toasts_on(settings):
             # SubSync's own "synced automatically" toast is on screen now;
             # the same words in the overlay beside it would be noise.
             return
         if _end_state:
-            _final_overlay(_status_line(_CHECKED_HEADINGS[_end_state]))
-        elif _end_state == '' and _waited < _OVERLAY_LINE_SECONDS:
+            _final_overlay(_status_line(CHECKED_HEADINGS[_end_state]))
+        elif _end_state == '' and _waited < OVERLAY_LINE_SECONDS:
             # no result to show: the line still gets its usual time
             _final_overlay(_checking_line,
-                           hold=_OVERLAY_LINE_SECONDS - _waited)
+                           hold=OVERLAY_LINE_SECONDS - _waited)
     except Exception as e:
         try:
             kodi.log('autosub_on_play failed: {0}'.format(e),

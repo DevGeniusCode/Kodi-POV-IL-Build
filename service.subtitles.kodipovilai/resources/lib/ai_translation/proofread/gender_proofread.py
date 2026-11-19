@@ -273,11 +273,11 @@ class Spent(Exception):
     model's day; asking the next model would make it two for one proofread."""
 
 
-def _today():
+def gender_proofread_today():
     """Google's quota day (Pacific), as the translator's quota record keeps it."""
     try:
         from resources.lib.ai_translation import quota
-        return quota._today_utc()
+        return quota.today_utc()
     except Exception:
         import datetime
         return datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')
@@ -287,14 +287,14 @@ def exhausted_today(model, settings):
     """Whether `model`'s daily quota ran out today (`settings`: sub_utils)."""
     try:
         day, _, names = (settings.get_setting(EXHAUSTED_SETTING, '') or '').partition(' ')
-        return day == _today() and model in names.split()
+        return day == gender_proofread_today() and model in names.split()
     except Exception:
         return False
 
 
 def note_exhausted(model, settings):
     try:
-        today = _today()
+        today = gender_proofread_today()
         day, _, names = (settings.get_setting(EXHAUSTED_SETTING, '') or '').partition(' ')
         names = names.split() if day == today else []
         if model not in names:

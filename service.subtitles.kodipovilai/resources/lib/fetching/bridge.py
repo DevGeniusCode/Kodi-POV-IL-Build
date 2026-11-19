@@ -31,10 +31,10 @@ import time
 import urllib.parse
 from resources.lib.core import kodi, settings, video_context
 from resources.lib.fetching import provider_adapter
-from resources.lib.delivery.rtl import _mark_logical_source, _render_hebrew_rtl_copy, is_logical_source
-from resources.lib.fetching.embedded.streams import _LANG_NORMALIZE, enabled
-from resources.lib.fetching.search_cache import _CUT_PROP, _RECENT_PROP, _cache_get, _cache_put, _recent_get, _recent_put
-from resources.lib.fetching.subs_cache import _cached_subs_dir, _cached_subs_keybase, _cached_subs_lookup, _cached_subs_prune, _cached_subs_store, _looks_like_subtitle
+from resources.lib.delivery.rtl import mark_logical_source, render_hebrew_rtl_copy, is_logical_source
+from resources.lib.fetching.embedded.streams import LANG_NORMALIZE, enabled
+from resources.lib.fetching.search_cache import CUT_PROP, RECENT_PROP, cache_get, cache_put, recent_get, recent_put
+from resources.lib.fetching.subs_cache import cached_subs_dir, cached_subs_keybase, cached_subs_lookup, cached_subs_prune, cached_subs_store, looks_like_subtitle
 
 
 # The vendored engine exposes provider results through module-level lists.
@@ -43,7 +43,7 @@ from resources.lib.fetching.subs_cache import _cached_subs_dir, _cached_subs_key
 _ENGINE_SEARCH_LOCK = threading.Lock()
 
 
-def _release_ready(info):
+def release_ready(info):
     """True once a REAL release name is available (not just the show/movie
     title). The sync-% is computed from the release name; right after an
     auto-advance to the next episode the real release (POV's picked_release,
@@ -116,8 +116,8 @@ def ensure_engine_settings():
     settings always; force-rewrites everything once when the defaults version
     changes (so existing installs pick up new defaults like all_lang)."""
     try:
-        from resources.lib.core import kodi
-        addon = kodi.addon()
+        from resources.lib.core import addon as core_addon
+        addon = core_addon.addon()
     except Exception:
         return
     try:
@@ -225,12 +225,12 @@ def search(info, modal_progress=True, cache_only=False):
     # the 0%-list sticks for 24h and the user has to exit + re-enter the
     # subtitle list to get a fresh (correct) search. So the result cache is
     # only consulted/written once a real release name is available.
-    cacheable = _release_ready(info)
+    cacheable = release_ready(info)
     # Result cache: a repeat open of the same title returns instantly
     # instead of re-running every provider (this is a big part of why
     # DarkSubs feels faster -- it caches its sorted results for 24h).
     if cacheable:
-        cached = _cache_get(info)
+        cached = cache_get(info)
         # Only a NON-EMPTY cached result counts as a hit. An empty cached list
         # is treated as a miss so we re-search -- this also lets devices that
         # already have a poisoned empty entry recover immediately instead of
@@ -240,7 +240,7 @@ def search(info, modal_progress=True, cache_only=False):
     # Kodi's own subtitle dialog (modal_progress) is an explicit request and
     # always searches.
     if not modal_progress:
-        recent = _recent_get(info)
+        recent = recent_get(info)
         if recent is not None:
             return recent
     if cache_only:
@@ -255,13 +255,13 @@ def search(info, modal_progress=True, cache_only=False):
         # Any finished search, empty or not, is reused for two minutes from
         # memory (_RECENT_TTL).
         if cacheable and out:
-            _cache_put(info, out)
+            cache_put(info, out)
         if _search_finished(time.monotonic() - started):
-            _recent_put(info, out)
+            recent_put(info, out)
         elif out:
             # cut at max_search_time: never reused as a list to show, but
             # what it found serves the gender reference (reusable_results)
-            _recent_put(info, out, prop=_CUT_PROP)
+            recent_put(info, out, prop=CUT_PROP)
         return out
     except Exception as e:
         kodi.log('subs_engine_bridge.search failed: {0}'.format(e),
@@ -284,12 +284,12 @@ def reusable_results(info):
     if not enabled():
         return []
     try:
-        if _release_ready(info):
-            cached = _cache_get(info)
+        if release_ready(info):
+            cached = cache_get(info)
             if cached:
                 return cached
-        for prop in (_RECENT_PROP, _CUT_PROP):
-            found = _recent_get(info, prop=prop)
+        for prop in (RECENT_PROP, CUT_PROP):
+            found = recent_get(info, prop=prop)
             if found:
                 return found
     except Exception:
@@ -357,9 +357,9 @@ def search_all_languages_for_timing(info):
     """
     if not enabled():
         return []
-    cacheable = _release_ready(info)
+    cacheable = release_ready(info)
     if cacheable:
-        cached = _cache_get(info, variant='timing_all')
+        cached = cache_get(info, variant='timing_all')
         if cached:
             return cached
     try:
@@ -374,7 +374,7 @@ def search_all_languages_for_timing(info):
         if not out:
             return None
         if cacheable and out:
-            _cache_put(info, out, variant='timing_all')
+            cache_put(info, out, variant='timing_all')
         return out
     except Exception as e:
         kodi.log(
@@ -478,7 +478,7 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
         # The provider already computed a proper ISO 639-1 code in the tuple's
         # thumbnail field (via xbmc.convertLanguage) -- use it so Kodi shows
         # the right flag. Normalize a few common non-standard codes.
-        code = _LANG_NORMALIZE.get(thumb_code, thumb_code)
+        code = LANG_NORMALIZE.get(thumb_code, thumb_code)
         # Machine/AI-translated flag carried by the provider (currently the
         # OpenSubtitles source sets download_data['mt']; it requests MT subs
         # from the API but the flag used to be dropped, letting an MT Hebrew
@@ -652,7 +652,7 @@ def _is_plausible_hebrew(text):
     return (heb / float(letters)) >= 0.5
 
 
-def _ensure_utf8(path):
+def ensure_utf8(path):
     """Rewrite `path` as UTF-8 if it is not already valid UTF-8. Returns True
     when the file was converted.
 
@@ -721,7 +721,7 @@ def _ensure_utf8(path):
     return True
 
 
-def _download_inner(payload, for_delivery=True):
+def download_inner(payload, for_delivery=True):
     global LAST_DOWNLOAD_FROM_CACHE
     LAST_DOWNLOAD_FROM_CACHE = False
     source = payload.get('source') or ''
@@ -783,14 +783,14 @@ def _download_inner(payload, for_delivery=True):
     # and skip the network download entirely -- this is what makes re-picking
     # a subtitle instant. The cached file was already validated + punctuation-
     # fixed when it was first stored, so we return it straight away.
-    cache_dir = _cached_subs_dir()
+    cache_dir = cached_subs_dir()
     keybase = None
     if cache_dir:
         try:
-            _cached_subs_prune(cache_dir)
-            keybase = _cached_subs_keybase(cache_dir, source, language,
+            cached_subs_prune(cache_dir)
+            keybase = cached_subs_keybase(cache_dir, source, language,
                                            filename)
-            hit = _cached_subs_lookup(keybase)
+            hit = cached_subs_lookup(keybase)
             if hit:
                 kodi.log('subs_engine_bridge: cached file hit ({0})'
                                .format(os.path.basename(hit)), level='INFO')
@@ -801,7 +801,7 @@ def _download_inner(payload, for_delivery=True):
                 # still be cp1255. Heal it in place, or the same device keeps
                 # serving the same unreadable copy for as long as the entry
                 # lives -- and keeps failing to mirror it to the pool.
-                _ensure_utf8(hit)
+                ensure_utf8(hit)
                 if (for_delivery
                         and settings.get_bool(
                             'auto_fix_sub_punctuation', True)
@@ -810,7 +810,7 @@ def _download_inner(payload, for_delivery=True):
                     # predates the single RTL owner and may carry the old
                     # engine's reversed dash/ellipsis shapes. Render a copy;
                     # never mutate/delete the cache source or its share marker.
-                    return _render_hebrew_rtl_copy(
+                    return render_hebrew_rtl_copy(
                         hit, legacy_engine=(
                             'auto' if is_logical_source(hit) else True))
                 return hit
@@ -832,7 +832,7 @@ def _download_inner(payload, for_delivery=True):
     # Validate it's an actual subtitle, not an HTML error page / un-extracted
     # archive a provider handed back on a failed download (e.g. YIFY 403).
     # Otherwise Kodi tries to load garbage and shows "download failed".
-    if not _looks_like_subtitle(sub_file):
+    if not looks_like_subtitle(sub_file):
         kodi.log('subs_engine_bridge: downloaded file is not a valid '
                        'subtitle ({0})'.format(os.path.basename(sub_file)),
                        level='WARNING')
@@ -844,16 +844,16 @@ def _download_inner(payload, for_delivery=True):
     # Normalise the encoding BEFORE the pristine copy is taken, so the stored
     # source -- the one the pool hashes, uploads and marks as shared, and the
     # one subsync reads -- is the UTF-8 text everything downstream assumes.
-    _ensure_utf8(sub_file)
+    ensure_utf8(sub_file)
 
     # Store the validated PRISTINE provider file before any playback rendering.
     # This preserves one stable source hash for pool de-dup and sharing.
     source_file = sub_file
     if keybase:
-        cached = _cached_subs_store(keybase, sub_file)
+        cached = cached_subs_store(keybase, sub_file)
         if cached:
             source_file = cached
-    _mark_logical_source(source_file)
+    mark_logical_source(source_file)
 
     # The old vendored fixer is intentionally gone. One canonical MoranSubs
     # processor owns Hebrew playback, on a disposable local copy only.
@@ -865,68 +865,8 @@ def _download_inner(payload, for_delivery=True):
         # old physical-RTL punctuation.  Auto-detection repairs only files
         # carrying an unambiguous signature and preserves genuinely logical
         # leading ellipses in clean files.
-        return _render_hebrew_rtl_copy(source_file, legacy_engine='auto')
+        return render_hebrew_rtl_copy(source_file, legacy_engine='auto')
     return source_file
-
-
-# Tokens that mark a string as a real release name (vs a clean title or a
-# debrid token). Used to pick the best release name for sync-% matching.
-_REL_PATTERNS = (
-    r'(?:19|20)\d{2}',
-    r'(?:360|480|576|720|1080|2160)p',
-    r'web.?dl|webrip|web|bluray|blu.?ray|brrip|bdrip|hdtv|hdrip|dvdrip|remux|hdcam',
-    r'x26[45]|h\.?26[45]|hevc|avc|xvid|10bit',
-    r'aac|ac3|e?ac.?3|dts|ddp?5|atmos|dd\+|truehd|multi',
-    r'-[a-z0-9]{2,}$',
-)
-
-
-def _release_score(s):
-    """Heuristic: how much a string looks like a scene/web release name."""
-    if not s:
-        return 0
-    s2 = s.lower()
-    sc = sum(1 for p in _REL_PATTERNS if re.search(p, s2))
-    if s2.count('.') >= 3 or s2.count(' ') >= 3:
-        sc += 1
-    return sc
-
-
-def _detect_release_name(info):
-    """Pick the best available release name for sync-% matching. The player
-    filepath is often a tokenized debrid URL, while the real release name
-    lives in the ListItem path / label / tagline -- so we score every
-    candidate and take the most release-like one."""
-    cands = []
-    # POV's captured pick is the most reliable release name -- prefer it.
-    pr = (info.get('picked_release') or '').strip()
-    if video_context.release_conflicts_with_episode(
-            pr, info.get('season'), info.get('episode')):
-        pr = ''
-    if pr:
-        cands.append(pr)
-    for key in ('filepath', 'li_filename'):
-        v = (info.get(key) or '').strip()
-        if v:
-            try:
-                cands.append(os.path.basename(v.rstrip('/')) or v)
-            except Exception:
-                cands.append(v)
-    for key in ('label', 'tagline', 'title'):
-        v = (info.get(key) or '').strip()
-        if v:
-            cands.append(v)
-    best, best_score = '', -1
-    for c in cands:
-        if video_context.release_conflicts_with_episode(
-                c, info.get('season'), info.get('episode')):
-            continue
-        sc = _release_score(c)
-        # tie-break: prefer the longer (more specific) string
-        if sc > best_score or (sc == best_score and len(c) > len(best)):
-            best, best_score = c, sc
-    return best
-
 
 
 # ---- video_data construction ---------------------------------------
@@ -957,7 +897,7 @@ def build_video_data(info):
     # (filepath, ListItem path, label, tagline, title) and feed the most
     # release-like one into BOTH file_original_path and Tagline. This is why
     # our %s were far lower than DarkSubs' -- we were matching a token.
-    release = _detect_release_name(info) or tvshow or title
+    release = video_context.release_name(info, 'scored') or tvshow or title
 
     vd = {
         'imdb': imdb,

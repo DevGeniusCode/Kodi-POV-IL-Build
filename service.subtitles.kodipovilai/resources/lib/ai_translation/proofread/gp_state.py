@@ -15,28 +15,28 @@ from resources.lib.core import settings
 # list -- a cached one, a pooled one -- and the pool takes the corrected file
 # (proofread=1: the worker replaces the pooled variant of the same source).
 
-def _gp_marker(path):
+def gp_marker(path):
     """Next to a translation: its proofread ran (a model answered), so
     opening it again spends no request."""
     return path + '.gp'
 
 
-def _gp_done(path):
-    return bool(path) and os.path.isfile(_gp_marker(path))
+def gp_done(path):
+    return bool(path) and os.path.isfile(gp_marker(path))
 
 
-def _gp_mark(path, report=None):
+def gp_mark(path, report=None):
     """The marker; with the proofread's report, it keeps the model and the
     lines it fixed for an upload offered again later (_gp_saved)."""
-    stats = _gp_stats(report)
+    stats = gp_stats(report)
     try:
-        with open(_gp_marker(path), 'w', encoding='utf-8') as f:
+        with open(gp_marker(path), 'w', encoding='utf-8') as f:
             f.write(json.dumps(stats) if stats else '1')
     except OSError:
         pass
 
 
-def _gp_stats(report):
+def gp_stats(report):
     """What the pool's dashboard shows of a proofread: the model that answered
     and the lines it fixed. {} when no model answered."""
     model = str((report or {}).get('model') or '')
@@ -49,11 +49,11 @@ def _gp_stats(report):
     return {'model': model, 'applied': applied}
 
 
-def _gp_saved(path):
+def gp_saved(path):
     """The stats a marker kept ({} from a marker written before 0.3.60)."""
     try:
-        with open(_gp_marker(path), 'r', encoding='utf-8') as f:
-            return _gp_stats(json.loads(f.read()))
+        with open(gp_marker(path), 'r', encoding='utf-8') as f:
+            return gp_stats(json.loads(f.read()))
     except Exception:
         return {}
 
@@ -79,7 +79,7 @@ def _gp_ref_marker(path):
     return path + '.gpref'
 
 
-def _gp_ref_mark(path, lang):
+def gp_ref_mark(path, lang):
     """Beside a translation: the language of its gender reference ('-' when
     it had none, '?' when it had one of a language not known); None when
     nothing is known (the marker goes)."""
@@ -93,7 +93,7 @@ def _gp_ref_mark(path, lang):
         pass
 
 
-def _gp_ref_tier(path, pooled_hash=None):
+def gp_ref_tier(path, pooled_hash=None):
     """Whether a translation of unknown origin was made with a gender
     reference: the pool keeps such a variant under "<hash>_ar", the cache in
     the ".ar" tier -- or in the plain one marked '?' (a pooled "_ar" variant
@@ -115,13 +115,13 @@ def _hebrew_subtitle_listed(info):
     try:
         from resources.lib.ai_translation.context import gender_reference
         from resources.lib.fetching import bridge
-        return any(isinstance(c, dict) and gender_reference._chain_lang_of(c) == 'he'
+        return any(isinstance(c, dict) and gender_reference.chain_lang_of(c) == 'he'
                    for c in bridge.reusable_results(info) or [])
     except Exception:
         return False
 
 
-def _gp_hebrew_ref(path, info=None):
+def gp_hebrew_ref(path, info=None):
     """Whether the translation at `path` was made with a Hebrew gender
     reference: its .gpref when it was made here, else -- `info` given for one
     of unknown origin made with a reference (_gp_ref_tier) -- the title's
@@ -145,35 +145,35 @@ _GP_RETRY_SECS = 6 * 3600
 _GP_SPENT_SECS = 7 * 86400
 
 
-def _gp_try_marker(path):
+def gp_try_marker(path):
     return path + '.gp.try'
 
 
-def _gp_trying(path):
+def gp_trying(path):
     try:
-        return time.time() - os.path.getmtime(_gp_try_marker(path)) < _GP_RETRY_SECS
+        return time.time() - os.path.getmtime(gp_try_marker(path)) < _GP_RETRY_SECS
     except OSError:
         return False
 
 
-def _gp_try_mark(path, on, hold=None):
+def gp_try_mark(path, on, hold=None):
     """The in-progress marker on (for _GP_RETRY_SECS, or `hold` seconds) or
     off."""
     try:
         if on:
-            with open(_gp_try_marker(path), 'w', encoding='utf-8') as f:
+            with open(gp_try_marker(path), 'w', encoding='utf-8') as f:
                 f.write('1')
             if hold:
                 # _gp_trying measures from the marker's time
                 t = time.time() + hold - _GP_RETRY_SECS
-                os.utime(_gp_try_marker(path), (t, t))
+                os.utime(gp_try_marker(path), (t, t))
         else:
-            os.remove(_gp_try_marker(path))
+            os.remove(gp_try_marker(path))
     except OSError:
         pass
 
 
-def _gp_settle(markers, report, stopped):
+def gp_settle(markers, report, stopped):
     """The in-progress markers after a proofread: off when a model answered;
     a week when one took the request and its reply was of no use -- even if
     the viewer moved on meanwhile, the request is spent; off when nothing was
@@ -181,16 +181,16 @@ def _gp_settle(markers, report, stopped):
     (_GP_RETRY_SECS)."""
     if report.get('model'):
         for m in markers:
-            _gp_try_mark(m, False)
+            gp_try_mark(m, False)
     elif report.get('spent'):
         for m in markers:
-            _gp_try_mark(m, True, hold=_GP_SPENT_SECS)
+            gp_try_mark(m, True, hold=_GP_SPENT_SECS)
     elif not report.get('asked') or stopped():
         for m in markers:
-            _gp_try_mark(m, False)
+            gp_try_mark(m, False)
 
 
-def _gp_models(hebrew_ref=False):
+def gp_models(hebrew_ref=False):
     """The proofread's models for a translation: gemini-4-hydrogen alone for
     one made with a Hebrew gender reference."""
     from resources.lib.ai_translation.proofread import gender_proofread
@@ -198,7 +198,7 @@ def _gp_models(hebrew_ref=False):
             else gender_proofread.MODELS)
 
 
-def _gp_models_left(hebrew_ref=False):
+def gp_models_left(hebrew_ref=False):
     """Whether a proofread model (_gp_models) still has quota today -- and AI is the chosen mode at
     all: with "Google Translate" or "no translation" chosen nothing is proofread (0.3.96; a translation
     from the cache or the pool was, and the viewer saw Gemini's "busy")."""
@@ -207,6 +207,6 @@ def _gp_models_left(hebrew_ref=False):
             return False
         from resources.lib.ai_translation.proofread import gender_proofread
         return any(not gender_proofread.exhausted_today(m, settings)
-                   for m in _gp_models(hebrew_ref))
+                   for m in gp_models(hebrew_ref))
     except Exception:
         return False

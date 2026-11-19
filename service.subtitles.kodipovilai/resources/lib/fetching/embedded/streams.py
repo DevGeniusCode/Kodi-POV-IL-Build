@@ -242,7 +242,7 @@ def note_playback_streams(info, streams=None, final=False):
                 low = (n or '').strip().lower()
                 if not low or is_external_stream(low):
                     return False
-                if _LANG_NORMALIZE.get(low, low[:2]) == 'he':
+                if LANG_NORMALIZE.get(low, low[:2]) == 'he':
                     return True
                 # Descriptive labels a code/2-char lookup misses:
                 # "Hebrew", "Hebrew SDH", "Forced Hebrew", or Hebrew script.
@@ -253,8 +253,7 @@ def note_playback_streams(info, streams=None, final=False):
             _rel = ''
             if has_he:
                 from resources.lib.ai_translation.reuse import pool_contribute
-                from resources.lib.fetching import pool_client
-                _rel = pool_client._release_from(info)
+                _rel = video_context.release_name(info, 'pool')
                 pool_contribute.report_embedded(info)
                 try:
                     from resources.lib import he_sub_match as _hsm
@@ -386,11 +385,10 @@ def embedded_candidates(info):
     try:
         if any(_stream_code(n) == 'he' for n in streams):
             from resources.lib.ai_translation.reuse import pool_contribute
-            from resources.lib.fetching import pool_client
             pool_contribute.report_embedded(info)
             try:
                 from resources.lib import he_sub_match as _hsm
-                _rel = pool_client._release_from(info)
+                _rel = video_context.release_name(info, 'pool')
                 if _rel:
                     _hsm.merge_embedded(info, [_rel])
             except Exception:
@@ -439,8 +437,8 @@ def _iso639_1(name):
     n = (name or '').strip().lower()
     if len(n) == 3:
         try:
-            from resources.lib.fetching.embedded.embedded_extract import _lang_key
-            k = _lang_key(n)
+            from resources.lib.fetching.embedded.embedded_extract import lang_key
+            k = lang_key(n)
             if len(k) == 2:
                 return k
         except Exception:
@@ -466,10 +464,10 @@ def is_external_stream(name):
 def _stream_code(name):
     """The code an embedded stream's row and pick go by."""
     n = (name or '').strip().lower()
-    return _LANG_NORMALIZE.get(n) or _iso639_1(n)
+    return LANG_NORMALIZE.get(n) or _iso639_1(n)
 
 # Fix common non-ISO-639-1 codes some providers emit so Kodi shows a flag.
-_LANG_NORMALIZE = {
+LANG_NORMALIZE = {
     'gr': 'el', 'gre': 'el', 'ell': 'el', 'greek': 'el',
     'sp': 'es', 'spa': 'es', 'spanish': 'es',
     'per': 'fa', 'fas': 'fa', 'far': 'fa', 'persian': 'fa',
@@ -533,11 +531,11 @@ def download(payload, for_delivery=True):
     separate RTL-rendered copy for a Hebrew SRT/VTT. Neither path performs any
     Worker request by itself.
     """
-    from resources.lib.fetching.bridge import _download_inner
+    from resources.lib.fetching.bridge import download_inner
     if not enabled():
         return None
     try:
-        return _download_inner(payload, for_delivery=for_delivery)
+        return download_inner(payload, for_delivery=for_delivery)
     except Exception as e:
         kodi.log('subs_engine_bridge.download failed ({0}): {1}'.format(
             (payload.get('source') or '?'), e), level='ERROR')

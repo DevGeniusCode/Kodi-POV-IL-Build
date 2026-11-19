@@ -16,12 +16,12 @@ try:
     from resources.lib.sync.align import common, retime
 except Exception:
     common = retime = None
-from resources.lib.sync.delivery_record import _clear_delivery, _record_delivery
-from resources.lib.sync.jobs import _clear_job_pending, _enqueue_deep, _fix_notice, _mark_pending, _selection_matches, _write_fixed
-from resources.lib.sync.probes.bundle import _cached_reference_bundle
-from resources.lib.sync.probes.cache import _known_cut_signature
-from resources.lib.sync.probes.remote import _playing_url, _remote_playing_url
-from resources.lib.sync.verdicts import _VERDICT_VERSION, _cache_key, _community_verdict, _load_verdicts, _store_verdict
+from resources.lib.sync.delivery_record import clear_delivery, record_delivery
+from resources.lib.sync.jobs import clear_job_pending, enqueue_deep, fix_notice, mark_pending, selection_matches, write_fixed
+from resources.lib.sync.probes.bundle import cached_reference_bundle
+from resources.lib.sync.probes.cache import known_cut_signature
+from resources.lib.sync.probes.remote import playing_url, remote_playing_url
+from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, community_verdict, load_verdicts, store_verdict
 
 
 # Trusted tiers need no verification at delivery time (same release / same
@@ -29,14 +29,14 @@ from resources.lib.sync.verdicts import _VERDICT_VERSION, _cache_key, _community
 _STATUS_TRUSTED = 'TRUSTED'
 
 
-def _selection_snapshot():
+def selection_snapshot():
     try:
         return core_selection.current_subtitle_selection() or {}
     except Exception:
         return {}
 
 
-def _publish_selection_status(state, source='local', selection=None):
+def publish_selection_status(state, source='local', selection=None):
     """Update the current pick's tiny UI record; never performs network I/O."""
     try:
         if kodi is not None:
@@ -54,7 +54,7 @@ def _publish_selection_status(state, source='local', selection=None):
     return False
 
 
-def _log(msg, level='INFO'):
+def log(msg, level='INFO'):
     try:
         kodi.log('subsync: ' + msg, level=level)
     except Exception:
@@ -74,13 +74,7 @@ def playing_release(info):
     uses), or '' when unknown/synthetic -- a synthesized player filename must
     never anchor verification."""
     try:
-        candidates = (info.get('picked_release'), info.get('tagline'),
-                      info.get('label'),
-                      os.path.basename(info.get('filepath') or ''),
-                      info.get('title'))
-        ref = next((str(value).strip() for value in candidates
-                    if value and not video_context.release_conflicts_with_episode(
-                        value, info.get('season'), info.get('episode'))), '')
+        ref = video_context.release_name(info, 'sync')
         if not ref or scoring_matching_release is None:
             return ''
         if scoring_matching_release.is_synthetic(ref):
@@ -131,20 +125,20 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         # A download/AI translation may finish much later; by then another
         # subtitle may be current. Never cancel, label, learn from or queue the
         # old result against that newer selection.
-        selection = (_selection_snapshot()
+        selection = (selection_snapshot()
                      if selection is None else selection)
-        if not _selection_matches(selection):
-            _log('delivery skipped: selection no longer owns player')
+        if not selection_matches(selection):
+            log('delivery skipped: selection no longer owns player')
             return path, None
         if common is None or scoring_matching_release is None or not enabled():
-            _log('delivery skipped: verifier unavailable or disabled')
+            log('delivery skipped: verifier unavailable or disabled')
             return path, None
         if not path or not os.path.isfile(path):
             return path, None
         playing = playing_release(info)
-        if not playing and not (_playing_url(info)
-                                or _remote_playing_url(info)):
-            _log('delivery unverified: playing release unavailable')
+        if not playing and not (playing_url(info)
+                                or remote_playing_url(info)):
+            log('delivery unverified: playing release unavailable')
             core_selection.stage_subtitle_delivery(
                 path, selection=selection,
                 status='unverified', source='no-release')
@@ -153,7 +147,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
             # No trustworthy release name (e.g. "Episode.Title.mp4"): nothing
             # can anchor a provider oracle or a shared record, but the playing
             # file's own subtitle timeline needs no name at all.
-            _log('playing release unavailable; file evidence only')
+            log('playing release unavailable; file evidence only')
 
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
@@ -162,8 +156,8 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
             return path, None
         if not text.strip():
             return path, None
-        cut_signature = _known_cut_signature(info, playing)
-        key = _cache_key(text, playing, cut_signature)
+        cut_signature = known_cut_signature(info, playing)
+        key = cache_key(text, playing, cut_signature)
 
         # Trusted tier -> synced by release identity; nothing to do (still
         # recorded so a manual-delay fix on it feeds the community registry).
@@ -171,9 +165,9 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         if rel:
             _pct, tier, _ = scoring_matching_release.score(playing, rel)
             if tier in scoring_matching_release.AUTO_OK_TIERS:
-                _log('delivery trusted by release tier: %s (%r for %r)'
+                log('delivery trusted by release tier: %s (%r for %r)'
                      % (tier, rel, playing))
-                _record_delivery(info, playing, key, 1.0, 0.0,
+                record_delivery(info, playing, key, 1.0, 0.0,
                                  cut_signature=cut_signature,
                                  selection=selection)
                 # A release label is a claim, not proof: Hebrew uploads are
@@ -187,17 +181,17 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                 core_selection.stage_subtitle_delivery(
                     path, selection=selection,
                     status='confirmed', source='release')
-                if _playing_url(info) or _remote_playing_url(info):
-                    marked = _mark_pending(key, selection=selection)
-                    if (marked and not _enqueue_deep(
+                if playing_url(info) or remote_playing_url(info):
+                    marked = mark_pending(key, selection=selection)
+                    if (marked and not enqueue_deep(
                             info, path, rel, playing, key,
                             file_only=True, selection=selection,
                             fallback_links=fallback_links)):
-                        _log('file-check job queue unavailable', level='DEBUG')
+                        log('file-check job queue unavailable', level='DEBUG')
                 return path, {'status': _STATUS_TRUSTED, 'tier': tier}
 
-        cached = _load_verdicts().get(key)
-        if cached and cached.get('v') != _VERDICT_VERSION:
+        cached = load_verdicts().get(key)
+        if cached and cached.get('v') != VERDICT_VERSION:
             cached = None   # stored by an older engine -- recompute
         if cached:
             status = cached.get('status')
@@ -205,16 +199,16 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                 try:
                     fixed = retime.apply_verdict(text, cached)
                 except Exception as e:
-                    _log('cached FIXABLE failed structural recheck: %r' % e,
+                    log('cached FIXABLE failed structural recheck: %r' % e,
                          level='WARNING')
                     fixed = ''
-                out = _write_fixed(path, fixed)
+                out = write_fixed(path, fixed)
                 if out:
                     # Quiet on repeat plays: the fix was announced ONCE when it
                     # was first computed; from then on it just works silently.
-                    _log('cached FIXABLE applied: ' + cached.get('diag', ''))
+                    log('cached FIXABLE applied: ' + cached.get('diag', ''))
                     if cached.get('mode', 'global') == 'global':
-                        _record_delivery(info, playing, key,
+                        record_delivery(info, playing, key,
                                          cached.get('scale', 1.0),
                                          cached.get('offset_ms', 0.0),
                                          cut_signature=cut_signature,
@@ -224,7 +218,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                         # subtitle corrected by several timeline regions.
                         # Remove the original zero/global record immediately,
                         # before the delay watcher can learn or share it.
-                        _clear_delivery(selection=selection)
+                        clear_delivery(selection=selection)
                     core_selection.stage_subtitle_sync_fix(
                         out, selection=selection, source='cache')
                     return out, {'status': status, 'applied': True,
@@ -235,7 +229,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                                  'diag': cached.get('diag', ''), 'cached': True}
             if status in (common.STATUS_CONFIRMED,
                           common.STATUS_UNKNOWN):
-                _record_delivery(info, playing, key, 1.0, 0.0,
+                record_delivery(info, playing, key, 1.0, 0.0,
                                  cut_signature=cut_signature,
                                  selection=selection)
                 core_selection.stage_subtitle_delivery(
@@ -246,8 +240,8 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                     source='cache')
                 if (status == common.STATUS_UNKNOWN
                         and (fallback_link or fallback_links)
-                        and _mark_pending(key, selection=selection)):
-                    _enqueue_deep(
+                        and mark_pending(key, selection=selection)):
+                    enqueue_deep(
                         info, path, rel, playing, key, selection=selection,
                         fallback_link=fallback_link,
                         fallback_links=fallback_links)
@@ -262,9 +256,9 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         # A remote first play has no exact cut id yet.  Do not apply the old
         # release-only community record blindly; the background verifier will
         # fingerprint the actual file and consult/store the scoped namespace.
-        cv = (None if ((_remote_playing_url(info) and not cut_signature)
+        cv = (None if ((remote_playing_url(info) and not cut_signature)
                        or not playing) else
-              _community_verdict(info, key, playing,
+              community_verdict(info, key, playing,
                                  cut_signature=cut_signature))
         # A community record is a shortcut, never stronger evidence than the
         # playing file. When this exact transport already has a cached
@@ -274,8 +268,8 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         # any unadjusted 15-minute watch as a human confirmation.
         if cv is not None and (
                 cv.get('status') == common.STATUS_CONFIRMED
-                or _cached_reference_bundle(info).get('cues')):
-            _log('community record deferred to file verification (%s)'
+                or cached_reference_bundle(info).get('cues')):
+            log('community record deferred to file verification (%s)'
                  % cv.get('status'))
             cv = None
         if cv is not None:
@@ -285,27 +279,27 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                     fixed = retime.apply_verdict(text, cv)
                 except Exception:
                     fixed = ''
-                out = _write_fixed(path, fixed)
+                out = write_fixed(path, fixed)
                 if out:
-                    _store_verdict(key, cv)
-                    _log('community FIXABLE applied: ' + cv.get('diag', ''))
+                    store_verdict(key, cv)
+                    log('community FIXABLE applied: ' + cv.get('diag', ''))
                     verdict = dict(cv, applied=True, community=True)
                     if cv.get('mode', 'global') == 'global':
-                        _record_delivery(info, playing, key,
+                        record_delivery(info, playing, key,
                                          cv.get('scale', 1.0),
                                          cv.get('offset_ms', 0.0),
                                          cut_signature=cut_signature,
                                          selection=selection)
                     else:
-                        _clear_delivery(selection=selection)
+                        clear_delivery(selection=selection)
                     core_selection.stage_subtitle_sync_fix(
                         out, selection=selection, source='community',
-                        notice=_fix_notice(verdict))
+                        notice=fix_notice(verdict))
                     return out, verdict
             elif status == common.STATUS_CONFIRMED:
-                _store_verdict(key, cv)
-                _log('community CONFIRMED: ' + cv.get('diag', ''))
-                _record_delivery(info, playing, key, 1.0, 0.0,
+                store_verdict(key, cv)
+                log('community CONFIRMED: ' + cv.get('diag', ''))
+                record_delivery(info, playing, key, 1.0, 0.0,
                                  cut_signature=cut_signature,
                                  selection=selection)
                 core_selection.stage_subtitle_delivery(
@@ -320,7 +314,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         # pattern as the he_warm drainer), deliver the ORIGINAL file now, and
         # let the worker swap in a fixed copy when (and only when) it proves
         # one -- self-healing delivery, per the plan's latency budget.
-        marked = _mark_pending(key, selection=selection)
+        marked = mark_pending(key, selection=selection)
         delivery_staged = bool(
             marked and core_selection.stage_subtitle_delivery(
                 path, selection=selection))
@@ -328,11 +322,11 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         # worker can only replace "checking" with its result, never have this
         # foreground path overwrite a verdict that has already completed.
         if delivery_staged:
-            _publish_selection_status(
+            publish_selection_status(
                 'checking', 'local', selection=selection)
-        _record_delivery(info, playing, key, 1.0, 0.0,
+        record_delivery(info, playing, key, 1.0, 0.0,
                          cut_signature=cut_signature, selection=selection)
-        if (delivery_staged and _enqueue_deep(
+        if (delivery_staged and enqueue_deep(
                 info, path, rel, playing, key, selection=selection,
                 fallback_link=fallback_link,
                 fallback_links=fallback_links)):
@@ -343,7 +337,7 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
             core_selection.clear_subtitle_delivery(path, selection=selection)
         except Exception:
             pass
-        _clear_job_pending({
+        clear_job_pending({
             'key': key,
             'selection_token': selection.get('token') or '',
             'selection_hash': selection.get('link_hash') or '',
@@ -356,8 +350,8 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         core_selection.stage_subtitle_delivery(
             path, selection=selection,
             status='unverified', source='queue')
-        _log('deep verify deferred: service queue unavailable', level='WARNING')
+        log('deep verify deferred: service queue unavailable', level='WARNING')
         return path, {'status': 'DEFERRED'}
     except Exception as e:
-        _log('process failed (fail-open): %r' % e, level='WARNING')
+        log('process failed (fail-open): %r' % e, level='WARNING')
         return path, None

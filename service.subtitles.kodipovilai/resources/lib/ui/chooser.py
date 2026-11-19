@@ -40,11 +40,6 @@ def _log(msg, level='INFO'):
         pass
 
 
-def _video_ref(info):
-    return (info.get('picked_release') or info.get('tagline')
-            or info.get('label') or info.get('title') or '')
-
-
 # Real flag images (32x32, bundled in resources/media/flags) shown in the list's
 # icon column. Images never depend on the skin font, so they ALWAYS render -- the
 # old ★/◆/■ glyphs showed as empty boxes in some skins (e.g. FENtastic). The flag
@@ -207,7 +202,7 @@ def _start_ai_apply(link, info):
 
         if not _selection_current():
             return
-        payload = link_codec._decode_link(link) or {}
+        payload = link_codec.decode_link(link) or {}
         ai_link = link
         ai_payload = payload
         # engine_ai: download the foreign SOURCE sub now, then continue as 'ai'
@@ -236,7 +231,7 @@ def _start_ai_apply(link, info):
                 'release': payload.get('filename') or '',
                 'force_ai': True,
             }
-            ai_link = link_codec._encode_link(ai_payload)
+            ai_link = link_codec.encode_link(ai_payload)
         # embedded_ai: do NOT extract here -- a scattered remux takes minutes and
         # would freeze this short-lived chooser process. Hand the embedded_ai
         # link straight to the background translator below (ai_link / ai_payload
@@ -272,7 +267,7 @@ def _start_ai_apply(link, info):
         # progressively (writes versioned .srt + setSubtitles), same handler the
         # search dialog's fast path uses.
         try:
-            sid = source_prep._source_id_for_ai(ai_payload) or ''
+            sid = source_prep.source_id_for_ai(ai_payload) or ''
         except Exception:
             sid = ''
         try:
@@ -349,7 +344,7 @@ def _show_pyxbmct():
             self.info = info
             self.items = items
             self.setGeometry(950, 620, 9, 2)
-            head = _video_ref(info) or ''
+            head = video_context.release_name(info, 'chooser') or ''
             # Header (A): "נמצאו N כתוביות" + the title/release, with a compact
             # colour/symbol legend underneath so the row glyphs are decodable.
             n_found = len(self.items)
@@ -478,7 +473,7 @@ def _show_pyxbmct():
                             timing_selection.get('stream_hash') or ''))
                     except Exception:
                         return False
-                payload = link_codec._decode_link(link) or {}
+                payload = link_codec.decode_link(link) or {}
                 kind = payload.get('type')
                 # Embedded pick: switch Kodi's stream, no file to deliver.
                 if kind == 'engine' and payload.get('embedded'):
@@ -651,7 +646,7 @@ def _deliver_pick(c, info, close_cb):
                     timing_selection.get('stream_hash') or ''))
             except Exception:
                 return False
-        payload = link_codec._decode_link(link) or {}
+        payload = link_codec.decode_link(link) or {}
         kind = payload.get('type')
         if kind == 'engine' and payload.get('embedded'):
             try:
@@ -910,7 +905,7 @@ def _show():
 
             def onInit(self):
                 try:
-                    self.setProperty('subs.head', _video_ref(self.info) or '')
+                    self.setProperty('subs.head', video_context.release_name(self.info, 'chooser') or '')
                     try:
                         xbmcgui.Window(10000).setProperty(
                             'MoranSubsChooserOpen', '1')

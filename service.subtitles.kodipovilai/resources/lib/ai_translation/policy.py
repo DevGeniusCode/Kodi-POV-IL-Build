@@ -37,7 +37,7 @@ def _embedded_translation_mode():
         return 'auto'
 
 
-def _embedded_translation_policy():
+def embedded_translation_policy():
     mode = _embedded_translation_mode()
     try:
         return settings.embedded_translation_policy(mode)
@@ -62,6 +62,6 @@ ALL_SOURCE_LANGS = [
 ]
 
 
-def _enabled_sources():
+def enabled_sources():
     return [code for code, key in ALL_SOURCE_LANGS
             if settings.get_bool(key, code in ('en', 'es'))]

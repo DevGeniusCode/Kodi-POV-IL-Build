@@ -12,7 +12,7 @@ except ImportError:
     xbmc = xbmcgui = xbmcplugin = xbmcvfs = None
 
 
-def _title():
+def dialogs_title():
     """The brand title of every dialog (the single constant lives in sub_utils.DIALOG_TITLE;
     imported lazily so a bad import path cannot stop the plugin from registering)."""
     from default import ADDON_ID
@@ -23,7 +23,7 @@ def _title():
         return ADDON_ID
 
 
-def _safe_log(msg, level='INFO'):
+def safe_log(msg, level='INFO'):
     from default import ADDON_ID
     try:
         from resources.lib.core import kodi

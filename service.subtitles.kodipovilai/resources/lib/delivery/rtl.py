@@ -6,7 +6,7 @@ import os
 from resources.lib.core import kodi
 from resources.lib.ai_translation.repairs import postfix_cleanup, postfix_glyphs, postfix_leaks, postfix_rtl
 from resources.lib.core.srt import timing
-from resources.lib.ai_translation.repairs.leak_rescue import _rescue_reasoning_leaks
+from resources.lib.ai_translation.repairs.leak_rescue import rescue_reasoning_leaks
 
 
 # Only plain timed-text formats can be passed through srt.fix_rtl_punctuation
@@ -41,7 +41,7 @@ def is_logical_source(path):
         return False
 
 
-def _mark_logical_source(path):
+def mark_logical_source(path):
     """Mark a freshly downloaded file as pristine logical-order text.
 
     Existing unmarked v2 entries are known to predate this change and may carry
@@ -58,7 +58,7 @@ def _mark_logical_source(path):
         pass
 
 
-def _render_hebrew_rtl_copy(sub_file, legacy_engine=False):
+def render_hebrew_rtl_copy(sub_file, legacy_engine=False):
     """Return a playback-only RTL copy while leaving ``sub_file`` untouched.
 
     The source bytes, source hash and ".shared" marker remain stable, so this
@@ -120,7 +120,7 @@ def _render_hebrew_rtl_copy(sub_file, legacy_engine=False):
         return sub_file
 
 
-def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None,
+def reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None,
                               source=None, source_lang='auto'):
     """Repair a cached translation in place: RTL punctuation AND cue timings.
     Catches up files that were cached before the current version's fixes were
@@ -160,7 +160,7 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None,
         # Same provenance gate: only our model writes its working into a cue.
         # `source` / `source_lang` are what the caller has, for a cue with no
         # Hebrew answer of its own (Google, then the source line itself).
-        body, _leaks = _rescue_reasoning_leaks(body, source, source_lang)
+        body, _leaks = rescue_reasoning_leaks(body, source, source_lang)
         body = postfix_glyphs.strip_leaked_arabic(body)
     # Same provenance gate as the Arabic strip, for the same reason: dropping a
     # cue's leading non-Hebrew lines is only ever right for OUR model's output.
@@ -203,7 +203,7 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None,
         except OSError: pass
 
 
-def _rtl_delivery_copy(path, legacy_engine='auto'):
+def rtl_delivery_copy(path, legacy_engine='auto'):
     """Render a Hebrew local-file candidate without touching its source bytes.
 
     A file sitting next to the video is not necessarily healthy: it may be an

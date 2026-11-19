@@ -5,11 +5,11 @@
 import re
 import bisect
 import math
-from resources.lib.core.srt.cues import _TIME_RE, _ms_to_stamp, _preflight_srt, _to_ms
-from resources.lib.sync.align.common import CONFIRM_OFFSET_MS, MAX_PLAUSIBLE_OFFSET_MS, MIN_CUES, MIN_OVERLAP, SCALE_MAX, SCALE_MIN, STATUS_CONFIRMED, STATUS_FIXABLE, STATUS_UNKNOWN, _ENV_NEAR_MS, _MICRO_MAX_SEGMENTS, _REGION_FINE_MIN_GAIN, _TIGHT_MIN, _UNIQUE_MIN
-from resources.lib.sync.align.estimate import _breathe, estimate
-from resources.lib.sync.align.piecewise import _local_spread, _local_windows, _map_cues_global, _piecewise_plan, _smooth_drift_refinement, _trusted_local_windows
-from resources.lib.sync.align.verify import _edge_windows, _required_tight, _rescue_regions_agree, _tight_agreement, _timing_score, _unique_match_metrics, coverage_profile, overlap_rate, verify
+from resources.lib.core.srt.cues import TIME_RE, ms_to_stamp, preflight_srt, to_ms
+from resources.lib.sync.align.common import CONFIRM_OFFSET_MS, MAX_PLAUSIBLE_OFFSET_MS, MIN_CUES, MIN_OVERLAP, SCALE_MAX, SCALE_MIN, STATUS_CONFIRMED, STATUS_FIXABLE, STATUS_UNKNOWN, ENV_NEAR_MS, MICRO_MAX_SEGMENTS, REGION_FINE_MIN_GAIN, TIGHT_MIN, UNIQUE_MIN
+from resources.lib.sync.align.estimate import breathe, estimate
+from resources.lib.sync.align.piecewise import piecewise_local_spread, piecewise_local_windows, map_cues_global, piecewise_plan, smooth_drift_refinement, trusted_local_windows
+from resources.lib.sync.align.verify import edge_windows, required_tight, rescue_regions_agree, tight_agreement, timing_score, unique_match_metrics, coverage_profile, overlap_rate, verify
 
 
 MIN_VOTE = 0.65       # histogram peak must carry >=65% of sampled cues
@@ -36,7 +36,7 @@ _COV_MIN_CUES = 60           # dense references only; sparse ones stay strict
 _COV_TIGHT_FLOOR = 0.40
 
 
-def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
+def gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
           max_offset_ms=None, allow_piecewise=True, require_tight=True,
           _allow_scale_refine=True):
     _mv = MIN_VOTE if min_vote is None else min_vote
@@ -49,7 +49,7 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
     a, b, vote = estimate(ref, cand, scales=scales,
                           max_offset_ms=max_offset_ms)
     ov = overlap_rate(ref, cand, a, b)
-    unique, unique_median, unique_p95 = _unique_match_metrics(ref, cand, a, b)
+    unique, unique_median, unique_p95 = unique_match_metrics(ref, cand, a, b)
     # Tight agreement is the REAL quality signal (a genuine offset lands almost
     # every ref cue within _TIGHT_MS; a spurious peak ~0.65-0.72). Compute it up
     # front for any real shift so it's visible in EVERY diagnostic -- including
@@ -57,7 +57,7 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
     # was actually good (field: an oracle match at -926ms/61% vote).
     tight = None
     if abs(b) > CONFIRM_OFFSET_MS:
-        tight = _tight_agreement(ref, cand, a, b)
+        tight = tight_agreement(ref, cand, a, b)
     diag = ('scale=%.6f offset=%+dms vote=%.0f%% overlap=%.0f%% '
             'unique=%.0f%%%s') % (
         a, int(b), vote * 100, ov * 100, unique * 100,
@@ -66,18 +66,18 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
     # One strong region must not hide another region on a different clock.
     # Run this BEFORE accepting/rejecting the global vote: a two-cut subtitle can
     # sit just below the global vote floor while every local region is clear.
-    local_windows = _local_windows(
+    local_windows = piecewise_local_windows(
         ref, cand, a, max_offset_ms=max_offset_ms, center_offset=b)
-    trusted_local = _trusted_local_windows(local_windows)
-    local_spread = _local_spread(local_windows)
+    trusted_local = trusted_local_windows(local_windows)
+    local_spread = piecewise_local_spread(local_windows)
     # A smooth local-offset slope is continuous clock drift, not a cut.  Refit
     # once to that measured scale, then demand the complete normal gate.  An
     # explicit caller scale (notably sparse audio and same-disc references)
     # remains pinned and is never overridden.
     if _allow_scale_refine and scales is None:
-        drift = _smooth_drift_refinement(local_windows, a)
+        drift = smooth_drift_refinement(local_windows, a)
         if drift is not None:
-            refined = _gate(
+            refined = gate(
                 ref, cand, min_vote=_mv, min_overlap=_mo,
                 scales=(drift['scale'],), max_offset_ms=max_offset_ms,
                 allow_piecewise=allow_piecewise,
@@ -99,7 +99,7 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
         # majority first.
         if (allow_piecewise and vote >= min(_mv, 0.45)
                 and ov >= min(_mo, 0.55)):
-            segments, pinfo = _piecewise_plan(
+            segments, pinfo = piecewise_plan(
                 ref, cand, a, _mo, max_offset_ms=max_offset_ms)
             if segments:
                 pscale = pinfo.get('scale', a)
@@ -144,7 +144,7 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
                          % ('?' if local_range is None else int(local_range),
                             len(trusted_local), len(local_windows), diag))}
     if (not (SCALE_MIN <= a <= SCALE_MAX) or vote < _mv or ov < _mo
-            or unique < _UNIQUE_MIN):
+            or unique < UNIQUE_MIN):
         return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
                 'vote': vote, 'overlap': ov, 'unique': unique,
                 'unique_median_ms': unique_median,
@@ -161,10 +161,10 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
     # must clear a bar that grows with the size of the jump, on dense refs too.
     coverage_rescue = False
     if tight is not None and require_tight:
-        need = _required_tight(b, len(ref), vote, ov)
+        need = required_tight(b, len(ref), vote, ov)
         diag += ' (need %.0f%%)' % (need * 100)
         dense = len(ref) >= _COV_MIN_CUES and len(cand) >= _COV_MIN_CUES
-        small_weak = abs(b) <= 1500 and tight < _TIGHT_MIN
+        small_weak = abs(b) <= 1500 and tight < TIGHT_MIN
         coverage = None
         if dense and (tight < need or small_weak):
             coverage = coverage_profile(ref, cand, a, b)
@@ -179,8 +179,8 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
             # global shift must never mis-time a correctly timed minority
             # region that the coarse local-consistency guard cannot see
             # between different subbers).
-            regions_ok, regions_diag = _rescue_regions_agree(
-                local_windows, b, _edge_windows(ref, cand, a, b))
+            regions_ok, regions_diag = rescue_regions_agree(
+                local_windows, b, edge_windows(ref, cand, a, b))
             if not (coverage is not None and coverage['corroborates']
                     and tight >= _COV_TIGHT_FLOOR and regions_ok):
                 return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
@@ -209,8 +209,8 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
     # over a previously-correct majority.  Even attractive vote/overlap then
     # represents redistribution, not improvement; refuse unless the complete
     # timing score improves materially.
-    before_score = _timing_score(ref, cand)
-    after_score = _timing_score(ref, _map_cues_global(cand, a, b))
+    before_score = timing_score(ref, cand)
+    after_score = timing_score(ref, map_cues_global(cand, a, b))
     if after_score < before_score + 0.01:
         return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
                 'vote': vote, 'overlap': ov, 'unique': unique,
@@ -249,12 +249,12 @@ def retime(cand_srt_text, scale, offset_ms, segments=None, strict=False):
     idx = 0
     text = cand_srt_text.lstrip('﻿')
     for block in re.split(r'\r?\n\r?\n+', text):
-        _breathe()
-        m = _TIME_RE.search(block)
+        breathe()
+        m = TIME_RE.search(block)
         if not m:
             continue
-        start = _to_ms(*m.group(1, 2, 3, 4))
-        end = _to_ms(*m.group(5, 6, 7, 8))
+        start = to_ms(*m.group(1, 2, 3, 4))
+        end = to_ms(*m.group(5, 6, 7, 8))
         applied_offset = offset_ms
         if segments:
             si = bisect.bisect_right(boundaries, start)
@@ -271,7 +271,7 @@ def retime(cand_srt_text, scale, offset_ms, segments=None, strict=False):
         body = body.strip('\n')
         idx += 1
         out_blocks.append('{0}\n{1} --> {2}\n{3}'.format(
-            idx, _ms_to_stamp(ns), _ms_to_stamp(ne), body.strip()))
+            idx, ms_to_stamp(ns), ms_to_stamp(ne), body.strip()))
     return '\n\n'.join(out_blocks) + '\n'
 
 
@@ -279,12 +279,12 @@ def _timed_signature(text):
     """Original-order timing/text signature for post-transform invariants."""
     out = []
     for block in re.split(r'\r?\n\r?\n+', (text or '').lstrip('﻿')):
-        _breathe()
-        m = _TIME_RE.search(block)
+        breathe()
+        m = TIME_RE.search(block)
         if not m:
             continue
-        start = _to_ms(*m.group(1, 2, 3, 4))
-        end = _to_ms(*m.group(5, 6, 7, 8))
+        start = to_ms(*m.group(1, 2, 3, 4))
+        end = to_ms(*m.group(5, 6, 7, 8))
         body = block[m.end():].strip('\r\n').strip()
         out.append((start, end, body))
     return out
@@ -454,7 +454,7 @@ def apply_verdict(cand_srt_text, verdict):
                     and float(verdict.get('holdout_score_min') or 0.0) >= 0.85
                     and float(verdict.get('holdout_gain_min') or 0.0) >= 0.15
                     and 3 <= len(verdict.get('segments') or [])
-                    <= _MICRO_MAX_SEGMENTS)
+                    <= MICRO_MAX_SEGMENTS)
             except (TypeError, ValueError):
                 native_lane = False
         # A file whose only subtitles are PGS: the map was learned from the
@@ -468,7 +468,7 @@ def apply_verdict(cand_srt_text, verdict):
                     and float(verdict.get('holdout_score_min') or 0.0) >= 0.85
                     and float(verdict.get('holdout_gain_min') or 0.0) >= 0.15
                     and 3 <= len(verdict.get('segments') or [])
-                    <= _MICRO_MAX_SEGMENTS)
+                    <= MICRO_MAX_SEGMENTS)
             except (TypeError, ValueError):
                 native_pgs = False
         # A streaming rip whose subtitles are all text: the map was learned
@@ -485,9 +485,9 @@ def apply_verdict(cand_srt_text, verdict):
                     # (the folds compared after >= before + gain: allow the
                     # last bit of the subtraction)
                     and float(verdict.get('holdout_gain_min') or 0.0)
-                    >= _REGION_FINE_MIN_GAIN - 1e-9
+                    >= REGION_FINE_MIN_GAIN - 1e-9
                     and 2 <= len(verdict.get('segments') or [])
-                    <= _MICRO_MAX_SEGMENTS)
+                    <= MICRO_MAX_SEGMENTS)
             except (TypeError, ValueError):
                 native_text = False
         # The playing file's own audio as the independent family: the Hebrew
@@ -503,9 +503,9 @@ def apply_verdict(cand_srt_text, verdict):
                     and int(verdict.get('envelope_trusted') or 0) >= 6
                     and int(verdict.get('envelope_windows') or 0) >= 6
                     and abs(float(verdict.get('envelope_offset_ms') or 0.0))
-                    <= _ENV_NEAR_MS
+                    <= ENV_NEAR_MS
                     and 2 <= len(verdict.get('segments') or [])
-                    <= _MICRO_MAX_SEGMENTS)
+                    <= MICRO_MAX_SEGMENTS)
             except (TypeError, ValueError):
                 envelope_proof = False
         if (validation_folds < 4
@@ -514,7 +514,7 @@ def apply_verdict(cand_srt_text, verdict):
                     and not envelope_proof and not native_lane
                     and not native_pgs and not native_text)):
             raise ValueError('piecewise proposal lacks holdout/family validation')
-    _all_cues, preflight_error = _preflight_srt(cand_srt_text, True)
+    _all_cues, preflight_error = preflight_srt(cand_srt_text, True)
     if preflight_error:
         raise ValueError('source subtitle failed structural preflight: '
                          + preflight_error)

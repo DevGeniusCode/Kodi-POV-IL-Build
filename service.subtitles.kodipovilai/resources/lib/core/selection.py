@@ -23,7 +23,7 @@ except ImportError:
     xbmcaddon = None
     xbmcvfs = None
     xbmcgui = None
-from resources.lib.core.kodi import _home_window, notify
+from resources.lib.core.kodi import home_window, notify
 from resources.lib.core.video_context import current_video_info
 
 
@@ -213,7 +213,7 @@ def _new_subtitle_selection_token(link):
 def clear_subtitle_sync_status():
     """Clear the tiny current-selection status record (no disk/network I/O)."""
     try:
-        win = _home_window()
+        win = home_window()
         if win is not None:
             token = win.getProperty(_CURRENT_SUB_TOKEN_PROP) or ''
             if token:
@@ -235,7 +235,7 @@ def set_current_subtitle(link, renew=False):
     if not KODI_AVAILABLE:
         return
     try:
-        win = _home_window()
+        win = home_window()
         if win is None:
             return
         new_link = link or ''
@@ -278,7 +278,7 @@ def get_current_subtitle():
     if not KODI_AVAILABLE:
         return ''
     try:
-        win = _home_window()
+        win = home_window()
         if win is not None:
             value = win.getProperty(_CURRENT_SUB_PROP) or ''
             if value:
@@ -294,7 +294,7 @@ def get_current_subtitle_identity():
     if not KODI_AVAILABLE:
         return ''
     try:
-        win = _home_window()
+        win = home_window()
         value = (win.getProperty(_CURRENT_SUB_ID_PROP) or '') if win else ''
         if value:
             return value
@@ -310,7 +310,7 @@ def get_subtitle_selection_token():
     if not KODI_AVAILABLE:
         return ''
     try:
-        win = _home_window()
+        win = home_window()
         return (win.getProperty(_CURRENT_SUB_TOKEN_PROP) or '') if win else ''
     except Exception:
         return ''
@@ -397,7 +397,7 @@ def set_subtitle_sync_status(state, source='', link=None, stream_url=None,
             'stream': current_stream_hash,
             'ts': int(time.time()),
         }
-        win = _home_window()
+        win = home_window()
         if win is None:
             return False
         raw = json.dumps(payload, separators=(',', ':'))
@@ -425,7 +425,7 @@ def get_subtitle_sync_status(link=None, stream_url=None):
         selected = current if link is None else (link or '')
         if not current or selected != current:
             return {}
-        win = _home_window()
+        win = home_window()
         token = get_subtitle_selection_token()
         raw = (win.getProperty(_CURRENT_SUB_STATUS_PROP + '.' + token)
                if win and token else '')
@@ -490,7 +490,7 @@ def stage_subtitle_delivery(path, selection=None, status='', source=''):
             'source': (source or '')[:24],
             'ts': int(time.time()),
         }
-        win = _home_window()
+        win = home_window()
         if win is None:
             return False
         prop = _CURRENT_SUB_DELIVERY_PROP + '.' + expected['token']
@@ -517,7 +517,7 @@ def _subtitle_delivery_record(path, selection=None, require_current=True):
                 expected['token'], expected['link_hash'],
                 expected['stream_hash'])):
             return {}, expected, '', None
-        win = _home_window()
+        win = home_window()
         prop = _CURRENT_SUB_DELIVERY_PROP + '.' + expected['token']
         raw = win.getProperty(prop) if win else ''
         record = json.loads(raw) if raw else {}
@@ -585,7 +585,7 @@ def clear_subtitle_delivery(path=None, selection=None):
         expected = _selection_values(selection)
         if not expected.get('token'):
             return False
-        win = _home_window()
+        win = home_window()
         if win is None:
             return False
         prop = _CURRENT_SUB_DELIVERY_PROP + '.' + expected['token']
@@ -643,7 +643,7 @@ def stage_subtitle_sync_fix(path, selection=None, source='local', notice=''):
             'notice': (notice or '')[:96],
             'ts': int(time.time()),
         }
-        win = _home_window()
+        win = home_window()
         if win is None:
             return False
         prop = _CURRENT_SUB_FIX_READY_PROP + '.' + expected['token']
@@ -669,7 +669,7 @@ def subtitle_sync_fix_staged(path, selection=None):
                     expected['token'], expected['link_hash'],
                     expected['stream_hash'])):
             return False
-        win = _home_window()
+        win = home_window()
         raw = (win.getProperty(
             _CURRENT_SUB_FIX_READY_PROP + '.' + expected['token'])
                if win else '')
@@ -847,7 +847,7 @@ def confirm_subtitle_sync_fix(path, selection=None):
                     expected['token'], expected['link_hash'],
                     expected['stream_hash'])):
             return False
-        win = _home_window()
+        win = home_window()
         prop = _CURRENT_SUB_FIX_READY_PROP + '.' + expected['token']
         raw = win.getProperty(prop) if win else ''
         record = json.loads(raw) if raw else {}

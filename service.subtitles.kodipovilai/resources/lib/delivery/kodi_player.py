@@ -13,7 +13,7 @@ try:
 except ImportError:
     # Allow `python -m default --action=search` for local debug.
     xbmc = xbmcgui = xbmcplugin = xbmcvfs = None
-from resources.lib.ui.dialogs import _safe_log, _title
+from resources.lib.ui.dialogs import safe_log, dialogs_title
 
 
 def _encode_selection_b64(selection):
@@ -29,7 +29,7 @@ def _encode_selection_b64(selection):
         return ''
 
 
-def _decode_selection_b64(value):
+def decode_selection_b64(value):
     try:
         import base64
         import json
@@ -41,7 +41,7 @@ def _decode_selection_b64(value):
         return {}
 
 
-def _handle_download(handle, params):
+def handle_download(handle, params):
     """User picked one of our entries -- deliver the SRT path."""
     from resources.lib.ai_translation import service
     from resources.lib.ai_translation.proofread import gp_jobs
@@ -87,7 +87,7 @@ def _handle_download(handle, params):
     # in the background -- instead of blocking the dialog open for the whole
     # 1-2 minute translation.
     try:
-        _p = link_codec._decode_link(link)
+        _p = link_codec.decode_link(link)
     except Exception:
         _p = None
 
@@ -117,7 +117,7 @@ def _handle_download(handle, params):
                     stream_hash=_timing_selection.get('stream_hash') or '')
                 kodi.notify('כתובית עברית מובנה הופעלה', time_ms=3000)
         except Exception as _e:
-            _safe_log('embedded select failed: {0}'.format(_e), level='WARNING')
+            safe_log('embedded select failed: {0}'.format(_e), level='WARNING')
         if not _embedded_selected:
             core_selection.abandon_subtitle_selection(_timing_selection)
         try:
@@ -140,10 +140,10 @@ def _handle_download(handle, params):
             kodi.notify('AI: מוריד את כתובית המקור...', time_ms=2500)
             eng_path = streams.download(_p)
         except Exception as _e:
-            _safe_log('engine_ai source download failed: {0}'.format(_e),
+            safe_log('engine_ai source download failed: {0}'.format(_e),
                       level='ERROR')
         if eng_path and os.path.isfile(eng_path):
-            link = link_codec._encode_link({
+            link = link_codec.encode_link({
                 'type': 'ai',
                 'source_lang': _p.get('src_lang') or 'en',
                 'local_path': eng_path,
@@ -190,7 +190,7 @@ def _handle_download(handle, params):
                 kodi.notify(
                     'AI: מחלץ ומתרגם תרגום מובנה ברקע', time_ms=3500)
         except Exception as _e:
-            _safe_log('embedded_ai bg fire failed: {0}'.format(_e),
+            safe_log('embedded_ai bg fire failed: {0}'.format(_e),
                       level='WARNING')
         try:
             xbmc.executebuiltin('Dialog.Close(all,true)')
@@ -226,7 +226,7 @@ def _handle_download(handle, params):
                     handle, link, info, selection=_timing_selection):
                 return  # endOfDirectory was called inside the helper
         except Exception as _e:
-            _safe_log('fast_download outer guard caught: {0}'
+            safe_log('fast_download outer guard caught: {0}'
                       .format(_e), level='WARNING')
 
     # AI translation links: CLOSE the dialog immediately and translate in the
@@ -237,13 +237,13 @@ def _handle_download(handle, params):
     # separate RunScript (bg_translate_picker), exactly like the fast path's
     # background step -- just without delivering an English fallback first.
     try:
-        _ai_payload = link_codec._decode_link(link)
+        _ai_payload = link_codec.decode_link(link)
     except Exception:
         _ai_payload = None
     if _ai_payload and _ai_payload.get('type') == 'ai':
         try:
             import base64 as _b64m
-            _sid = source_prep._source_id_for_ai(_ai_payload) or ''
+            _sid = source_prep.source_id_for_ai(_ai_payload) or ''
             _lk = _b64m.b64encode(link.encode('utf-8')).decode('ascii')
             _sd = _b64m.b64encode(_sid.encode('utf-8')).decode('ascii')
             _ss = _encode_selection_b64(_timing_selection)
@@ -256,7 +256,7 @@ def _handle_download(handle, params):
             except Exception:
                 pass
         except Exception as _e:
-            _safe_log('ai bg fire failed: {0}'.format(_e), level='WARNING')
+            safe_log('ai bg fire failed: {0}'.format(_e), level='WARNING')
         # Close the dialog now with no item -- same proven sequence as the
         # embedded-Hebrew pick (Dialog.Close -> empty -> sleep -> endOfDirectory).
         try:
@@ -284,7 +284,7 @@ def _handle_download(handle, params):
     progress = None
     try:
         progress = xbmcgui.DialogProgressBG()
-        progress.create(_title(),
+        progress.create(dialogs_title(),
                         'AI Hebrew')
     except Exception:
         progress = None
@@ -297,7 +297,7 @@ def _handle_download(handle, params):
             if progress is not None:
                 try:
                     progress.update(
-                        pct, _title(),
+                        pct, dialogs_title(),
                         kodi.localised(32631, stage, total))
                 except Exception:
                     pass
@@ -320,7 +320,7 @@ def _handle_download(handle, params):
         path = service.resolve(
             link, info, progress_cb=report, selection=_timing_selection)
     except Exception as e:
-        _safe_log('resolve crashed: {0}'.format(e), level='ERROR')
+        safe_log('resolve crashed: {0}'.format(e), level='ERROR')
         path = None
     finally:
         if progress is not None:
@@ -342,7 +342,7 @@ def _handle_download(handle, params):
                 path, link, fallback_selection = fallback
                 _timing_selection = fallback_selection
         except Exception as e:
-            _safe_log('next-hebrew fallback failed: {0}'.format(e),
+            safe_log('next-hebrew fallback failed: {0}'.format(e),
                       level='WARNING')
 
     if (path and os.path.isfile(path)
@@ -356,7 +356,7 @@ def _handle_download(handle, params):
             delivered = _deliver_named_subtitle(
                 handle, path, link, info, selection=_timing_selection)
         except Exception as _e:
-            _safe_log('named subtitle delivery failed: {0}'.format(_e),
+            safe_log('named subtitle delivery failed: {0}'.format(_e),
                       level='WARNING')
             delivered = False
         if delivered:
@@ -418,7 +418,7 @@ def _sanitise_sub_name(name):
     return cleaned
 
 
-def _playing_now():
+def playing_now():
     """True when Kodi still has a video player. Used to decide whether a failed
     canonical swap is dangerous. With a player up, deleting the progressive
     slots can strand the viewer on a removed file; with no player there is
@@ -429,7 +429,7 @@ def _playing_now():
         return False
 
 
-def _progressive_slot_path(cache_dir, source_id, slot, release=''):
+def progressive_slot_path(cache_dir, source_id, slot, release=''):
     """Path for a transient progressive-translation slot file. Kodi
     turns the basename into the subtitle label shown in the picker, so
     when we know the source RELEASE we name the slot after it (e.g.
@@ -452,7 +452,7 @@ def _progressive_slot_path(cache_dir, source_id, slot, release=''):
     return os.path.join(cache_dir, name)
 
 
-def _progressive_cleanup_patterns(source_id, release=''):
+def progressive_cleanup_patterns(source_id, release=''):
     """Glob patterns matching every transient slot file we may have
     written for one translation -- both the hash-named fallback and the
     release-named slots, plus the legacy _v* names from older builds.
@@ -492,7 +492,7 @@ def _subtitle_display_name(link, info, path):
     (caller then falls back to the normal flow)."""
     from resources.lib.core import link_codec
     try:
-        payload = link_codec._decode_link(link) or {}
+        payload = link_codec.decode_link(link) or {}
     except Exception:
         payload = {}
     kind = payload.get('type')
@@ -597,7 +597,7 @@ def _deliver_named_subtitle(handle, path, link, info, selection=None):
         if os.path.abspath(dest) != os.path.abspath(path):
             shutil.copyfile(path, dest)
     except OSError as _e:
-        _safe_log('named subtitle copy failed: {0}'.format(_e),
+        safe_log('named subtitle copy failed: {0}'.format(_e),
                   level='WARNING')
         return False
     if not _still_current():
@@ -605,7 +605,7 @@ def _deliver_named_subtitle(handle, path, link, info, selection=None):
     if not core_selection.apply_subtitle_file(
             dest, selection=expected, fix_path=path,
             abandon_on_failure=False):
-        _safe_log('named subtitle setSubtitles failed or became stale',
+        safe_log('named subtitle setSubtitles failed or became stale',
                   level='WARNING')
         return False
     # Close the dialog cleanly with no item -- same sequence the embedded
@@ -636,7 +636,7 @@ def _try_next_hebrew(failed_link, info, owner_selection=None):
     from resources.lib.fetching import service as fetching_service
     from resources.lib.core import kodi, selection as core_selection, link_codec
     try:
-        failed = link_codec._decode_link(failed_link) or {}
+        failed = link_codec.decode_link(failed_link) or {}
     except Exception:
         failed = {}
     # Skip the WHOLE source that just failed -- other subs from it (e.g. more
@@ -668,7 +668,7 @@ def _try_next_hebrew(failed_link, info, owner_selection=None):
         if not link2:
             continue
         try:
-            p2 = link_codec._decode_link(link2) or {}
+            p2 = link_codec.decode_link(link2) or {}
         except Exception:
             continue
         src = p2.get('source')
@@ -741,7 +741,7 @@ def _try_fast_download(handle, link, info, selection=None):
     except Exception:
         return False
 
-    payload = link_codec._decode_link(link)
+    payload = link_codec.decode_link(link)
     if not payload or payload.get('type') != 'ai':
         # passthrough / pool entries are short -- the existing path
         # handles them fine.
@@ -763,7 +763,7 @@ def _try_fast_download(handle, link, info, selection=None):
     if source_lang != 'en':
         return False
 
-    source_id = source_prep._source_id_for_ai(payload)
+    source_id = source_prep.source_id_for_ai(payload)
 
     # Cache hit fast path: serve cached Hebrew immediately. The
     # cache key here matches what list_candidates uses for its
@@ -791,13 +791,13 @@ def _try_fast_download(handle, link, info, selection=None):
             # resolve() looks in this same plain slot, i.e. with the gender
             # reference off. With it on, resolve() reads the 'ar' slot only,
             # so this file stays the instant hit it was.
-            _upgrade = (google_flow._google_cache_upgradeable(cached)
+            _upgrade = (google_flow.google_cache_upgradeable(cached)
                         and not settings.get_bool('gender_ref_arabic', False))
             if os.path.isfile(cached) and not _upgrade:
                 # A cached translation keeps its SOURCE subtitle's timing. Run
                 # the delivery through the same release-aware gate as resolve;
                 # any correction is a copy, never a rewrite of the AI cache.
-                cached_delivery = delivery_gate._sync_hebrew_delivery(
+                cached_delivery = delivery_gate.sync_hebrew_delivery(
                     info, cached,
                     source_release=(payload.get('release') or ''),
                     embedded_timing=bool(payload.get('embedded')),
@@ -836,7 +836,7 @@ def _try_fast_download(handle, link, info, selection=None):
                         pass
                 return True
         except Exception as _e:
-            _safe_log('fast_download cache check failed: {0}'
+            safe_log('fast_download cache check failed: {0}'
                       .format(_e), level='WARNING')
 
     # No cache hit. Read the source SRT inline (instant -- local file
@@ -848,7 +848,7 @@ def _try_fast_download(handle, link, info, selection=None):
                       errors='replace') as f:
                 src_text = f.read()
     except Exception as _e:
-        _safe_log('fast_download source read failed: {0}'
+        safe_log('fast_download source read failed: {0}'
                   .format(_e), level='WARNING')
 
     if not src_text:
@@ -879,7 +879,7 @@ def _try_fast_download(handle, link, info, selection=None):
             _f.write(src_text)
         os.replace(_tmp, fallback_path)
     except OSError as _e:
-        _safe_log('fast_download fallback write failed: {0}'
+        safe_log('fast_download fallback write failed: {0}'
                   .format(_e), level='ERROR')
         return False
 
@@ -918,7 +918,7 @@ def _try_fast_download(handle, link, info, selection=None):
             'link_b64={0},source_id_b64={1},selection_b64={2})'.format(
                 link_b64, source_id_b64, selection_b64))
     except Exception as _e:
-        _safe_log('fast_download BG fire failed: {0}'.format(_e),
+        safe_log('fast_download BG fire failed: {0}'.format(_e),
                   level='ERROR')
         # Subtitle was already delivered; BG didn't fire. User
         # gets English permanently for this play. Acceptable

@@ -28,7 +28,7 @@ def _breathe():
 _MAX_SUBTITLE_SAMPLES = 50000
 
 
-def _read_movie_index_source(file_size, read, max_bytes=None):
+def read_movie_index_source(file_size, read, max_bytes=None):
     """Read one moov box using bounded positional reads, including tail moov."""
     if file_size < 16:
         raise ValueError('short MP4 file')
@@ -64,14 +64,14 @@ def _read_movie_index_source(file_size, read, max_bytes=None):
     raise ValueError('MP4 movie index absent')
 
 
-def _read_movie_index(path):
+def read_movie_index(path):
     """Read the bounded moov box from a local file."""
     file_size = Path(path).stat().st_size
     with open(path, 'rb') as source:
         def read(offset, size):
             source.seek(offset)
             return source.read(size)
-        return _read_movie_index_source(file_size, read)
+        return read_movie_index_source(file_size, read)
 
 
 def boxes(data, begin=0, end=None):
@@ -198,7 +198,7 @@ def simple_edit(data, trak, movie_scale, media_scale):
 
 
 def cue_onsets(path, index_data=None):
-    data = index_data if index_data is not None else _read_movie_index(path)
+    data = index_data if index_data is not None else read_movie_index(path)
     top = list(boxes(data))
     moov = next(((a, b) for k, a, b in top if k == b'moov'), None)
     if not moov:
@@ -254,7 +254,7 @@ def cue_onsets(path, index_data=None):
     return result
 
 
-def _reference_from_index(index_bytes, log=None):
+def reference_from_index(index_bytes, log=None):
     emit = log or (lambda _message: None)
     try:
         profiles = cue_onsets(None, index_data=index_bytes)
@@ -295,12 +295,12 @@ def _reference_from_index(index_bytes, log=None):
 def subtitle_reference(path, log=None):
     """Return per-track cues from a local MP4/MOV file."""
     try:
-        index_bytes = _read_movie_index(path)
+        index_bytes = read_movie_index(path)
     except (OSError, ValueError, struct.error, OverflowError) as exc:
         (log or (lambda _message: None))(
             'MP4 index probe skipped: %s' % type(exc).__name__)
         return None
-    return _reference_from_index(index_bytes, log=log)
+    return reference_from_index(index_bytes, log=log)
 
 
 # ---- audio frame-size envelope --------------------------------------------
@@ -450,7 +450,7 @@ def audio_envelope_source(file_size, read, index_data=None, log=None):
     emit = log or (lambda _message: None)
     try:
         data = (index_data if index_data is not None
-                else _read_movie_index_source(file_size, read))
+                else read_movie_index_source(file_size, read))
         envelope = audio_envelope(data)
     except (OSError, ValueError, struct.error, OverflowError,
             ZeroDivisionError, TypeError, MemoryError) as exc:

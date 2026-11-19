@@ -15,11 +15,11 @@ try:
     from resources.lib.fetching import pool_client
 except Exception:
     pool_contribute = pool_client = None
-from resources.lib.core.link_codec import _decode_link
-from resources.lib.ai_translation.source_prep import _content_hash, _prepare_source, _prepared_source_reader
+from resources.lib.core.link_codec import decode_link
+from resources.lib.ai_translation.source_prep import content_hash, prepare_source, prepared_source_reader
 
 
-def _pool_reuse_fetch(info, content_id, ar_on):
+def pool_reuse_fetch(info, content_id, ar_on):
     """Whether the community pool already has a translation for THIS source hash;
     returns (path_or_None, is_ar). Consults the ALREADY-CACHED /lookup variant list
     (a cache-only peek that NEVER networks) so we only /sub-fetch a hash the pool
@@ -51,7 +51,7 @@ def _pool_reuse_fetch(info, content_id, ar_on):
     return None, False
 
 
-def _pool_local_id(source_hash):
+def pool_local_id(source_hash):
     """The file-name-safe id of a pooled variant's local copy: its source hash,
     or for any other key ("<hash>_ar", the Arabic-gender tier) 'h' and a hash
     of it. '' for none."""
@@ -65,7 +65,7 @@ def _pool_local_id(source_hash):
     return 'h' + _hpool.sha1(raw.encode('utf-8')).hexdigest()[:16]
 
 
-def _pool_source_text(info, source_hash, cache_only=False):
+def pool_source_text(info, source_hash, cache_only=False):
     """Read a pool SRT from the local immutable cache, fetching it only once.
 
     The hash-named source is never passed through RTL rendering in place. A
@@ -77,7 +77,7 @@ def _pool_source_text(info, source_hash, cache_only=False):
     """
     import hashlib as _hpool
     raw_hash = (source_hash or '').strip().lower()
-    safe_hash = _pool_local_id(raw_hash)
+    safe_hash = pool_local_id(raw_hash)
     if safe_hash:
         source_path = os.path.join(
             kodi.cache_dir(),
@@ -113,7 +113,7 @@ def _pool_source_text(info, source_hash, cache_only=False):
     return text, stable_id
 
 
-def _pool_quality_ok(src_text, final):
+def pool_quality_ok(src_text, final):
     """Quality gate before SHARING a translation to the community pool. Skips
     obviously-broken output so it can't pollute the pool: a truncated result
     (lost too many blocks vs the source -> failed/partial chunks) or one that
@@ -151,7 +151,7 @@ def _pool_quality_ok(src_text, final):
         return True
 
 
-def _pool_marker(translated_path, kind):
+def pool_marker(translated_path, kind):
     """One-shot '.shared' marker path for a pool contribution of `kind`.
     Embedded ('ai_emb') translations track a SEPARATE '<path>.emb2' marker
     (physical '<path>.emb2.shared') so they can UPGRADE a file already shared as
@@ -176,7 +176,7 @@ def _pool_marker(translated_path, kind):
     return (translated_path + '.emb2') if kind == 'ai_emb' else translated_path
 
 
-def _backfill_pool_async(info, translated_path, local_source, source_lang,
+def backfill_pool_async(info, translated_path, local_source, source_lang,
                          ar_tier=False, embedded=False):
     """Share an ALREADY-cached Hebrew translation to the community pool, in
     the background, the first time the user re-watches it after enabling
@@ -207,7 +207,7 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
             # Embedded upgrades run under a distinct '.emb2' marker (see
             # _pool_marker) so an already-'ai'-shared file can still emit its one
             # ai_emb contribution.
-            _marker = _pool_marker(translated_path, kind)
+            _marker = pool_marker(translated_path, kind)
             if not pool_client.share_enabled() or pool_contribute.was_contributed(_marker):
                 return
             cached = translation_cache.load_text(translated_path)
@@ -223,10 +223,10 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
                     raw = None
             if not raw:
                 return
-            prepared = _prepare_source(raw)
-            if not _pool_quality_ok(prepared, cached):
+            prepared = prepare_source(raw)
+            if not pool_quality_ok(prepared, cached):
                 return
-            cid = _content_hash(prepared)
+            cid = content_hash(prepared)
             _rel = None
             try:
                 with open(translated_path + '.release', 'r',
@@ -253,7 +253,7 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
         pass
 
 
-def _embedded_source_path(base_hash):
+def embedded_source_path(base_hash):
     """This device's copy of the subtitle an embedded translation was made
     from, under its content hash (the pool's key for that translation)."""
     return os.path.join(kodi.cache_dir(),
@@ -325,7 +325,7 @@ def _emb_source_laid(he_text, raw):
     from resources.lib.core.srt import cues as srt_cues
     from resources.lib.sync.align import common, retime, verify
     he_blocks = srt_blocks.parse_blocks(he_text)
-    laid = _emb_source_paired(he_blocks, _prepare_source(raw))
+    laid = _emb_source_paired(he_blocks, prepare_source(raw))
     if laid:
         return laid
     try:
@@ -337,13 +337,13 @@ def _emb_source_laid(he_text, raw):
         if verdict.get('status') != common.STATUS_FIXABLE:
             return ''
         # it refuses (raises) a map that would break the file
-        return _emb_source_paired(he_blocks, _prepare_source(
+        return _emb_source_paired(he_blocks, prepare_source(
             retime.apply_verdict(raw, verdict)))
     except Exception:
         return ''
 
 
-def _pool_pick_emb_source(info, pool_hash, source_lang, he_path):
+def pool_pick_emb_source(info, pool_hash, source_lang, he_path):
     """The subtitle a pooled EMBEDDED translation (ai_emb) was made from, for
     its proofread: the prepared text, '' when it is not to be had, None when
     the look failed.
@@ -365,10 +365,10 @@ def _pool_pick_emb_source(info, pool_hash, source_lang, he_path):
     base = pool_hash[:-3] if (pool_hash or '').endswith('_ar') else (pool_hash or '')
     if not base:
         return ''
-    kept = _embedded_source_path(base)
+    kept = embedded_source_path(base)
     if os.path.isfile(kept):
-        prepared = _prepared_source_reader(kept)()
-        if prepared and _content_hash(prepared) == base:
+        prepared = prepared_source_reader(kept)()
+        if prepared and content_hash(prepared) == base:
             return prepared
     try:
         he_text = translation_cache.load_text(he_path) or ''
@@ -389,7 +389,7 @@ def _pool_pick_emb_source(info, pool_hash, source_lang, he_path):
             if ((c.get('language') or '').strip().lower()[:2] != lang
                     or c.get('_engine_kind') not in (None, 'other')):
                 continue
-            p = _decode_link(c.get('link') or '') or {}
+            p = decode_link(c.get('link') or '') or {}
             if p.get('type') == 'engine' and not p.get('embedded'):
                 cands.append(p)
         playing = service.playing_release(info) or ''
@@ -425,7 +425,7 @@ def _pool_pick_emb_source(info, pool_hash, source_lang, he_path):
     return ''
 
 
-def _pool_pick_source(info, pool_hash, release):
+def pool_pick_source(info, pool_hash, release):
     """The subtitle a pooled translation was translated FROM, found in the
     engine's cached search (the list the viewer just picked from): the same
     release name, then the same content hash the pool keys it by. The
@@ -442,7 +442,7 @@ def _pool_pick_source(info, pool_hash, release):
             return None     # nothing cached: no look, so no week's pause
         tried = read = 0
         for c in rows:
-            p = _decode_link(c.get('link') or '') or {}
+            p = decode_link(c.get('link') or '') or {}
             if p.get('type') != 'engine' or p.get('filename') != release:
                 continue
             tried += 1
@@ -453,8 +453,8 @@ def _pool_pick_source(info, pool_hash, release):
                 continue
             read += 1
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
-                prepared = _prepare_source(f.read())
-            if _content_hash(prepared) == base:
+                prepared = prepare_source(f.read())
+            if content_hash(prepared) == base:
                 return prepared
         if tried and not read:
             return None     # no download came through: no look either

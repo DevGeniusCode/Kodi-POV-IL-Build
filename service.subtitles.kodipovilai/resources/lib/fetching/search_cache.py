@@ -8,6 +8,7 @@ import hashlib
 import os
 import time
 from resources.lib.core import kodi
+from resources.lib.core.cache.profile_dir import profile_subdir
 
 
 # ---- result cache (per media, short TTL) ----------------------------
@@ -24,8 +25,8 @@ def _cache_key(info):
     # 6h-stale results that still contain the now-disabled source.
     sig = ''
     try:
-        from resources.lib.core import kodi
-        a = kodi.addon()
+        from resources.lib.core import addon as core_addon
+        a = core_addon.addon()
         for s in ('ktuvit', 'wizdom', 'opensubtitles',
                   'yify', 'subsource', 'subscene', 'bsplayer', 'all_lang'):
             sig += '1' if (a.getSetting(s) or '') == 'true' else '0'
@@ -47,23 +48,23 @@ def _cache_key(info):
 _RECENT_TTL = 120
 
 
-_RECENT_PROP = 'moransubs.engine_recent'
+RECENT_PROP = 'moransubs.engine_recent'
 # Searches stopped at max_search_time, apart: the picker never reuses them.
-_CUT_PROP = 'moransubs.engine_recent_cut'
+CUT_PROP = 'moransubs.engine_recent_cut'
 _RECENT_KEEP = 3
 
 
 def _release_key(info):
     """The release name the match % is computed from, hashed."""
-    from resources.lib.fetching.bridge import _detect_release_name
+    from resources.lib.core import video_context
     try:
-        rel = _detect_release_name(info) or ''
+        rel = video_context.release_name(info, 'scored') or ''
     except Exception:
         rel = ''
     return hashlib.sha1(rel.encode('utf-8', 'replace')).hexdigest()[:16]
 
 
-def _recent_entries(prop=_RECENT_PROP):
+def _recent_entries(prop=RECENT_PROP):
     try:
         import xbmcgui
         raw = xbmcgui.Window(10000).getProperty(prop)
@@ -73,7 +74,7 @@ def _recent_entries(prop=_RECENT_PROP):
         return []
 
 
-def _recent_put(info, out, prop=_RECENT_PROP):
+def recent_put(info, out, prop=RECENT_PROP):
     key = _cache_key(info)
     if not key:
         return
@@ -96,7 +97,7 @@ def _recent_put(info, out, prop=_RECENT_PROP):
         pass
 
 
-def _recent_get(info, prop=_RECENT_PROP):
+def recent_get(info, prop=RECENT_PROP):
     """The finished search of the last two minutes for this media, or None
     (`prop` _CUT_PROP: the cut one)."""
     key = _cache_key(info)
@@ -121,20 +122,10 @@ def _recent_get(info, prop=_RECENT_PROP):
 
 
 def _cache_dir():
-    try:
-        import xbmcvfs
-        from resources.lib.core import kodi
-        base = xbmcvfs.translatePath(
-            kodi.addon().getAddonInfo('profile'))
-        d = os.path.join(base, 'engine_cache')
-        if not os.path.isdir(d):
-            os.makedirs(d)
-        return d
-    except Exception:
-        return None
+    return profile_subdir('engine_cache')
 
 
-def _cache_get(info, variant=''):
+def cache_get(info, variant=''):
     key = _cache_key(info)
     d = _cache_dir()
     if not key or not d:
@@ -152,7 +143,7 @@ def _cache_get(info, variant=''):
         return None
 
 
-def _cache_put(info, candidates, variant=''):
+def cache_put(info, candidates, variant=''):
     key = _cache_key(info)
     d = _cache_dir()
     if not key or not d:

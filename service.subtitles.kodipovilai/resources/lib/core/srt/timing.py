@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # SRT timing: re-aligning a translation to the source cues, pinned starts, duration clamps.
 
-from resources.lib.core.srt.blocks import _block_declared_index, _block_start, _block_timecode_index, _block_times, _fmt_tc, _rebuild_block, parse_blocks, stitch_blocks
+from resources.lib.core.srt.blocks import block_declared_index, block_start, block_timecode_index, block_times, fmt_tc, rebuild_block, parse_blocks, stitch_blocks
 
 
 # --- Cue-timing integrity ---------------------------------------------------
@@ -60,12 +60,12 @@ def missing_blocks(src_blocks, out_blocks):
             return []
         have = {}
         for b in out_blocks or ():
-            st = _block_start(b)
+            st = block_start(b)
             if st is not None:
                 have[st] = have.get(st, 0) + 1
         out = []
         for b in src_blocks:
-            st = _block_start(b)
+            st = block_start(b)
             if st is None:
                 continue
             if have.get(st, 0) > 0:
@@ -106,14 +106,14 @@ def align_blocks(src_blocks, *candidate_lists):
     try:
         wanted = {}
         for b in src_blocks or ():
-            st = _block_start(b)
+            st = block_start(b)
             if st is not None:
                 wanted[st] = wanted.get(st, 0) + 1
         taken = {}
         keyed = []
         for lst in candidate_lists:
             for b in lst or ():
-                st = _block_start(b)
+                st = block_start(b)
                 if st is None or taken.get(st, 0) >= wanted.get(st, 0):
                     continue
                 taken[st] = taken.get(st, 0) + 1
@@ -150,7 +150,7 @@ def _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous):
             return fixed
         agrees = []
         for i in range(n):
-            ss, os_ = _block_start(src_blocks[i]), _block_start(out_blocks[i])
+            ss, os_ = block_start(src_blocks[i]), block_start(out_blocks[i])
             agrees.append(ss is not None and os_ is not None and ss == os_)
         out = list(fixed)
         for i in range(n):
@@ -158,7 +158,7 @@ def _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous):
                 continue
             if fixed[i] is not out_blocks[i]:
                 continue          # the by-start pass already identified it
-            src_start = _block_start(src_blocks[i])
+            src_start = block_start(src_blocks[i])
             if src_start is None or src_start in ambiguous:
                 continue
             # One agreeing neighbour alone cannot distinguish a mistyped start
@@ -166,9 +166,9 @@ def _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous):
             # index is an independent anchor the model was also asked to copy;
             # without an exact match, keep the output unpaired and let the
             # caller restore the missing source slot instead.
-            if (_block_declared_index(src_blocks[i]) is None
-                    or _block_declared_index(src_blocks[i])
-                    != _block_declared_index(out_blocks[i])):
+            if (block_declared_index(src_blocks[i]) is None
+                    or block_declared_index(src_blocks[i])
+                    != block_declared_index(out_blocks[i])):
                 continue
             # None means "no neighbour on that side", which happens only at the
             # ends -- and an end has no room on the far side for a block to have
@@ -179,7 +179,7 @@ def _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous):
             right = agrees[i + 1] if i + 1 < n else None
             if left is False or right is False:
                 continue          # a neighbour disagrees -> a shift or a swap
-            rebuilt = _rebuild_block(src_blocks[i], out_blocks[i])
+            rebuilt = rebuild_block(src_blocks[i], out_blocks[i])
             if rebuilt:
                 out[i] = rebuilt
         return out
@@ -225,7 +225,7 @@ def restore_block_timings(src_blocks, out_blocks):
             return out_blocks
         by_start = {}
         for i, src in enumerate(src_blocks):
-            st = _block_start(src)
+            st = block_start(src)
             if st is not None:
                 by_start.setdefault(st, []).append(i)
         ambiguous = set(st for st, idxs in by_start.items() if len(idxs) > 1)
@@ -233,22 +233,22 @@ def restore_block_timings(src_blocks, out_blocks):
             pairs = list(zip(src_blocks, out_blocks))
             comparable = agree = 0
             for src, out in pairs:
-                ss, os_ = _block_start(src), _block_start(out)
+                ss, os_ = block_start(src), block_start(out)
                 if ss is None or os_ is None:
                     continue
                 comparable += 1
                 if ss == os_:
                     agree += 1
             if comparable and agree == comparable:
-                return [out if _block_start(src) in ambiguous
-                        else (_rebuild_block(src, out) or out)
+                return [out if block_start(src) in ambiguous
+                        else (rebuild_block(src, out) or out)
                         for src, out in pairs]
         # Counts differ, or a pair disagreed: repair only what can be identified
         # positively.
         used = set()
         fixed = []
         for out in out_blocks:
-            st = _block_start(out)
+            st = block_start(out)
             idxs = by_start.get(st) if st is not None and st not in ambiguous else None
             pick = None
             if idxs:
@@ -260,7 +260,7 @@ def restore_block_timings(src_blocks, out_blocks):
                 fixed.append(out)
                 continue
             used.add(pick)
-            fixed.append(_rebuild_block(src_blocks[pick], out) or out)
+            fixed.append(rebuild_block(src_blocks[pick], out) or out)
         # A block whose START the model corrupted matches nothing above, so it
         # kept the corrupted start -- and the clamp deliberately never moves a
         # start, so nothing downstream fixes it either. That is the "line appears
@@ -298,7 +298,7 @@ def clamp_cue_durations(text, max_ms=None):
             return text
         limit = _MAX_CUE_MS if max_ms is None else max_ms
         blocks = parse_blocks(text)
-        times = [_block_times(b) for b in blocks]
+        times = [block_times(b) for b in blocks]
         # The next start strictly LATER than this cue's own start. A suffix
         # minimum cannot express that (the smallest following start may be
         # EARLIER than ours in an out-of-order file), so this is a forward scan
@@ -344,14 +344,14 @@ def clamp_cue_durations(text, max_ms=None):
                 continue
             changed += 1
             lines = block.split('\n')
-            ti = _block_timecode_index(lines)
+            ti = block_timecode_index(lines)
             if ti < 0:
                 out.append(block)
                 continue
             # Preserve the line's own EOL so a CRLF file stays a CRLF file.
             cr = '\r' if lines[ti].endswith('\r') else ''
             lines[ti] = '{0} --> {1}{2}{3}'.format(
-                _fmt_tc(start), _fmt_tc(new_end), trail.rstrip('\r'), cr)
+                fmt_tc(start), fmt_tc(new_end), trail.rstrip('\r'), cr)
             out.append('\n'.join(lines))
         if not changed:
             return text
@@ -377,7 +377,7 @@ def merge_same_time_cues(text, max_lines=3):
     prev_tc = None
     for block in blocks:
         lines = block.split('\n')
-        ti = _block_timecode_index(lines)
+        ti = block_timecode_index(lines)
         if ti < 0:
             merged.append([None, block])
             prev_tc = None
@@ -397,7 +397,7 @@ def merge_same_time_cues(text, max_lines=3):
     for n, item in enumerate(merged, 1):
         if item[0] is None:
             lines = item[1].split('\n')
-            ti = _block_timecode_index(lines)
+            ti = block_timecode_index(lines)
             out.append('\n'.join([str(n)] + lines[max(ti, 0):] if ti >= 0
                                  else [str(n)] + lines[1:]))
         else:

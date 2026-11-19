@@ -5,6 +5,7 @@
 import re
 import math
 import statistics
+from resources.lib.core.srt.blocks import TC_PAIR
 from resources.lib.sync.align.common import MIN_CUES, STATUS_UNKNOWN
 
 
@@ -21,9 +22,7 @@ from resources.lib.sync.align.common import MIN_CUES, STATUS_UNKNOWN
 
 # ---- SRT parsing -----------------------------------------------------------
 
-_TIME_RE = re.compile(
-    r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*'
-    r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})')
+TIME_RE = re.compile(TC_PAIR)
 
 _TAG_RE = re.compile(r'<[^>]+>|\{\\[^}]*\}')
 
@@ -36,11 +35,11 @@ _CREDIT_RE = re.compile(
     r'\.net|\.org|opensubtitles|subscene|ktuvit|wizdom)', re.I)
 
 
-def _to_ms(h, m, s, ms):
+def to_ms(h, m, s, ms):
     return ((int(h) * 60 + int(m)) * 60 + int(s)) * 1000 + int(ms.ljust(3, '0'))
 
 
-def _ms_to_stamp(ms):
+def ms_to_stamp(ms):
     if ms < 0:
         ms = 0
     ms = int(round(ms))
@@ -53,18 +52,18 @@ def _ms_to_stamp(ms):
 def parse_srt(text):
     """[{'start': ms, 'end': ms, 'text': str}] for every timed block.
     Tolerant: skips malformed blocks, handles BOM/CRLF, '.' or ',' millis."""
-    from resources.lib.sync.align.estimate import _breathe
+    from resources.lib.sync.align.estimate import breathe
     cues = []
     if not text:
         return cues
     text = text.lstrip('﻿')
     for block in re.split(r'\r?\n\r?\n+', text):
-        _breathe()
-        m = _TIME_RE.search(block)
+        breathe()
+        m = TIME_RE.search(block)
         if not m:
             continue
-        start = _to_ms(*m.group(1, 2, 3, 4))
-        end = _to_ms(*m.group(5, 6, 7, 8))
+        start = to_ms(*m.group(1, 2, 3, 4))
+        end = to_ms(*m.group(5, 6, 7, 8))
         if end < start:
             continue
         body = block[m.end():].strip()
@@ -74,7 +73,7 @@ def parse_srt(text):
     return cues
 
 
-def _preflight_srt(text, allow_instant=False):
+def preflight_srt(text, allow_instant=False):
     """Strict, original-order SRT validation for an automatic rewrite.
 
     The tolerant public parser is useful for reading imperfect downloads, but
@@ -82,7 +81,7 @@ def _preflight_srt(text, allow_instant=False):
     blocks and sorts non-chronological input.  An automatic synchronizer must
     instead leave any questionable file byte-for-byte alone.
     """
-    from resources.lib.sync.align.estimate import _breathe
+    from resources.lib.sync.align.estimate import breathe
     if not isinstance(text, str) or not text.strip():
         return [], 'empty subtitle'
     cues = []
@@ -92,16 +91,16 @@ def _preflight_srt(text, allow_instant=False):
     if not blocks:
         return [], 'empty subtitle'
     for number, block in enumerate(blocks, 1):
-        _breathe()
+        breathe()
         # More than one timing arrow means missing block separation; no parser
         # should silently keep the first cue and throw the remainder away.
         if block.count('-->') != 1:
             return [], 'malformed timing block %d' % number
-        match = _TIME_RE.search(block)
+        match = TIME_RE.search(block)
         if match is None:
             return [], 'unparseable timing block %d' % number
-        start = _to_ms(*match.group(1, 2, 3, 4))
-        end = _to_ms(*match.group(5, 6, 7, 8))
+        start = to_ms(*match.group(1, 2, 3, 4))
+        end = to_ms(*match.group(5, 6, 7, 8))
         # A cue that ends before it starts is a damaged file.  One that ends
         # WHEN it starts is merely invisible (no player shows it): subbing
         # tools leave such markers at act breaks (four of them in every
@@ -123,7 +122,7 @@ def _preflight_srt(text, allow_instant=False):
     return cues, ''
 
 
-def _tolerant_reference(text):
+def tolerant_reference(text):
     """Timing skeleton of a reference SRT that failed the strict preflight.
 
     The strict preflight protects files we REWRITE. A reference is only read
@@ -137,8 +136,8 @@ def _tolerant_reference(text):
         return None
     # Timing itself must be intact and in order; only the block LAYOUT may
     # be imperfect (non-positive or reordered cues still refuse).
-    timings = [(_to_ms(*m.group(1, 2, 3, 4)), _to_ms(*m.group(5, 6, 7, 8)))
-               for m in _TIME_RE.finditer(text)]
+    timings = [(to_ms(*m.group(1, 2, 3, 4)), to_ms(*m.group(5, 6, 7, 8)))
+               for m in TIME_RE.finditer(text)]
     if len(timings) < MIN_CUES:
         return None
     previous = None
@@ -152,7 +151,7 @@ def _tolerant_reference(text):
     return cues
 
 
-def _preflight_cues(cues):
+def preflight_cues(cues):
     """Validate an already-parsed timing skeleton without reordering it."""
     out = []
     previous_start = None
@@ -177,15 +176,15 @@ def _preflight_cues(cues):
     return out, ''
 
 
-def _preflight_unknown(error):
+def preflight_unknown(error):
     return {'status': STATUS_UNKNOWN, 'scale': 1.0, 'offset_ms': 0.0,
             'vote': 0.0, 'overlap': 0.0, 'reason': 'malformed',
             'diag': 'preflight FAILED: ' + error}
 
 
 def _is_dialogue(c):
-    from resources.lib.sync.align.estimate import _breathe
-    _breathe()
+    from resources.lib.sync.align.estimate import breathe
+    breathe()
     t = (c.get('text') or '').strip()
     if not t or t.startswith(('♪', '♫', '#')):
         return False
@@ -215,5 +214,5 @@ def dialogue_cues(text_or_cues):
     return kept
 
 
-def _median(values):
+def cues_median(values):
     return float(statistics.median(values))

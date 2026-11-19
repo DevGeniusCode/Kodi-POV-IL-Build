@@ -4,10 +4,10 @@
 
 import bisect
 import math
-from resources.lib.core.srt.cues import _median
-from resources.lib.sync.align.common import MAX_PLAUSIBLE_OFFSET_MS, MIN_OVERLAP, _LOCAL_MIN_REF_CUES, _MAXOFF, _MICRO_MAX_SEGMENTS, _MICRO_MAX_STEP_MS, _MICRO_MIN_STEP_MS, _PIECEWISE_MIN_GAIN, _REGION_FINE_MIN_GAIN
-from resources.lib.sync.align.estimate import _best_offset, _breathe
-from resources.lib.sync.align.verify import _nearest_onset_distance
+from resources.lib.core.srt.cues import cues_median
+from resources.lib.sync.align.common import MAX_PLAUSIBLE_OFFSET_MS, MIN_OVERLAP, LOCAL_MIN_REF_CUES, MAXOFF, MICRO_MAX_SEGMENTS, MICRO_MAX_STEP_MS, MICRO_MIN_STEP_MS, PIECEWISE_MIN_GAIN, REGION_FINE_MIN_GAIN
+from resources.lib.sync.align.estimate import best_offset, breathe
+from resources.lib.sync.align.verify import nearest_onset_distance
 
 
 # Cue-level region planner for the same narrow proposal space.  Fixed 2.5-min
@@ -76,7 +76,7 @@ def _region_cost_rows(ref_on, cand_on, center):
     count = int(2 * radius / step) + 1
     rows = []
     for onset in cand_on:
-        _breathe()
+        breathe()
         row = [cap] * count
         lo = bisect.bisect_left(ref_on, onset - center - radius - cap)
         hi = bisect.bisect_right(ref_on, onset - center + radius + cap)
@@ -104,7 +104,7 @@ def _region_dp_path(rows):
     previous = list(rows[0])
     transitions = []
     for row in rows[1:]:
-        _breathe()
+        breathe()
         floor = min(previous)
         best = previous.index(floor)
         threshold = floor + _REGION_SWITCH_COST
@@ -174,7 +174,7 @@ def _region_drift_ms(pairs):
     return abs(slope) * (max(xs) - min(xs))
 
 
-def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
+def region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
                            max_offset_ms=None, fine=False, free=False,
                            _dp=None):
     """Cue-level proposal for repeated short edit pads, pending validation.
@@ -195,20 +195,20 @@ def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
     for the same pair of cue lists; the modes differ only in what they make
     of its path.
     """
-    from resources.lib.sync.align.piecewise import _micro_verdict_from_cuts
+    from resources.lib.sync.align.piecewise import micro_verdict_from_cuts
     fine = bool(fine or free)
     name = 'region-free' if free else ('region-fine' if fine else 'region')
     info = {'planner': name}
-    min_step = _REGION_FINE_MIN_STEP_MS if fine else float(_MICRO_MIN_STEP_MS)
-    if len(ref) < _LOCAL_MIN_REF_CUES or len(cand) < 3 * _REGION_MIN_CUES:
+    min_step = _REGION_FINE_MIN_STEP_MS if fine else float(MICRO_MIN_STEP_MS)
+    if len(ref) < LOCAL_MIN_REF_CUES or len(cand) < 3 * _REGION_MIN_CUES:
         return None, info
-    max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
+    max_off = MAXOFF if max_offset_ms is None else max_offset_ms
     ref_on = [float(c['start']) for c in ref]
     cand_on = [float(c['start']) for c in cand]
     if _dp is not None and _dp.get('max_off') == max_off and 'path' in _dp:
         center, path = _dp['center'], _dp['path']
     else:
-        center, _votes = _best_offset(ref_on, cand_on, 1.0, max_off)
+        center, _votes = best_offset(ref_on, cand_on, 1.0, max_off)
         path = _region_dp_path(_region_cost_rows(ref_on, cand_on, center))
         if _dp is not None:
             _dp.update(max_off=max_off, center=center, path=path)
@@ -256,7 +256,7 @@ def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
             if len(pairs) < max(8, int(0.25 * (end - begin + 1))):
                 info['reason'] = 'unsupported region'
                 return None, info
-            refined.append([begin, end, _median([y for _x, y in pairs]),
+            refined.append([begin, end, cues_median([y for _x, y in pairs]),
                             pairs])
         regions = []
         for begin, end, offset, pairs in refined:
@@ -272,15 +272,15 @@ def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
             else:
                 regions.append([begin, end, offset])
     info['regions'] = [(begin, end, offset) for begin, end, offset in regions]
-    if not ((2 if fine else 3) <= len(regions) <= _MICRO_MAX_SEGMENTS):
+    if not ((2 if fine else 3) <= len(regions) <= MICRO_MAX_SEGMENTS):
         return None, info
     offsets = [offset for _begin, _end, offset in regions]
     if any(abs(offset) > MAX_PLAUSIBLE_OFFSET_MS for offset in offsets):
         return None, info
     steps = [offsets[i + 1] - offsets[i] for i in range(len(offsets) - 1)]
-    direction = 1.0 if _median(steps) > 0 else -1.0
+    direction = 1.0 if cues_median(steps) > 0 else -1.0
     if not free and any(direction * value < min_step
-                        or abs(value) > _MICRO_MAX_STEP_MS
+                        or abs(value) > MICRO_MAX_STEP_MS
                         for value in steps):
         return None, info
     if (max(offsets) - min(offsets)
@@ -320,7 +320,7 @@ def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
             cost = 0.0
             for index in range(lo, hi + 1):
                 offset = left_off if index < position else right_off
-                cost += _nearest_onset_distance(
+                cost += nearest_onset_distance(
                     ref_on, cand[index]['start'] - offset,
                     cap=_REGION_CAP_MS)
             options.append((cost, position))
@@ -345,30 +345,30 @@ def _region_piecewise_plan(ref, cand, min_overlap=MIN_OVERLAP,
     support = min(len(_region_matched_deltas(
         ref_on, cand, begin, end, offset)) / float(end - begin + 1)
         for begin, end, offset in regions)
-    verdict, info = _micro_verdict_from_cuts(
+    verdict, info = micro_verdict_from_cuts(
         ref, cand, cuts, offsets, info, vote=support,
         label=('free cue-level region proposal' if free
                else 'fine cue-level region proposal' if fine
                else 'cue-level region proposal'),
         min_overlap=min_overlap, max_offset_ms=max_offset_ms,
-        min_gain=_REGION_FINE_MIN_GAIN if fine else _PIECEWISE_MIN_GAIN)
+        min_gain=REGION_FINE_MIN_GAIN if fine else PIECEWISE_MIN_GAIN)
     if verdict:
         verdict['planner'] = name
     return verdict, info
 
 
-def _region_fine_plan(ref, cand, min_overlap=MIN_OVERLAP, max_offset_ms=None,
+def region_fine_plan(ref, cand, min_overlap=MIN_OVERLAP, max_offset_ms=None,
                       _dp=None):
     """The cue-level planner in fine mode, as a planner of its own (the
     held-out folds rebuild every fold with the planner that proposed)."""
-    return _region_piecewise_plan(ref, cand, min_overlap=min_overlap,
+    return region_piecewise_plan(ref, cand, min_overlap=min_overlap,
                                   max_offset_ms=max_offset_ms, fine=True,
                                   _dp=_dp)
 
 
-def _region_free_plan(ref, cand, min_overlap=MIN_OVERLAP, max_offset_ms=None,
+def region_free_plan(ref, cand, min_overlap=MIN_OVERLAP, max_offset_ms=None,
                       _dp=None):
     """The cue-level planner in free mode, as a planner of its own."""
-    return _region_piecewise_plan(ref, cand, min_overlap=min_overlap,
+    return region_piecewise_plan(ref, cand, min_overlap=min_overlap,
                                   max_offset_ms=max_offset_ms, free=True,
                                   _dp=_dp)

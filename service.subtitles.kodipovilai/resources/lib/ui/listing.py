@@ -3,10 +3,10 @@
 # The subtitle list of the Kodi subtitle dialog (action=search / manualsearch).
 
 import urllib.parse
-from resources.lib.ui.dialogs import _safe_log
+from resources.lib.ui.dialogs import safe_log
 
 
-def _handle_search(handle, params):
+def handle_search(handle, params):
     """List available subtitles. Kodi calls this when the user opens
     the subtitle search dialog."""
     # A playback source can opt out of automatic subtitle search by setting the
@@ -36,19 +36,19 @@ def _handle_search(handle, params):
         from resources.lib.fetching.embedded import streams
         if streams.enabled():
             for _ in range(15):  # up to ~3s
-                if _seb._release_ready(info):
+                if _seb.release_ready(info):
                     break
                 import xbmc as _xbmc
                 _xbmc.sleep(200)
                 info = video_context.current_video_info()
     except Exception:
         pass
-    _safe_log('search: ' + repr({k: v for k, v in info.items() if v}))
+    safe_log('search: ' + repr({k: v for k, v in info.items() if v}))
 
     try:
         candidates = service.list_candidates(info)
     except Exception as e:
-        _safe_log('list_candidates crashed: {0}'.format(e), level='ERROR')
+        safe_log('list_candidates crashed: {0}'.format(e), level='ERROR')
         candidates = []
 
     import re as _re_rating
@@ -83,14 +83,14 @@ def _handle_search(handle, params):
                                         listitem=listitem,
                                         isFolder=False)
         except Exception as e:
-            _safe_log('addDirectoryItem failed: {0}'.format(e),
+            safe_log('addDirectoryItem failed: {0}'.format(e),
                       level='WARNING')
 
     xbmcplugin.endOfDirectory(handle)
 
 
-def _handle_manualsearch(handle, params):
+def handle_manualsearch(handle, params):
     # Kodi sometimes invokes manualsearch when the user types a
     # query in the search dialog. We treat it the same as search;
     # the title/year still flow through getInfoLabel.
-    _handle_search(handle, params)
+    handle_search(handle, params)

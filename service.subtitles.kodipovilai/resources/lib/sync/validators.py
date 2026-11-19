@@ -14,8 +14,8 @@ try:
     from resources.lib.sync.align import common, piecewise, retime, verify
 except Exception:
     srt_cues = common = piecewise = retime = verify = None
-from resources.lib.sync.common import MIN_REMOTE_CUES, _AUDIO_MAX_OFFSET_MS, _AUDIO_SCALES, _ORACLE_SOURCE_MIN_VOTE, _ORACLE_SOURCE_SCALES
-from resources.lib.sync.oracles import _diversify_oracle_matches, _download_oracle, _merge_oracle_candidates, _oracle_candidates, _oracle_match
+from resources.lib.sync.common import MIN_REMOTE_CUES, AUDIO_MAX_OFFSET_MS, AUDIO_SCALES, ORACLE_SOURCE_MIN_VOTE, ORACLE_SOURCE_SCALES
+from resources.lib.sync.oracles import diversify_oracle_matches, download_oracle, merge_oracle_candidates, oracle_candidates, oracle_match
 
 
 # This rare rescue runs only after an ordinary oracle abstains and only in the
@@ -33,7 +33,7 @@ _ORACLE_PIECEWISE_MAX_ATTEMPTS = 12
 _SPARSE_PROBE_CUES = 40
 
 
-def _guard_soft_probe_shift(verdict, ref_kind):
+def guard_soft_probe_shift(verdict, ref_kind):
     """Refuse a sub-second nudge supported only by soft media-probe timing.
 
     Subtitle tracks share the container clock, but each language/subber may
@@ -64,10 +64,10 @@ def _guard_soft_probe_shift(verdict, ref_kind):
     return guarded
 
 
-def _probe_gate_kwargs(cues):
+def probe_gate_kwargs(cues):
     if cues and len(cues) < _SPARSE_PROBE_CUES:
-        return {'scales': _AUDIO_SCALES,
-                'max_offset_ms': _AUDIO_MAX_OFFSET_MS}
+        return {'scales': AUDIO_SCALES,
+                'max_offset_ms': AUDIO_MAX_OFFSET_MS}
     return {}
 
 
@@ -85,7 +85,7 @@ def _track_base_language(track):
     # every script that imports subsync ~50 ms on a PC.
     if not _ISO_LANG_KEY:
         try:
-            from resources.lib.fetching.embedded.embedded_extract import _lang_key
+            from resources.lib.fetching.embedded.embedded_extract import lang_key as _lang_key
         except Exception:
             _lang_key = None
         _ISO_LANG_KEY.append(_lang_key)
@@ -103,7 +103,7 @@ def _track_base_language(track):
 _ISO_LANG_KEY = []
 
 
-def _track_language_rank(track):
+def track_language_rank(track):
     lang = _track_base_language(track)
     # (A tag spelled out -- 'hebrew', 'english' -- ranked by its first three
     # letters before, and still does.)
@@ -115,7 +115,7 @@ def _track_language_rank(track):
     return 2
 
 
-def _maps_agree(left, right):
+def validators_maps_agree(left, right):
     """Whether two independently accepted track corrections corroborate."""
     if (left.get('mode', 'global') != 'global'
             or right.get('mode', 'global') != 'global'):
@@ -131,7 +131,7 @@ def _maps_agree(left, right):
         return False
 
 
-def _track_codec_family(track):
+def track_codec_family(track):
     codec = (track.get('codec') or '').strip().upper()
     if 'PGS' in codec or 'HDMV' in codec:
         return 'pgs'
@@ -187,17 +187,17 @@ def _paired_bitmap_cues(cues):
     return None
 
 
-def _track_span(profile):
+def track_span(profile):
     cues = profile.get('cues') or []
     if not cues:
         return 0.0
     return max(0.0, float(cues[-1]['end']) - float(cues[0]['start']))
 
 
-def _onset_coverage(source, target, tolerance_ms=250.0):
+def onset_coverage(source, target, tolerance_ms=250.0):
     """Fraction of source onsets with a nearby target onset (linear scan)."""
-    from resources.lib.sync.deep import _breathe
-    _breathe()
+    from resources.lib.sync.deep import breathe
+    breathe()
     left = sorted(float(cue['start']) for cue in source or [])
     right = sorted(float(cue['start']) for cue in target or [])
     if not left or not right:
@@ -245,7 +245,7 @@ def _shift_invariant_onset_coverage(source, target, tolerance_ms=250.0):
     best = 0.0
     for offset in offsets:
         shifted = [{'start': value + offset} for value in left]
-        best = max(best, _onset_coverage(
+        best = max(best, onset_coverage(
             shifted, [{'start': value} for value in right], tolerance_ms))
         if best >= 0.995:
             break
@@ -261,7 +261,7 @@ def _shift_invariant_shape_coverage(source, target, tolerance_ms=350.0,
     exact duration. Independently authored subtitle families do not preserve
     that cue-shape fingerprint at scale.
     """
-    from resources.lib.sync.deep import _breathe
+    from resources.lib.sync.deep import breathe
     left = sorted(source or [], key=lambda cue: float(cue['start']))
     right = sorted(target or [], key=lambda cue: float(cue['start']))
     if not left or not right:
@@ -282,7 +282,7 @@ def _shift_invariant_shape_coverage(source, target, tolerance_ms=350.0,
 
     best = 0.0
     for offset in offsets:
-        _breathe()
+        breathe()
         matched = 0
         cursor = 0
         for cue in left:
@@ -316,8 +316,8 @@ def _timing_profiles_distinct(left, right):
     """
     left_cues = (left or {}).get('cues') or []
     right_cues = (right or {}).get('cues') or []
-    left_raw = _onset_coverage(left_cues, right_cues)
-    right_raw = _onset_coverage(right_cues, left_cues)
+    left_raw = onset_coverage(left_cues, right_cues)
+    right_raw = onset_coverage(right_cues, left_cues)
     if left_raw >= 0.90 and right_raw >= 0.90:
         return False
     # Map agreement tolerates up to 300 ms of segment jitter. Independence
@@ -357,9 +357,9 @@ def _validated_pgs_only_piecewise(pgs_tracks, text, planner, validator,
     held-out folds).
     """
     ranked = sorted(pgs_tracks, key=lambda profile: (
-        1 if _track_language_rank(profile.get('track') or {}) == 1 else 0,
+        1 if track_language_rank(profile.get('track') or {}) == 1 else 0,
         0 if (profile.get('track') or {}).get('forced') else 1,
-        _track_span(profile), len(profile.get('cues') or [])), reverse=True)
+        track_span(profile), len(profile.get('cues') or [])), reverse=True)
     primary = ranked[0]
     paired = _paired_bitmap_cues(primary.get('cues') or [])
     if not paired:
@@ -462,14 +462,14 @@ def _named_streaming_rip(playing):
         if not attrs:
             return False
         tokens = {token for token in name[attrs.start():].split('.') if token}
-        sources = {cls for cls, words in scoring_matching_release._SOURCE_SETS
+        sources = {cls for cls, words in scoring_matching_release.SOURCE_SETS
                    if tokens & words}
         return sources == {'web'}
     except Exception:
         return False
 
 
-def _text_lane_file(bundle, playing):
+def text_lane_file(bundle, playing):
     """Whether the playing file may use the text-lane proof at all.
 
     That proof takes the file's own tracks as the video's timeline, and
@@ -488,7 +488,7 @@ def _text_lane_file(bundle, playing):
     listed += [track for track in (bundle or {}).get('tracks') or []
                if isinstance(track, dict)]
     return bool(listed) and all(
-        _track_codec_family(track) == 'text' for track in listed)
+        track_codec_family(track) == 'text' for track in listed)
 
 
 def _validated_text_lane_piecewise(text_tracks, text, planner, validator,
@@ -527,9 +527,9 @@ def _validated_text_lane_piecewise(text_tracks, text, planner, validator,
 
     def primary_key(profile):
         track = profile.get('track') or {}
-        return (1 if _track_language_rank(track) == 1 else 0,
+        return (1 if track_language_rank(track) == 1 else 0,
                 0 if _is_sdh_track(track) else 1,
-                _track_span(profile), len(profile.get('cues') or []))
+                track_span(profile), len(profile.get('cues') or []))
 
     primary = max(text_tracks, key=primary_key)
     primary_track = primary.get('track') or {}
@@ -678,7 +678,7 @@ def _validated_text_lane_piecewise(text_tracks, text, planner, validator,
             'verdict': out}
 
 
-def _validated_micro_piecewise(profiles, text, text_lanes=False):
+def validated_micro_piecewise(profiles, text, text_lanes=False):
     """Prove repeated short edits without counting duplicate tracks twice.
 
     Matroska Cues entries for several language tracks can be near-identical, so
@@ -699,12 +699,12 @@ def _validated_micro_piecewise(profiles, text, text_lanes=False):
     every_text = []
     for profile in profiles or []:
         track = profile.get('track') or {}
-        family = _track_codec_family(track)
+        family = track_codec_family(track)
         if family == 'pgs':
             pgs_tracks.append(profile)
         if family == 'text' and not track.get('forced'):
             every_text.append(profile)
-            if _track_language_rank(track) == 1:
+            if track_language_rank(track) == 1:
                 text_tracks.append(profile)
     # A file whose only subtitles are PGS learns from the disc track itself
     # (_validated_pgs_only_piecewise, below); one whose subtitles are all
@@ -725,9 +725,9 @@ def _validated_micro_piecewise(profiles, text, text_lanes=False):
 
     def complete_family(items):
         """Ignore a short/forced excerpt before ranking preferred tracks."""
-        max_span = max([_track_span(item) for item in items] + [0.0])
+        max_span = max([track_span(item) for item in items] + [0.0])
         floor = 0.90 * max(max_span, candidate_span)
-        return [item for item in items if _track_span(item) >= floor]
+        return [item for item in items if track_span(item) >= floor]
 
     text_tracks = complete_family(text_tracks)
     pgs_tracks = complete_family(pgs_tracks)
@@ -745,7 +745,7 @@ def _validated_micro_piecewise(profiles, text, text_lanes=False):
 
     def primary_key(profile):
         track = profile.get('track') or {}
-        return (0 if _is_sdh_track(track) else 1, _track_span(profile),
+        return (0 if _is_sdh_track(track) else 1, track_span(profile),
                 len(profile.get('cues') or []))
 
     primary = max(text_tracks, key=primary_key)
@@ -761,9 +761,9 @@ def _validated_micro_piecewise(profiles, text, text_lanes=False):
     # Prefer English PGS, then the broadest non-forced PGS representative. One
     # passing representative establishes the codec family; duplicates do not.
     pgs_tracks = sorted(pgs_tracks, key=lambda profile: (
-        1 if _track_language_rank(profile.get('track') or {}) == 1 else 0,
+        1 if track_language_rank(profile.get('track') or {}) == 1 else 0,
         0 if (profile.get('track') or {}).get('forced') else 1,
-        _track_span(profile), len(profile.get('cues') or [])), reverse=True)
+        track_span(profile), len(profile.get('cues') or [])), reverse=True)
     family_result = None
     family_profile = None
     lane_languages = set()
@@ -1003,7 +1003,7 @@ def _validated_oracle_piecewise(candidates, playing, text,
     plus a strong frozen-map evaluation; one
     translated timing copy is never evidence.
     """
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     planner = getattr(piecewise, 'micro_piecewise_proposal', None)
     validator = getattr(piecewise, 'validate_micro_piecewise', None)
     family_judge = getattr(piecewise, 'evaluate_piecewise_family', None)
@@ -1027,7 +1027,7 @@ def _validated_oracle_piecewise(candidates, playing, text,
             or int(validated.get('validation_folds') or 0) < 4):
         return None
 
-    ranked = _oracle_match(candidates, playing)
+    ranked = oracle_match(candidates, playing)
     if not ranked:
         return None
     try:
@@ -1063,7 +1063,7 @@ def _validated_oracle_piecewise(candidates, playing, text,
         0 if (item[0].get('language') or '').lower()
         in ('en', 'eng', 'english') else 1,
     ), reverse=True)
-    ranked = _diversify_oracle_matches(ranked)
+    ranked = diversify_oracle_matches(ranked)
 
     primary_profile = {'cues': primary_cues}
     primary_key = (
@@ -1090,7 +1090,7 @@ def _validated_oracle_piecewise(candidates, playing, text,
                 or attempts >= _ORACLE_PIECEWISE_MAX_ATTEMPTS):
             break
         attempts += 1
-        secondary_text = _download_oracle(secondary.get('payload') or {})
+        secondary_text = download_oracle(secondary.get('payload') or {})
         if not secondary_text.strip() or secondary_text == primary_text:
             continue
         try:
@@ -1221,38 +1221,38 @@ def _validated_oracle_piecewise(candidates, playing, text,
         secondary = same_master_groups[groups[0]]['candidate']
         return {'verdict': verdict, 'secondary': secondary,
                 'downloads': downloads}
-    _log('provider-consensus exhausted: %d attempt(s), %d usable '
+    log('provider-consensus exhausted: %d attempt(s), %d usable '
          'independent-candidate download(s)' % (attempts, downloads),
          level='DEBUG')
     return None
 
 
-def _provider_piecewise_rescue(info, candidates, playing, text,
+def provider_piecewise_rescue(info, candidates, playing, text,
                                primary, primary_text, search_state=None):
     """Try visible-language evidence, then one cached all-language expansion."""
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     audit = {}
     rescue = _validated_oracle_piecewise(
         candidates, playing, text, primary, primary_text, audit=audit)
     if rescue:
         return rescue
     if audit.get('veto'):
-        _log('provider-consensus: ordinary timing evidence vetoed expansion '
+        log('provider-consensus: ordinary timing evidence vetoed expansion '
              '(%s)' % (audit.get('reason') or 'conflict'), level='DEBUG')
         return None
     expansion_state = {}
-    expanded = _oracle_candidates(
+    expanded = oracle_candidates(
         info, all_languages=True, search_state=expansion_state)
     if expansion_state.get('transient'):
         if isinstance(search_state, dict):
             search_state['transient'] = True
         return None
-    ordinary = _merge_oracle_candidates(candidates)
-    merged = _merge_oracle_candidates(ordinary, expanded)
+    ordinary = merge_oracle_candidates(candidates)
+    merged = merge_oracle_candidates(ordinary, expanded)
     newly_discovered = merged[len(ordinary):]
     if not newly_discovered:
         return None
-    _log('provider-consensus: expanded timing evidence from %d to %d '
+    log('provider-consensus: expanded timing evidence from %d to %d '
          'candidate row(s) using the cached all-language search'
          % (len(ordinary), len(merged)))
     # Ordinary rows were already exhausted above. Only genuinely new rows are
@@ -1265,7 +1265,7 @@ def _provider_piecewise_rescue(info, candidates, playing, text,
 _RESCUE_CORROBORATION_DOWNLOADS = 2
 
 
-def _corroborate_rescued_oracle(cands, playing, text, oracle, oracle_text,
+def corroborate_rescued_oracle(cands, playing, text, oracle, oracle_text,
                                 verdict, early_job=None):
     """Require an independent second reference for a coverage-rescued shift.
 
@@ -1278,8 +1278,8 @@ def _corroborate_rescued_oracle(cands, playing, text, oracle, oracle_text,
     same map. A conflicting reference vetoes; no second reference abstains,
     which is exactly the previous behaviour for these shifts.
     """
-    from resources.lib.sync.jobs import _job_matches_current
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.jobs import job_matches_current
+    from resources.lib.sync.service import log
     try:
         first_profile = {'cues': srt_cues.dialogue_cues(oracle_text)}
         chosen_payload = json.dumps(oracle.get('payload') or {},
@@ -1305,26 +1305,26 @@ def _corroborate_rescued_oracle(cands, playing, text, oracle, oracle_text,
         for _rank, _pct, cand, tier in ranked:
             if tried >= _RESCUE_CORROBORATION_DOWNLOADS:
                 break
-            if early_job and not _job_matches_current(early_job):
+            if early_job and not job_matches_current(early_job):
                 break
-            second = _download_oracle(cand['payload'])
+            second = download_oracle(cand['payload'])
             tried += 1
             if not second.strip():
                 continue
             if not _timing_profiles_distinct(
                     first_profile,
                     {'cues': srt_cues.dialogue_cues(second)}):
-                _log('rescue corroboration: %r is a timing clone; skipped'
+                log('rescue corroboration: %r is a timing clone; skipped'
                      % cand.get('release'))
                 continue
-            kw = ({'scales': _ORACLE_SOURCE_SCALES,
-                   'min_vote': _ORACLE_SOURCE_MIN_VOTE}
+            kw = ({'scales': ORACLE_SOURCE_SCALES,
+                   'min_vote': ORACLE_SOURCE_MIN_VOTE}
                   if tier == scoring_matching_release.TIER_SOURCE else {})
             other = verify.verify(second, text, **kw)
             status = other.get('status')
             if status in (common.STATUS_CONFIRMED,
                           common.STATUS_FIXABLE):
-                if _maps_agree(verdict, other):
+                if validators_maps_agree(verdict, other):
                     return dict(verdict, corroborated_by=cand.get('release'),
                                 diag=verdict.get('diag', '')
                                 + ' | corroborated by %r' % cand.get('release'))
@@ -1338,7 +1338,7 @@ def _corroborate_rescued_oracle(cands, playing, text, oracle, oracle_text,
                     diag=verdict.get('diag', '')
                     + ' | no independent second reference (%d tried)' % tried)
     except Exception as e:
-        _log('rescue corroboration failed: %r' % e, level='WARNING')
+        log('rescue corroboration failed: %r' % e, level='WARNING')
         return dict(verdict, status=common.STATUS_UNKNOWN,
                     reason='uncorroborated_rescue')
 # Embedded subtitle tracks are an excellent video-timeline anchor for large

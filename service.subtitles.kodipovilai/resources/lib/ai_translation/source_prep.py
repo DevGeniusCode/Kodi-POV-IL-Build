@@ -7,7 +7,7 @@ from resources.lib.ai_translation.repairs import postfix_cleanup
 from resources.lib.core.srt import blocks as srt_blocks, timing
 
 
-def _source_id_for_ai(payload):
+def source_id_for_ai(payload):
     """Stable identifier for one source SRT, used as part of the
     cache key. Local files get content-hashed because Kodi reuses
     temp paths like TempSubtitle.0.srt across movies -- the filename
@@ -31,19 +31,19 @@ def _source_id_for_ai(payload):
     return ''
 
 
-def _prepared_source_reader(local_source):
+def prepared_source_reader(local_source):
     """A callable returning the prepared text of the source subtitle at
     `local_source` ('' when it cannot be read), for a lazy `source`."""
     def read():
         try:
             with open(local_source, 'r', encoding='utf-8', errors='replace') as f:
-                return _prepare_source(f.read())
+                return prepare_source(f.read())
         except Exception:
             return ''
     return read
 
 
-def _prepare_source(raw_src, merge=True):
+def prepare_source(raw_src, merge=True):
     """Strip hearing-impaired SOUND cues from a source SRT (but KEEP ALL-CAPS
     speaker prefixes like 'MABEL:' -- the AI uses them to look up the character's
     gender in the cast block, then drops the tag from its Hebrew output), and only
@@ -66,7 +66,7 @@ def _prepare_source(raw_src, merge=True):
     return raw_src
 
 
-def _content_hash(text):
+def content_hash(text):
     """sha1[:16] of the (already prepared) source text -- the pool's
     source_hash / dedup key."""
     import hashlib as _h

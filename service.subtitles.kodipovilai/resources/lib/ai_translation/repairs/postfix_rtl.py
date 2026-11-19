@@ -3,7 +3,7 @@
 # Post-fix: Hebrew RTL punctuation, music mojibake and the wrapped-line renderer.
 
 import re
-from resources.lib.core.srt.blocks import _INDEX_RE, _INVISIBLE_BIDI, _PDF, _RLE, _TIMECODE_RE, _TRAILING_PUNCT_CHARS
+from resources.lib.core.srt.blocks import INDEX_RE, INVISIBLE_BIDI, PDF, RLE, TIMECODE_RE, TRAILING_PUNCT_CHARS
 
 
 # Hebrew letter range for RTL post-processing.
@@ -19,7 +19,7 @@ _HEB_LETTER = r'֐-׿'
 _LEADING_PUNCT_RE = re.compile(
     r'^(?P<dash>-\s+)?'                                 # optional "- " dialogue marker
     r'(?P<open_tags_a>(?:<[a-zA-Z!][^>]*>)*)'           # opening tags BEFORE the punct
-    r'(?P<leading>[' + _TRAILING_PUNCT_CHARS + r']+)\s*'  # the misplaced punct
+    r'(?P<leading>[' + TRAILING_PUNCT_CHARS + r']+)\s*'  # the misplaced punct
     r'(?P<open_tags_b>(?:<[a-zA-Z!][^>]*>)*)'           # opening tags AFTER the punct
                                                          # (covers ".<i>text</i>")
     r'(?P<rest>[' + _HEB_LETTER + r'][^\n]*?)'          # Hebrew body (non-greedy)
@@ -35,7 +35,7 @@ _LEADING_PUNCT_RE = re.compile(
 _LEADING_PUNCT_CLOSER_RE = re.compile(
     r'^(?P<dash>-\s+)?'
     r'(?P<open_tags_a>(?:<[a-zA-Z!][^>]*>)*)'
-    r'(?P<leading>[' + _TRAILING_PUNCT_CHARS + r']+)'
+    r'(?P<leading>[' + TRAILING_PUNCT_CHARS + r']+)'
     r'(?P<closers>["\'\u05f3\u05f4\u2019\u201d\)\]\}\u00bb]+)\s*'
     r'(?P<open_tags_b>(?:<[a-zA-Z!][^>]*>)*)'
     r'(?P<rest>[' + _HEB_LETTER + r'][^\n]*?)'
@@ -52,10 +52,10 @@ def _fix_one_text_line(line, move_ellipsis=False):
     stripped = line.strip()
     # Strip any leading invisible BiDi / BOM characters that would
     # otherwise hide the punct from our regex.
-    while stripped and stripped[0] in _INVISIBLE_BIDI:
+    while stripped and stripped[0] in INVISIBLE_BIDI:
         stripped = stripped[1:]
     # Also strip from the end -- Gemini occasionally appends them too.
-    while stripped and stripped[-1] in _INVISIBLE_BIDI:
+    while stripped and stripped[-1] in INVISIBLE_BIDI:
         stripped = stripped[:-1]
     if not stripped:
         return line
@@ -114,7 +114,7 @@ def _fix_one_text_line(line, move_ellipsis=False):
         return stripped if stripped != line.strip() else line
     # If the rest already ends with punctuation, the leading one is
     # redundant -- drop it instead of moving (which would double up).
-    if rest[-1] in _TRAILING_PUNCT_CHARS:
+    if rest[-1] in TRAILING_PUNCT_CHARS:
         return dash + open_tags + rest + close_tags
     # Otherwise move leading punct to the end, INSIDE any closing
     # tag (so "<i>.לעזאזל</i>" becomes "<i>לעזאזל.</i>", not
@@ -238,8 +238,8 @@ def fix_rtl_punctuation(text, mode=None, legacy_engine=False):
     cue_hebrew = False   # did an earlier text line of THIS cue carry Hebrew?
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped or _INDEX_RE.match(stripped) or \
-                _TIMECODE_RE.match(stripped):
+        if not stripped or INDEX_RE.match(stripped) or \
+                TIMECODE_RE.match(stripped):
             out_lines.append(line)
             cue_hebrew = False   # blank / index / timecode = cue boundary
             continue
@@ -272,15 +272,15 @@ _TRAILING_PUNCT_RE = re.compile(
     # ... or inside the line's opening tag ("<i>-להתראות.</i>")
     r'(?P<dash2>' + _DIALOGUE_DASH + r')?'
     r'(?P<rest>(?=[^\n]*[' + _HEB_LETTER + r'])[^\n]*?[^'
-    + _TRAILING_PUNCT_CHARS + r'\s])'
-    r'(?P<trailing>[' + _TRAILING_PUNCT_CHARS + r']+)'
+    + TRAILING_PUNCT_CHARS + r'\s])'
+    r'(?P<trailing>[' + TRAILING_PUNCT_CHARS + r']+)'
     r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
 )
 # That ".-להתראות" as cached and pooled files still carry it (field report,
 # update 756): the sentence mark in front, the bare dash after it.
 _DISPLACED_BARE_DASH_RE = re.compile(
     r'^(?P<open_tags>(?:<[a-zA-Z!][^>]*>)*)'
-    r'(?P<leading>[' + _TRAILING_PUNCT_CHARS + r']+)-'
+    r'(?P<leading>[' + TRAILING_PUNCT_CHARS + r']+)-'
     r'(?P<inner_tags>(?:<[a-zA-Z!][^>]*>)*)'
     r'(?P<rest>(?:["\'\u05f4\u201c\u201d]|\.\.+|\u2026)?['
     + _HEB_LETTER + r'][^\n]*?)'
@@ -289,9 +289,9 @@ _DISPLACED_BARE_DASH_RE = re.compile(
 _REVERSE_DASHED_LEADING_PUNCT_RE = re.compile(
     r'^(?P<dash>-\s+)'
     r'(?P<open_tags>(?:<[a-zA-Z!][^>]*>)*)'
-    r'(?P<leading>[' + _TRAILING_PUNCT_CHARS + r']+)'
+    r'(?P<leading>[' + TRAILING_PUNCT_CHARS + r']+)'
     r'(?P<rest>(?=[^\n]*[' + _HEB_LETTER + r'])[^\n]*?[^'
-    + _TRAILING_PUNCT_CHARS + r'\s])'
+    + TRAILING_PUNCT_CHARS + r'\s])'
     r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
 )
 
@@ -308,8 +308,8 @@ _HEB_LETTER_RE = re.compile('[' + _HEB_LETTER + ']')
 _LATIN_TAIL_PUNCT_RE = re.compile(
     r'^(?P<dash>-\s+)?'
     r'(?P<open_tags>(?:<[a-zA-Z!][^>]*>)*)'
-    r'(?P<pre>.*?[^' + _TRAILING_PUNCT_CHARS + r'\s])'
-    r'(?P<trailing>[' + _TRAILING_PUNCT_CHARS + r']+)'
+    r'(?P<pre>.*?[^' + TRAILING_PUNCT_CHARS + r'\s])'
+    r'(?P<trailing>[' + TRAILING_PUNCT_CHARS + r']+)'
     r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
 )
 
@@ -330,9 +330,9 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
     'Modelbehavior36.' on its own line); it never affects a standalone Latin
     line (cue_hebrew stays False there)."""
     stripped = line.strip()
-    while stripped and stripped[0] in _INVISIBLE_BIDI:
+    while stripped and stripped[0] in INVISIBLE_BIDI:
         stripped = stripped[1:]
-    while stripped and stripped[-1] in _INVISIBLE_BIDI:
+    while stripped and stripped[-1] in INVISIBLE_BIDI:
         stripped = stripped[:-1]
     if not stripped:
         return line
@@ -365,7 +365,7 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
                 pre = lm.group('pre') or ''
                 lat_trailing = lm.group('trailing')
                 lat_close = lm.group('close_tags') or ''
-                if pre and pre[0] not in _TRAILING_PUNCT_CHARS:
+                if pre and pre[0] not in TRAILING_PUNCT_CHARS:
                     # Move the punct to the start, INSIDE any tag pair, and send a
                     # dialogue dash to the end -- same shape as the Hebrew path.
                     return lat_open + lat_trailing + pre + lat_close + \
@@ -383,7 +383,7 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
     # If a leading punct is already present too, don't double up:
     # the trailing one is redundant, drop it. Detection: rest
     # itself starts with punct (after the optional dash/tag prefix).
-    if rest[0] in _TRAILING_PUNCT_CHARS:
+    if rest[0] in TRAILING_PUNCT_CHARS:
         return open_tags + rest + close_tags + _reverse_dash_suffix(dash)
     return open_tags + trailing + rest + close_tags + \
         _reverse_dash_suffix(dash)
@@ -402,7 +402,7 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
 # \Z (not $) so a stray trailing newline can never sneak a match, even if this
 # helper is ever reused somewhere that doesn't pre-split lines.
 _WRAPPABLE_LATIN_TAIL_RE = re.compile(
-    r'^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*[' + _TRAILING_PUNCT_CHARS + r']\Z')
+    r'^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*[' + TRAILING_PUNCT_CHARS + r']\Z')
 
 
 def _is_wrappable_latin_tail(s):
@@ -427,9 +427,9 @@ def _looks_like_legacy_engine_text(text):
     try:
         for line in (text or '').splitlines():
             st = line.strip()
-            while st and st[0] in _INVISIBLE_BIDI:
+            while st and st[0] in INVISIBLE_BIDI:
                 st = st[1:]
-            while st and st[-1] in _INVISIBLE_BIDI:
+            while st and st[-1] in INVISIBLE_BIDI:
                 st = st[:-1]
             if not st or not _HEB_LETTER_RE.search(st):
                 continue
@@ -473,7 +473,7 @@ def _rtl_inside_single_style_run(line):
         return line
     # Previous cache repair may have put controls outside or inside styles.
     # Remove only embedding controls here; retain other intentional bidi marks.
-    plain = ''.join(parts[::2]).replace(_RLE, '').replace(_PDF, '')
+    plain = ''.join(parts[::2]).replace(RLE, '').replace(PDF, '')
     if len(texts) != 1:
         return plain
     # Preserve only one nested style chain. Collecting sibling openings
@@ -495,7 +495,7 @@ def _rtl_inside_single_style_run(line):
             stack.append(name)
     opens = ''.join(t for t in parts[1::2] if not t.startswith('</'))
     closes = ''.join(t for t in parts[1::2] if t.startswith('</'))
-    return opens + _RLE + plain + _PDF + closes
+    return opens + RLE + plain + PDF + closes
 
 
 
@@ -530,9 +530,9 @@ def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
     contributor used the same mode. Idempotent: edge BiDi marks (including a prior
     RLE/PDF) are stripped and the normalization converges, so a re-run is a no-op."""
     s = line
-    while s and s[0] in _INVISIBLE_BIDI:
+    while s and s[0] in INVISIBLE_BIDI:
         s = s[1:]
-    while s and s[-1] in _INVISIBLE_BIDI:
+    while s and s[-1] in INVISIBLE_BIDI:
         s = s[:-1]
     if not s.strip():
         return line
@@ -545,7 +545,7 @@ def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
         # possible reverse-mode move, because a leading '.' is indistinguishable
         # from a genuine one.
         if cue_hebrew and _is_wrappable_latin_tail(s):
-            return _RLE + s + _PDF
+            return RLE + s + PDF
         # Return the cleaned form only if we removed stray edge marks; else verbatim.
         return s if s != line else line
     # 'reverse' also relocates a leading dialogue dash "- " to a TRAILING " -"
@@ -577,4 +577,4 @@ def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
     # displaced leading sentence-punct back to the logical end. On pristine
     # (fresh AI) text this is a no-op -- Hebrew never authors a leading . , ; : ! ?
     normalized = _fix_one_text_line(s, move_ellipsis=legacy_engine)
-    return _RLE + _rtl_inside_single_style_run(normalized) + _PDF
+    return RLE + _rtl_inside_single_style_run(normalized) + PDF

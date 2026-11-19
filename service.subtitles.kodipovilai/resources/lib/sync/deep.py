@@ -15,14 +15,14 @@ try:
     from resources.lib.sync.align import common, estimate, retime, verify
 except Exception:
     srt_cues = common = estimate = retime = verify = None
-from resources.lib.sync.common import _AUDIO_MAX_OFFSET_MS, _AUDIO_SCALES, _ORACLE_SOURCE_MIN_VOTE, _ORACLE_SOURCE_SCALES, _STATUS_ALTERNATE_APPLIED, _STATUS_NO_ORACLE, _yield_state
-from resources.lib.sync.oracles import _download_oracle, _oracle_candidates
-from resources.lib.sync.probes.audio import _audio_probe_reference
-from resources.lib.sync.probes.bundle import _bundle_envelope, _envelope_diag, _envelope_hypothesis_search, _file_timeline_conflict, _probe_reference_bundle, _verify_file_bundle
-from resources.lib.sync.probes.cache import _learn_cut_signature
-from resources.lib.sync.probes.remote import _current_stream_transport
-from resources.lib.sync.validators import _corroborate_rescued_oracle, _guard_soft_probe_shift, _provider_piecewise_rescue
-from resources.lib.sync.verdicts import _VERDICT_VERSION, _cache_key, _community_verdict, _load_verdicts, _store_verdict, _sync_registry_release
+from resources.lib.sync.common import AUDIO_MAX_OFFSET_MS, AUDIO_SCALES, ORACLE_SOURCE_MIN_VOTE, ORACLE_SOURCE_SCALES, STATUS_ALTERNATE_APPLIED, STATUS_NO_ORACLE, yield_state
+from resources.lib.sync.oracles import download_oracle, oracle_candidates
+from resources.lib.sync.probes.audio import audio_probe_reference
+from resources.lib.sync.probes.bundle import bundle_envelope, envelope_diag, envelope_hypothesis_search, file_timeline_conflict, probe_reference_bundle, verify_file_bundle
+from resources.lib.sync.probes.cache import learn_cut_signature
+from resources.lib.sync.probes.remote import current_stream_transport
+from resources.lib.sync.validators import corroborate_rescued_oracle, guard_soft_probe_shift, provider_piecewise_rescue
+from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, community_verdict, load_verdicts, store_verdict, sync_registry_release
 
 
 # Audio-VAD boundaries are softer than subtitle cues -> relaxed vote/overlap,
@@ -47,7 +47,7 @@ _BREATHE_SLICE = 0.02
 _breath = [0.0]
 
 
-def _breathe():
+def breathe():
     now = time.monotonic()
     if now - _breath[0] >= _BREATHE_SLICE:
         time.sleep(0.001)
@@ -62,7 +62,7 @@ def _breathe():
 # The deep job (and only it -- never a request the viewer made) therefore
 # STOPS while the player's menu or the chooser is open, and ends once the
 # video it checks has stopped.
-_DEEP_THREAD = [None]
+DEEP_THREAD = [None]
 _YIELD_CHECK_S = 0.25
 _YIELD_MAX_S = 30.0
 _YIELD_JOB_MAX_S = 120.0   # all waits of one job together
@@ -77,12 +77,12 @@ class ViewerLeft(BaseException):
 
 
 def _yield_to_viewer():
-    if _DEEP_THREAD[0] is None or threading.get_ident() != _DEEP_THREAD[0]:
+    if DEEP_THREAD[0] is None or threading.get_ident() != DEEP_THREAD[0]:
         return
     now = time.monotonic()
-    if now - _yield_state['checked'] < _YIELD_CHECK_S:
+    if now - yield_state['checked'] < _YIELD_CHECK_S:
         return
-    _yield_state['checked'] = now
+    yield_state['checked'] = now
     try:
         import xbmc
         import xbmcgui
@@ -98,14 +98,14 @@ def _yield_to_viewer():
         except Exception:
             return
         if playing:
-            _yield_state['seen_playing'] = True
-            _yield_state['gone'] = None
+            yield_state['seen_playing'] = True
+            yield_state['gone'] = None
             if (not busy or waited >= _YIELD_MAX_S
-                    or _yield_state['waited'] >= _YIELD_JOB_MAX_S):
+                    or yield_state['waited'] >= _YIELD_JOB_MAX_S):
                 return
-        elif _yield_state['seen_playing']:
-            gone = _yield_state['gone'] or time.monotonic()
-            _yield_state['gone'] = gone
+        elif yield_state['seen_playing']:
+            gone = yield_state['gone'] or time.monotonic()
+            yield_state['gone'] = gone
             if time.monotonic() - gone >= _STOP_AFTER_S:
                 raise ViewerLeft('playback ended')
         else:
@@ -115,8 +115,8 @@ def _yield_to_viewer():
         if monitor.waitForAbort(0.1):
             raise ViewerLeft('Kodi is closing')
         waited += 0.1
-        _yield_state['waited'] += 0.1
-        _yield_state['checked'] = time.monotonic()
+        yield_state['waited'] += 0.1
+        yield_state['checked'] = time.monotonic()
 
 
 def _chooser_opening(xbmcgui):
@@ -133,7 +133,7 @@ if srt_cues is not None:
     estimate.YIELD = _yield_to_viewer
 
 
-def _timing_attempt_key(text, cut_signature):
+def timing_attempt_key(text, cut_signature):
     """Identity of verifier input, independent of provider release labels.
 
     Only strict, well-formed SRTs qualify. The timing of *all* blocks and the
@@ -141,7 +141,7 @@ def _timing_attempt_key(text, cut_signature):
     share a timeline, while an SFX/credit change can change verifier input.
     Never persist this key or use it across playing-file cut signatures.
     """
-    cues, error = srt_cues._preflight_srt(text)
+    cues, error = srt_cues.preflight_srt(text)
     if error or not cut_signature:
         return None
     dialogue = srt_cues.dialogue_cues(cues)
@@ -153,39 +153,39 @@ def _timing_attempt_key(text, cut_signature):
             hashlib.sha256(repr(skeleton).encode('ascii')).digest())
 
 
-def _remember_rejected_timing(job, text, cut_signature, verdict):
+def remember_rejected_timing(job, text, cut_signature, verdict):
     """Memoize only a failed verification during this one first-play job."""
     if not isinstance(job, dict) or not isinstance(verdict, dict):
         return
     if verdict.get('status') not in (common.STATUS_UNKNOWN, None):
         return
-    timing_key = _timing_attempt_key(text, cut_signature)
+    timing_key = timing_attempt_key(text, cut_signature)
     if timing_key:
         job.setdefault('_rejected_timing', set()).add(timing_key)
 
 
-def _deep_verify(info, path, text, rel, playing, key, early_job=None):
+def deep_verify(info, path, text, rel, playing, key, early_job=None):
     """Cross-check the actual file, exact-cut memory, oracle, then local audio.
 
     The playing file is stronger than a release name, so it is evaluated first.
     Its content id also unlocks an exact-cut local/community verdict before any
     subtitle-provider download. Runs in the service worker; never raises.
     """
-    from resources.lib.sync.jobs import _apply_verified_human_fallback, _job_matches_current, _write_fixed
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.jobs import apply_verified_human_fallback, job_matches_current, write_fixed
+    from resources.lib.sync.service import log
     try:
         pinned = (info.get('_subsync_stream_url') or '').strip()
-        if pinned and _current_stream_transport() != pinned:
+        if pinned and current_stream_transport() != pinned:
             return path, None
 
         # Profile the actual media first. Besides being the strongest timing
         # anchor, this produces the content id used by all learning below.
-        bundle = _probe_reference_bundle(info, playing)
-        if pinned and _current_stream_transport() != pinned:
-            _log('deep verify discarded: playback changed during media probe')
+        bundle = probe_reference_bundle(info, playing)
+        if pinned and current_stream_transport() != pinned:
+            log('deep verify discarded: playback changed during media probe')
             return path, None
-        if early_job and not _job_matches_current(early_job):
-            _log('deep verify stopped: subtitle selection changed during '
+        if early_job and not job_matches_current(early_job):
+            log('deep verify stopped: subtitle selection changed during '
                  'media probe')
             return path, None
         cut_signature = (bundle.get('cut_signature') or '').strip().lower()
@@ -193,16 +193,16 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
             # A useful cue profile can survive optional signature-range
             # pressure. Retry only the tiny identity reader rather than throwing
             # away the timing evidence or caching it under a release-only key.
-            cut_signature = _learn_cut_signature(info)
+            cut_signature = learn_cut_signature(info)
             if not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature or ''):
                 cut_signature = ''
-        final_key = _cache_key(text, playing, cut_signature)
+        final_key = cache_key(text, playing, cut_signature)
         accepted = (common.STATUS_CONFIRMED, common.STATUS_FIXABLE)
 
         # The first foreground pass may not have known the remote content id.
         # Once the profile reveals it, reuse an exact local verdict immediately.
-        exact_cached = _load_verdicts().get(final_key) if cut_signature else None
-        if exact_cached and exact_cached.get('v') == _VERDICT_VERSION:
+        exact_cached = load_verdicts().get(final_key) if cut_signature else None
+        if exact_cached and exact_cached.get('v') == VERDICT_VERSION:
             status = exact_cached.get('status')
             result = dict(exact_cached, cut_signature=cut_signature,
                           cache_key=final_key, cached=True)
@@ -211,7 +211,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                     fixed = retime.apply_verdict(text, exact_cached)
                 except Exception:
                     fixed = ''
-                out = _write_fixed(path, fixed)
+                out = write_fixed(path, fixed)
                 if out:
                     return out, dict(result, applied=True)
             if status in (common.STATUS_CONFIRMED,
@@ -224,11 +224,11 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
         # clients reported every unadjusted 15-minute watch as a HUMAN
         # confirmation) silently disabled all verification for that cut.
 
-        file_verdict, ref_kind, ref_count = _verify_file_bundle(bundle, text, playing)
-        _remember_rejected_timing(early_job, text, cut_signature,
+        file_verdict, ref_kind, ref_count = verify_file_bundle(bundle, text, playing)
+        remember_rejected_timing(early_job, text, cut_signature,
                                   file_verdict)
         if file_verdict:
-            _log('verdict for %r vs %s (%d ref cues): %s'
+            log('verdict for %r vs %s (%d ref cues): %s'
                  % (rel or '?', ref_kind, ref_count,
                     file_verdict.get('diag', '?')))
 
@@ -238,7 +238,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
         envelope = None
         envelope_before = None
         if not bundle.get('track_cues') and file_verdict is None:
-            envelope = _bundle_envelope(bundle)
+            envelope = bundle_envelope(bundle)
             if envelope is not None:
                 try:
                     envelope_before = verify.envelope_check(
@@ -246,8 +246,8 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 except Exception:
                     envelope_before = None
                 if envelope_before:
-                    _log('verdict for %r vs FILE AUDIO ENVELOPE: %s'
-                         % (rel or '?', _envelope_diag(envelope_before)))
+                    log('verdict for %r vs FILE AUDIO ENVELOPE: %s'
+                         % (rel or '?', envelope_diag(envelope_before)))
                 # Agreement is never proof: four-minute windows cannot see a
                 # half-second error.  Only a 'conflict' is acted upon below.
 
@@ -263,11 +263,11 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 and cut_signature and bundle.get('cues')
                 and (not file_verdict
                      or file_verdict.get('status') not in accepted)
-                and _apply_verified_human_fallback(
+                and apply_verified_human_fallback(
                     early_job, cache_only=True)):
-            _log('autosub tournament: proven alternate selected before '
+            log('autosub tournament: proven alternate selected before '
                  'provider oracle')
-            return path, {'status': _STATUS_ALTERNATE_APPLIED,
+            return path, {'status': STATUS_ALTERNATE_APPLIED,
                           'cut_signature': cut_signature,
                           'cache_key': final_key}
 
@@ -278,16 +278,16 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
         elif not playing:
             # Without a trustworthy release name no provider subtitle can be
             # proven to belong to this cut; keep the file's (non-)answer.
-            _log('no oracle: playing release unavailable')
+            log('no oracle: playing release unavailable')
             verdict = file_verdict
         else:
             # The file could not decide, so only now pay for a provider oracle.
             oracle_started = time.monotonic()
-            cands = _oracle_candidates(info)
-            _log('oracle: discovery in %.2fs (%d candidate(s))'
+            cands = oracle_candidates(info)
+            log('oracle: discovery in %.2fs (%d candidate(s))'
                  % (time.monotonic() - oracle_started, len(cands)))
-            if early_job and not _job_matches_current(early_job):
-                _log('deep verify stopped: subtitle selection changed during '
+            if early_job and not job_matches_current(early_job):
+                log('deep verify stopped: subtitle selection changed during '
                      'oracle discovery')
                 return path, None
             oracle, tier = (retime.pick_oracle(cands, playing)
@@ -297,31 +297,31 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
             oracle_text = ''
             if oracle is not None:
                 download_started = time.monotonic()
-                oracle_text = _download_oracle(oracle['payload'])
-                _log('oracle: download in %.2fs (%d character(s))'
+                oracle_text = download_oracle(oracle['payload'])
+                log('oracle: download in %.2fs (%d character(s))'
                      % (time.monotonic() - download_started,
                         len(oracle_text)))
-                if early_job and not _job_matches_current(early_job):
-                    _log('deep verify stopped: subtitle selection changed '
+                if early_job and not job_matches_current(early_job):
+                    log('deep verify stopped: subtitle selection changed '
                          'during oracle download')
                     return path, None
                 if oracle_text.strip():
                     okw = {}
                     if tier == scoring_matching_release.TIER_SOURCE:
-                        okw = {'scales': _ORACLE_SOURCE_SCALES,
-                               'min_vote': _ORACLE_SOURCE_MIN_VOTE}
+                        okw = {'scales': ORACLE_SOURCE_SCALES,
+                               'min_vote': ORACLE_SOURCE_MIN_VOTE}
                     oracle_fixed, oracle_verdict = retime.verify_and_fix(
                         oracle_text, text, **okw)
-                    _log('verdict for %r vs oracle %r [%s]: %s'
+                    log('verdict for %r vs oracle %r [%s]: %s'
                          % (rel or '?', oracle['release'], tier,
                             oracle_verdict['diag']))
                     if (oracle_verdict.get('status')
                             == common.STATUS_FIXABLE
                             and oracle_verdict.get('coverage_rescue')):
-                        oracle_verdict = _corroborate_rescued_oracle(
+                        oracle_verdict = corroborate_rescued_oracle(
                             cands, playing, text, oracle, oracle_text,
                             oracle_verdict, early_job=early_job)
-                        _log('oracle rescue corroboration: %s'
+                        log('oracle rescue corroboration: %s'
                              % oracle_verdict.get('diag', '?')[-160:])
                         if (oracle_verdict.get('status')
                                 != common.STATUS_FIXABLE):
@@ -331,7 +331,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                             and oracle_verdict.get('reason') not in (
                                 'oracle_conflict',)):
                         rescue_state = {}
-                        rescue = _provider_piecewise_rescue(
+                        rescue = provider_piecewise_rescue(
                             info, cands, playing, text, oracle, oracle_text,
                             search_state=rescue_state)
                         transient_oracle_search = bool(
@@ -344,7 +344,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                             except Exception:
                                 oracle_fixed = None
                             if oracle_fixed and oracle_fixed.strip():
-                                _log('provider-consensus piecewise rescue for '
+                                log('provider-consensus piecewise rescue for '
                                      '%r: %s' % (
                                          rel or '?',
                                          oracle_verdict.get('diag', '?')))
@@ -363,7 +363,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                     top = '; '.join('%d%%/%s %r' % s for s in scored) or '-'
                 except Exception:
                     top = '?'
-                _log('no oracle for release %r (%d foreign candidates); '
+                log('no oracle for release %r (%d foreign candidates); '
                      'closest: %s' % (playing, len(cands), top))
             if oracle_verdict and oracle_verdict.get('status') in accepted:
                 verdict = oracle_verdict
@@ -377,13 +377,13 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 if (early_job and early_job.get('fallback_links')
                         and oracle is not None and oracle_text.strip()
                         and not bundle.get('cues')
-                        and _apply_verified_human_fallback(
+                        and apply_verified_human_fallback(
                             early_job, reference={
                                 'text': oracle_text, 'tier': tier,
                                 'release': oracle.get('release')})):
-                    _log('autosub tournament: proven alternate selected '
+                    log('autosub tournament: proven alternate selected '
                          'against oracle %r' % oracle.get('release'))
-                    return path, {'status': _STATUS_ALTERNATE_APPLIED,
+                    return path, {'status': STATUS_ALTERNATE_APPLIED,
                                   'cut_signature': cut_signature,
                                   'cache_key': final_key}
 
@@ -393,7 +393,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
         # deliberate correction for these exact media bytes.
         if (cut_signature and playing
                 and (verdict is None or verdict.get('status') not in accepted)):
-            community = _community_verdict(
+            community = community_verdict(
                 info, final_key, playing, cut_signature=cut_signature)
             if (community
                     and community.get('status') == common.STATUS_FIXABLE):
@@ -402,7 +402,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 except Exception:
                     community_fixed = ''
                 if community_fixed and community_fixed.strip():
-                    _log('community FIXABLE used after file/oracle abstained: '
+                    log('community FIXABLE used after file/oracle abstained: '
                          + community.get('diag', ''))
                     verdict = dict(community, community=True)
                     fixed_text = community_fixed
@@ -412,26 +412,26 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
         # remote path is the tiny cue/signature reader above.
         if (file_verdict is None
                 and (verdict is None or verdict.get('status') not in accepted)):
-            ref_cues = _audio_probe_reference(info, playing)
+            ref_cues = audio_probe_reference(info, playing)
             if ref_cues:
                 gate_kw = {'min_vote': _AUDIO_MIN_VOTE,
                            'min_overlap': _AUDIO_MIN_OVERLAP,
-                           'scales': _AUDIO_SCALES,
-                           'max_offset_ms': _AUDIO_MAX_OFFSET_MS}
+                           'scales': AUDIO_SCALES,
+                           'max_offset_ms': AUDIO_MAX_OFFSET_MS}
                 verdict = verify.verify_cues(ref_cues, text, **gate_kw)
-                _log('verdict for %r vs AUDIO PROBE (%d ref cues): %s'
+                log('verdict for %r vs AUDIO PROBE (%d ref cues): %s'
                      % (rel or '?', len(ref_cues), verdict['diag']))
                 if (verdict['status'] == common.STATUS_UNKNOWN
                         and 'tight check FAILED' in verdict.get('diag', '')
                         and verdict.get('vote', 0) >= 0.8):
-                    more = _audio_probe_reference(info, playing,
+                    more = audio_probe_reference(info, playing,
                                                   second_pass=True)
                     if more and len(more) > len(ref_cues):
                         verdict = verify.verify_cues(
                             more, text, **gate_kw)
-                        _log('audio verdict (pass 2, %d cues): %s'
+                        log('audio verdict (pass 2, %d cues): %s'
                              % (len(more), verdict['diag']))
-                verdict = _guard_soft_probe_shift(verdict, 'AUDIO PROBE')
+                verdict = guard_soft_probe_shift(verdict, 'AUDIO PROBE')
                 if (verdict.get('status') == common.STATUS_FIXABLE
                         and verdict.get('coverage_rescue')):
                     # Speech-detector onsets carry ~1s of error; they cannot
@@ -446,7 +446,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 and (verdict is None
                      or verdict.get('status') not in accepted)):
             envelope_searched = True
-            found = _envelope_hypothesis_search(
+            found = envelope_hypothesis_search(
                 info, text, envelope, envelope_before, early_job=early_job,
                 state=envelope_state)
             if found:
@@ -455,10 +455,10 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 verdict = {'status': common.STATUS_UNKNOWN,
                            'scale': 1.0, 'offset_ms': 0.0,
                            'reason': 'file_timeline_conflict',
-                           'diag': _envelope_diag(envelope_before)}
+                           'diag': envelope_diag(envelope_before)}
 
         if verdict is None:
-            return path, {'status': _STATUS_NO_ORACLE,
+            return path, {'status': STATUS_NO_ORACLE,
                           'cut_signature': cut_signature,
                           'cache_key': final_key}
 
@@ -479,9 +479,9 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 and not verdict.get('envelope_status')):
             delivered = (fixed_text if verdict.get('status')
                          == common.STATUS_FIXABLE else text)
-            conflict = _file_timeline_conflict(bundle, delivered)
+            conflict = file_timeline_conflict(bundle, delivered)
             if conflict:
-                _log('file timeline contradicts the %s answer: plateaus %s'
+                log('file timeline contradicts the %s answer: plateaus %s'
                      % ('community' if verdict.get('community')
                         else 'provider',
                         ', '.join('%+dms x%d' % (int(offset), count)
@@ -496,7 +496,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
         if (envelope is not None and envelope_before and not envelope_searched
                 and envelope_before.get('status') == 'conflict'
                 and verdict.get('status') not in accepted):
-            found = _envelope_hypothesis_search(
+            found = envelope_hypothesis_search(
                 info, text, envelope, envelope_before, early_job=early_job,
                 state=envelope_state)
             if found:
@@ -505,8 +505,8 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 and verdict.get('status') not in accepted):
             transient_oracle_search = True
 
-        if pinned and _current_stream_transport() != pinned:
-            _log('deep verify discarded: playback changed before commit')
+        if pinned and current_stream_transport() != pinned:
+            log('deep verify discarded: playback changed before commit')
             return path, None
         verdict = dict(verdict, cut_signature=cut_signature,
                        cache_key=final_key)
@@ -514,7 +514,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 and not (transient_oracle_search
                          and verdict.get('status')
                          == common.STATUS_UNKNOWN)):
-            _store_verdict(final_key, verdict)
+            store_verdict(final_key, verdict)
 
         # Reuse the existing Worker protocol by namespacing its release key with
         # the content signature.  Old clients keep their legacy records; new
@@ -528,7 +528,7 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
                 from resources.lib.ai_translation.reuse import pool_contribute as _pool
                 _pool.report_sync(
                     info, final_key.split('|', 1)[0],
-                    _sync_registry_release(playing, cut_signature),
+                    sync_registry_release(playing, cut_signature),
                     verdict.get('scale', 1.0),
                     verdict.get('offset_ms', 0.0), verdict['status'],
                     origin='auto')
@@ -536,10 +536,10 @@ def _deep_verify(info, path, text, rel, playing, key, early_job=None):
             pass
 
         if verdict['status'] == common.STATUS_FIXABLE:
-            out = _write_fixed(path, fixed_text)
+            out = write_fixed(path, fixed_text)
             if out:
                 return out, dict(verdict, applied=True)
         return path, verdict
     except Exception as e:
-        _log('deep verify failed (fail-open): %r' % e, level='WARNING')
+        log('deep verify failed (fail-open): %r' % e, level='WARNING')
         return path, None

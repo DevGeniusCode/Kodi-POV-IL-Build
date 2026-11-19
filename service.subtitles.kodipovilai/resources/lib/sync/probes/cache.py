@@ -27,10 +27,10 @@ _MAX_PROBE_ENTRIES = 60
 # v6: local ISO BMFF/QuickTime timed-text indexes are now probeable.
 # v7: opaque remote MP4/MOV streams use the same bounded Range source; old
 # negative entries must not suppress the new index probe after upgrade.
-_PROBE_CACHE_VERSION = 7
+PROBE_CACHE_VERSION = 7
 
 
-def _probe_cache_path():
+def probe_cache_path():
     try:
         import xbmcvfs
         return xbmcvfs.translatePath(_PROBE_CACHE_FILE)
@@ -51,7 +51,7 @@ _PROBE_MIGRATED = [False]
 
 
 def _probe_entries_dir():
-    path = _probe_cache_path()
+    path = probe_cache_path()
     return os.path.join(os.path.dirname(path), _PROBE_DIR_NAME) if path else ''
 
 
@@ -114,12 +114,12 @@ def _prune_probe_entries():
             pass
 
 
-def _migrate_probe_cache():
+def migrate_probe_cache():
     """Split the legacy single-file cache into per-entry files, once."""
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     if _PROBE_MIGRATED[0]:
         return
-    path = _probe_cache_path()
+    path = probe_cache_path()
     if not path or not os.path.isfile(path):
         return
     with _PROBE_MIGRATE_LOCK:
@@ -146,15 +146,15 @@ def _migrate_probe_cache():
         except Exception:
             pass
         _prune_probe_entries()
-        _log('probe cache: split %d entr%s into %s/'
+        log('probe cache: split %d entr%s into %s/'
              % (moved, 'y' if moved == 1 else 'ies', _PROBE_DIR_NAME))
 
 
-def _read_probe_entry(cache_key):
+def read_probe_entry(cache_key):
     """One cached media profile (dict) or None."""
     if not cache_key:
         return None
-    _migrate_probe_cache()
+    migrate_probe_cache()
     fpath = _probe_entry_path(cache_key)
     if not fpath or not os.path.isfile(fpath):
         return None
@@ -169,44 +169,44 @@ def _read_probe_entry(cache_key):
     return ent if isinstance(ent, dict) else None
 
 
-def _write_probe_cache(cache_key, bundle):
+def write_probe_cache(cache_key, bundle):
     """Atomically store one media profile in the bounded probe cache."""
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     if not cache_key or not isinstance(bundle, dict):
         return False
-    _migrate_probe_cache()
+    migrate_probe_cache()
     try:
         if not _store_probe_entry(cache_key, bundle):
             return False
         _prune_probe_entries()
         return True
     except Exception as e:
-        _log('probe cache store failed: %r' % e, level='WARNING')
+        log('probe cache store failed: %r' % e, level='WARNING')
         return False
 
 
-def _known_cut_signature(info, playing=''):
+def known_cut_signature(info, playing=''):
     """Known exact-media id without any network request.
 
     Local files are sampled directly (192 KiB total).  A remote id is returned
     only after this exact hashed stream URL was already probed during the
     current/previous delivery; a same release name can never borrow it.
     """
-    from resources.lib.sync.probes.remote import _local_cut_signature, _transport_cache_key
-    local = _local_cut_signature(info)
+    from resources.lib.sync.probes.remote import local_cut_signature, transport_cache_key
+    local = local_cut_signature(info)
     if local:
         return local
-    cache_key = _transport_cache_key(info)
+    cache_key = transport_cache_key(info)
     if not cache_key:
         return ''
-    ent = _read_probe_entry(cache_key)
-    if not isinstance(ent, dict) or ent.get('pv') != _PROBE_CACHE_VERSION:
+    ent = read_probe_entry(cache_key)
+    if not isinstance(ent, dict) or ent.get('pv') != PROBE_CACHE_VERSION:
         return ''
     sig = (ent.get('cut_signature') or '').strip().lower()
     return sig if re.fullmatch(r'cut1:[0-9a-f]{32}', sig) else ''
 
 
-def _learn_cut_signature(info):
+def learn_cut_signature(info):
     """Learn a remote media id with only three 64 KiB content samples.
 
     This is for a subtitle already trusted by release name: there is no reason
@@ -214,15 +214,15 @@ def _learn_cut_signature(info):
     correction.  It runs in the service process, after playback is stable, and
     aborts if Kodi changes streams or the provider applies pressure.
     """
-    from resources.lib.sync.probes.remote import _current_stream_url, _probe_enabled, _remote_playing_url, _remote_probe_ready, _transport_cache_key
-    from resources.lib.sync.service import _log
-    known = _known_cut_signature(info)
+    from resources.lib.sync.probes.remote import current_stream_url, probe_enabled, remote_playing_url, remote_probe_ready, transport_cache_key
+    from resources.lib.sync.service import log
+    known = known_cut_signature(info)
     if known:
         return known
-    if not _probe_enabled():
+    if not probe_enabled():
         return ''
-    url = _remote_playing_url(info)
-    if not url or not _remote_probe_ready(expected_url=url):
+    url = remote_playing_url(info)
+    if not url or not remote_probe_ready(expected_url=url):
         return ''
     started = time.monotonic()
 
@@ -232,7 +232,7 @@ def _learn_cut_signature(info):
         try:
             import xbmc
             return (not xbmc.Player().isPlayingVideo()
-                    or _current_stream_url() != url)
+                    or current_stream_url() != url)
         except Exception:
             return True
 
@@ -240,23 +240,23 @@ def _learn_cut_signature(info):
         from resources.lib.fetching.embedded import embedded_extract
         sig = embedded_extract.media_cut_signature(
             url, allow_http=True, abort_cb=abort,
-            log=lambda m: _log('cut-id: ' + m)) or ''
+            log=lambda m: log('cut-id: ' + m)) or ''
     except Exception as e:
-        _log('remote cut-id failed: %r' % e, level='DEBUG')
+        log('remote cut-id failed: %r' % e, level='DEBUG')
         return ''
     sig = sig.strip().lower()
     if not re.fullmatch(r'cut1:[0-9a-f]{32}', sig):
         return ''
-    cache_key = _transport_cache_key(info)
-    old = _read_probe_entry(cache_key) if cache_key else None
-    if not isinstance(old, dict) or old.get('pv') != _PROBE_CACHE_VERSION:
+    cache_key = transport_cache_key(info)
+    old = read_probe_entry(cache_key) if cache_key else None
+    if not isinstance(old, dict) or old.get('pv') != PROBE_CACHE_VERSION:
         old = {}
     bundle = dict(old)
-    bundle.update({'ts': time.time(), 'pv': _PROBE_CACHE_VERSION,
+    bundle.update({'ts': time.time(), 'pv': PROBE_CACHE_VERSION,
                    'cut_signature': sig})
     bundle.setdefault('cues', [])
     bundle.setdefault('track_cues', [])
     bundle.setdefault('tracks', [])
     bundle.setdefault('timing_attempted', False)
-    _write_probe_cache(cache_key, bundle)
+    write_probe_cache(cache_key, bundle)
     return sig

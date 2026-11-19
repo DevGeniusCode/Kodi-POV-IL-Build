@@ -4,9 +4,9 @@
 
 import bisect
 import math
-from resources.lib.core.srt.cues import _median, _preflight_cues, _preflight_srt, _preflight_unknown, _tolerant_reference, dialogue_cues
-from resources.lib.sync.align.common import CONFIRM_OFFSET_MS, MAX_PLAUSIBLE_OFFSET_MS, STATUS_CONFIRMED, STATUS_FIXABLE, STATUS_UNKNOWN, _ENV_NEAR_MS, _LOCAL_MIN_REF_CUES, _TIGHT_MIN
-from resources.lib.sync.align.estimate import _best_offset, _breathe
+from resources.lib.core.srt.cues import cues_median, preflight_cues, preflight_srt, preflight_unknown, tolerant_reference, dialogue_cues
+from resources.lib.sync.align.common import CONFIRM_OFFSET_MS, MAX_PLAUSIBLE_OFFSET_MS, STATUS_CONFIRMED, STATUS_FIXABLE, STATUS_UNKNOWN, ENV_NEAR_MS, LOCAL_MIN_REF_CUES, TIGHT_MIN
+from resources.lib.sync.align.estimate import best_offset, breathe
 
 
 def overlap_rate(ref_cues, cand_cues, a, b):
@@ -47,21 +47,21 @@ def verify(ref_srt_text, cand_srt_text, min_vote=None, min_overlap=None,
     scales to identity (same disc master = same framerate) and relaxes the vote
     floor, since cross-language cue segmentation depresses the vote while the
     graduated tight gate still guards correctness."""
-    from resources.lib.sync.align.piecewise import _snap_piecewise_boundaries
-    from resources.lib.sync.align.retime import _gate
-    ref_all, ref_error = _preflight_srt(ref_srt_text)
+    from resources.lib.sync.align.piecewise import snap_piecewise_boundaries
+    from resources.lib.sync.align.retime import gate
+    ref_all, ref_error = preflight_srt(ref_srt_text)
     if ref_error:
-        ref_all = (_tolerant_reference(ref_srt_text)
+        ref_all = (tolerant_reference(ref_srt_text)
                    if ref_error.startswith(('malformed timing block',
                                             'unparseable timing block'))
                    else None)
         if ref_all is None:
-            return _preflight_unknown('reference: ' + ref_error)
-    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
+            return preflight_unknown('reference: ' + ref_error)
+    cand_all, cand_error = preflight_srt(cand_srt_text, True)
     if cand_error:
-        return _preflight_unknown('candidate: ' + cand_error)
-    return _snap_piecewise_boundaries(
-        _gate(dialogue_cues(ref_all), dialogue_cues(cand_all),
+        return preflight_unknown('candidate: ' + cand_error)
+    return snap_piecewise_boundaries(
+        gate(dialogue_cues(ref_all), dialogue_cues(cand_all),
               min_vote=min_vote, min_overlap=min_overlap,
               scales=scales, max_offset_ms=max_offset_ms,
               allow_piecewise=allow_piecewise,
@@ -202,25 +202,25 @@ def verify_cues(ref_cues, cand_srt_text, min_vote=None, min_overlap=None,
     candidates and `max_offset_ms` the offset window (MANDATORY discipline
     for sparse audio-VAD references -- see _gate notes). `ref_events` says
     the reference is a bitmap track's display events (see bitmap_events)."""
-    from resources.lib.sync.align.piecewise import _snap_piecewise_boundaries
-    from resources.lib.sync.align.retime import _gate
-    ref, ref_error = _preflight_cues(ref_cues)
+    from resources.lib.sync.align.piecewise import snap_piecewise_boundaries
+    from resources.lib.sync.align.retime import gate
+    ref, ref_error = preflight_cues(ref_cues)
     if ref_error:
-        return _preflight_unknown('reference: ' + ref_error)
-    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
+        return preflight_unknown('reference: ' + ref_error)
+    cand_all, cand_error = preflight_srt(cand_srt_text, True)
     if cand_error:
-        return _preflight_unknown('candidate: ' + cand_error)
+        return preflight_unknown('candidate: ' + cand_error)
     cand = dialogue_cues(cand_all)
     if ref_events:
-        verdict = _refine_on_onsets(ref, cand, _gate(
+        verdict = _refine_on_onsets(ref, cand, gate(
             ref, bitmap_events(cand),
             min_vote=min_vote, min_overlap=min_overlap,
             scales=scales, max_offset_ms=max_offset_ms,
             allow_piecewise=allow_piecewise,
             require_tight=require_tight))
-        return _snap_piecewise_boundaries(verdict, cand_all)
-    return _snap_piecewise_boundaries(
-        _gate(ref, cand,
+        return snap_piecewise_boundaries(verdict, cand_all)
+    return snap_piecewise_boundaries(
+        gate(ref, cand,
               min_vote=min_vote, min_overlap=min_overlap,
               scales=scales, max_offset_ms=max_offset_ms,
               allow_piecewise=allow_piecewise,
@@ -236,14 +236,14 @@ def verify_cue_lists(ref_cues, cand_cues, min_vote=None, min_overlap=None,
     boundaries, so a caller such as the gender helper can map source cues onto
     a differently-cut human reference without rewriting either file.
     """
-    from resources.lib.sync.align.retime import _gate
-    ref, ref_error = _preflight_cues(ref_cues)
+    from resources.lib.sync.align.retime import gate
+    ref, ref_error = preflight_cues(ref_cues)
     if ref_error:
-        return _preflight_unknown('reference: ' + ref_error)
-    cand, cand_error = _preflight_cues(cand_cues)
+        return preflight_unknown('reference: ' + ref_error)
+    cand, cand_error = preflight_cues(cand_cues)
     if cand_error:
-        return _preflight_unknown('candidate: ' + cand_error)
-    return _gate(ref, cand, min_vote=min_vote, min_overlap=min_overlap,
+        return preflight_unknown('candidate: ' + cand_error)
+    return gate(ref, cand, min_vote=min_vote, min_overlap=min_overlap,
                  scales=scales, max_offset_ms=max_offset_ms,
                  allow_piecewise=allow_piecewise,
                  require_tight=require_tight)
@@ -255,7 +255,7 @@ _TIGHT_MS = 450     # genuine sub-vs-speech onsets land within ~0.4s; random
 _UNIQUE_MS = 800
 
 
-def _tight_agreement(ref, cand, a, b):
+def tight_agreement(ref, cand, a, b):
     cand_on = sorted(c['start'] for c in cand)
     ok = 0
     for c in ref:
@@ -268,7 +268,7 @@ def _tight_agreement(ref, cand, a, b):
     return ok / len(ref) if ref else 0.0
 
 
-def _unique_match_metrics(ref, cand, a, b, tolerance=_UNIQUE_MS):
+def unique_match_metrics(ref, cand, a, b, tolerance=_UNIQUE_MS):
     """Monotonic one-to-one onset support for a proposed time map.
 
     Histogram vote and overlap deliberately allow different cue segmentation,
@@ -295,11 +295,11 @@ def _unique_match_metrics(ref, cand, a, b, tolerance=_UNIQUE_MS):
     if not residuals:
         return coverage, None, None
     ordered = sorted(residuals)
-    return (coverage, _median(ordered),
+    return (coverage, cues_median(ordered),
             float(ordered[int(0.95 * (len(ordered) - 1))]))
 
 
-def _required_tight(offset_ms, n_ref, vote=1.0, overlap=1.0):
+def required_tight(offset_ms, n_ref, vote=1.0, overlap=1.0):
     """Minimum tight-agreement needed to APPLY a shift of `offset_ms`.
 
     A genuine constant offset makes almost every reference cue land within
@@ -336,7 +336,7 @@ def _required_tight(offset_ms, n_ref, vote=1.0, overlap=1.0):
         # small NON-ZERO offset when the sub is genuinely off (a synced sub
         # peaks at 0 -> CONFIRMED before reaching here); vote is still floored by
         # the gate's min_vote so a true non-match can't sneak through.
-        need = 0.35 if overlap >= 0.85 else _TIGHT_MIN
+        need = 0.35 if overlap >= 0.85 else TIGHT_MIN
     elif a <= 6000:
         need = 0.78
     elif a <= 15000:
@@ -383,7 +383,7 @@ _EDGE_VOTE = 0.50
 _EDGE_RADIUS_MS = 20000
 
 
-def _edge_windows(ref, cand, scale, offset):
+def edge_windows(ref, cand, scale, offset):
     """Short probes of the very start and end of the reference timeline.
 
     Recaps, cold opens, logos and end credits are where releases most often
@@ -399,14 +399,14 @@ def _edge_windows(ref, cand, scale, offset):
         # Search NEAR the global offset only: a short probe searched over
         # +/-150 s finds dense-dialogue aliases (field-like fixtures produced
         # a spurious 139 s "region"); recap/logo differences are seconds.
-        found, votes = _best_offset([c['start'] for c in subset], cand_on,
+        found, votes = best_offset([c['start'] for c in subset], cand_on,
                                     scale, _EDGE_RADIUS_MS)
         out.append({'offset_ms': float(found) + offset,
                     'vote': votes / float(len(subset)), 'edge': True})
     return out
 
 
-def _rescue_regions_agree(windows, offset, edges=()):
+def rescue_regions_agree(windows, offset, edges=()):
     """Every moderately supported local region must sit near ``offset``.
 
     The ordinary local-consistency guard counts only windows with a strong
@@ -571,16 +571,16 @@ def coverage_profile(ref, cand, scale=1.0, offset_hint=0.0):
     return result
 
 
-def _nearest_onset_distance(onsets, value, cap=2500.0):
+def nearest_onset_distance(onsets, value, cap=2500.0):
     pos = bisect.bisect_left(onsets, value)
     values = [abs(onsets[j] - value)
               for j in (pos - 1, pos) if 0 <= j < len(onsets)]
     return min(min(values) if values else cap, cap)
 
 
-def _timing_score(ref, cand):
+def timing_score(ref, cand):
     return (0.60 * overlap_rate(ref, cand, 1.0, 0.0)
-            + 0.40 * _tight_agreement(ref, cand, 1.0, 0.0))
+            + 0.40 * tight_agreement(ref, cand, 1.0, 0.0))
 
 
 _ENV_WINDOW_MS = 240000
@@ -597,7 +597,7 @@ _ENV_STAIR_MS = 3000.0
 def _envelope_scores(prefix, size, spans, lags):
     scores = []
     for lag in lags:
-        _breathe()
+        breathe()
         total = 0.0
         for begin, end in spans:
             a = begin - lag
@@ -632,11 +632,11 @@ def envelope_windows(envelope, cand_srt_text):
         return []
     if step <= 0 or len(values) < 1000:
         return []
-    cand_all, cand_error = _preflight_srt(cand_srt_text, True)
+    cand_all, cand_error = preflight_srt(cand_srt_text, True)
     if cand_error:
         return []
     cand = dialogue_cues(cand_all)
-    if len(cand) < _LOCAL_MIN_REF_CUES:
+    if len(cand) < LOCAL_MIN_REF_CUES:
         return []
     prefix = [0.0]
     for value in values:
@@ -756,7 +756,7 @@ def envelope_check(envelope, cand_srt_text, polarity=None):
             clusters[-1].append(value)
         else:
             clusters.append([value])
-    plateaus = sorted(((_median(c), len(c)) for c in clusters if len(c) >= 2),
+    plateaus = sorted(((cues_median(c), len(c)) for c in clusters if len(c) >= 2),
                       key=lambda item: -item[1])
     result['plateaus'] = plateaus
     if _envelope_staircase(ordered):
@@ -781,7 +781,7 @@ def envelope_check(envelope, cand_srt_text, polarity=None):
         return result
     if abs(main_offset) <= _ENV_SYNC_MS:
         result['status'] = 'synced'
-    elif abs(main_offset) <= _ENV_NEAR_MS:
+    elif abs(main_offset) <= ENV_NEAR_MS:
         result['status'] = 'near'
     elif abs(main_offset) >= _ENV_SHIFT_MS:
         result['status'] = 'shifted'
@@ -801,26 +801,26 @@ def timeline_plateaus(ref_cues, cand_srt_text):
     Returns ``[(median_offset_ms, windows), ...]`` strongest first, or ``[]``
     when the reference cannot tell.
     """
-    from resources.lib.sync.align.piecewise import _local_windows, _trusted_local_windows
+    from resources.lib.sync.align.piecewise import piecewise_local_windows, trusted_local_windows
     try:
-        ref, ref_error = _preflight_cues(ref_cues)
-        cand_all, cand_error = _preflight_srt(cand_srt_text, True)
+        ref, ref_error = preflight_cues(ref_cues)
+        cand_all, cand_error = preflight_srt(cand_srt_text, True)
         if ref_error or cand_error:
             return []
         cand = dialogue_cues(cand_all)
-        if len(ref) < _LOCAL_MIN_REF_CUES or len(cand) < _LOCAL_MIN_REF_CUES:
+        if len(ref) < LOCAL_MIN_REF_CUES or len(cand) < LOCAL_MIN_REF_CUES:
             return []
-        center, _votes = _best_offset(
+        center, _votes = best_offset(
             [c['start'] for c in ref], [c['start'] for c in cand], 1.0)
-        windows = _local_windows(ref, cand, 1.0, center_offset=center)
-        offsets = sorted(w['offset_ms'] for w in _trusted_local_windows(windows))
+        windows = piecewise_local_windows(ref, cand, 1.0, center_offset=center)
+        offsets = sorted(w['offset_ms'] for w in trusted_local_windows(windows))
         clusters = []
         for value in offsets:
             if clusters and value - clusters[-1][-1] <= _PLATEAU_JOIN_MS:
                 clusters[-1].append(value)
             else:
                 clusters.append([value])
-        return sorted(((_median(c), len(c)) for c in clusters if len(c) >= 2),
+        return sorted(((cues_median(c), len(c)) for c in clusters if len(c) >= 2),
                       key=lambda item: -item[1])
     except Exception:
         return []

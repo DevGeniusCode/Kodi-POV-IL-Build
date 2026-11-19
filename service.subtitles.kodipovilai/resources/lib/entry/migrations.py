@@ -39,7 +39,7 @@ except ImportError:
 CACHE_RTL_FIX_VERSION = '8'
 
 
-def _maybe_repair_rtl_cache():
+def maybe_repair_rtl_cache():
     """One-shot walk of cache/translated/, re-applying the current display and
     TIMING repairs to each file. Catches up translations that got cached before
     a post-processor was in place or before it handled a specific edge case.
@@ -105,7 +105,7 @@ def _maybe_repair_rtl_cache():
             pass
 
 
-def _maybe_default_fast_first_chunk():
+def maybe_default_fast_first_chunk():
     """One-shot: flip `fast_first_chunk` from the old default-off to
     the new default-on for existing users. Gated by a marker so it
     fires once per install; if the user later turns it off manually
@@ -136,7 +136,7 @@ def _maybe_default_fast_first_chunk():
             pass
 
 
-def _maybe_migrate_embedded_translation_mode():
+def maybe_migrate_embedded_translation_mode():
     """One-shot bridge from the two hidden booleans to the explained mode list."""
     try:
         from resources.lib.core import kodi, settings
@@ -152,7 +152,7 @@ def _maybe_migrate_embedded_translation_mode():
             pass
 
 
-def _maybe_default_pool_on():
+def maybe_default_pool_on():
     """One-shot: turn the community pool ON (both pull and share) for existing
     users who are still on the old default-off. Gated by a marker so it fires
     once per install; if the user later turns either toggle off manually we
@@ -182,7 +182,7 @@ def _maybe_default_pool_on():
             pass
 
 
-def _maybe_force_gender_ref_arabic():
+def maybe_force_gender_ref_arabic():
     """One-shot: turn the Arabic-gender-reference setting (gender_ref_arabic) ON
     for EVERYONE -- including users who previously had it off. It tested clean
     (gender accuracy ~27% -> ~90%+, no quality regression, full fallback when no
@@ -211,7 +211,7 @@ def _maybe_force_gender_ref_arabic():
             pass
 
 
-def _maybe_tune_gemini3_defaults():
+def maybe_tune_gemini3_defaults():
     """One-shot: move existing users to the validated Gemini 3 translation
     settings -- temperature 1.0 (Google's recommended default; 0.2 was our old
     default and degrades Gemini 3 reasoning) and thinking_level MEDIUM (the old
@@ -248,7 +248,7 @@ def _maybe_tune_gemini3_defaults():
             pass
 
 
-def _maybe_bump_gemini_model():
+def maybe_bump_gemini_model():
     """One-shot: move existing users off the superseded default Gemini models to
     their newer, same-quota successors -- gemini-3.1-flash-lite -> 3.5-flash-lite
     (the free 500/day default) and 3.5-flash / 3.6-flash -> 3.8-flash (the paid
@@ -290,7 +290,7 @@ def _maybe_bump_gemini_model():
             pass
 
 
-def _maybe_bump_gemini_model_38():
+def maybe_bump_gemini_model_38():
     """One-shot: move existing users off gemini-3.7-flash to gemini-3.8-flash.
 
     Google shipped 3.8 Flash as the current regular-Flash model and reclassified
@@ -338,7 +338,7 @@ def _maybe_bump_gemini_model_38():
             pass
 
 
-def _maybe_retire_gemini_31_flash():
+def maybe_retire_gemini_31_flash():
     """One-shot: a stored 'gemini-3.1-flash' becomes the default model.
 
     Google has no model of that id (HTTP 404 for every key, Nov 2026), and
@@ -369,7 +369,7 @@ def _maybe_retire_gemini_31_flash():
             pass
 
 
-def _maybe_lower_chunk_lines():
+def maybe_lower_chunk_lines():
     """One-shot: move existing users to the smaller 50-line translation chunk.
     Live testing showed big chunks (100+) of graphically-explicit dialogue trip
     Google's prompt-level PROHIBITED_CONTENT block, while 50-line chunks stay
@@ -403,7 +403,7 @@ def _maybe_lower_chunk_lines():
 
 
 
-def _maybe_force_pool_share():
+def maybe_force_pool_share():
     """One-shot rollout: turn community-pool SHARING on for EVERYONE, to grow the
     shared Hebrew pool as fast as possible. With pool_share on, every human
     Ktuvit Hebrew sub for a played title is mirrored to the pool in the
@@ -427,7 +427,7 @@ def _maybe_force_pool_share():
             pass
 
 
-def _maybe_default_builtin_engine():
+def maybe_default_builtin_engine():
     """One-shot rollout: move EVERYONE from DarkSubs to MoranSubs's own built-in
     engine. Turns use_builtin_engine ON exactly once (and seeds engine_autosub
     ON so auto-search-and-apply works like DarkSubs did). Marker-gated, so a
@@ -465,7 +465,7 @@ def _maybe_default_builtin_engine():
             pass
 
 
-def _maybe_set_default_subtitle_service():
+def maybe_set_default_subtitle_service():
     """When the engine is on, make MoranSubs the default subtitle service for
     movies + TV, so Kodi auto-runs it and pre-selects it when the subtitle
     dialog opens (the services list order itself is fixed by Kodi, but the
@@ -503,7 +503,7 @@ def _maybe_set_default_subtitle_service():
     except Exception:
         pass
 
-def _maybe_seed_hebrew_subtitle_prefs():
+def maybe_seed_hebrew_subtitle_prefs():
     """One-shot: make Kodi's subtitle-language settings match the intent of
     installing a HEBREW subtitles addon. On foreign builds / clean Kodi the
     defaults point elsewhere, and the addon's language gate then disables

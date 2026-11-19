@@ -12,7 +12,7 @@ except Exception:
 
 # ---- oracle acquisition -----------------------------------------------------
 
-def _decode_link(link):
+def decode_link(link):
     try:
         import urllib.parse
         return json.loads(urllib.parse.unquote(link))
@@ -20,7 +20,7 @@ def _decode_link(link):
         return None
 
 
-def _oracle_candidates(info, include_he=False, all_languages=False,
+def oracle_candidates(info, include_he=False, all_languages=False,
                        search_state=None):
     """Foreign-language engine candidates as [{'release', 'payload'}] -- the
     bridge's 24h result cache makes this cheap right after the picker/autosub
@@ -36,7 +36,7 @@ def _oracle_candidates(info, include_he=False, all_languages=False,
     caller silently gets zero candidates and falls through to English, which
     would deliver an ENGLISH subtitle to someone who asked for Hebrew.
     """
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     out = []
     try:
         from resources.lib.fetching import bridge
@@ -66,7 +66,7 @@ def _oracle_candidates(info, include_he=False, all_languages=False,
                          else (None, 'other'))
             if _kind not in _ok_kinds:
                 continue
-            pl = _decode_link(c.get('link') or '')
+            pl = decode_link(c.get('link') or '')
             if not pl or pl.get('type') != 'engine' or pl.get('embedded'):
                 continue
             rel = (pl.get('filename') or '').strip()
@@ -80,11 +80,11 @@ def _oracle_candidates(info, include_he=False, all_languages=False,
                 out.append({'release': rel, 'payload': pl,
                             'language': (c.get('language') or '').strip().lower()})
     except Exception as e:
-        _log('oracle candidate scan failed: %r' % e, level='WARNING')
+        log('oracle candidate scan failed: %r' % e, level='WARNING')
     return out
 
 
-def _merge_oracle_candidates(*groups):
+def merge_oracle_candidates(*groups):
     """Stable de-duplication for ordinary plus all-language oracle rows."""
     out = []
     seen = set()
@@ -106,8 +106,8 @@ def _merge_oracle_candidates(*groups):
     return out
 
 
-def _download_oracle(payload):
-    from resources.lib.sync.service import _log
+def download_oracle(payload):
+    from resources.lib.sync.service import log
     try:
         from resources.lib.fetching.embedded import streams as embedded_streams
         path = embedded_streams.download(payload)
@@ -115,11 +115,11 @@ def _download_oracle(payload):
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 return f.read()
     except Exception as e:
-        _log('oracle download failed: %r' % e, level='WARNING')
+        log('oracle download failed: %r' % e, level='WARNING')
     return ''
 
 
-def _oracle_match(candidates, playing):
+def oracle_match(candidates, playing):
     """Rank provider oracles that may represent the playing edit.
 
     Exact/group matches are usable for every source. A looser same-source
@@ -159,7 +159,7 @@ def _oracle_match(candidates, playing):
     return ranked
 
 
-def _diversify_oracle_matches(ranked):
+def diversify_oracle_matches(ranked):
     """Round-robin release groups before spending provider downloads.
 
     Subtitle APIs commonly return the same ROVERS/DEMAND timing translated

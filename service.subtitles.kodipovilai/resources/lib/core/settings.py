@@ -18,7 +18,7 @@ except ImportError:
     xbmcaddon = None
     xbmcvfs = None
     xbmcgui = None
-from resources.lib.core.kodi import addon
+from resources.lib.core.addon import addon
 
 
 _EMBEDDED_MODE_VALUES = (

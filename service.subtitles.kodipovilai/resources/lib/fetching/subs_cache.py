@@ -4,6 +4,7 @@
 
 import os
 from resources.lib.core import kodi, settings
+from resources.lib.core.cache.profile_dir import profile_subdir
 
 
 # ---- download -------------------------------------------------------
@@ -23,18 +24,8 @@ _CACHED_SUBS_EXTS = ('.srt', '.idx', '.sup', '.sub', '.str', '.ass', '.ssa',
                      '.smi', '.vtt', '.txt')
 
 
-def _cached_subs_dir():
-    try:
-        import xbmcvfs
-        from resources.lib.core import kodi
-        base = xbmcvfs.translatePath(
-            kodi.addon().getAddonInfo('profile'))
-        d = os.path.join(base, _CACHED_SUBS_DIRNAME)
-        if not os.path.isdir(d):
-            os.makedirs(d)
-        return d
-    except Exception:
-        return None
+def cached_subs_dir():
+    return profile_subdir(_CACHED_SUBS_DIRNAME)
 
 
 def _cached_subs_max():
@@ -48,7 +39,7 @@ def _cached_subs_max():
     return _CACHED_SUBS_MAX
 
 
-def _cached_subs_keybase(cache_dir, source, language, filename):
+def cached_subs_keybase(cache_dir, source, language, filename):
     """The DarkSubs cache stem: <dir>/<source>_<language>_<filename>. Filename
     components are sanitised so a provider's title can't escape the folder or
     break the path; the value is still stable per pick, so a repeat pick hits
@@ -67,7 +58,7 @@ def _cached_subs_keybase(cache_dir, source, language, filename):
     return os.path.join(cache_dir, stem)
 
 
-def _cached_subs_lookup(keybase):
+def cached_subs_lookup(keybase):
     """Return an existing cached file for this stem (any known ext), or None."""
     for ext in _CACHED_SUBS_EXTS:
         p = keybase + ext
@@ -79,7 +70,7 @@ def _cached_subs_lookup(keybase):
     return None
 
 
-def _cached_subs_prune(cache_dir):
+def cached_subs_prune(cache_dir):
     """Match DarkSubs: once the folder exceeds the cap, wipe it wholesale (a
     simple, predictable bound that never blocks a download)."""
     try:
@@ -100,7 +91,7 @@ def _cached_subs_prune(cache_dir):
             pass
 
 
-def _cached_subs_store(keybase, sub_file):
+def cached_subs_store(keybase, sub_file):
     """Copy a freshly-downloaded subtitle into the cache (if not already there),
     preserving its extension -- exactly like DarkSubs's shutil.copy."""
     try:
@@ -116,7 +107,7 @@ def _cached_subs_store(keybase, sub_file):
         return None
 
 
-def _looks_like_subtitle(path):
+def looks_like_subtitle(path):
     """True if the file is a plausible subtitle: not an HTML/zip blob (some
     providers hand back the error page or un-extracted archive when a download
     actually failed). Accepts by known extension OR by content sniff -- some
@@ -147,19 +138,19 @@ def _looks_like_subtitle(path):
 
 def cached_source(payload):
     """Return an already-downloaded canonical subtitle without networking."""
-    from resources.lib.fetching.bridge import _ensure_utf8
+    from resources.lib.fetching.bridge import ensure_utf8
     try:
-        cache_dir = _cached_subs_dir()
+        cache_dir = cached_subs_dir()
         if not cache_dir:
             return None
-        keybase = _cached_subs_keybase(
+        keybase = cached_subs_keybase(
             cache_dir, payload.get('source') or '',
             payload.get('language') or 'Hebrew',
             payload.get('filename') or 'subtitle')
-        hit = _cached_subs_lookup(keybase)
+        hit = cached_subs_lookup(keybase)
         if not hit:
             return None
-        _ensure_utf8(hit)
+        ensure_utf8(hit)
         return hit if os.path.isfile(hit) else None
     except Exception:
         return None

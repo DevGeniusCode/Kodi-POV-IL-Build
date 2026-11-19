@@ -20,15 +20,15 @@ try:
     from resources.lib.sync.align import common, retime, verify
 except Exception:
     common = retime = verify = None
-from resources.lib.sync.candidates import _is_human_hebrew_candidate, _ready_candidate_text
-from resources.lib.sync.common import _INFO_KEYS, _STATUS_ALTERNATE_APPLIED, _STATUS_NO_ORACLE, _yield_state
-from resources.lib.sync.deep import ViewerLeft, _DEEP_THREAD, _deep_verify, _remember_rejected_timing, _timing_attempt_key
-from resources.lib.sync.delivery_record import _clear_delivery, _record_delivery
-from resources.lib.sync.oracles import _decode_link
-from resources.lib.sync.probes.bundle import _bundle_envelope, _cached_reference_bundle, _envelope_diag, _envelope_hypothesis_search, _probe_reference_bundle, _verify_file_bundle
-from resources.lib.sync.probes.cache import _learn_cut_signature
-from resources.lib.sync.probes.remote import _current_stream_transport
-from resources.lib.sync.verdicts import _VERDICT_VERSION, _cache_key, _load_verdicts, _store_verdict
+from resources.lib.sync.candidates import is_human_hebrew_candidate, ready_candidate_text
+from resources.lib.sync.common import INFO_KEYS, STATUS_ALTERNATE_APPLIED, STATUS_NO_ORACLE, yield_state
+from resources.lib.sync.deep import ViewerLeft, DEEP_THREAD, deep_verify, remember_rejected_timing, timing_attempt_key
+from resources.lib.sync.delivery_record import clear_delivery, record_delivery
+from resources.lib.sync.oracles import decode_link
+from resources.lib.sync.probes.bundle import bundle_envelope, cached_reference_bundle, envelope_diag, envelope_hypothesis_search, probe_reference_bundle, verify_file_bundle
+from resources.lib.sync.probes.cache import learn_cut_signature
+from resources.lib.sync.probes.remote import current_stream_transport
+from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, load_verdicts, store_verdict
 
 
 # ---- background worker plumbing (service-side) -------------------------------
@@ -47,7 +47,7 @@ def _queue_dir():
         return ''
 
 
-def _selection_matches(selection):
+def selection_matches(selection):
     expected = selection or {}
     try:
         return bool(expected.get('token') and expected.get('link_hash')
@@ -71,15 +71,15 @@ def _pending_prop(selection=None):
     return _PENDING_PROP + ('.' + token if token else '')
 
 
-def _mark_pending(key, selection=None):
+def mark_pending(key, selection=None):
     """Remember which (sub, release) pair we delivered un-verified, so the
     worker only swaps if the user hasn't picked something else meanwhile."""
-    from resources.lib.sync.service import _selection_snapshot
+    from resources.lib.sync.service import selection_snapshot
     try:
         import xbmcgui
-        expected = (_selection_snapshot()
+        expected = (selection_snapshot()
                     if selection is None else selection)
-        if not _selection_matches(expected):
+        if not selection_matches(expected):
             return False
         payload = {
             'key': key, 'ts': time.time(),
@@ -91,7 +91,7 @@ def _mark_pending(key, selection=None):
         raw = json.dumps(payload, separators=(',', ':'))
         prop = _pending_prop(expected)
         win.setProperty(prop, raw)
-        if not _selection_matches(expected):
+        if not selection_matches(expected):
             if win.getProperty(prop) == raw:
                 win.clearProperty(prop)
             return False
@@ -125,7 +125,7 @@ def _pending_record(selection=None):
         return {}
 
 
-def _clear_job_pending(job):
+def clear_job_pending(job):
     """Clear only this job's token-scoped marker; never another selection's."""
     try:
         import xbmcgui
@@ -149,18 +149,18 @@ def _clear_job_pending(job):
     return False
 
 
-def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
+def enqueue_deep(info, path, rel, playing, key, identity_only=False,
                   selection=None, fallback_link='', fallback_links=None,
                   file_only=False):
     """Drop a deep-verify job for the service drainer. True on success."""
-    from resources.lib.sync.service import _log, _selection_snapshot
+    from resources.lib.sync.service import log, selection_snapshot
     d = _queue_dir()
     if not d:
         return False
     try:
-        expected = (_selection_snapshot()
+        expected = (selection_snapshot()
                     if selection is None else selection)
-        if not _selection_matches(expected):
+        if not selection_matches(expected):
             return False
         os.makedirs(d, exist_ok=True)
         # The readable prefix alone used to collide when two long release keys
@@ -191,7 +191,7 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
             # Capture the actual stream identity at delivery time.  Metadata's
             # filepath is optional and may be absent; without this value a
             # later background result must never hot-swap into another video.
-            'stream_url': _current_stream_transport(),
+            'stream_url': current_stream_transport(),
             # Autosub-only escape hatch, revalidated by the worker before use.
             'fallback_link': fallback_link or '',
             # Other human Hebrew rows discovered by the same autosub search.
@@ -199,7 +199,7 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
             # first candidate proven against this exact media cue profile.
             'fallback_links': [str(link) for link in
                                list(fallback_links or [])[:6] if link],
-            'info': {k: info.get(k) for k in _INFO_KEYS
+            'info': {k: info.get(k) for k in INFO_KEYS
                      if isinstance(info.get(k), (str, int, float, bool))},
         }
         tmp = jpath + '.tmp'
@@ -207,17 +207,17 @@ def _enqueue_deep(info, path, rel, playing, key, identity_only=False,
             json.dump(job, f, ensure_ascii=False)
         # Last gate before the job becomes visible to the service. A newer
         # selection may have landed while this small file was being written.
-        if not _selection_matches(expected):
+        if not selection_matches(expected):
             try:
                 os.remove(tmp)
             except OSError:
                 pass
             return False
         os.replace(tmp, jpath)
-        _log('deep job enqueued for %r' % key)
+        log('deep job enqueued for %r' % key)
         return True
     except Exception as e:
-        _log('enqueue failed: %r' % e, level='WARNING')
+        log('enqueue failed: %r' % e, level='WARNING')
         return False
 
 
@@ -228,12 +228,12 @@ def _apply_proven_pool_fallback(job):
     Kodi registration fails, restore the human row's identity bookkeeping; the
     human file already on screen is never removed by a failed fallback.
     """
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     link = job.get('fallback_link') or ''
-    if (not link or not _job_matches_current(job)
+    if (not link or not job_matches_current(job)
             or not _job_stream_is_current(job)):
         return False
-    payload = _decode_link(link) or {}
+    payload = decode_link(link) or {}
     if (payload.get('type') != 'pool'
             or (payload.get('pool_kind') or 'ai') == 'ktuvit'):
         return False
@@ -253,17 +253,17 @@ def _apply_proven_pool_fallback(job):
             expected_link=link) or {}
         fallback_selection = dict(selection)
         if (selection.get('stream_hash') != (job.get('stream_hash') or '')
-                or not _selection_matches(selection)):
+                or not selection_matches(selection)):
             raise RuntimeError('fallback selection/stream changed')
         # Lazy import avoids the translate -> subsync module cycle.
         from resources.lib.ai_translation import service
         path = service.resolve(
             link, dict(job.get('info') or {}), selection=selection)
-        if (not path or not _selection_matches(selection)
+        if (not path or not selection_matches(selection)
                 or not core_selection.apply_subtitle_file(
                     path, selection=selection)):
             raise RuntimeError('fallback delivery was not acknowledged')
-        _log('autosub fallback: release-proven pool AI replaced '
+        log('autosub fallback: release-proven pool AI replaced '
              'unalignable human')
         try:
             kodi.notify(
@@ -273,18 +273,18 @@ def _apply_proven_pool_fallback(job):
             pass
         return True
     except Exception as e:
-        _log('autosub AI fallback skipped: %r' % e, level='WARNING')
+        log('autosub AI fallback skipped: %r' % e, level='WARNING')
         try:
             # A user can manually choose the same AI row while resolve is in
             # flight. Its link is identical but its new selection token is
             # authoritative; never overwrite that manual choice on failure.
             if (old_link and fallback_selection
                     and core_selection.get_current_subtitle() == link
-                    and _selection_matches(fallback_selection)):
+                    and selection_matches(fallback_selection)):
                 core_selection.set_current_subtitle(old_link)
                 restored = core_selection.current_subtitle_selection(
                     expected_link=old_link) or {}
-                if _selection_matches(restored):
+                if selection_matches(restored):
                     core_selection.set_subtitle_sync_status(
                         'unverified', source='fallback-failed',
                         selection_token=restored.get('token') or '',
@@ -303,22 +303,22 @@ def _tournament_candidate_text(info, link, cache_only=False):
     opens the media URL; the exact media cue profile was built once by the
     current deep job.
     """
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     candidate = {'link': link, 'language': 'he'}
-    text, payload = _ready_candidate_text(info, candidate)
+    text, payload = ready_candidate_text(info, candidate)
     if text:
         return text, payload
-    payload = _decode_link(link) or {}
+    payload = decode_link(link) or {}
     if cache_only:
         return '', payload
-    if not _is_human_hebrew_candidate(payload):
+    if not is_human_hebrew_candidate(payload):
         return '', payload
     try:
         kind = payload.get('type')
         path = ''
         if kind == 'pool':
             from resources.lib.ai_translation.reuse import pool_reuse
-            text, _sid = pool_reuse._pool_source_text(
+            text, _sid = pool_reuse.pool_source_text(
                 info, payload.get('hash'), cache_only=False)
             return text or '', payload
         if kind == 'engine' and not payload.get('embedded'):
@@ -330,12 +330,12 @@ def _tournament_candidate_text(info, link, cache_only=False):
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 return f.read(), payload
     except Exception as e:
-        _log('autosub tournament candidate unavailable: %r' % e,
+        log('autosub tournament candidate unavailable: %r' % e,
              level='DEBUG')
     return '', payload
 
 
-def _apply_verified_human_fallback(job, cache_only=False, reference=None):
+def apply_verified_human_fallback(job, cache_only=False, reference=None):
     """Find and apply the first alternate human row proven for this cut.
 
     This is the first-play continuation path: the initially displayed row may
@@ -350,14 +350,14 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
     HDTV encodes). A rescued (low-onset) shift is not enough there: it would
     need a second independent reference, so such rows are skipped.
     """
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     links = [str(link) for link in (job.get('fallback_links') or []) if link]
-    if (not links or not _job_matches_current(job)
+    if (not links or not job_matches_current(job)
             or not _job_stream_is_current(job)):
         return False
     info = dict(job.get('info') or {})
     info['_subsync_stream_url'] = (job.get('stream_url') or '').strip()
-    bundle = _cached_reference_bundle(info)
+    bundle = cached_reference_bundle(info)
     cut_signature = (bundle.get('cut_signature') or '').strip().lower()
     if reference is None:
         if (not bundle.get('cues')
@@ -376,11 +376,11 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
     seen_text = set()
     rejected_timing = job.setdefault('_rejected_timing', set())
     for link in links[:4]:
-        if not _job_matches_current(job):
+        if not job_matches_current(job):
             return False
         text, payload = _tournament_candidate_text(
             info, link, cache_only=cache_only)
-        if not text.strip() or not _is_human_hebrew_candidate(payload):
+        if not text.strip() or not is_human_hebrew_candidate(payload):
             continue
         # Providers often list one SRT under several release names.  Skip
         # exact bytes within this pass; the timing key below also covers
@@ -389,14 +389,14 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
         if text_key in seen_text:
             continue
         seen_text.add(text_key)
-        timing_key = _timing_attempt_key(text, cut_signature)
+        timing_key = timing_attempt_key(text, cut_signature)
         if timing_key and timing_key in rejected_timing:
-            _log('autosub tournament: identical rejected timing already '
+            log('autosub tournament: identical rejected timing already '
                  'checked for this playing file', level='DEBUG')
             continue
         attempted += 1
         if reference is None:
-            verdict, label, count = _verify_file_bundle(bundle, text, playing)
+            verdict, label, count = verify_file_bundle(bundle, text, playing)
         else:
             verdict = verify.verify(reference['text'], text)
             label = 'ORACLE %r' % (reference.get('release') or '?')
@@ -408,11 +408,11 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
         verdict = verdict or {}
         status = verdict.get('status')
         rel = (payload.get('filename') or payload.get('release') or '?')
-        _log('autosub tournament: %r vs %s (%d cues): %s' % (
+        log('autosub tournament: %r vs %s (%d cues): %s' % (
             rel, label, count, verdict.get('diag', 'no verdict')))
         if status not in (common.STATUS_CONFIRMED,
                           common.STATUS_FIXABLE):
-            _remember_rejected_timing(job, text, cut_signature, verdict)
+            remember_rejected_timing(job, text, cut_signature, verdict)
             continue
         if status == common.STATUS_FIXABLE:
             # A map this subtitle cannot take is no fix: try the next row, as
@@ -426,9 +426,9 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
                 if not (retime.apply_verdict(text, verdict) or '').strip():
                     raise ValueError('the map leaves no subtitle')
             except Exception as e:
-                _log('autosub tournament: %r is FIXABLE but its map cannot be '
+                log('autosub tournament: %r is FIXABLE but its map cannot be '
                      'applied (%r) -- trying the next one' % (rel, e))
-                _remember_rejected_timing(
+                remember_rejected_timing(
                     job, text, cut_signature,
                     dict(verdict, status=common.STATUS_UNKNOWN,
                          reason='map_not_applicable'))
@@ -438,26 +438,26 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
         # different text hash, in which case its own fast background check
         # repeats against the already-cached media profile.
         if cut_signature:
-            _store_verdict(_cache_key(text, playing, cut_signature), verdict)
+            store_verdict(cache_key(text, playing, cut_signature), verdict)
         fallback_selection = {}
         try:
             # Candidate retrieval/analysis can take seconds.  Re-check the old
             # ownership immediately before changing the selected-row token, so
             # a user choice made during that work always wins.
-            if not _job_matches_current(job):
+            if not job_matches_current(job):
                 return False
             core_selection.set_current_subtitle(link, renew=True)
             fallback_selection = core_selection.current_subtitle_selection(
                 expected_link=link) or {}
             if (fallback_selection.get('stream_hash')
                     != (job.get('stream_hash') or '')
-                    or not _selection_matches(fallback_selection)
+                    or not selection_matches(fallback_selection)
                     or not _job_stream_is_current(job)):
                 raise RuntimeError('tournament selection/stream changed')
             from resources.lib.ai_translation import service
             path = service.resolve(
                 link, info, selection=fallback_selection)
-            if not path or not _selection_matches(fallback_selection):
+            if not path or not selection_matches(fallback_selection):
                 raise RuntimeError('verified candidate resolve failed')
 
             # RTL cleanup changes glyph order/punctuation but never timings,
@@ -474,13 +474,13 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
             if not delivery_text.strip():
                 raise RuntimeError('verified candidate delivery is unreadable')
             if cut_signature:
-                _store_verdict(
-                    _cache_key(delivery_text, playing, cut_signature),
+                store_verdict(
+                    cache_key(delivery_text, playing, cut_signature),
                     verdict)
             delivery_path = path
             if status == common.STATUS_FIXABLE:
                 fixed_text = retime.apply_verdict(delivery_text, verdict)
-                delivery_path = _write_fixed(path, fixed_text)
+                delivery_path = write_fixed(path, fixed_text)
                 if not delivery_path:
                     raise RuntimeError('verified correction could not be written')
                 cancel_pending()
@@ -497,7 +497,7 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
             if not core_selection.apply_subtitle_file(
                     delivery_path, selection=fallback_selection):
                 raise RuntimeError('verified candidate delivery failed')
-            _log('autosub tournament: applied verified human candidate %r'
+            log('autosub tournament: applied verified human candidate %r'
                  % rel)
             try:
                 kodi.notify(
@@ -506,18 +506,18 @@ def _apply_verified_human_fallback(job, cache_only=False, reference=None):
                 pass
             return True
         except Exception as e:
-            _log('autosub tournament apply skipped: %r' % e,
+            log('autosub tournament apply skipped: %r' % e,
                  level='WARNING')
             try:
                 if (old_link and fallback_selection
                         and core_selection.get_current_subtitle() == link
-                        and _selection_matches(fallback_selection)):
+                        and selection_matches(fallback_selection)):
                     core_selection.set_current_subtitle(old_link, renew=True)
             except Exception:
                 pass
             return False
     if attempted:
-        _log('autosub tournament: no alternate passed exact-cut proof')
+        log('autosub tournament: no alternate passed exact-cut proof')
     return False
 
 
@@ -534,7 +534,7 @@ def _announce(verdict, fresh, offset_hint=None, selection=None):
     try:
         if not fresh or not verdict:
             return
-        if selection is not None and not _selection_matches(selection):
+        if selection is not None and not selection_matches(selection):
             return
         if (verdict.get('status') == common.STATUS_FIXABLE
                 and verdict.get('applied')):
@@ -551,7 +551,7 @@ def _announce(verdict, fresh, offset_hint=None, selection=None):
         pass
 
 
-def _fix_notice(verdict, offset_hint=None):
+def fix_notice(verdict, offset_hint=None):
     try:
         off = float(offset_hint if offset_hint is not None
                     else verdict.get('offset_ms') or 0.0)
@@ -564,7 +564,7 @@ def _fix_notice(verdict, offset_hint=None):
     return 'הכתובית סונכרנה אוטומטית'
 
 
-def _job_matches_current(job):
+def job_matches_current(job):
     """Prove a background result still belongs to the visible stream/pick."""
     try:
         expected = {
@@ -582,7 +582,7 @@ def _job_matches_current(job):
                 or pending.get('selection_hash') != expected['link_hash']
                 or pending.get('stream_hash') != expected['stream_hash']):
             return False
-        return (_selection_matches(expected) and
+        return (selection_matches(expected) and
                 _job_stream_is_current(job))
     except Exception:
         return False
@@ -595,7 +595,7 @@ def _job_stream_is_current(job):
         player = xbmc.Player()
         if not player.isPlaying():
             return False
-        cur_url = _current_stream_transport()
+        cur_url = current_stream_transport()
         job_url = (job.get('stream_url') or '').strip()
         # Require the exact captured stream URL.  Some providers use one path
         # for every title and put the content identity in `?file=`/`?id=`;
@@ -629,7 +629,7 @@ def _wait_for_delivery_ack(job, timeout_ms=3000):
         import xbmc
         steps = max(1, min(120, int(max(0, timeout_ms) / 50) + 1))
         for attempt in range(steps):
-            if not _job_matches_current(job):
+            if not job_matches_current(job):
                 return False
             if core_selection.subtitle_delivery_is_applied(
                     path, selection=selection):
@@ -645,11 +645,11 @@ def _swap_if_current(job, fixed_path, verdict):
     """Swap the playing subtitle to the fixed copy -- ONLY if the user is
     still watching the same stream and hasn't picked a different subtitle
     since we delivered (the pending marker still names our job)."""
-    from resources.lib.sync.service import _log
+    from resources.lib.sync.service import log
     try:
         import xbmc
-        if not _job_matches_current(job):
-            _log('swap skipped: selection or stream changed meanwhile')
+        if not job_matches_current(job):
+            log('swap skipped: selection or stream changed meanwhile')
             return False
         player = xbmc.Player()
         if not player.isPlaying():
@@ -666,13 +666,13 @@ def _swap_if_current(job, fixed_path, verdict):
         except Exception:
             pass
         if before < 0:
-            _log('fixed subtitle handed to Kodi; registration unobservable',
+            log('fixed subtitle handed to Kodi; registration unobservable',
                  level='WARNING')
             return False
         for _ in range(20):  # setSubtitles posts asynchronously; wait <= 1s.
             xbmc.sleep(50)
-            if not _job_matches_current(job):
-                _log('swap confirmation abandoned: selection changed')
+            if not job_matches_current(job):
+                log('swap confirmation abandoned: selection changed')
                 return False
             try:
                 streams = player.getAvailableSubtitleStreams() or []
@@ -682,12 +682,12 @@ def _swap_if_current(job, fixed_path, verdict):
                 try:
                     player.setSubtitleStream(len(streams) - 1)
                 except Exception:
-                    _log('fixed subtitle registered but could not be selected',
+                    log('fixed subtitle registered but could not be selected',
                          level='WARNING')
                     return False
-                if not _job_matches_current(job):
+                if not job_matches_current(job):
                     return False
-                _log('fixed subtitle swapped in-place: ' + fixed_path)
+                log('fixed subtitle swapped in-place: ' + fixed_path)
                 return True
         # Kodi 21/Android replaces its current external-subtitle slot instead
         # of growing the stream list (the field log shows Closing stream 3 /
@@ -695,14 +695,14 @@ def _swap_if_current(job, fixed_path, verdict):
         # add and activate the supplied file.  A successfully returned call,
         # a real content-addressed correction file, and the still-current exact
         # selection together are positive evidence for this replacement form.
-        if os.path.isfile(fixed_path) and _job_matches_current(job):
-            _log('fixed subtitle replaced current external slot: '
+        if os.path.isfile(fixed_path) and job_matches_current(job):
+            log('fixed subtitle replaced current external slot: '
                  + fixed_path)
             return True
-        _log('fixed subtitle registration was not observed', level='WARNING')
+        log('fixed subtitle registration was not observed', level='WARNING')
         return False
     except Exception as e:
-        _log('swap failed: %r' % e, level='WARNING')
+        log('swap failed: %r' % e, level='WARNING')
         return False
 
 
@@ -715,9 +715,9 @@ def _run_file_only_job(job, info, playing, path, job_selection):
     oracles, audio and alternate rows are deliberately NOT consulted: without
     file evidence the release-identity decision stands unchanged.
     """
-    from resources.lib.sync.service import _log, _publish_selection_status
+    from resources.lib.sync.service import log, publish_selection_status
     if not _wait_for_delivery_ack(job, timeout_ms=6000):
-        _log('trusted file check skipped: delivery unconfirmed',
+        log('trusted file check skipped: delivery unconfirmed',
              level='WARNING')
         return
     try:
@@ -727,36 +727,36 @@ def _run_file_only_job(job, info, playing, path, job_selection):
         return
     if not text.strip():
         return
-    bundle = _probe_reference_bundle(info, playing)
+    bundle = probe_reference_bundle(info, playing)
     if not _job_stream_is_current(job):
-        _log('trusted file check discarded: playback changed during probe')
+        log('trusted file check discarded: playback changed during probe')
         return
     cut_signature = (bundle.get('cut_signature') or '').strip().lower()
     if not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature):
-        cut_signature = _learn_cut_signature(info)
+        cut_signature = learn_cut_signature(info)
         if not re.fullmatch(r'cut1:[0-9a-f]{32}', cut_signature or ''):
             cut_signature = ''
-    exact_key = _cache_key(text, playing, cut_signature)
+    exact_key = cache_key(text, playing, cut_signature)
     verdict = None
     # Always judge against the file itself (its profile is cached per
     # transport, so this is cheap). A cached verdict for the same key may have
     # come from an oracle, a shared record or a sub-second soft probe, none of
     # which this release-trusted path is allowed to act on.
     if bundle.get('track_cues') or bundle.get('cues'):
-        verdict, ref_kind, ref_count = _verify_file_bundle(bundle, text, playing)
+        verdict, ref_kind, ref_count = verify_file_bundle(bundle, text, playing)
         if verdict:
-            _log('trusted file check for %r vs %s (%d ref cues): %s'
+            log('trusted file check for %r vs %s (%d ref cues): %s'
                  % (job.get('release') or '?', ref_kind, ref_count,
                     verdict.get('diag', '?')))
             if cut_signature and verdict.get('status') in (
                     common.STATUS_CONFIRMED, common.STATUS_FIXABLE):
-                _store_verdict(exact_key, verdict)
+                store_verdict(exact_key, verdict)
     else:
         # No subtitle timeline, but an MP4 still carries its audio frame
         # sizes.  When they prove the trusted row is on another clock, the
         # label is overruled by the file: let the audio pick a provider
         # timeline, and never keep calling the row synced.
-        envelope = _bundle_envelope(bundle)
+        envelope = bundle_envelope(bundle)
         check = None
         if envelope is not None:
             try:
@@ -764,56 +764,56 @@ def _run_file_only_job(job, info, playing, path, job_selection):
             except Exception:
                 check = None
         if check and check.get('status') == 'conflict':
-            _log('trusted file check for %r vs FILE AUDIO ENVELOPE: %s'
-                 % (job.get('release') or '?', _envelope_diag(check)))
-            found = _envelope_hypothesis_search(
+            log('trusted file check for %r vs FILE AUDIO ENVELOPE: %s'
+                 % (job.get('release') or '?', envelope_diag(check)))
+            found = envelope_hypothesis_search(
                 info, text, envelope, check, early_job=job)
             if found:
                 verdict = found[0]
                 if cut_signature:
-                    _store_verdict(exact_key, verdict)
+                    store_verdict(exact_key, verdict)
             else:
                 verdict = {'status': common.STATUS_UNKNOWN,
                            'scale': 1.0, 'offset_ms': 0.0,
                            'reason': 'file_timeline_conflict',
-                           'diag': _envelope_diag(check)}
-                if _job_matches_current(job):
-                    _publish_selection_status('unverified', 'local',
+                           'diag': envelope_diag(check)}
+                if job_matches_current(job):
+                    publish_selection_status('unverified', 'local',
                                               selection=job_selection)
         else:
-            _log('trusted file check: playing file has no subtitle timeline; '
+            log('trusted file check: playing file has no subtitle timeline; '
                  'release identity kept%s'
-                 % ((' (' + _envelope_diag(check) + ')') if check else ''))
+                 % ((' (' + envelope_diag(check) + ')') if check else ''))
     if (verdict and verdict.get('status') == common.STATUS_FIXABLE
-            and _job_matches_current(job)):
+            and job_matches_current(job)):
         try:
             fixed = retime.apply_verdict(text, verdict)
         except Exception:
             fixed = ''
-        out = _write_fixed(path, fixed)
+        out = write_fixed(path, fixed)
         if out and _swap_if_current(job, out, dict(verdict, applied=True)):
             if verdict.get('mode', 'global') == 'global':
-                _record_delivery(info, playing, exact_key,
+                record_delivery(info, playing, exact_key,
                                  verdict.get('scale', 1.0),
                                  verdict.get('offset_ms', 0.0),
                                  cut_signature=cut_signature,
                                  selection=job_selection)
             else:
-                _clear_delivery(selection=job_selection)
-            if _publish_selection_status('fixed', 'local',
+                clear_delivery(selection=job_selection)
+            if publish_selection_status('fixed', 'local',
                                          selection=job_selection):
                 _announce(dict(verdict, applied=True), fresh=True,
                           selection=job_selection)
             return
     if (verdict and verdict.get('status') == common.STATUS_UNKNOWN
             and job.get('fallback_links')
-            and _apply_verified_human_fallback(job)):
+            and apply_verified_human_fallback(job)):
         # The file could not confirm the release-trusted row; another
         # already-discovered Hebrew row was PROVEN against this exact file.
-        _log('trusted row unproven by the file; proven alternate selected')
+        log('trusted row unproven by the file; proven alternate selected')
         return
-    if _job_matches_current(job):
-        _record_delivery(info, playing, exact_key, 1.0, 0.0,
+    if job_matches_current(job):
+        record_delivery(info, playing, exact_key, 1.0, 0.0,
                          cut_signature=cut_signature,
                          selection=job_selection)
 
@@ -822,11 +822,11 @@ def run_deep_job(job):
     """Service-side execution of one queued deep-verify job. Computes the
     verdict, and on FIXABLE swaps the playing subtitle in place. One gentle
     toast per pair, ever (see _announce). Never raises."""
-    from resources.lib.sync.service import _log, _publish_selection_status
+    from resources.lib.sync.service import log, publish_selection_status
     started = time.monotonic()
     started_wall = time.time()
-    _DEEP_THREAD[0] = threading.get_ident()
-    _yield_state.update(checked=0.0, seen_playing=False, gone=None, waited=0.0)
+    DEEP_THREAD[0] = threading.get_ident()
+    yield_state.update(checked=0.0, seen_playing=False, gone=None, waited=0.0)
     try:
         key = job.get('key') or ''
         path = job.get('path') or ''
@@ -834,17 +834,17 @@ def run_deep_job(job):
 
         def _finish_unverified(source):
             if (not job.get('identity_only')
-                    and _job_matches_current(job)):
-                if _publish_selection_status(
+                    and job_matches_current(job)):
+                if publish_selection_status(
                         'unverified', source, selection=job_selection):
-                    _log('status for current subtitle: unverified ({0})'
+                    log('status for current subtitle: unverified ({0})'
                          .format(source))
 
         if not key or not path or not os.path.isfile(path):
             _finish_unverified('missing')
             return
         if not _job_stream_is_current(job):
-            _log('deep job discarded: captured stream is no longer playing')
+            log('deep job discarded: captured stream is no longer playing')
             return
         info = dict(job.get('info') or {})
         info['_subsync_stream_url'] = (job.get('stream_url') or '').strip()
@@ -854,16 +854,16 @@ def run_deep_job(job):
         # manual delay is never shared with another cut carrying the same name.
         # It does not contact subtitle providers, Gemini or the timing oracle.
         if job.get('identity_only'):
-            cut_signature = _learn_cut_signature(info)
-            if (cut_signature and _job_matches_current(job)):
+            cut_signature = learn_cut_signature(info)
+            if (cut_signature and job_matches_current(job)):
                 try:
                     with open(path, 'r', encoding='utf-8', errors='replace') as f:
                         text = f.read()
                 except Exception:
                     text = ''
                 if text.strip():
-                    exact_key = _cache_key(text, playing, cut_signature)
-                    _record_delivery(info, playing, exact_key, 1.0, 0.0,
+                    exact_key = cache_key(text, playing, cut_signature)
+                    record_delivery(info, playing, exact_key, 1.0, 0.0,
                                      cut_signature=cut_signature,
                                      selection=job_selection)
             return
@@ -875,24 +875,24 @@ def run_deep_job(job):
         # visibly registered and selected that original delivery.
         if not _wait_for_delivery_ack(job):
             _finish_unverified('delivery')
-            _log('deep job deferred: foreground subtitle delivery unconfirmed',
+            log('deep job deferred: foreground subtitle delivery unconfirmed',
                  level='WARNING')
             return
         # Someone may have computed it while the job sat in the queue.
-        cached = _load_verdicts().get(key)
-        if (cached and cached.get('v') == _VERDICT_VERSION
+        cached = load_verdicts().get(key)
+        if (cached and cached.get('v') == VERDICT_VERSION
                 and cached.get('status') in (
                     common.STATUS_CONFIRMED, common.STATUS_UNKNOWN)):
-            if _job_matches_current(job):
+            if job_matches_current(job):
                 if cached.get('status') == common.STATUS_CONFIRMED:
-                    _publish_selection_status(
+                    publish_selection_status(
                         'confirmed', 'cache', selection=job_selection)
                 else:
-                    if _apply_verified_human_fallback(job):
+                    if apply_verified_human_fallback(job):
                         return
                     if _apply_proven_pool_fallback(job):
                         return
-                    _publish_selection_status(
+                    publish_selection_status(
                         'unverified', 'cache', selection=job_selection)
             return
         try:
@@ -905,15 +905,15 @@ def run_deep_job(job):
             _finish_unverified('empty')
             return
         rel = job.get('release') or ''
-        out, verdict = _deep_verify(
+        out, verdict = deep_verify(
             info, path, text, rel, playing, key, early_job=job)
         if not verdict:
             _finish_unverified('no-result')
             return
-        if verdict.get('status') == _STATUS_ALTERNATE_APPLIED:
+        if verdict.get('status') == STATUS_ALTERNATE_APPLIED:
             return
         swapped = False
-        current = _job_matches_current(job)
+        current = job_matches_current(job)
         if (verdict.get('status') == common.STATUS_FIXABLE
                 and verdict.get('applied') and out and out != path):
             swapped = _swap_if_current(job, out, verdict)
@@ -921,7 +921,7 @@ def run_deep_job(job):
                 # Refresh the delivery record with the APPLIED fix, so a later
                 # manual delay on top of it folds into the human report right.
                 if verdict.get('mode', 'global') == 'global':
-                    _record_delivery(info, playing,
+                    record_delivery(info, playing,
                                      verdict.get('cache_key') or key,
                                      verdict.get('scale', 1.0),
                                      verdict.get('offset_ms', 0.0),
@@ -932,17 +932,17 @@ def run_deep_job(job):
                     # The foreground path recorded the untouched subtitle as a
                     # global zero while verification ran.  Once a piecewise
                     # copy is swapped in, that stale scalar must disappear.
-                    _clear_delivery(selection=job_selection)
+                    clear_delivery(selection=job_selection)
         if current and not swapped:
             if (verdict.get('status') in (
-                    common.STATUS_UNKNOWN, _STATUS_NO_ORACLE)
-                    and (_apply_verified_human_fallback(job)
+                    common.STATUS_UNKNOWN, STATUS_NO_ORACLE)
+                    and (apply_verified_human_fallback(job)
                          or _apply_proven_pool_fallback(job))):
                     return
             # The original subtitle is still on screen.  Refresh only its exact
             # cut identity (not an unapplied proposed shift), so any later manual
             # delay learns safely even after an UNKNOWN/CONFIRMED result.
-            _record_delivery(info, playing,
+            record_delivery(info, playing,
                              verdict.get('cache_key') or key,
                              1.0, 0.0,
                              cut_signature=(
@@ -950,22 +950,22 @@ def run_deep_job(job):
                              selection=job_selection)
             final_state = ('confirmed' if verdict.get('status')
                            == common.STATUS_CONFIRMED else 'unverified')
-            if _publish_selection_status(
+            if publish_selection_status(
                     final_state, 'local', selection=job_selection):
-                _log('status for current subtitle: {0} (local)'.format(
+                log('status for current subtitle: {0} (local)'.format(
                     final_state))
         # Announce ONLY an actual in-place swap the user can see. A verdict
         # that couldn't be verified changes nothing on screen -> stay silent.
         if swapped:
-            if _publish_selection_status(
+            if publish_selection_status(
                     'fixed', 'local', selection=job_selection):
-                if _selection_matches(job_selection):
+                if selection_matches(job_selection):
                     _announce(dict(verdict, applied=True), fresh=True,
                               selection=job_selection)
     except Exception as e:
         try:
-            if _job_matches_current(job):
-                _publish_selection_status(
+            if job_matches_current(job):
+                publish_selection_status(
                     'unverified', 'error', selection={
                         'token': job.get('selection_token') or '',
                         'link_hash': job.get('selection_hash') or '',
@@ -973,16 +973,16 @@ def run_deep_job(job):
                     })
         except Exception:
             pass
-        _log('deep job failed: %r' % e, level='WARNING')
+        log('deep job failed: %r' % e, level='WARNING')
     except ViewerLeft as e:
-        _log('deep job stopped: %s' % e)
+        log('deep job stopped: %s' % e)
     finally:
-        _DEEP_THREAD[0] = None
+        DEEP_THREAD[0] = None
         try:
             queued = float(job.get('ts') or 0.0)
             wait_s = (max(0.0, started_wall - queued)
                       if queued > 0.0 else 0.0)
-            _log('deep job timing: processing=%.2fs queue_wait=%.2fs '
+            log('deep job timing: processing=%.2fs queue_wait=%.2fs '
                  'identity_only=%s' % (
                      time.monotonic() - started, wait_s,
                      bool(job.get('identity_only'))))
@@ -1026,15 +1026,15 @@ def drain_queue_once():
                                 selection=_job_selection(job))
                         except Exception:
                             pass
-                    _clear_job_pending(job)
+                    clear_job_pending(job)
                 ran += 1
     except Exception:
         pass
     return ran
 
 
-def _write_fixed(orig_path, fixed_text):
-    from resources.lib.sync.service import _log
+def write_fixed(orig_path, fixed_text):
+    from resources.lib.sync.service import log
     if not fixed_text or not fixed_text.strip():
         return ''
     try:
@@ -1067,7 +1067,7 @@ def _write_fixed(orig_path, fixed_text):
         os.replace(tmp, out)
         return out
     except Exception as e:
-        _log('write fixed failed: %r' % e, level='WARNING')
+        log('write fixed failed: %r' % e, level='WARNING')
         return ''
 
 

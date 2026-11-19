@@ -10,10 +10,10 @@ try:
 except ImportError:
     # Allow `python -m default --action=search` for local debug.
     xbmc = xbmcgui = xbmcplugin = xbmcvfs = None
-from resources.lib.ui.dialogs import _title
+from resources.lib.ui.dialogs import dialogs_title
 
 
-def _handle_engine_test(_params):
+def handle_engine_test(_params):
     """Diagnostic for the built-in sources engine. Runs a real search for
     the currently-playing video and reports, per provider, how many results
     came back (or the exact exception), plus the final Hebrew candidates the
@@ -26,7 +26,7 @@ def _handle_engine_test(_params):
         from resources.lib.core import settings, video_context
     except Exception as e:
         try:
-            xbmcgui.Dialog().ok(_title(), 'Internal error: {0}'.format(e))
+            xbmcgui.Dialog().ok(dialogs_title(), 'Internal error: {0}'.format(e))
         except Exception:
             pass
         return

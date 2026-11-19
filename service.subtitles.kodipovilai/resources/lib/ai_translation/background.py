@@ -12,8 +12,8 @@ try:
 except ImportError:
     # Allow `python -m default --action=search` for local debug.
     xbmc = xbmcgui = xbmcplugin = xbmcvfs = None
-from resources.lib.delivery.kodi_player import _decode_selection_b64, _playing_now, _progressive_cleanup_patterns, _progressive_slot_path
-from resources.lib.ui.dialogs import _safe_log, _title
+from resources.lib.delivery.kodi_player import decode_selection_b64, playing_now, progressive_cleanup_patterns, progressive_slot_path
+from resources.lib.ui.dialogs import safe_log, dialogs_title
 
 
 def _new_translation_job():
@@ -36,7 +36,7 @@ def _clear_translation_job(token):
         win.clearProperty('ai_subs.live_translate_job')
 
 
-def _handle_bg_translate_picker(params):
+def handle_bg_translate_picker(params):
     """Fired by _handle_download after delivering the English
     fallback subtitle to Kodi. Calls translate.resolve() with a
     progressive_cb that writes versioned .vN.srt files and swaps
@@ -48,7 +48,7 @@ def _handle_bg_translate_picker(params):
         from resources.lib.ai_translation import service
         from resources.lib.core import kodi, selection as core_selection, video_context, link_codec
     except Exception as e:
-        _safe_log('bg_translate_picker import failed: {0}'.format(e),
+        safe_log('bg_translate_picker import failed: {0}'.format(e),
                   level='ERROR')
         return
 
@@ -61,10 +61,10 @@ def _handle_bg_translate_picker(params):
 
     link = _b64(params.get('link_b64', ''))
     expected_source_id = _b64(params.get('source_id_b64', ''))
-    _timing_selection = _decode_selection_b64(
+    _timing_selection = decode_selection_b64(
         params.get('selection_b64', ''))
     if not link:
-        _safe_log('bg_translate_picker: missing link',
+        safe_log('bg_translate_picker: missing link',
                   level='WARNING')
         return
 
@@ -82,7 +82,7 @@ def _handle_bg_translate_picker(params):
 
     try:
         if not _selection_is_current():
-            _safe_log('bg_translate_picker: stale selection discarded',
+            safe_log('bg_translate_picker: stale selection discarded',
                       level='INFO')
             return
     except Exception:
@@ -124,9 +124,9 @@ def _handle_bg_translate_picker(params):
             msg = label or 'מכין תרגום מובנה...'
             if _ebar['d'] is None:
                 _ebar['d'] = xbmcgui.DialogProgressBG()
-                _ebar['d'].create(_title(), msg)
+                _ebar['d'].create(dialogs_title(), msg)
             pct = int(done * 100 / total) if total else 0
-            _ebar['d'].update(pct, _title(), '{0} {1}%'.format(msg, pct))
+            _ebar['d'].update(pct, dialogs_title(), '{0} {1}%'.format(msg, pct))
         except Exception:
             pass
 
@@ -172,7 +172,7 @@ def _handle_bg_translate_picker(params):
                 _got = payload.get('source_id', '')
                 if (expected_source_id
                         and _got != expected_source_id):
-                    _safe_log(
+                    safe_log(
                         'bg_translate_picker: source_id mismatch '
                         '(expected {0}, got {1})'.format(
                             expected_source_id, _got),
@@ -196,7 +196,7 @@ def _handle_bg_translate_picker(params):
                 # reported "10/10" piling up in the picker.
                 slot = 'b' if _ver.get('slot', 'b') == 'a' else 'a'
                 _ver['slot'] = slot
-                ver_path = _progressive_slot_path(
+                ver_path = progressive_slot_path(
                     kodi.cache_dir(), payload['source_id'], slot,
                     payload.get('release') or '')
                 _tmp = ver_path + '.aitmp'
@@ -215,7 +215,7 @@ def _handle_bg_translate_picker(params):
                             ver_path, selection=_timing_selection,
                             abandon_on_failure=False)
                 except Exception as _e:
-                    _safe_log(
+                    safe_log(
                         'bg_translate_picker setSubtitles raised: '
                         '{0}'.format(_e), level='DEBUG')
                 return
@@ -269,7 +269,7 @@ def _handle_bg_translate_picker(params):
                                     _dst_f.write(_bytes)
                                 os.replace(_tmp_final, _final_path)
                             except OSError as _we:
-                                _safe_log(
+                                safe_log(
                                     'bg_translate_picker done copy '
                                     'failed: {0}'.format(_we),
                                     level='WARNING')
@@ -343,7 +343,7 @@ def _handle_bg_translate_picker(params):
                                                     _grew = False
                                                 break
                                     _registered_and_pinned = _grew
-                                    if not _grew and not _playing_now():
+                                    if not _grew and not playing_now():
                                         # Nobody to strand: with no player
                                         # there is no stream pointing at a
                                         # slot file, so deleting is safe --
@@ -352,7 +352,7 @@ def _handle_bg_translate_picker(params):
                                         # outlives playback.
                                         _grew = True
                                     elif not _grew:
-                                        _safe_log(
+                                        safe_log(
                                             'bg_translate_picker: Kodi did not '
                                             'register the final subtitle '
                                             'stream -- keeping the progressive '
@@ -369,12 +369,12 @@ def _handle_bg_translate_picker(params):
                                             canonical,
                                             selection=_timing_selection)
                                 except Exception as _se:
-                                    _safe_log(
+                                    safe_log(
                                         'bg_translate_picker done '
                                         'setSubtitles raised: {0}'
                                         .format(_se), level='DEBUG')
                     except Exception as _e:
-                        _safe_log(
+                        safe_log(
                             'bg_translate_picker done canonical '
                             'swap failed: {0}'.format(_e),
                             level='DEBUG')
@@ -388,7 +388,7 @@ def _handle_bg_translate_picker(params):
                         # _a/_b slots AND the release-named slots. The
                         # clean <release>.he.srt _final stays as the
                         # canonical stream Kodi is on.
-                        _patterns = _progressive_cleanup_patterns(
+                        _patterns = progressive_cleanup_patterns(
                             payload['source_id'],
                             payload.get('release') or '')
                         for _pat in _patterns:
@@ -405,7 +405,7 @@ def _handle_bg_translate_picker(params):
                 _clear_translation_job(_job_token)
                 return
         except Exception as _e:
-            _safe_log(
+            safe_log(
                 'bg_translate_picker on_phase({0}) raised: '
                 '{1}'.format(phase, _e), level='WARNING')
 
@@ -443,7 +443,7 @@ def _handle_bg_translate_picker(params):
                 on_phase('done', {'success': True, 'path': _resolved,
                                   'source_id': _source, '_cached_media': _initial_media})
     except Exception as e:
-        _safe_log(
+        safe_log(
             'bg_translate_picker resolve crashed: {0}'.format(e),
             level='ERROR')
     finally:
@@ -463,7 +463,7 @@ def _handle_bg_translate_picker(params):
     # a falsy result means extraction/translation deferred or failed. Not for a
     # gender-proofread job (translate.proofread_later): its subtitle is on
     # screen already, and None only means nothing was corrected.
-    if not _resolved and not (link_codec._decode_link(link) or {}).get(
+    if not _resolved and not (link_codec.decode_link(link) or {}).get(
             'proofread_only'):
         try:
             # An extraction that STOPPED PART-WAY is not a failure -- it banked
@@ -487,7 +487,7 @@ def _handle_bg_translate_picker(params):
             except Exception:
                 _partial = ''
             if not _partial:
-                _pl = link_codec._decode_link(link) or {}
+                _pl = link_codec.decode_link(link) or {}
                 _msg = ('AI: לא ניתן היה לחלץ תרגום מובנה — נסו כתובית אחרת'
                         if _pl.get('type') == 'embedded_ai'
                         else 'AI: לא ניתן היה לתרגם — נסו כתובית אחרת')
@@ -496,7 +496,7 @@ def _handle_bg_translate_picker(params):
             pass
 
 
-def _handle_translate_file(params):
+def handle_translate_file(params):
     """Translate an SRT file to Hebrew on disk.
 
     Invoked by the DarkSubs engine.py hook via RunScript when the
@@ -515,7 +515,7 @@ def _handle_translate_file(params):
         from resources.lib.ai_translation import service
         from resources.lib.core import kodi, selection as core_selection, settings, video_context
     except Exception as e:
-        _safe_log('translate_file: import failed: {0}'.format(e),
+        safe_log('translate_file: import failed: {0}'.format(e),
                   level='ERROR')
         return
 
@@ -528,11 +528,11 @@ def _handle_translate_file(params):
     in_path = _decode(params.get('input_b64', ''))
     out_path = _decode(params.get('output_b64', ''))
     if not in_path or not out_path:
-        _safe_log('translate_file: missing input/output paths',
+        safe_log('translate_file: missing input/output paths',
                   level='WARNING')
         return
     if not os.path.isfile(in_path):
-        _safe_log(
+        safe_log(
             'translate_file: input not found: {0}'.format(in_path),
             level='WARNING')
         return
@@ -542,12 +542,12 @@ def _handle_translate_file(params):
         with open(in_path, 'r', encoding='utf-8', errors='replace') as f:
             src_text = f.read()
     except OSError as e:
-        _safe_log('translate_file: read failed: {0}'.format(e),
+        safe_log('translate_file: read failed: {0}'.format(e),
                   level='ERROR')
         return
 
     if not src_text.strip():
-        _safe_log('translate_file: source empty', level='WARNING')
+        safe_log('translate_file: source empty', level='WARNING')
         return
 
     # We don't have video info here (the hook is running inside
@@ -607,7 +607,7 @@ def _handle_translate_file(params):
     progress = None
     try:
         progress = xbmcgui.DialogProgressBG()
-        progress.create(_title(),
+        progress.create(dialogs_title(),
                         'תרגום AI מתחיל...')
     except Exception:
         progress = None
@@ -621,7 +621,7 @@ def _handle_translate_file(params):
             if progress is not None:
                 try:
                     progress.update(
-                        pct, _title(),
+                        pct, dialogs_title(),
                         _ku.localised(32631, stage, total))
                 except Exception:
                     pass
@@ -667,14 +667,14 @@ def _handle_translate_file(params):
             _peek_lang = _ld.detect(src_text[:8000])
             if _peek_lang and _peek_lang != 'en':
                 fast_mode = False
-                _safe_log(
+                safe_log(
                     'translate_file: fast mode skipped (detected '
                     'src lang = {0}, not en)'.format(_peek_lang),
                     level='INFO')
         except Exception as _e:
             # Detection failure: err on the safe side and use slow.
             fast_mode = False
-            _safe_log(
+            safe_log(
                 'translate_file: lang detect failed, falling '
                 'back to slow: {0}'.format(_e), level='WARNING')
 
@@ -684,7 +684,7 @@ def _handle_translate_file(params):
                 link, info, progress_cb=report,
                 selection=_timing_selection)
         except Exception as e:
-            _safe_log('translate_file: resolve crashed: {0}'.format(e),
+            safe_log('translate_file: resolve crashed: {0}'.format(e),
                       level='ERROR')
         finally:
             if progress is not None:
@@ -694,7 +694,7 @@ def _handle_translate_file(params):
                     pass
 
         if not translated_path or not os.path.isfile(translated_path):
-            _safe_log('translate_file: resolve returned nothing',
+            safe_log('translate_file: resolve returned nothing',
                       level='WARNING')
             return
 
@@ -743,7 +743,7 @@ def _handle_translate_file(params):
                 f.write(hebrew)
             os.replace(tmp_out, out_path)
         except OSError as e:
-            _safe_log('translate_file: write failed: {0}'.format(e),
+            safe_log('translate_file: write failed: {0}'.format(e),
                       level='ERROR')
             return
 
@@ -757,7 +757,7 @@ def _handle_translate_file(params):
             open(out_path + '.ai_done', 'w').close()
             _sentinel_ready = True
         except OSError as e:
-            _safe_log('translate_file: sentinel write failed: {0}'
+            safe_log('translate_file: sentinel write failed: {0}'
                       .format(e), level='WARNING')
         if (_sentinel_ready and _delivery_before is not None
                 and not core_selection.confirm_subtitle_sync_registration(
@@ -815,7 +815,7 @@ def _handle_translate_file(params):
                 try:
                     open(out_path + '.ai_done', 'w').close()
                 except OSError as e:
-                    _safe_log('translate_file fast: sentinel write '
+                    safe_log('translate_file fast: sentinel write '
                               'failed: {0}'.format(e), level='WARNING')
                 # Belt-and-suspenders: load the fallback ourselves
                 # instead of trusting DarkSubs's post-hook code to
@@ -849,7 +849,7 @@ def _handle_translate_file(params):
                         xbmc.sleep(250)
                         _attempts += 1
                 except Exception as e:
-                    _safe_log(
+                    safe_log(
                         'translate_file fast first_ready '
                         'setSubtitles raised: {0}'.format(e),
                         level='DEBUG')
@@ -879,7 +879,7 @@ def _handle_translate_file(params):
                 # (plus _final after done) instead of N.
                 slot = 'b' if _ver.get('slot', 'b') == 'a' else 'a'
                 _ver['slot'] = slot
-                ver_path = _progressive_slot_path(
+                ver_path = progressive_slot_path(
                     kodi.cache_dir(), payload['source_id'], slot,
                     payload.get('release') or '')
                 _tmp = ver_path + '.aitmp'
@@ -899,7 +899,7 @@ def _handle_translate_file(params):
                             ver_path, selection=_timing_selection,
                             abandon_on_failure=False)
                 except Exception as e:
-                    _safe_log(
+                    safe_log(
                         'translate_file fast: setSubtitles raised: '
                         '{0}'.format(e), level='DEBUG')
             elif phase == 'done':
@@ -955,7 +955,7 @@ def _handle_translate_file(params):
                                     _dst_f.write(_bytes)
                                 os.replace(_tmp_final, _final_path)
                             except OSError as _we:
-                                _safe_log(
+                                safe_log(
                                     'translate_file fast done copy '
                                     'failed: {0}'.format(_we),
                                     level='WARNING')
@@ -1032,7 +1032,7 @@ def _handle_translate_file(params):
                                                 except Exception:
                                                     _grew = False
                                                 break
-                                    if not _grew and not _playing_now():
+                                    if not _grew and not playing_now():
                                         # Nobody to strand: with no player
                                         # there is no stream pointing at a
                                         # slot file, so deleting is safe --
@@ -1041,7 +1041,7 @@ def _handle_translate_file(params):
                                         # outlives playback.
                                         _grew = True
                                     elif not _grew:
-                                        _safe_log(
+                                        safe_log(
                                             'translate_file: Kodi did not '
                                             'register the final subtitle '
                                             'stream -- keeping the progressive '
@@ -1059,12 +1059,12 @@ def _handle_translate_file(params):
                                             canonical,
                                             selection=_timing_selection)
                                 except Exception as _se:
-                                    _safe_log(
+                                    safe_log(
                                         'translate_file fast done '
                                         'setSubtitles raised: {0}'
                                         .format(_se), level='DEBUG')
                     except Exception as _e:
-                        _safe_log(
+                        safe_log(
                             'translate_file fast done canonical '
                             'swap failed: {0}'.format(_e),
                             level='DEBUG')
@@ -1083,7 +1083,7 @@ def _handle_translate_file(params):
                         # _a/_b slots AND the release-named slots. The
                         # clean <release>.he.srt _final stays as the
                         # canonical stream Kodi is on.
-                        _patterns = _progressive_cleanup_patterns(
+                        _patterns = progressive_cleanup_patterns(
                             payload['source_id'],
                             payload.get('release') or '')
                         for _pat in _patterns:
@@ -1099,7 +1099,7 @@ def _handle_translate_file(params):
                         pass
                 _clear_translation_job(_job_token)
         except Exception as _e:
-            _safe_log(
+            safe_log(
                 'translate_file fast on_phase({0}) raised: {1}'.format(
                     phase, _e), level='WARNING')
 
@@ -1111,7 +1111,7 @@ def _handle_translate_file(params):
                 progressive_cb=on_phase,
                 selection=_timing_selection)
         except Exception as e:
-            _safe_log(
+            safe_log(
                 'translate_file fast: resolve crashed: {0}'.format(e),
                 level='ERROR')
 
@@ -1172,7 +1172,7 @@ def _handle_translate_file(params):
                         core_selection.abandon_subtitle_selection(
                             _timing_selection)
             except OSError as _e:
-                _safe_log(
+                safe_log(
                     'translate_file fast: post-resolve sentinel '
                     'recovery failed: {0}'.format(_e),
                     level='ERROR')

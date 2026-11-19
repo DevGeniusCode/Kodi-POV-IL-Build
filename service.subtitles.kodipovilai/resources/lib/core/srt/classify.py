@@ -4,7 +4,7 @@
 
 import os
 import re
-from resources.lib.core.srt.blocks import _SPEAKER_RE, block_text_only, parse_blocks
+from resources.lib.core.srt.blocks import SPEAKER_RE, block_text_only, parse_blocks
 
 
 def looks_hebrew(text, min_alpha=120, min_ratio=0.5):
@@ -109,7 +109,7 @@ def sdh_content_stats(text):
         total += 1
         if (any(g in t for g in _SDH_MUSIC_GLYPHS)
                 or _SDH_BRACKET_RE.search(t)
-                or any(_SPEAKER_RE.match(ln.strip()) for ln in t.split('\n'))):
+                or any(SPEAKER_RE.match(ln.strip()) for ln in t.split('\n'))):
             annotated += 1
     ratio = (annotated / float(total)) if total else 0.0
     return (total, annotated, ratio)

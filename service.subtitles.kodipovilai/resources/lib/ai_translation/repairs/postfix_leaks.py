@@ -3,8 +3,8 @@
 # Post-fix: reasoning, draft and source-echo leaks of the model output.
 
 import re
-from resources.lib.ai_translation.repairs.postfix_glyphs import _self_contained_markup
-from resources.lib.core.srt.blocks import _HEB_RE, _INVISIBLE_BIDI, _PROTECTED_RE, _TIMECODE_RE, _block_start, block_text_only, parse_blocks
+from resources.lib.ai_translation.repairs.postfix_glyphs import self_contained_markup
+from resources.lib.core.srt.blocks import HEB_RE, INVISIBLE_BIDI, PROTECTED_RE, TIMECODE_RE, block_start, block_text_only, parse_blocks
 from resources.lib.core.srt.timing import align_blocks, missing_blocks, restore_block_timings
 
 
@@ -77,7 +77,7 @@ _SOURCE_ARROW_RE = re.compile(r'-+>|=>|→')
 
 
 def _reasoning_line(line, source_has_arrow=False):
-    line = ''.join(c for c in line if c not in _INVISIBLE_BIDI)
+    line = ''.join(c for c in line if c not in INVISIBLE_BIDI)
     line = _MARKUP_RE.sub('', line)
     m = _REASONING_LINE_RE.match(_REASONING_LEAD_RE.sub('', line))
     # A sign or caption arrow the source has anywhere ("Exit ->") may open
@@ -86,7 +86,7 @@ def _reasoning_line(line, source_has_arrow=False):
 
 
 def _plain(text):
-    return _MARKUP_RE.sub('', ''.join(c for c in text if c not in _INVISIBLE_BIDI))
+    return _MARKUP_RE.sub('', ''.join(c for c in text if c not in INVISIBLE_BIDI))
 
 
 def _phrase(text):
@@ -147,7 +147,7 @@ def _first_of_drafts(line):
     'word' (a word or phrase swapped mid-sentence: "הקיתארה / הנבל הנהדרת",
     no draft of the whole line to take)."""
     stripped = line.rstrip()
-    if stripped.endswith(' /') and _HEB_RE.search(stripped):
+    if stripped.endswith(' /') and HEB_RE.search(stripped):
         return stripped[:-2].rstrip(), 'sentence'
     m = _DRAFTS_RE.search(line)
     if not m:
@@ -209,7 +209,7 @@ def _complete_answer(answer, source='', speakers=0):
     and as many dialogue lines as the cue's source line -- or, without one,
     as the cue had before its working (`speakers`) -- and, with the source
     line, not a fragment of it (under 40% of its words, names left out)."""
-    if not answer or not _HEB_RE.search(answer):
+    if not answer or not HEB_RE.search(answer):
         return False
     if answer.count('(') != answer.count(')') or answer.count('[') != answer.count(']'):
         return False
@@ -268,7 +268,7 @@ def reasoning_final_answer(body, source=''):
         m = _QUOTED_LINE_RE.match(cut.strip())
         if m:
             cut = m.group(1) + ('' if m.group(1).endswith(tuple('.!?,…')) else m.group(2))
-        if not _HEB_RE.search(cut):
+        if not HEB_RE.search(cut):
             if keep:
                 break
             continue
@@ -304,7 +304,7 @@ def reasoning_free_draft(body, source=''):
         cut, how = _first_of_drafts(cut)
         if how == 'word':
             return ''
-        if not _HEB_RE.search(cut):
+        if not HEB_RE.search(cut):
             break
         if how and plain.endswith(' -') and not cut.endswith('-'):
             cut += ' -'     # the dialogue dash 'reverse' put after the last draft
@@ -407,7 +407,7 @@ def generated_editorial_leak_indices(src_blocks, out_blocks, strong_only=False):
         bad = []
         for index, block in enumerate(out_blocks):
             body = block_text_only(block) or ''
-            if not _HEB_RE.search(body):
+            if not HEB_RE.search(body):
                 continue
             source = sources[index]
             source_clean = re.sub(r'\s+', ' ', source).strip().lower()
@@ -415,7 +415,7 @@ def generated_editorial_leak_indices(src_blocks, out_blocks, strong_only=False):
             leaked = False
             for match in _EDITORIAL_FRAGMENT_RE.finditer(body):
                 fragment = ''.join(c for c in match.group(0)
-                                   if c not in _INVISIBLE_BIDI)
+                                   if c not in INVISIBLE_BIDI)
                 if not (_EDITORIAL_ACTION_RE.search(fragment)
                         or _REASONING_FRAGMENT_RE.search(fragment)):
                     continue
@@ -466,12 +466,12 @@ def may_carry_reasoning(text):
             if not ('/' in line or '>' in line or '→' in line
                     or _LATIN_PAIR_RE.search(line)):
                 continue
-            if _TIMECODE_RE.match(line.strip()):
+            if TIMECODE_RE.match(line.strip()):
                 continue
             # each line cleaned on its own, as the scan does ("<3" must not
             # swallow the next line's arrow)
             window = '\n'.join(_plain(l) for l in lines[max(0, i - 1):i + 2]
-                               if not _TIMECODE_RE.match(l.strip()))
+                               if not TIMECODE_RE.match(l.strip()))
             if _ANY_REASONING_RE.search(window):
                 return True
         return False
@@ -484,13 +484,13 @@ def aligned_source_texts(src_blocks, out_blocks):
     (matched by start time, then by order), '' where there is none."""
     sources = {}
     for block in src_blocks or ():
-        start = _block_start(block)
+        start = block_start(block)
         if start is not None:
             sources.setdefault(start, []).append(block_text_only(block) or '')
     seen = {}
     texts = []
     for block in out_blocks:
-        start = _block_start(block)
+        start = block_start(block)
         occurrence = seen.get(start, 0)
         seen[start] = occurrence + 1
         candidates = sources.get(start, ())
@@ -518,16 +518,16 @@ def generated_source_echo_indices(src_blocks, out_blocks):
             return []
         sources = {}
         for block in src_blocks:
-            start = _block_start(block)
+            start = block_start(block)
             if start is not None:
                 sources.setdefault(start, []).append(block_text_only(block) or '')
         seen = {}
         bad = []
         for index, block in enumerate(out_blocks):
             body = block_text_only(block) or ''
-            if not _HEB_RE.search(body):
+            if not HEB_RE.search(body):
                 continue
-            start = _block_start(block)
+            start = block_start(block)
             occurrence = seen.get(start, 0)
             seen[start] = occurrence + 1
             candidates = sources.get(start, ())
@@ -535,7 +535,7 @@ def generated_source_echo_indices(src_blocks, out_blocks):
                 continue
             source_text = candidates[occurrence]
             source_stripped = source_text.strip()
-            if (_HEB_RE.search(source_text)
+            if (HEB_RE.search(source_text)
                     or any(mark in source_text for mark in ('"', '“', '”', '«', '»'))
                     or not source_stripped.endswith((',', ';', ':'))):
                 continue
@@ -549,7 +549,7 @@ def generated_source_echo_indices(src_blocks, out_blocks):
                 bool(word and word[0].isupper()) for word in source_tokens)
             if title_case_words * 5 >= len(source_tokens) * 3:
                 continue
-            first_hebrew = _HEB_RE.search(body).start()
+            first_hebrew = HEB_RE.search(body).start()
             fragments = []
             cursor = 0
             for line in body.splitlines(True):
@@ -563,7 +563,7 @@ def generated_source_echo_indices(src_blocks, out_blocks):
                 if match.start() > first_hebrew
             )
             for fragment in fragments:
-                if _HEB_RE.search(fragment):
+                if HEB_RE.search(fragment):
                     continue
                 fragment_words = tuple(
                     word.lower().replace('’', "'")
@@ -597,16 +597,16 @@ def generated_negation_loss_indices(src_blocks, out_blocks):
             return []
         sources = {}
         for block in src_blocks:
-            start = _block_start(block)
+            start = block_start(block)
             if start is not None:
                 sources.setdefault(start, []).append(block_text_only(block) or '')
         seen = {}
         bad = []
         for index, block in enumerate(out_blocks):
             target = block_text_only(block) or ''
-            if not _HEB_RE.search(target):
+            if not HEB_RE.search(target):
                 continue
-            start = _block_start(block)
+            start = block_start(block)
             occurrence = seen.get(start, 0)
             seen[start] = occurrence + 1
             candidates = sources.get(start, ())
@@ -621,8 +621,8 @@ def generated_negation_loss_indices(src_blocks, out_blocks):
             # They are presentation metadata, not semantic clauses; leaving the
             # closing PDF after a full stop creates a spurious third clause and
             # silently disables this gate on the exact delivered artifact.
-            source = ''.join(c for c in source if c not in _INVISIBLE_BIDI)
-            target = ''.join(c for c in target if c not in _INVISIBLE_BIDI)
+            source = ''.join(c for c in source if c not in INVISIBLE_BIDI)
+            target = ''.join(c for c in target if c not in INVISIBLE_BIDI)
             if _NEGATIVE_FUTURE_CONDITIONAL_RE.search(source):
                 continue
             source_clauses = [part.strip() for part in
@@ -749,7 +749,7 @@ def strip_source_echo(text):
     if not text:
         return text
     try:
-        if not _HEB_RE.search(text):
+        if not HEB_RE.search(text):
             return text
         lines = text.split('\n')
         out, cue, changed = [], [], False
@@ -763,10 +763,10 @@ def strip_source_echo(text):
                     head = i + 1
                     break
             body = cue[head:]
-            if len(body) < 2 or not any(_HEB_RE.search(l) for l in body):
+            if len(body) < 2 or not any(HEB_RE.search(l) for l in body):
                 return cue, False
             first_heb = next(i for i, l in enumerate(body)
-                             if _HEB_RE.search(l))
+                             if HEB_RE.search(l))
             # Only a LEADING run of non-Hebrew lines counts as an echo. There is
             # no blank-line check here because a blank line cannot reach this
             # point: blanks delimit cues in the loop below, so every line in
@@ -782,13 +782,13 @@ def strip_source_echo(text):
             lead = body[:first_heb]
             if lead and all(_MARKUP_RE.sub('', l).strip() for l in lead):
                 removed='\n'.join(lead);kept='\n'.join(body[first_heb:])
-                if not _self_contained_markup(removed):return cue, False
+                if not self_contained_markup(removed):return cue, False
                 # A clock, amount or identifier is content, even above Hebrew.
                 from collections import Counter
                 numbers=lambda value:Counter(re.findall(r'\d+(?:[.,:/-]\d+)*',value))
                 if numbers(removed)-numbers(kept):return cue, False
                 # Quoted foreign text may be a literal/password, not an echo.
-                if any(m.group(0)[:1] in ('"','“','«') for m in _PROTECTED_RE.finditer(removed)):
+                if any(m.group(0)[:1] in ('"','“','«') for m in PROTECTED_RE.finditer(removed)):
                     return cue, False
                 return cue[:head] + body[first_heb:], True
             return cue, False

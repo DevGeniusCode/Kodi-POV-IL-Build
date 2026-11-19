@@ -5,12 +5,12 @@
 import threading
 import time
 from resources.lib.core import kodi
-from resources.lib.ai_translation.progress import _status
+from resources.lib.ai_translation.progress import status
 
 
 # The model every install starts on, and the one a translation goes on with
 # when the viewer's own choice does not answer.
-_FALLBACK_MODEL = 'gemini-3.5-flash-lite'
+FALLBACK_MODEL = 'gemini-3.5-flash-lite'
 # How long a model that did not answer is passed over by the translations
 # that follow (seconds), by why: 'busy' a 5xx answer (two in a row for a
 # paid key), 'slow' no reply within the timeout, 'quota' its free requests for the day are spent,
@@ -20,7 +20,7 @@ _MODEL_OUT_PROP = 'povil.gemini.model_out.'
 # How long a chunk waits for a chosen (non-default) model's reply before it
 # counts as 'slow' (seconds; gemini.REQUEST_TIMEOUT, 90, for the default
 # model, which has nothing behind it).
-_CHOSEN_MODEL_TIMEOUT = 60
+CHOSEN_MODEL_TIMEOUT = 60
 
 
 def _model_out_key(model, api_key=''):
@@ -64,7 +64,7 @@ def _model_label(model):
     return ' '.join(part.capitalize() for part in name.split('-')) or 'Gemini'
 
 
-def _model_fallback_notice(chosen, why):
+def model_fallback_notice(chosen, why):
     """Tell the viewer the translation is on another model than their pick.
 
     A model Google no longer serves is theirs to change in the settings, so
@@ -78,11 +78,11 @@ def _model_fallback_notice(chosen, why):
         except Exception:
             pass
     else:
-        _status(message, time_ms=5000)
+        status(message, time_ms=5000)
 
 
 def _model_fallback_message(chosen, why, fallback=None):
-    old, new = _model_label(chosen), _model_label(fallback or _FALLBACK_MODEL)
+    old, new = _model_label(chosen), _model_label(fallback or FALLBACK_MODEL)
     return {
         'gone': 'AI: המודל {0} כבר לא זמין אצל Google — מתרגם עם {1}. '
                 'אפשר להחליף מודל בהגדרות',
@@ -90,7 +90,7 @@ def _model_fallback_message(chosen, why, fallback=None):
     }.get(why, 'AI: {0} עמוס כרגע — ממשיך עם {1}').format(old, new)
 
 
-class _ModelFallback(object):
+class ModelFallback(object):
     """Which model one translation asks.
 
     A viewer who picked another model than the default got no AI at all when
@@ -105,7 +105,7 @@ class _ModelFallback(object):
     keeps the behaviour it had.
     """
 
-    def __init__(self, chosen, fallback=_FALLBACK_MODEL, out=_model_out,
+    def __init__(self, chosen, fallback=FALLBACK_MODEL, out=_model_out,
                  note=_model_out_note, api_key=''):
         self.chosen = (chosen or '').strip() or fallback
         self.fallback = fallback

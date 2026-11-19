@@ -11,21 +11,21 @@ _ASK_AI_CLOSE_MS = 10000
 
 # The top overlay's status line once a subtitle is on screen, by the state of
 # its timing at that moment ...
-_LOADED_HEADINGS = {
+LOADED_HEADINGS = {
     'checking': 'כתובית נטענה · בודק סנכרון',
     'confirmed': 'כתובית מסונכרנת',
     'fixed': 'כתובית סונכרנה אוטומטית',
     'unverified': 'כתובית נטענה · התזמון טרם אומת',
 }
 # ... and once a check that was still running at that moment has ended.
-_CHECKED_HEADINGS = {
+CHECKED_HEADINGS = {
     'confirmed': 'כתובית מסונכרנת',
     'fixed': 'כתובית סונכרנה אוטומטית',
     'unverified': 'כתובית נטענה · הסנכרון לא אומת',
 }
 # What the overlay says when the pick was the video's own subtitle and it gave
 # nothing (translate.embedded_miss_since: the extractor's reason).
-_EMBEDDED_MISS_LINES = {
+EMBEDDED_MISS_LINES = {
     'no_index': 'את הכתובית המובנית בקובץ הזה אי אפשר לקרוא מהסטרים\n'
                 'ואין כתובית אחרת לתרגם',
     'no_text': 'הכתובית המובנית בקובץ הזה היא תמונה ולא טקסט\n'
@@ -36,7 +36,7 @@ _EMBEDDED_MISS_LINES = {
         'אפשר לבחור אותה שוב מרשימת הכתוביות',
 }
 # A status line stays this long (seconds) ...
-_OVERLAY_LINE_SECONDS = 5.0
+OVERLAY_LINE_SECONDS = 5.0
 # ... and "checking" stays until the check ends, this long at most.  A check
 # that ends later still announces a fix with its own toast.
 _SYNC_CHECK_OVERLAY_CAP = 25.0
@@ -45,7 +45,7 @@ _SYNC_CHECK_OVERLAY_CAP = 25.0
 _STATUS_GONE_READS = 3
 
 
-def _wait_for_sync_check(read_state, still_ours, sleep,
+def wait_for_sync_check(read_state, still_ours, sleep,
                          cap=_SYNC_CHECK_OVERLAY_CAP, step=0.2):
     """Wait while the timing check of the subtitle on screen is running.
 
@@ -61,7 +61,7 @@ def _wait_for_sync_check(read_state, still_ours, sleep,
         if not still_ours():
             return None, done * step
         state = read_state()
-        if state in _CHECKED_HEADINGS:
+        if state in CHECKED_HEADINGS:
             return state, done * step
         if state == 'checking':
             gone = 0
@@ -76,7 +76,7 @@ def _wait_for_sync_check(read_state, still_ours, sleep,
     return '', steps * step
 
 
-def _toasts_on(sub_utils):
+def toasts_on(sub_utils):
     """The viewer's switch for subtitle toasts (sub_utils.notify obeys it)."""
     try:
         return (sub_utils.get_setting('subs_notifications', 'true')
@@ -99,10 +99,10 @@ def ai_when_no_hebrew(sub_utils):
 
 # AI rows the list shows as Hebrew -- the translation of the video's own
 # foreign track, of a foreign file beside it -- are translations too
-_AI_ROW_TYPES = ('embedded_ai', 'ai')
+AI_ROW_TYPES = ('embedded_ai', 'ai')
 
 
-def _ask_ai_translation(google=False):
+def ask_ai_translation(google=False):
     """'ask': True only on an explicit yes. 'No' has the focus: an OK meant
     for the player must not spend requests."""
     try:

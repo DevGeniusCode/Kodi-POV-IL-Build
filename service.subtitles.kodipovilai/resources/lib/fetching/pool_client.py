@@ -4,7 +4,6 @@
 # helpers (release name from a path, token test, URL and enable switches).
 
 import json
-import os
 from resources.lib.core import kodi, settings
 try:
     import urllib.request as _urlreq
@@ -80,7 +79,7 @@ def sign_headers(method, path):
     return {'x-pov-sig': sig, 'x-pov-anon': anon, 'x-pov-v': _addon_version()}
 
 
-def _post_headers(path):
+def post_headers(path):
     """Headers for a signed POST to `path`."""
     h = {'content-type': 'application/json', 'user-agent': _UA}
     h.update(sign_headers('POST', path))
@@ -103,51 +102,7 @@ def share_enabled():
     return settings.get_bool('pool_share', False)
 
 
-def _is_token_like(s):
-    """A debrid URL / token / bare UUID is NOT a usable release name."""
-    import re as _re
-    s = (s or '').strip()
-    low = s.lower()
-    if not s:
-        return True
-    if 'token=' in low or '://' in low or '?' in low or '&' in low:
-        return True
-    if _re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-'
-                     r'[0-9a-f]{4}-[0-9a-f]{12}', low):
-        return True
-    if (len(s) >= 24 and '.' not in s and ' ' not in s
-            and _re.fullmatch(r'[0-9a-f-]+', low)):
-        return True
-    return False
-
-
-def _release_from(info):
-    # Prefer real release names; never share a debrid URL/token as the release
-    # (that's what produced the garbage "...?token=..." names in the pool).
-    for key in ('release', 'filename', 'picked_release', 'tagline', 'label'):
-        rel = (info.get(key) or '').strip()
-        if rel and not _is_token_like(rel):
-            return rel
-    # li_filename (ListItem.FileNameAndPath) and filepath are PATHS whose
-    # basename is often the real release even when the player's filepath is a
-    # tokenized debrid URL. _release_ready() treats li_filename as a valid
-    # release (so autosub proceeds and embedded detection runs on it), so
-    # _release_from MUST consult it too -- otherwise report_embedded and the
-    # local merge_embedded get an empty release and silently no-op, and the
-    # source screen never gets the BUILT-IN flag locally OR from the pool.
-    for pathkey in ('li_filename', 'filepath'):
-        fp = (info.get(pathkey) or '').strip()
-        if not fp:
-            continue
-        base = os.path.basename(fp)
-        if '.' in base:
-            base = base.rsplit('.', 1)[0]
-        if base and not _is_token_like(base):
-            return base
-    return ''
-
-
-def _params(info):
+def pool_client_params(info):
     return {
         'tmdb': (info.get('tmdb_id') or '').strip(),
         'imdb': (info.get('imdb_id') or '').strip(),
@@ -158,11 +113,11 @@ def _params(info):
     }
 
 
-def _has_id(p):
+def has_id(p):
     return bool(p.get('tmdb') or p.get('imdb'))
 
 
-def _get(path, params):
+def get(path, params):
     q = _urlparse.urlencode({k: v for k, v in params.items() if v})
     hdrs = {'user-agent': _UA}
     hdrs.update(sign_headers('GET', path))
@@ -201,7 +156,7 @@ def _lookup_raw(p):
         return ent[1]
     cacheable = True
     try:
-        data = json.loads(_get('/lookup', p).decode('utf-8'))
+        data = json.loads(get('/lookup', p).decode('utf-8'))
         if not isinstance(data, dict) or not data.get('ok'):
             data = {}
     except Exception as e:
@@ -229,8 +184,8 @@ def lookup(info):
     """Return a list of available Hebrew variants for this media, or []."""
     if _urlreq is None:
         return []
-    p = _params(info)
-    if not _has_id(p):
+    p = pool_client_params(info)
+    if not has_id(p):
         return []
     data = _lookup_raw(p)
     if not data:
@@ -249,8 +204,8 @@ def lookup_cached(info):
     try:
         if _urlreq is None:
             return None
-        p = _params(info)
-        if not _has_id(p):
+        p = pool_client_params(info)
+        if not has_id(p):
             return None
         ent = _LOOKUP_CACHE.get(_lookup_cache_key(p))
         if ent and (_t.time() - ent[0]) < _LOOKUP_TTL and ent[1]:
@@ -307,8 +262,8 @@ def sync_map(info):
     try:
         if _urlreq is None or not use_enabled():
             return {}
-        p = _params(info)
-        if not _has_id(p):
+        p = pool_client_params(info)
+        if not has_id(p):
             return {}
         import time as _t
         ent = _SYNC_CACHE.get(_sync_cache_key(p))
@@ -328,19 +283,19 @@ def fetch(info, source_hash=None):
     or None. With a hash, the Worker 404s when that exact variant is absent."""
     if _urlreq is None:
         return None
-    p = _params(info)
-    if not _has_id(p):
+    p = pool_client_params(info)
+    if not has_id(p):
         return None
     if source_hash:
         p['hash'] = source_hash
     try:
-        return _get('/sub', p).decode('utf-8')
+        return get('/sub', p).decode('utf-8')
     except Exception as e:
         kodi.log('pool fetch failed: {0}'.format(e), level='DEBUG')
         return None
 
 
-def _lookup_params_from_body(body):
+def lookup_params_from_body(body):
     return {
         'tmdb': (body.get('tmdb_id') or '').strip(),
         'imdb': (body.get('imdb_id') or '').strip(),
@@ -365,4 +320,4 @@ def _lookup_params_from_body(body):
 #     success (or a server dedup) removes it; permanently-bad jobs are dropped,
 #     and anything stuck is aged out so the queue can't grow without bound.
 
-_QUEUE_MAX_AGE_SEC = 14 * 24 * 3600
+QUEUE_MAX_AGE_SEC = 14 * 24 * 3600
