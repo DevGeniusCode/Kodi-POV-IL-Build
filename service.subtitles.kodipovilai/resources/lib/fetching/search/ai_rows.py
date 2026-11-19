@@ -314,24 +314,11 @@ def ai_entries(S):
 
 
 def finish(S):
-    """The final ordering, the labels and the empty-list message."""
+    """The final ordering, the labels and the empty-list log line."""
     S.ai_entries.sort(key=lambda e: 0 if e.get('is_cached') else 1)
     S.results.extend(S.ai_entries)
 
     if not S.results:
-        # Give the user a hint about why we have nothing -- the
-        # "no subtitles found" toast from Kodi alone is
-        # uninformative. Each reason is conditional so the message
-        # only lists what's actually missing.
-        reasons = []
-        if not S.imdb_id and not S.tmdb_id:
-            reasons.append('אין IMDB / TMDB id מהנגן')
-        if not S.alongside and not S.in_temp:
-            reasons.append('אין קבצי SRT ב-temp או ליד הסרט')
-        msg = 'AI: אין מקור לתרגום ({0}). בחר כתובית באנגלית מ-DarkSubs ' \
-              'ופתח שוב את חיפוש הכתוביות — התרגום ל-AI יופעל אוטומטית.'.format(
-                ' / '.join(reasons) or 'לא ידוע')
-        kodi.notify(msg, time_ms=5000)
         kodi.log('list_candidates returned empty: ' + repr(
             {'imdb_id': S.imdb_id, 'tmdb_id': S.tmdb_id,
              'alongside_count': len(S.alongside),

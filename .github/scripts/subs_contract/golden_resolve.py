@@ -1414,7 +1414,6 @@ def sc_download_ai(h):
     ai_settings(h)
     link, _ = ai_link(h)
     run_entry(h, _q(action='download', link=link))
-    h.settings['pov_fast_navigation'] = 'true'
     run_entry(h, _q(action='download', link=link))
     h.settings['use_builtin_engine'] = 'true'
     h.gemini_policy = policy_seq([], then='503')

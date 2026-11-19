@@ -24,7 +24,7 @@ from resources.lib.fetching.embedded.extract.tuning import CLUSTER_CAP_LOCAL, DE
 from resources.lib.fetching.embedded.extract.matroska import is_bitmap_codec, is_text_codec, NotMatroska, parse_head, sub_tracks
 from resources.lib.fetching.embedded.extract.pace import pace_memory_load, PACE_MEMORY_PROBE, pace_memory_save
 from resources.lib.fetching.embedded.extract.http_source import Source
-from resources.lib.fetching.embedded.extract.tracks import choose_track, track_rows
+from resources.lib.fetching.embedded.extract.tracks import choose_track, lone_forced_track, LONE_FORCED_MIN_CUES, track_rows
 from resources.lib.fetching.embedded.extract.srt_rows import entries_to_srt, timeline_origin
 from resources.lib.fetching.embedded.extract.extract_http import extract_cues_http, extract_in_windows, steps_in_ticks
 from resources.lib.fetching.embedded.extract.extract_mp4 import extract_srt_mp4
@@ -152,6 +152,15 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         # NOT prefer SDH -- there the track is only a timing skeleton.)
         track = choose_track(src, subs, track_num, lang, other_text, on_track,
                               _log)
+        lone_forced = False
+        if track is None:
+            track = lone_forced_track(subs, track_num, lang)
+            lone_forced = track is not None
+            if lone_forced:
+                _log('the only subtitle track (#%s %s [%s]) is flagged forced -- '
+                     'reading it; it is delivered only when it holds %d cues '
+                     'or more' % (track['num'], track['codec'], track['lang'],
+                                  LONE_FORCED_MIN_CUES))
         if track is None:
             # SAY WHAT WAS ACTUALLY THERE. "no matching text track" reads as a
             # defect in this parser, and on the report that prompted this it was
@@ -233,6 +242,11 @@ def extract_srt(url_or_path, track_num=None, lang=None,
             return None
         srt = entries_to_srt(entries, scale_ms, origin_ms, codec)
         if not srt:
+            return None
+        if lone_forced and srt.count('-->') < LONE_FORCED_MIN_CUES:
+            _log('the forced-flagged track #%s holds %d cue(s) -- a real '
+                 'forced track (foreign lines only), not the dialogue; not '
+                 'delivered' % (want, srt.count('-->')))
             return None
         _log('extracted %d cue(s) from track #%s (%s), %.1fMB, %.1fs'
              % (srt.count('-->'), want, codec, src.fetched / 1e6,

@@ -1,32 +1,10 @@
 """Start-up waits: hold boot work while a video plays, then until Home is
 live and its rows have settled, so no modal fires before Kodi's GUI exists."""
-import sys
 import time
 
 import xbmc
 
-from resources.libs.common.config import CONFIG
 from resources.libs.common import logging
-
-
-def stop_if_duplicate():
-    NOW = time.time()
-    temp = CONFIG.get_setting('time_started')
-
-    if temp:
-        if temp > NOW - (60 * 2):
-            logging.log('Killing Start Up Script')
-            sys.exit()
-
-    logging.log("{0}".format(NOW))
-    CONFIG.set_setting('time_started', NOW)
-    xbmc.sleep(1000)
-
-    if not CONFIG.get_setting('time_started') == NOW:
-        logging.log('Killing Start Up Script')
-        sys.exit()
-    else:
-        logging.log('Continuing Start Up Script')
 
 
 def check_for_video():

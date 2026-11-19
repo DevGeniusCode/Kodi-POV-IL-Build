@@ -306,6 +306,90 @@ msgctxt "#32624"
 msgid "Previous lines sent as context"
 msgstr "Previous lines sent as context"
 
+msgctxt "#32627"
+msgid "Gemini requests per minute"
+msgstr "Gemini requests per minute"
+
+msgctxt "#32628"
+msgid "0 = automatic: a free key follows the model's free limit, a paid key is not paced. A lower number slows requests down; on a free key a higher number is capped to the model's limit."
+msgstr "0 = automatic: a free key follows the model's free limit, a paid key is not paced. A lower number slows requests down; on a free key a higher number is capped to the model's limit."
+
+msgctxt "#32615"
+msgid "Search also in Russian"
+msgstr "Search also in Russian"
+
+msgctxt "#32643"
+msgid "Adds Russian to the languages the built-in sources look for. Not used while \"Search in all languages\" is on."
+msgstr "Adds Russian to the languages the built-in sources look for. Not used while \"Search in all languages\" is on."
+
+msgctxt "#32616"
+msgid "Search also in Arabic"
+msgstr "Search also in Arabic"
+
+msgctxt "#32644"
+msgid "Adds Arabic to the languages the built-in sources look for. Not used while \"Search in all languages\" is on."
+msgstr "Adds Arabic to the languages the built-in sources look for. Not used while \"Search in all languages\" is on."
+
+msgctxt "#32617"
+msgid "Other search languages"
+msgstr "Other search languages"
+
+msgctxt "#32645"
+msgid "Three-letter language codes separated by commas, for example fre,spa,ita. Added to the languages above. Not used while \"Search in all languages\" is on."
+msgstr "Three-letter language codes separated by commas, for example fre,spa,ita. Added to the languages above. Not used while \"Search in all languages\" is on."
+
+msgctxt "#32618"
+msgid "Search in all languages"
+msgstr "Search in all languages"
+
+msgctxt "#32646"
+msgid "The sources return subtitles in every language, not only Hebrew and English. Turn off to search only the languages selected here."
+msgstr "The sources return subtitles in every language, not only Hebrew and English. Turn off to search only the languages selected here."
+
+msgctxt "#32619"
+msgid "Retry in all languages when nothing is found"
+msgstr "Retry in all languages when nothing is found"
+
+msgctxt "#32647"
+msgid "When the search finds nothing, search once more in all languages. Used only while \"Search in all languages\" is off."
+msgstr "When the search finds nothing, search once more in all languages. Used only while \"Search in all languages\" is off."
+
+msgctxt "#32629"
+msgid "Downloaded subtitle files kept in the cache"
+msgstr "Downloaded subtitle files kept in the cache"
+
+msgctxt "#32648"
+msgid "When the number of cached downloaded subtitle files goes above this, the whole downloaded-subtitles cache is cleared."
+msgstr "When the number of cached downloaded subtitle files goes above this, the whole downloaded-subtitles cache is cleared."
+
+msgctxt "#32639"
+msgid "OpenSubtitles API key (optional)"
+msgstr "OpenSubtitles API key (optional)"
+
+msgctxt "#32649"
+msgid "Your own OpenSubtitles API key. When set, it is used instead of the built-in keys. Leave empty to use the built-in keys. May need a Kodi restart to take effect."
+msgstr "Your own OpenSubtitles API key. When set, it is used instead of the built-in keys. Leave empty to use the built-in keys. May need a Kodi restart to take effect."
+
+msgctxt "#32640"
+msgid "Read the file's own foreign track as a gender reference"
+msgstr "Read the file's own foreign track as a gender reference"
+
+msgctxt "#32650"
+msgid "When a translation is made from a subtitle track inside the video file, also read another foreign track of that file (Arabic is the reference) to get the speaker's gender right. Turn off to never read the file for a reference."
+msgstr "When a translation is made from a subtitle track inside the video file, also read another foreign track of that file (Arabic is the reference) to get the speaker's gender right. Turn off to never read the file for a reference."
+
+msgctxt "#32641"
+msgid "Engine debug lines in the Kodi log"
+msgstr "Engine debug lines in the Kodi log"
+
+msgctxt "#32651"
+msgid "Writes the search engine's detailed debug lines to the Kodi log as warnings. Leave off unless you are collecting a log."
+msgstr "Writes the search engine's detailed debug lines to the Kodi log as warnings. Leave off unless you are collecting a log."
+
+msgctxt "#32642"
+msgid "Search languages"
+msgstr "Search languages"
+
 msgctxt "#32625"
 msgid "Badge may ask Ktuvit when nothing else has Hebrew"
 msgstr "Badge may ask Ktuvit when nothing else has Hebrew"
@@ -577,14 +661,6 @@ msgstr "Fast mode (paid Gemini API tier)"
 msgctxt "#32551"
 msgid "Turn ON only if you are on a PAID Gemini plan (billing enabled on your API key). The add-on normally paces requests and limits parallel chunks to stay under the free tier's ~15 requests/minute limit; a paid key has thousands, so this lifts those limits for much faster translation. Leave OFF for a free key (ON would just cause rate-limit errors and retries). Does not change translation quality -- that is set by the Model option."
 msgstr "Turn ON only if you are on a PAID Gemini plan (billing enabled on your API key). The add-on normally paces requests and limits parallel chunks to stay under the free tier's ~15 requests/minute limit; a paid key has thousands, so this lifts those limits for much faster translation. Leave OFF for a free key (ON would just cause rate-limit errors and retries). Does not change translation quality -- that is set by the Model option."
-
-msgctxt "#32554"
-msgid "POV: fast navigation (reuse Python interpreter)"
-msgstr "POV: fast navigation (reuse Python interpreter)"
-
-msgctxt "#32555"
-msgid "OFF (default, safe): POV gets a fresh Python interpreter for every menu press, so it reloads its own code each time -- measured at about 1.75 seconds of spinner on every category, on every press, and a repeat visit is no faster. ON: POV keeps one interpreter, so it loads its code once per Kodi session instead of once per press -- the first press after a start still pays it, and the presses after that should be much faster, though exactly how much has not been measured yet. But if several POV requests ever run at the same moment (home widgets refreshing together, or you pressing again before the previous list finished) they share that interpreter, and that is a native crash that closes Kodi completely. This add-on turned it OFF on 14 Aug 2026 after exactly such a crash. Turn ON only if you would rather have the speed and accept that risk. Takes effect after ONE Kodi restart. On that restart POV notices the change and asks to reload your profile -- say OK and it is active immediately; say Cancel and it is active at the next start instead. It only asks once."
-msgstr "OFF (default, safe): POV gets a fresh Python interpreter for every menu press, so it reloads its own code each time -- measured at about 1.75 seconds of spinner on every category, on every press, and a repeat visit is no faster. ON: POV keeps one interpreter, so it loads its code once per Kodi session instead of once per press -- the first press after a start still pays it, and the presses after that should be much faster, though exactly how much has not been measured yet. But if several POV requests ever run at the same moment (home widgets refreshing together, or you pressing again before the previous list finished) they share that interpreter, and that is a native crash that closes Kodi completely. This add-on turned it OFF on 14 Aug 2026 after exactly such a crash. Turn ON only if you would rather have the speed and accept that risk. Takes effect after ONE Kodi restart. On that restart POV notices the change and asks to reload your profile -- say OK and it is active immediately; say Cancel and it is active at the next start instead. It only asks once."
 
 msgctxt "#32556"
 msgid "AI translation: gender proofread by a stronger model"

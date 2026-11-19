@@ -651,23 +651,6 @@ PATCH_CONFIG = [
         )
     },
     {
-        "id": "pov_results_cache_guard",
-        "name": "Results survive a failed results-cache write",
-        "description": "Wraps ExternalProvidersCache.set so a malformed or full providerscache.db costs only the cache, not every provider's results. Module scope, so a Wizard that is gone must never stop sources.py from importing.",
-        "category": "reliability",
-        "priority": "major",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "target_file": "resources/lib/modules/sources.py",
-        "marker": "# WIZARD_POV_RESULTS_CACHE_GUARD_v1",
-        "anchor": "from caches.providers_cache import ExternalProvidersCache",
-        "action": "append_after",
-        "hook": _build_patch_hook(
-            module_name="pov_cache_guard",
-            custom_logic="pov_cache_guard.guard(ExternalProvidersCache)"
-        )
-    },
-    {
         "id": "pov_keep_build_files",
         "name": "POV clean-up keeps the build's files",
         "description": "remove_old_databases keeps the build's povil* files and navigator.before-* menu backups in POV's data folder.",
@@ -3036,32 +3019,6 @@ PATCH_CONFIG = [
         "hook": (
             "# The Wizard owns this flag (host_repairs/pov_language_invoker_guard); addon.xml was already rewritten above.\n"
             "refresh = False\n"
-        )
-    },
-
-    # =====================================================================
-    # ============= POV SOURCE FLOW: NO HOME FLASH BETWEEN WINDOWS =========
-    # =====================================================================
-    {
-        "id": "pov_curtain_start",
-        "name": "Dark curtain over Home while POV's source windows change",
-        "description": "POV closes progress_media before sources_results opens, and again before the video starts; Home showed for 1-3 s in between. Raises the povil.pov_curtain window property (a black image on top of Home.xml in skin.fentastic); pov_curtain.py takes it down when the video runs or the flow ends.",
-        "category": "ux",
-        "priority": "minor",
-        "addon_id": "plugin.video.pov",
-        "enabled": True,
-        "optional": True,
-        "target_file": "resources/lib/modules/sources.py",
-        "marker": "# WIZARD_POV_CURTAIN_v1",
-        "anchor": "\t\tself.config_loader.apply(self, params)",
-        "action": "append_after",
-        "hook": _build_patch_hook(
-            module_name="pov_curtain",
-            indent="\t\t",
-            custom_logic=(
-                "if getattr(self, 'full_screen', False) and not getattr(self, 'background', False):\n"
-                "\tpov_curtain.raise_curtain()"
-            )
         )
     }
 ]

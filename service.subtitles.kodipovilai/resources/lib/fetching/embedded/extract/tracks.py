@@ -181,6 +181,33 @@ def choose_track(src, subs, track_num, lang, other_text, on_track, _log):
     return track
 
 
+# A file's ONLY subtitle track, flagged forced (QA Kodi, 19 Nov 2026: The Beast
+# 2026 WEB-DL Dual Audio, one S_TEXT/ASS [en] track, forced, and the log said "no
+# matching text track"): pick_track never offers a forced track, so the embedded
+# source was refused. Releases that mux their one full English track with the
+# forced bit set are common, and a REAL forced track (a few dozen foreign-line
+# cues) is told apart only by its size, which is known after the read. So
+# extract_srt reads such a lone track and delivers it only from this many cues up
+# (the same 200 as the MP4 path's "signs / forced" rule in extract_mp4).
+LONE_FORCED_MIN_CUES = 200
+
+
+def lone_forced_track(subs, track_num, lang):
+    """The file's single subtitle track when it is a text track flagged forced
+    and its language is the one asked for (or is not known); else None. Only
+    extract_srt uses it, and only after pick_track found nothing: the timing
+    probes (cue_reference) keep skipping forced tracks."""
+    if track_num is not None or len(subs) != 1:
+        return None
+    t = subs[0]
+    if not (t['forced'] and is_text_codec(t['codec'])):
+        return None
+    if (lang and t.get('lang_explicit', True)
+            and lang_key(t['lang']) != lang_key(lang)):
+        return None
+    return t
+
+
 def pick_track(subs, track_num, lang, prefer_sdh=False):
     # prefer_sdh: order an SDH/hearing-impaired track FIRST among equally-tagged
     # matches. Turn it on ONLY when the track's own TEXT is what we translate

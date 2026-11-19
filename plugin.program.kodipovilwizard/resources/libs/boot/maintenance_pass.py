@@ -1,5 +1,5 @@
 """Start-up housekeeping before the OTA pass: auto-clean, storage guard and
-POV cache repair. Each step is independently guarded."""
+POV cache repair, the low-memory / big-cache question. Each step is independently guarded."""
 import xbmc
 
 from resources.libs.common import logging
@@ -28,3 +28,11 @@ def run_startup_maintenance():
     except Exception as _cache_error:
         logging.log('[POV caches] start-up check failed: {0}: {1}'.format(
             type(_cache_error).__name__, _cache_error), level=xbmc.LOGWARNING)
+    # Low free RAM or a big cache: ask, in Hebrew, whether to clear it (boot/resource_check.py). After the repairs above, so a
+    # cache they just removed is not counted.
+    try:
+        from resources.libs.boot import resource_check
+        resource_check.run_at_startup()
+    except Exception as _check_error:
+        logging.log('[Resource check] start-up check failed: {0}: {1}'.format(
+            type(_check_error).__name__, _check_error), level=xbmc.LOGWARNING)

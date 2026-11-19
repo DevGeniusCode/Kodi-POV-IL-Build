@@ -243,9 +243,10 @@ SETTING_ID = 'reuse_language_invoker'
 SAFE = 'false'
 FAST = 'true'
 
-# Our own setting, added after the measurement in the header. OFF by default,
-# so a device nobody has touched behaves exactly as it did before the switch
-# existed.
+# The Wizard's own setting (Maintenance -> POV), added after the measurement in
+# the header. OFF by default, so a device nobody has touched behaves exactly as
+# it did before the switch existed. It lived in the subtitle add-on until the
+# 20 Nov 2026 cleanup; that add-on no longer declares it.
 SETTING_FAST = 'pov_fast_navigation'
 
 # Matched on BYTES, and deliberately tolerant about the element's inner
@@ -305,7 +306,7 @@ def _wanted():
     if kodi_utils is None:
         return SAFE
     try:
-        return FAST if kodi_utils.subs_get_bool(SETTING_FAST, False) is True \
+        return FAST if kodi_utils.get_bool(SETTING_FAST, False) is True \
             else SAFE
     except Exception:
         return SAFE

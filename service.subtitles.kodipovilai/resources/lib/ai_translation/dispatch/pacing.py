@@ -5,6 +5,7 @@
 import threading
 import time
 from resources.lib.ai_translation.providers import gemini
+from resources.lib.core import settings
 from resources.lib.core.srt import blocks as srt_blocks, timing
 
 
@@ -49,6 +50,20 @@ def gemini_free_rpm_cap(model):
     if 'flash' in m:
         return 4
     return 4
+
+
+def gemini_rpm_interval(paid_mode, model):
+    """Seconds between two Gemini request starts, from the `gemini_rpm` setting.
+
+    `gemini_rpm` is declared (default 0 = automatic). Paid tier: 0 means no
+    pacing, a pinned value paces at that rate. Free tier: 0 means the model's
+    free ceiling; a LOWER pinned value is honoured, a HIGHER one is clamped to
+    the ceiling so it cannot 429-storm the key."""
+    rpm = settings.get_int('gemini_rpm', 0)
+    if paid_mode:
+        return (60.0 / rpm) if rpm > 0 else 0.0
+    cap = gemini_free_rpm_cap(model)
+    return 60.0 / max(1, min(rpm if rpm > 0 else cap, cap))
 
 
 class IntegrityRejected(gemini.FilteredResponse):

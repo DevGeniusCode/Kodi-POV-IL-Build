@@ -272,10 +272,10 @@
 				<!-- </control> -->
 				<control type="list" id="150">
 					<left>20</left>
-					<top>200</top>
+					<top>260</top>
 					<width>280</width>
-					<height>200</height>
-					<onup>9001</onup>
+					<height>130</height>
+					<onup>9002</onup>
 					<onleft>120</onleft>
 					<ondown>130</ondown>
 					<scrolltime>200</scrolltime>
@@ -302,9 +302,28 @@
 					<texturefocus colordiffuse="button_focus">buttons/dfo.png</texturefocus>
 					<texturenofocus colordiffuse="button_focus2">buttons/dnfo.png</texturenofocus>
 					<onleft>120</onleft>
-					<ondown>150</ondown>
+					<ondown>9002</ondown>
 					<onup>9001</onup>
 					<onclick>Addon.OpenSettings(service.subtitles.kodipovilai)</onclick>
+				</control>
+				<!-- AI_SUBS_CANCEL_BUTTON_v1: stops the running translation (the add-on drops the selection the job is bound to); under the settings button, same look -->
+				<control type="button" id="9002">
+					<left>20</left>
+					<top>197</top>
+					<width>280</width>
+					<height>55</height>
+					<label>ביטול תרגום</label>
+					<font>font12</font>
+					<align>center</align>
+					<aligny>center</aligny>
+					<textcolor>unfocused_text</textcolor>
+					<focusedcolor>focused_text</focusedcolor>
+					<texturefocus colordiffuse="button_focus">buttons/dfo.png</texturefocus>
+					<texturenofocus colordiffuse="button_focus2">buttons/dnfo.png</texturenofocus>
+					<onleft>120</onleft>
+					<ondown>150</ondown>
+					<onup>9001</onup>
+					<onclick>RunScript(service.subtitles.kodipovilai,action=cancel_translation)</onclick>
 				</control>
 			</control>
 			

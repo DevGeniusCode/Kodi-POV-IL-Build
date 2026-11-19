@@ -120,6 +120,20 @@
           </dependencies>
           <control type="toggle"/>
         </setting>
+        <setting id="OS_USER_API_KEY_VALUE" type="string" label="32639" help="32649"> <!-- OpenSubtitles API key (optional) -->
+          <level>3</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+            <dependency type="enable" setting="opensubtitles" operator="is">true</dependency>
+          </dependencies>
+          <control type="edit" format="string">
+            <heading>32639</heading>
+          </control>
+        </setting>
         <setting id="yify" type="boolean" label="32515">
           <level>0</level>
           <default>true</default>
@@ -151,6 +165,64 @@
             <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
+        </setting>
+      </group>
+
+      <!-- ~~~~~ Search languages ~~~~~ -->
+      <!-- The sources always look for Hebrew and English (language_hebrew and
+           language_english stay hidden: English is the AI source). These add to
+           them. all_lang makes the sources return every language and wins over
+           the rest. The defaults below are the values the engine has always
+           been seeded with (bridge._ENGINE_DEFAULTS). -->
+      <group id="search_languages" label="32642">
+        <setting id="all_lang" type="boolean" label="32618" help="32646"> <!-- Search in all languages -->
+          <level>2</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="retry_search_with_all_langs" type="boolean" label="32619" help="32647"> <!-- Retry in all languages when nothing is found -->
+          <level>2</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+            <dependency type="enable" setting="all_lang" operator="is">false</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="language_russian" type="boolean" label="32615" help="32643"> <!-- Search also in Russian -->
+          <level>2</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+            <dependency type="enable" setting="all_lang" operator="is">false</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="language_arab" type="boolean" label="32616" help="32644"> <!-- Search also in Arabic -->
+          <level>2</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+            <dependency type="enable" setting="all_lang" operator="is">false</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="other_lang" type="string" label="32617" help="32645"> <!-- Other search languages (3-letter codes) -->
+          <level>3</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+            <dependency type="enable" setting="all_lang" operator="is">false</dependency>
+          </dependencies>
+          <control type="edit" format="string">
+            <heading>32617</heading>
+          </control>
         </setting>
       </group>
 
@@ -223,50 +295,11 @@
         <setting id="language_english" type="string" label="30000">
           <level>4</level><default>true</default>
         </setting>
-        <setting id="language_russian" type="string" label="30000">
-          <level>4</level><default>false</default>
-        </setting>
-        <setting id="language_arab" type="string" label="30000">
-          <level>4</level><default>false</default>
-        </setting>
-        <setting id="all_lang" type="string" label="30000">
-          <level>4</level><default>false</default>
-        </setting>
-        <setting id="retry_search_with_all_langs" type="string" label="30000">
-          <level>4</level><default>false</default>
-        </setting>
-        <setting id="other_lang" type="string" label="30000">
-          <level>4</level><default></default>
-          <constraints>
-            <allowempty>true</allowempty>
-          </constraints>
-        </setting>
-        <setting id="auto_translate" type="string" label="30000">
-          <level>4</level><default>false</default>
-        </setting>
-        <setting id="translate_p" type="string" label="30000">
-          <level>4</level><default>0</default>
-        </setting>
-        <setting id="subtitle_trans_cache" type="string" label="30000">
-          <level>4</level><default>15</default>
-        </setting>
         <setting id="enable_autosub_notifications" type="string" label="30000">
           <level>4</level><default>true</default>
         </setting>
         <setting id="auto_fix_sub_punctuation" type="string" label="30000">
           <level>4</level><default>true</default>
-        </setting>
-        <setting id="auto_remove_hi_tags" type="string" label="30000">
-          <level>4</level><default>false</default>
-        </setting>
-        <setting id="show_debug" type="string" label="30000">
-          <level>4</level><default>false</default>
-        </setting>
-        <setting id="OS_USER_API_KEY_VALUE" type="string" label="30000">
-          <level>4</level><default></default>
-          <constraints>
-            <allowempty>true</allowempty>
-          </constraints>
         </setting>
         <setting id="_engine_defaults_v" type="string" label="30000">
           <level>4</level><default></default>
@@ -482,6 +515,11 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <setting id="embedded_reference" type="boolean" label="32640" help="32650"> <!-- Read the file's own foreign track as a gender reference -->
+          <level>3</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
       </group>
 
       <!-- ~~~~~ Performance ~~~~~ -->
@@ -541,6 +579,16 @@
           </constraints>
           <control type="edit" format="integer">
             <heading>32624</heading>
+          </control>
+        </setting>
+        <setting id="gemini_rpm" type="integer" label="32627" help="32628">
+          <level>3</level>
+          <default>0</default>
+          <constraints>
+            <minimum>0</minimum>
+          </constraints>
+          <control type="edit" format="integer">
+            <heading>32627</heading>
           </control>
         </setting>
       </group>
@@ -750,6 +798,19 @@
             <formatlabel>32304</formatlabel> <!-- {} days -->
           </control>
         </setting>
+        <setting id="subtitle_trans_cache" type="integer" label="32629" help="32648"> <!-- Downloaded subtitle files kept in the cache -->
+          <level>2</level>
+          <default>200</default>
+          <constraints>
+            <minimum>1</minimum>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
+          <control type="edit" format="integer">
+            <heading>32629</heading>
+          </control>
+        </setting>
         <!-- Both action buttons need an explicit <control type="button"
              format="action"> block. Without it some Kodi 21 builds
              silently drop action settings even when label + data are
@@ -799,27 +860,12 @@
             <heading>32401</heading>
           </control>
         </setting>
-        <!-- POV's reused Python interpreter: speed against stability.
-             OFF is the safe side and the default, and it is what every
-             device has been running since 2026 08 14.
-             Measured on a reporter's device 2026 08 23: with it OFF, five
-             unrelated POV routes all cost between 1.72s and 1.89s at their
-             floor, and revisiting a category is no faster than opening it the
-             first time. POV defers most of its import work into the call
-             itself (about 210KB and twenty of its own modules on top of what
-             starting up already loaded, plus requests and
-             concurrent.futures), so a fresh interpreter repays all of it on
-             every press. ON pays it once per session instead.
-             What ON costs: concurrent POV invocations then share one
-             interpreter, and that is the native crash that takes all of Kodi
-             down. See pov_language_invoker_guard.py, which enforces whichever
-             side this names, in both places POV keeps the flag.
-             Level 3 on purpose: this is an informed choice, not a
-             preference. It lives under Advanced; three shipped
-             documents already told users to look there. -->
-        <setting id="pov_fast_navigation" type="boolean" label="32554" help="32555">
+        <setting id="show_debug" type="boolean" label="32641" help="32651"> <!-- Engine debug lines in the Kodi log -->
           <level>3</level>
           <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
+          </dependencies>
           <control type="toggle"/>
         </setting>
       </group>
@@ -977,6 +1023,18 @@
              fallback cached that day is not re-translated until the next
              day. MUST be declared or set_setting silently no-ops. -->
         <setting id="_gemini_quota_exhausted" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden state of the gender proofread (gender_proofread.note_exhausted):
+             the day and the models whose daily quota ran out, so a second
+             proofread that day does not spend a request on a model that has
+             none left. It was written without a declaration, so set_setting
+             silently no-opped and the stamp never persisted. -->
+        <setting id="_proofread_quota_exhausted" type="string" label="30000">
           <level>4</level>
           <default></default>
           <constraints>

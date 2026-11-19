@@ -11,13 +11,13 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 
 | Folder           | Responsibility                                                                         |
 |------------------|----------------------------------------------------------------------------------------|
-| `boot/`          | `startup.py` helpers: GUI-ready waits, first-boot stabilizer, notices, build checks, housekeeping, language sync |
+| `boot/`          | `startup.py` helpers: GUI-ready waits, notices, build checks, housekeeping, the low-memory / big-cache question, language sync |
 | `provisioning/`  | Fresh install / resume, the progress banner, the start-up OTA pass                     |
 | `build/`         | `wizard_actions.Wizard`: install / GUI fix / theme / quick update / restart            |
 | `skins/`         | On-demand skins, Switch Skin, AF3 tools, favourites sync, `skin_settings`, `fentastic_manager`, `onyx_home/`, `search_provider_picker` |
 | `addons/`        | Add-on install / management (Umbrella, `debrid_notice`)                                |
 | `accounts_auth/` | Account Manager                                                                        |
-| `system/`        | Kodi version check, speed tests                                                        |
+| `system/`        | Kodi version check, speed tests, the `playlist_timeout` writer                         |
 | `host_repairs/`  | Runtime repairs of other add-ons and skins (20 patcher / repair modules, flat on purpose), `flow/` (startup-repair pass + runner), `kodi_utils` (subset copy) |
 | `tonight/`       | The Tonight home tile (shortcut writer, picker window logic)                           |
 
@@ -37,8 +37,8 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `.po` merged into POV's strings table, P3 decisions) are done. Step 2 (Category C: the 17 runtime patchers of Umbrella, Idan
   Plus and AF3, reference Umbrella 6.8.02, Idan Plus 4.0.6, AF3 3.5.2) is applied: Idan Plus (3) and Umbrella (5 of its 10) became
   registry entries, Umbrella's settings are baked into `userdata` (`config_version` 2.0.8), the AF3 search patcher was rewritten
-  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 151 entries (121
-  POV, 13 Umbrella, 12 Idan Plus, 5 AF3; `pov_curtain_start` (QA Phase 4) is the 121st POV entry, with `patches/pov_curtain.py`). Runtime patchers that remain because the registry cannot express them (they REPLACE
+  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 149 entries (119
+  POV, 13 Umbrella, 12 Idan Plus, 5 AF3; the QA Phase 4 `pov_curtain_start` + `patches/pov_curtain.py` were removed in Wizard 0.5.5: the black curtain left a black screen on exit). Runtime patchers that remain because the registry cannot express them (they REPLACE
   lines or need function-scoped anchors): `umbrella_tmdb_apikey`, `umbrella_list_order`, `af3_dialog_subtitles`, `af3_home`
   (data seeding, font) and the data copies `umbrella_hebrew_ui`, `umbrella_watch_*` (see "Architectural decision" below). The AF3
   discover-grid patcher is retired without replacement; AF3 3.5.2 + script.skinvariables 2.3.2 were re-evaluated (reference:
@@ -59,8 +59,9 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   optional Umbrella; it now asks through `addon_presence` like the two mirrors. Baked POV `settings.xml`: `results.xml_style` was
   `List Contrast Default` and `subtitles.subs_action` was `2`, both invalid for POV 6.11.03 (enums `0..2` / `0..1`; POV indexes a dict with
   the style, a probable `KeyError` when the results window opens); both are now `0` (List Default / Off: subtitles come from
-  `service.subtitles.kodipovilai`), `config_version` 2.0.9. The other 60 ids of that file (prowlarr, folder1-5, ed.*, imdb_*, fanart_*,
-  tmdb_api, ...) do not exist in POV 6.11.03: inert leftovers of an older POV, left untouched (optional cleanup, needs approval).
+  `service.subtitles.kodipovilai`), `config_version` 2.0.9. The other 60 entries of that file (prowlarr, folder1-5, ed.*, imdb_*, fanart_*,
+  tmdb_api, ...; 59 ids, `sort.watchlist` twice) did not exist in POV 6.11.03: inert leftovers of an older POV, REMOVED in Step 3 of the 20 Nov 2026 cleanup (owner-approved; none is
+  referenced by POV 6.11.03 or by any code of this repository; the file now holds 221 settings, all declared by POV; `config_version` 2.0.14).
   Log triage: `_reference_addons/log_digest.py` (temporary, never committed; the owner drops the full `kodi.log` there) condenses a log to
   its errors and repeats.
   Optional add-ons (Phase 6): the Wizard's main menu has one **"תוספים וסקינים אופציונליים"** screen (`mode=optional`,
@@ -176,6 +177,17 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   vulture 102 -> 64, the public surface byte-identical. Left open for the owner: `subs_engine/srt.py` (no importer; its MIT notice is in
   `LICENSE.txt`), the DarkSubs empty-list toast of
   `translate.list_candidates`, `gemini_rpm` (declared nowhere, its readers use different defaults).
+  **Closed 20 Nov 2026 (owner-requested follow-up):** `fetching/providers/srt.py` deleted (and its MIT notice in `LICENSE.txt`), the DarkSubs
+  empty-list toast of `fetching/search/ai_rows.finish` removed (the WARNING log line stays), `gemini_rpm` is declared (`settings.xml` perf group, level 3,
+  default 0 = automatic, labels 32627 / 32628) and its four readers use ONE helper, `ai_translation/dispatch/pacing.gemini_rpm_interval(paid_mode, model)`;
+  `baseline.json` `settings_known_undeclared` is empty, `golden_expected.json` (3 list cases) and `golden_resolve_expected.json` (2 entry cases) lost the toast.
+- **SUBTITLE SETTINGS VISIBILITY AUDIT (20 Nov 2026, owner-approved).** Exposed (new labels 32615-32619, 32629, 32639-32642, help 32643-32651): group "Search languages" (Providers & Fetching: `all_lang`
+  default true, `retry_search_with_all_langs` default true, `language_russian`, `language_arab` L2, `other_lang` L3; they are booleans now, the engine's `== 'true'` reads are unchanged), `subtitle_trans_cache` (Cache, L2,
+  integer, default and seed 200), `OS_USER_API_KEY_VALUE` (next to the OpenSubtitles toggle, L3), `embedded_reference` (declared, default true, gender group, L3), `show_debug` (Advanced / debug, L3). `bridge._ENGINE_DEFAULTS` seeds
+  200 and `_ENGINE_DEFAULTS_VERSION` is 5 (it force-rewrites the seeded keys once). Deleted as never read: `auto_translate`, `translate_p`, `auto_remove_hi_tags` (NOT `auto_fix_sub_punctuation`: it is read in
+  `fetching/bridge.py`, the Hebrew punctuation fix on delivery; the audit listed it by mistake and it was restored, still hidden). BUG FIX (approved, own change): `_proofread_quota_exhausted` is declared (the
+  gender-proofread quota stamp was written without a declaration and never persisted). `check_subs_contract.py` now resolves `*SETTING*` constants and `set_setting` writes, so an undeclared key held in a constant fails the check
+  (it would have caught `embedded_reference` and `_proofread_quota_exhausted`). `settings.xml`: 93 settings, 69 with a control, 24 internal.
 - **SUBTITLE PHASE 1 FOLLOW-UP (19 Nov 2026).** The 5 labels of `ai_when_no_hebrew` moved from `33009`-`33013` to `32610`-`32614` (settings.xml and
   both `strings.po`); every dialog, progress bar, toast and HTML page title of the subtitle add-on now reads `sub_utils.DIALOG_TITLE` (one place to
   rebrand; "MoranSubs" titles became "Kodi POV IL"). Git forensics against the upstream history: nothing deleted in Phase 1 was a live feature;
@@ -299,15 +311,14 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   (`xbmc.subtitle.module` = `default.py`, `xbmc.service` = `service.py`, `subtitles.tv` / `subtitles.movie` in `guisettings.xml`
   = the add-on id); `RunScript(service.subtitles.kodipovilai,action=choose_subs)` (skins) and `action=connect_gemini` (frozen
   `patches/pov_myservices.py`) plus its own actions (`search`, `manualsearch`, `download`, `translate_file`,
-  `bg_translate_picker`, `he_avail`, the Gemini / pool / cache / engine-test buttons of its `settings.xml`; the Telegram actions were removed in Phase 1 by owner decision);
+  `bg_translate_picker`, `he_avail`, `cancel_translation` (the "ביטול תרגום" button of FENtastic's subtitles dialog), the Gemini / pool / cache / engine-test buttons of its `settings.xml`; the Telegram actions were removed in Phase 1 by owner decision);
   `Addon.OpenSettings(service.subtitles.kodipovilai)` (`skins/af3_tools`, `profiles/build_profiles`, Onyx `Home.xml`,
   `widget_baselines`); window properties `subs.player_filename` (published by `ui/filename_publisher.py`), `MoranSubsChooserOpen`
   (set by `ui/chooser.py`; those two modules may move, the strings and the chooser XML file name may not); `resources/lib/he_sub_match.py`
   (imported by bare name after a `sys.path` append by POV / Umbrella hooks and frozen `patches/pov_prewarm`, `pov_sub_match_v2`:
   stdlib-only at module level; API `prewarm`, `release_names`, `embedded_names`, `confirmed_releases`, `label_prefix`; this
-  file's path is PINNED). The Wizard reads only `use_builtin_engine` (`flow/runner.py`) and
-  `pov_fast_navigation` (`pov_language_invoker_guard`) from it, and only through
-  `host_repairs/kodi_utils.subs_get_*`; it names the add-on id only as an existence / required-add-on reference
+  file's path is PINNED). The Wizard reads only `use_builtin_engine` (`flow/runner.py`) from it, and only through
+  `host_repairs/kodi_utils.subs_get_*` (`pov_fast_navigation` is the WIZARD's own setting since 20 Nov 2026: Maintenance -> POV, read by `pov_language_invoker_guard` through `kodi_utils.get_bool`; the subtitle add-on declares no Wizard setting); it names the add-on id only as an existence / required-add-on reference
   (`build/wizard_actions`, `fresh_install`, `auto_install`, `build_profiles`, `pyc_warm`, `clear`, `manifest.json`).
 - **SUBTITLE ADD-ON: PUBLIC NAMES, SINGLE ROUTE, CONTRACT TEST (Subtitle Phase 3).** No module imports or reads a `_name` of another module (a name another module needs is public in its home), except the frozen `fetching/pool_client._lookup_raw` (listed in `.github/scripts/subs_contract/baseline.json`; the two `he_sub_match` names became public in Phase 4: `dbg`, `warm_queue_dir`). Everything outside `fetching/` and `ai_translation/` reaches `list_candidates` / `resolve` only through `resources/lib/pipeline.py`. The playing release comes only from
   `core.video_context.release_name(info, policy)` (a new caller picks one of the six policies; never write a seventh copy) and the token test from `core.video_context.looks_like_token`. `core/addon.py` stays a leaf (it imports nothing of this add-on).
@@ -380,8 +391,7 @@ have. Our 1.0.9 and upstream's 1.0.9 are different releases; a port must take a 
 
 ## 🔮 FUTURE ENHANCEMENTS
 
-- **Playlist Timeout UI setting:** the owner wants a user-facing setting (Wizard settings) for Kodi's `<playlisttimeout>`. Today `<playlisttimeout>0</playlisttimeout>` is pre-baked in `userdata/advancedsettings.xml` (WIZARD IL BAKED fence); the UI setting would replace that baked value. Not started.
-- **Startup cache / low-memory check:** create a Kodi startup check that detects low memory or cache issues and prompts the user with an alert to clear the cache. Once implemented, we can remove the runtime `pov_cache_guard` (registry entry `pov_results_cache_guard`).
+- **(Both former items are DONE, 20 Nov 2026, see the Step 4 / Step 5 bullet in the STATUS list.)** Playlist timeout: Wizard setting `playlist_timeout` -> `system/playlist_timeout.py`. Start-up low-memory / big-cache question: `boot/resource_check.py`; the registry entry `pov_results_cache_guard` and `patches/pov_cache_guard.py` are retired.
 
 ## 📝 OPEN NOTES (reported, not fixed; each needs user approval)
 
@@ -393,9 +403,10 @@ have. Our 1.0.9 and upstream's 1.0.9 are different releases; a port must take a 
   the setting and POV's `addon.xml` in agreement; losing shows POV's English "SETTING/XML mismatch" dialog. Investigate
   (a) preventing the mismatch at provisioning / install / POV-update time, (b) decoupling this clock-bound step from the
   rest of the repair bundle. Until then it stays FIRST in the pass.
-- **Known, kept as-is until Phase 4 gets to it:** the registry validator misreports
-  `profile_age_guard.py` as missing when given the patches dir (it lives in `profiles/`); dead code `boot/gui_ready.stop_if_duplicate`, `build/wizard_actions.wizard()`, the dormant
-  first-boot stabilizer; `skins/skin_settings.swap_us()` is not skin code.
+- **Known, kept as-is:** `skins/skin_settings.swap_us()` is not skin code. (Closed 20 Nov 2026, Step 3: the registry validator no longer reports `profile_age_guard.py` as missing,
+  `_NON_PATCH_MODULES` has carried it since Phase 5 Step 2 (`python patches_config.py <patches dir>`: 150 patches, 0 problems); the dead `boot/gui_ready.stop_if_duplicate` (and its `time_started` setting),
+  `build/wizard_actions.wizard()` and the dormant first-boot stabilizer (`boot/first_boot.py`, its `startup.py` call, the `first_boot_warmup_seconds` setting) are deleted: no caller, and no code writes the
+  `kodipovil.first_boot_stabilize` marker. `pov_remember_source` moved from the removed first-boot header to Maintenance -> POV; its label `32504` is a number the Wizard has no string for (not fixed).)
 - `tonight/entrypoints.LEGACY_ICON` still names the subtitle add-on's icon (a string used to match old tiles).
 - **Phase 3 findings:** Wizard-side repair logs follow the Wizard's own `log_level`
   (undeclared, so INFO) and no longer the subtitle add-on's; `userdata/` changed (baselines moved, tiles state deleted), so
@@ -407,11 +418,14 @@ have. Our 1.0.9 and upstream's 1.0.9 are different releases; a port must take a 
   load: `telegram_api` did not ship) was deleted at the end of Subtitle Phase 1 on the owner's decision.
 - **LABEL IDS >= 33000 (audit task, owner request):** Kodi's add-on string range is 30000-32999 (the settings file says so); ids from 33000 up belong to Kodi
   and are ignored or mapped to built-in strings. **The subtitle add-on is clean** (Subtitle Phase 1: `settings.xml` highest 32626, `strings.po` highest
-  32638, the 9 runtime strings moved from `33000`-`33008` to `32630`-`32638`; no id >= 33000 anywhere in it). **Still to do: audit every other add-on in this
-  repository** (`settings.xml`, `strings.po`, `<label>` / `$LOCALIZE` / `getLocalizedString` uses of an add-on's own strings) for label ids >= 33000. First
-  pass done: no other add-on `strings.po` or `settings.xml` of this repository uses an id >= 33000. Skins are different: a skin's `strings.po` is its own
+  32638, the 9 runtime strings moved from `33000`-`33008` to `32630`-`32638`; no id >= 33000 anywhere in it). **AUDIT COMPLETE (20 Nov 2026, Step 2): no change needed.** Every non-skin add-on of
+  this repository (autocompletion, Wizard, orderfavourites-hebrew, the two repositories, `script.fentastic.helper`, `script.module.autocompletion`) was scanned (`strings.po`,
+  `settings.xml` label / help / heading, every XML `<label>` / `<label2>` / `<heading>` / `<formatlabel>` / `$LOCALIZE` / `$ADDON`, every Python `getLocalizedString` / `localize` / `_()`-style call, and a text
+  sweep of patch bodies): zero ids >= 33000, and every `strings.po` / `settings.xml` id is inside 30000-32999. Not ours, left as is: the Wizard's
+  `umbrella_hebrew_ui_patcher.py` holds 179 keys >= 33000 (up to 40829) because they are UMBRELLA's own string ids (its upstream `strings.po` defines 1,009 ids >= 33000, up to 40871); the Wizard only writes
+  Hebrew values for them into Umbrella's `he_il` file, so they cannot be renumbered. POV's merged Hebrew table (`resources/text/pov.resource.language.he_il.strings.po`) ends at 32998. Skins are different: a skin's `strings.po` is its own
   table, and `skin.fentastic` (upstream-authored, not ours to renumber) defines 72 ids from `700010` up there (`$LOCALIZE[700068]` in `SkinSettings.xml` is
-  one: a string id, not a control id); the skins' other `33xxx` references are Kodi core strings and are correct.
+  one: a string id, not a control id); the skins' other `33xxx` references are Kodi core strings and are correct. Skins were scanned read-only: stock `skin.estuary` / FENtastic / NOX / Onyx reference core ids 33xxx-39xxx; Onyx alone uses `36312`, `36314`, `36901`, `36912` (not used by Estuary or FENtastic, so not verifiable against a copy of Kodi's core table offline: check them in Kodi 21 if a label shows empty).
 - **Check at the final Kodi test:** (1) the host-repair runner starts when the Wizard's service starts (`start="startup"`), not at
   the old login timing: after a profile switch exactly one runner must be alive and repairs must apply to the new profile;
   (2) the POV invoker guard still wins its race (its log line says how far ahead of POV it wrote); (3) `patcher_health`
@@ -482,8 +496,19 @@ The three runtime patchers that stay for this reason (reference Umbrella 6.8.02,
 
 Phase 4 optimized `patches_config.py` and trimmed `host_repairs/` (Steps 1-4, see the STATUS bullet). Items of its original
 scope that were not carried out stay open and go on with Phase 5: the invoker-mismatch investigation (Open Notes); moving the
-`pov_fast_navigation` declaration out of the subtitle add-on (it stays there only because the Wizard's
-`pov_language_invoker_guard` reads and writes it by the add-on id; `patches/pov_invoker_safe.py` was deleted in Step 4); the
-registry validator's `profile_age_guard.py` misreport. Phases 1-4 are complete.
+`pov_fast_navigation` declaration out of the subtitle add-on (done 20 Nov 2026: it is the Wizard's own setting now; `patches/pov_invoker_safe.py` was deleted in Step 4); the
+registry validator's `profile_age_guard.py` misreport (already fixed in Phase 5 Step 2). Phases 1-4 are complete.
 
+- **STEP 4 + STEP 5 (20 Nov 2026, owner-approved).** (4) Kodi's `<playlisttimeout>` is the Wizard setting `playlist_timeout` (Maintenance -> Kodi, seconds, default 0, a slider 0-120; needs one Kodi restart).
+  `system/playlist_timeout.py` writes the number into the `WIZARD IL BAKED: playlisttimeout` fence of `userdata/advancedsettings.xml` with TEXT edits only (ElementTree would drop the file's comments and fences): a `<playlisttimeout>` outside the fence is the
+  owner's and is never touched, a file without the tag gets the block before `</advancedsettings>` (not when the value is Kodi's own default 20), the result is parsed back before an atomic replace. The host-repair runner polls it
+  (`PlaylistTimeoutSync`, once before the build flow and every idle tick: one setting read and one `stat`), so a change of the setting AND a config pack that replaced the file with the baked default (policy `update: replace`) are both written back within
+  seconds. The baked file keeps the fence with value 0 (the setting's default, so a fresh install is right before the poller ever runs); `config_version` 2.0.15. (5) `boot/resource_check.py`, called last in `boot/maintenance_pass.run_startup_maintenance` (after the GUI wait):
+  a Hebrew yes / no question offering to clear the cache when the cache is >= 400 MB (the Wizard's clearable caches, `clear.get_cache_size`, plus POV's four cache DBs) or free RAM is < 100 MB with >= 50 MB clearable. Silent while playing, in a child profile,
+  with the setting `startup_cache_check` off, and when free disk is under `storage_guard.LOW_BYTES` (that guard already speaks). Next ask: 1 day after a clean check, 3 after a "yes", 7 after a "no" (hidden setting `resource_check_due`). "Clear" = the Maintenance
+  Clear Cache (`clear.clear_cache(over=True)`) + removal of POV's `providerscache.db` / `debridcache.db`. It sits beside the existing start-up guards `storage_guard` (old add-on zips, low-disk notice) and `pov_cache_repair` (a damaged POV cache is deleted). The registry entry `pov_results_cache_guard` (+ `patches/pov_cache_guard.py`)
+  is RETIRED as approved: verified against a copy of POV 6.11.03 (119 POV entries select, 117 apply once, 2 disabled by design; only `sources.py` differs from the old registry, by exactly that block; a second run is a no-op; an old-registry copy upgrades to the same
+  bytes except the stale block; every patched file compiles; no pyflakes message added). NOT COVERED any more: a results-cache write that fails DURING a session (disk filling after boot) loses that provider's results again until the next start-up repair. A device that already applied the
+  patch keeps the stale block; its hook logs `Wizard Patch Error [pov_cache_guard]` and POV carries on (the hook is not fail-closed). Clearing a disk cache does not hand RAM back directly; the RAM trigger is advisory and asks only when there is something to clear.
+  Observed, not fixed: `storage_low_warned` (the daily stamp of `storage_guard`) is written by `CONFIG.set_setting` but is not declared in the Wizard's `settings.xml`.
 - **COMMIT COMMAND:** At the end of every step, provide a ready-to-copy Git commit snippet (using `git add -A && git commit -m "..."`) inside a bash code block, with a clear, concise summary of what changed in that step.

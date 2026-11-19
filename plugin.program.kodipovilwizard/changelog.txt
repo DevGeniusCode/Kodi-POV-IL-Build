@@ -1,3 +1,6 @@
+0.5.5
+- Removed the POV patch pov_curtain_start and patches/pov_curtain.py (with skin.fentastic 1.0.36 no longer drawing the curtain): the black screen it left on exit was worse than the 1-3 s of Home between POV's windows. The registry stands at 150 entries. A device that already applied the patch keeps the hook in POV's sources.py until POV is updated or reinstalled; the hook is guarded (it logs "Wizard Patch Error [pov_curtain]" at each source search and carries on).
+
 0.5.4
 - Active-skin update guard (host_repairs/flow/skin_gui_guard.py, wired into the update watcher): Kodi 21.3 unloaded skin.fentastic to install 1.0.35 in the background, never loaded it again and left a frozen screen (the GUI thread's last log line was "Unloaded skin"). The watcher now watches every catalog skin; when the active skin was updated and the GUI has no window a few seconds after the install settled, it posts ReloadSkin() and then ActivateWindow(home). The GUI is probed with a timeout, so a hung GUI cannot take the watcher down; the log line says whether the GUI was "none" (recoverable) or "hung" (a real deadlock, which no script can undo).
 

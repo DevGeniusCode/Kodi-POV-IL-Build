@@ -282,15 +282,6 @@ fresh install, so they start configured.
 - **Graceful reload, not crash.** Add-on updates are Kodi's: it reloads the active skin and restarts the services it updated by
   itself, so the Wizard never force-closes Kodi for an ordinary update. A config change that touched the active skin's look is
   applied in place with **`ReloadSkin()`**.
-- **First‑Boot Stabilizer (race shield).** The first boot after an install is a race: FENtastic fires parallel widget
-  directory queries at `plugin.video.pov` while POV's service creates its databases for the first time, which can fail
-  the directory calls or deadlock the skin‑variable engine (the "second boot is always fine" symptom).
-  `first_boot_stabilize_if_needed()` (`boot/first_boot.py`) runs after `wait_for_gui_ready()` (`boot/gui_ready.py`) and is a **no‑op unless the one‑shot marker
-  `kodipovil.first_boot_stabilize` exists**. When it does, it holds briefly with a user‑visible Hebrew countdown while
-  POV warms up (bounded by `first_boot_warmup_seconds`, default 25 s, early‑exit once `System.HasAddon(plugin.video.pov)`
-  plus a minimum warm‑up), then runs `UpdateLocalAddons` + `ReloadSkin()`. It never patches the skin, uses no global
-  watchdog, and **always clears the marker in a `finally`** so a failure can never trap Kodi in a stabilize loop. Fresh
-  installs now finish live (below), so the fresh‑install path no longer arms the marker.
 - **Verified completion path (`fresh_install.py`).** One path serves both the automatic startup install and a manual full
   installation, and a fresh install is reported complete only after it is verified in the running session — there is
   **no forced restart**.
@@ -497,7 +488,7 @@ Each patch configuration is declared as a structured Python dictionary within th
 (`patches_config.py`). New patches are appended to the registry; existing patches are never reordered, so branches stay
 diffable. The registry file holds entries only, grouped under large banner comments (one per domain: navigator, MDBList,
 continue watching, parental control, …); `_build_patch_hook`, the shared `_*_HOOK` constants and `validate_registry` live in
-`patches/patches_registry_utils.py`. The registry currently holds 150 entries (120 for `plugin.video.pov`, 13 for
+`patches/patches_registry_utils.py`. The registry currently holds 149 entries (119 for `plugin.video.pov`, 13 for
 `plugin.video.umbrella`, 12 for `plugin.video.idanplus`, 5 for `skin.arctic.fuse.3`).
 
 ```python
@@ -1313,7 +1304,7 @@ reintroduce them or references to them**:
 │       │   ├── {config_apply,fresh_install,provision_progress,patch_engine,downloader,extract,db}.py
 │       │   ├── boot/ provisioning/ build/ skins/ addons/ accounts_auth/ system/ host_repairs/   # domain folders (Phase 1 / 3)
 │       │   ├── common/ gui/                 # CONFIG, logging, router, tools · Wizard menus and windows
-│       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 150 entries) & 46 decoupled logic modules
+│       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 149 entries) & 43 decoupled logic modules
 │       │   └── profiles/                    # the Profiles feature (§9); hooks.py is its only engine‑facing surface (+ build_skin, profile_bootstrap)
 │       ├── skins/Default/1080i/             # Wizard windows: Profiles.xml + shared ChildHome.xml / ProfileLogin.xml templates
 │       └── media/profile-ui/                # picker / child‑home / login artwork
@@ -1335,13 +1326,13 @@ one or two files. Every new folder lives inside `plugin.program.kodipovilwizard/
 
 | Folder           | Modules                                                                                    | Responsibility                                                                                                                                                                                |
 |------------------|--------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `boot/`          | `gui_ready`, `first_boot`, `notifications`, `build_check`, `maintenance_pass`, `language_sync` | `startup.py` helpers: wait for video / the Home window / the home rows, the first-boot stabilizer, start-up notices, APK build registration and the installed-build check, start-up housekeeping, the POV Hebrew strings sync |
+| `boot/`          | `gui_ready`, `notifications`, `build_check`, `maintenance_pass`, `resource_check`, `language_sync` | `startup.py` helpers: wait for video / the Home window / the home rows, start-up notices, the low-memory / big-cache question, APK build registration and the installed-build check, start-up housekeeping, the POV Hebrew strings sync |
 | `provisioning/`  | `banner`, `auto_install`, `provisioner`, `repo_bootstrap`, `addon_state`, `build_sync`, `clean_reinstall`                                         | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, the start-up OTA pass (`run_startup_ota`), and the Maintenance "clean reinstall" (`mode=clean_reinstall`)  |
 | `build/`         | `wizard_actions`                                                                           | The `Wizard` class: fresh / normal install, GUI fix, theme, quick update, restart, force-close                                                                                                |
 | `skins/`         | `skin_catalog`, `skin_manager`, `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`, `skin_settings`, `fentastic_manager`, `onyx_home/` (`favourites_row`, `pvr_row`, `hero_details`), `search_provider_picker` | The skin catalog (default skin, on-demand rule, seeding guard), the Skin Manager menu (browse / install / switch), on-demand skins (Estuary / NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch; `skin_settings`: the `lookandfeel.*` JSON-RPC helpers (`switch_to_skin`, `skin_to_default`, `look_and_feel_data`); `fentastic_manager`: FENtastic helper data / skin XMLs kept across a wipe and the home-widget layout a quick update leaves alone; `onyx_home/`: the Onyx home's favourites / live TV rows and its hero details. |
 | `addons/`        | `umbrella`, `debrid_notice`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers, from their official repositories); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |
 | `accounts_auth/` | `acctmgr`                                                                                  | Account Manager Lite: pilot install and install-for-everyone                                                                                                                                  |
-| `system/`        | `kodi_version`, `speedtest`                                                                | The official-Kodi release check (Android / Windows) and the network speed tests                                                                                                               |
+| `system/`        | `kodi_version`, `speedtest`, `playlist_timeout`                                                                | The official-Kodi release check (Android / Windows) and the network speed tests                                                                                                               |
 | `host_repairs/`  | 20 patcher / repair modules (flat), `kodi_utils`, `media_assets/`, and `flow/` (`startup_pass`, `*_steps`, `runner`, `addon_update_watch`) | Runtime repairs of other add-ons and skins moved out of the subtitle add-on (Phase 3): the POV, Umbrella / MDBList / Trakt, Idan Plus, Arctic Fuse 3, NOX and Kodi patchers, the repair-state audit (`patcher_health`) and the startup-repair pass. Not the source-hook engine: that stays in `patches/`. Its settings, state files and log prefix are the Wizard's (`settings.xml`, `addon_data/`); it reads only `use_builtin_engine` and `pov_fast_navigation` from the subtitle add-on (`kodi_utils.subs_get_*`). |
 | `tonight/`       | `ui`, `entrypoints`, `hub`, `engine`, `catalog`, `providers`, `history`, `storage`, `taste`, `discovery`, `experience` | The "Tonight" home tile: the one-time favourites shortcut (`entrypoints.ensure`, called by `fresh_install`, `profile_home` and the repair runner) and the picker window (`script.moransubs.tonight.xml`, `resources/media/tonight.png`), served by `Router.dispatch` `mode=tonight`; its state lives under the Wizard's `addon_data/tonight/`. |
 

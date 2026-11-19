@@ -1,3 +1,7 @@
+1.0.36
+- Home: the black curtain over Home while POV changes windows (1.0.35) is removed: leaving the screen left a disruptive black screen. The ~2 s of Home between POV's windows is back, by the owner's decision.
+- DialogSubtitles: a "ביטול תרגום" button under the "הגדרות כתוביות" button stops the running translation (RunScript service.subtitles.kodipovilai action=cancel_translation, add-on 0.3.98). The service list moved 60 px down (and shows two rows) to make room.
+
 1.0.35
 - DialogSubtitles: a "הגדרות כתוביות" button above the service list opens the subtitle add-on's settings. The star rating's visibility condition and three conditions of the player's texture variables (Player.Art fanart / landscape / poster) had an unmatched parenthesis and were logged as invalid; fixed.
 - Home: a black curtain (Window(10000).Property(povil.pov_curtain), raised by the Wizard's POV patch pov_curtain_start) covers Home while POV moves from the scraping window to the results list and on to the video, so Home no longer flashes in between.

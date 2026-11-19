@@ -9,7 +9,7 @@ from resources.lib.ai_translation.providers import gemini
 from resources.lib.core import kodi, selection as core_selection, settings
 from resources.lib.ai_translation.context import prompt
 from resources.lib.core.srt import blocks as srt_blocks
-from resources.lib.ai_translation.dispatch.pacing import gemini_free_rpm_cap, gemini_rate_gate, thinking_params
+from resources.lib.ai_translation.dispatch.pacing import gemini_rate_gate, gemini_rpm_interval, thinking_params
 from resources.lib.ai_translation.progress import status
 from resources.lib.ai_translation.providers.google_flow import preview_clean
 from resources.lib.ai_translation.providers.model_fallback import FALLBACK_MODEL
@@ -784,13 +784,8 @@ def _steps_translator(info, source_lang, cancelled):
              or 'medium').strip().lower(), model)
         temperature = settings.get_float('temperature', 1.0)
         top_p = settings.get_float('top_p', 0.95)
-        if settings.get_bool('ai_paid_mode', False):
-            rpm = settings.get_int('gemini_rpm', 0)
-            interval = (60.0 / rpm) if rpm > 0 else 0.0
-        else:
-            cap = gemini_free_rpm_cap(model)
-            interval = 60.0 / max(1, min(
-                settings.get_int('gemini_rpm', cap), cap))
+        interval = gemini_rpm_interval(
+            settings.get_bool('ai_paid_mode', False), model)
     except Exception as e:
         kodi.log('embedded steps: no translator: {0}'.format(e),
                        level='WARNING')

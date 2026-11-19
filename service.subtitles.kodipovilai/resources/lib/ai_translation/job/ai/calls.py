@@ -7,10 +7,10 @@ import time
 from resources.lib.ai_translation.providers import gemini
 from resources.lib.ai_translation.repairs import postfix_leaks
 from resources.lib.ai_translation.dispatch import srt_wire
-from resources.lib.core import kodi, settings
+from resources.lib.core import kodi
 from resources.lib.ai_translation.context import prompt
 from resources.lib.core.srt import blocks as srt_blocks, timing
-from resources.lib.ai_translation.dispatch.pacing import answered, BlockClock, gemini_free_rpm_cap, GEMINI_NEXT_SLOT, gemini_rate_gate, GEMINI_RATE_LOCK, IntegrityRejected, is_untranslated_chunk_response, source_context_for_subchunk
+from resources.lib.ai_translation.dispatch.pacing import answered, BlockClock, GEMINI_NEXT_SLOT, gemini_rate_gate, gemini_rpm_interval, GEMINI_RATE_LOCK, IntegrityRejected, is_untranslated_chunk_response, source_context_for_subchunk
 from resources.lib.ai_translation.providers.google_flow import google_fill_missing, google_rescue
 from resources.lib.ai_translation.providers.model_fallback import CHOSEN_MODEL_TIMEOUT, model_fallback_notice
 from resources.lib.ai_translation.job.ai.plan import count
@@ -63,9 +63,7 @@ def go_on_with_fallback(S, asked, why):
         if not S.paid_mode:
             # the pace follows the model: Flash-Lite's free allowance is
             # three times a Flash model's
-            _cap = gemini_free_rpm_cap(S.model)
-            S.rpm_interval = 60.0 / max(1, min(
-                settings.get_int('gemini_rpm', _cap), _cap))
+            S.rpm_interval = gemini_rpm_interval(False, S.model)
         # Slots already handed out were spaced for the old model (15 s
         # apart on a Flash model): left there, the chunk that caused the
         # switch -- the first, where the viewer is -- waited 36 s for its

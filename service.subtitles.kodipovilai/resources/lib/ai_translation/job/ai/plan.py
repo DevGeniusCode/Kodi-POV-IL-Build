@@ -6,7 +6,7 @@ import threading
 import time
 from resources.lib.core import kodi, settings
 from resources.lib.core.srt import blocks as srt_blocks
-from resources.lib.ai_translation.dispatch.pacing import gemini_free_rpm_cap
+from resources.lib.ai_translation.dispatch.pacing import gemini_rpm_interval
 from resources.lib.ai_translation.proofread.gp_state import gp_models_left, gp_stats
 from resources.lib.ai_translation.job.state import NEXT
 
@@ -156,20 +156,10 @@ def plan(S):
     # picking regular Flash no longer 429-storms at Flash-Lite's pace.
     # `ai_paid_mode` (a paid Gemini plan has thousands of RPM) disables the pacing
     # entirely, since the free cap only slows a paid key down.
+    # Paid tier: no pacing unless gemini_rpm is pinned. Free tier: the model's
+    # free ceiling, a lower pinned gemini_rpm is honoured (gemini_rpm_interval).
     S.paid_mode = settings.get_bool('ai_paid_mode', False)
-    if S.paid_mode:
-        # Paid tier has thousands of RPM, so disable pacing (0 -> the gate no-ops).
-        # An explicitly pinned gemini_rpm still wins.
-        _rpm = settings.get_int('gemini_rpm', 0)
-        S.rpm_interval = (60.0 / _rpm) if _rpm > 0 else 0.0
-    else:
-        # Free tier: pace at the model's free ceiling. A user who pins a LOWER
-        # gemini_rpm is honoured (min picks it); a pinned value ABOVE the model's
-        # free cap is clamped down so it can't 429-storm. >=1 keeps a pinned
-        # 0/negative from accidentally unpacing a free key.
-        _free_cap = gemini_free_rpm_cap(S.model)
-        S.rpm_interval = 60.0 / max(1, min(
-            settings.get_int('gemini_rpm', _free_cap), _free_cap))
+    S.rpm_interval = gemini_rpm_interval(S.paid_mode, S.model)
     # Show the "rate limited" toast at most ONCE per job (shared across chunks),
     # not once per chunk per retry.
     S.ratelimit_notified = [False]

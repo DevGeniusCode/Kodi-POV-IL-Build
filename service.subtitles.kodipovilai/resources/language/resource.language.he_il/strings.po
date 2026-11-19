@@ -302,6 +302,90 @@ msgctxt "#32624"
 msgid "Previous lines sent as context"
 msgstr "שורות קודמות המשמשות כהקשר"
 
+msgctxt "#32627"
+msgid "Gemini requests per minute"
+msgstr "בקשות Gemini לדקה"
+
+msgctxt "#32628"
+msgid "0 = automatic: a free key follows the model's free limit, a paid key is not paced. A lower number slows requests down; on a free key a higher number is capped to the model's limit."
+msgstr "0 = אוטומטי: מפתח חינמי פועל לפי המגבלה החינמית של המודל, מפתח בתשלום לא מוגבל בקצב. מספר נמוך יותר מאט את הבקשות; במפתח חינמי מספר גבוה יותר מוגבל למגבלת המודל."
+
+msgctxt "#32615"
+msgid "Search also in Russian"
+msgstr "חיפוש גם ברוסית"
+
+msgctxt "#32643"
+msgid "Adds Russian to the languages the built-in sources look for. Not used while \"Search in all languages\" is on."
+msgstr "מוסיף רוסית לשפות שהמקורות המובנים מחפשים. לא בשימוש כשהאפשרות \"חיפוש בכל השפות\" פעילה."
+
+msgctxt "#32616"
+msgid "Search also in Arabic"
+msgstr "חיפוש גם בערבית"
+
+msgctxt "#32644"
+msgid "Adds Arabic to the languages the built-in sources look for. Not used while \"Search in all languages\" is on."
+msgstr "מוסיף ערבית לשפות שהמקורות המובנים מחפשים. לא בשימוש כשהאפשרות \"חיפוש בכל השפות\" פעילה."
+
+msgctxt "#32617"
+msgid "Other search languages"
+msgstr "שפות חיפוש נוספות"
+
+msgctxt "#32645"
+msgid "Three-letter language codes separated by commas, for example fre,spa,ita. Added to the languages above. Not used while \"Search in all languages\" is on."
+msgstr "קודי שפה בני 3 אותיות, מופרדים בפסיקים, למשל fre,spa,ita. מתווספים לשפות שלמעלה. לא בשימוש כשהאפשרות \"חיפוש בכל השפות\" פעילה."
+
+msgctxt "#32618"
+msgid "Search in all languages"
+msgstr "חיפוש בכל השפות"
+
+msgctxt "#32646"
+msgid "The sources return subtitles in every language, not only Hebrew and English. Turn off to search only the languages selected here."
+msgstr "המקורות מחזירים כתוביות בכל השפות, לא רק עברית ואנגלית. כבו כדי לחפש רק בשפות שנבחרו כאן."
+
+msgctxt "#32619"
+msgid "Retry in all languages when nothing is found"
+msgstr "ניסיון חוזר בכל השפות כשלא נמצא דבר"
+
+msgctxt "#32647"
+msgid "When the search finds nothing, search once more in all languages. Used only while \"Search in all languages\" is off."
+msgstr "כשהחיפוש לא מוצא דבר, מחפש פעם נוספת בכל השפות. בשימוש רק כשהאפשרות \"חיפוש בכל השפות\" כבויה."
+
+msgctxt "#32629"
+msgid "Downloaded subtitle files kept in the cache"
+msgstr "קבצי כתוביות שהורדו ונשמרים במטמון"
+
+msgctxt "#32648"
+msgid "When the number of cached downloaded subtitle files goes above this, the whole downloaded-subtitles cache is cleared."
+msgstr "כשמספר קבצי הכתוביות שהורדו ונשמרו במטמון עובר את המספר הזה, כל מטמון הכתוביות שהורדו מתנקה."
+
+msgctxt "#32639"
+msgid "OpenSubtitles API key (optional)"
+msgstr "מפתח API של OpenSubtitles (אופציונלי)"
+
+msgctxt "#32649"
+msgid "Your own OpenSubtitles API key. When set, it is used instead of the built-in keys. Leave empty to use the built-in keys. May need a Kodi restart to take effect."
+msgstr "מפתח API אישי של OpenSubtitles. כשהוא מוגדר, הוא בשימוש במקום המפתחות המובנים. השאירו ריק כדי להשתמש במפתחות המובנים. ייתכן שיידרש הפעלה מחדש של Kodi."
+
+msgctxt "#32640"
+msgid "Read the file's own foreign track as a gender reference"
+msgstr "קריאת כתובית זרה מתוך הקובץ כהפניה למגדר"
+
+msgctxt "#32650"
+msgid "When a translation is made from a subtitle track inside the video file, also read another foreign track of that file (Arabic is the reference) to get the speaker's gender right. Turn off to never read the file for a reference."
+msgstr "כשהתרגום נעשה מכתובית שבתוך קובץ הווידאו, קורא גם כתובית זרה נוספת מאותו קובץ (ערבית היא ההפניה) כדי לקבוע נכון את מגדר הדובר. כבו כדי לא לקרוא את הקובץ לצורך הפניה."
+
+msgctxt "#32641"
+msgid "Engine debug lines in the Kodi log"
+msgstr "שורות דיבאג של המנוע ביומן Kodi"
+
+msgctxt "#32651"
+msgid "Writes the search engine's detailed debug lines to the Kodi log as warnings. Leave off unless you are collecting a log."
+msgstr "כותב את שורות הדיבאג המפורטות של מנוע החיפוש ליומן Kodi כאזהרות. השאירו כבוי אלא אם אוספים יומן."
+
+msgctxt "#32642"
+msgid "Search languages"
+msgstr "שפות חיפוש"
+
 msgctxt "#32625"
 msgid "Badge may ask Ktuvit when nothing else has Hebrew"
 msgstr "התג רשאי לשאול את Ktuvit כשאין עברית במקור אחר"
@@ -565,14 +649,6 @@ msgstr "מצב מהיר (למשתמשי Gemini API בתשלום)"
 msgctxt "#32551"
 msgid "Turn ON only if you are on a PAID Gemini plan (billing enabled on your API key). The add-on normally paces requests and limits parallel chunks to stay under the free tier's ~15 requests/minute limit; a paid key has thousands, so this lifts those limits for much faster translation. Leave OFF for a free key (ON would just cause rate-limit errors and retries). Does not change translation quality -- that is set by the Model option."
 msgstr "הפעילו רק אם אתם על תוכנית Gemini בתשלום (חיוב מופעל על מפתח ה-API). התוסף בדרך כלל מווסת את קצב הבקשות ומגביל את מספר המקטעים המקבילים כדי להישאר מתחת למגבלת ~15 בקשות לדקה של התוכנית החינמית; למפתח בתשלום יש אלפים, כך שאפשרות זו מסירה את ההגבלות לתרגום מהיר בהרבה. השאירו כבוי עם מפתח חינמי (הפעלה רק תגרום לשגיאות מגבלת-קצב ולניסיונות חוזרים). לא משנה את איכות התרגום — היא נקבעת באפשרות 'מודל'."
-
-msgctxt "#32554"
-msgid "POV: fast navigation (reuse Python interpreter)"
-msgstr "POV: ניווט מהיר (שימוש חוזר במפרש פייתון)"
-
-msgctxt "#32555"
-msgid "OFF (default, safe): POV gets a fresh Python interpreter for every menu press, so it reloads its own code each time -- measured at about 1.75 seconds of spinner on every category, on every press, and a repeat visit is no faster. ON: POV keeps one interpreter, so it loads its code once per Kodi session instead of once per press -- the first press after a start still pays it, and the presses after that should be much faster, though exactly how much has not been measured yet. But if several POV requests ever run at the same moment (home widgets refreshing together, or you pressing again before the previous list finished) they share that interpreter, and that is a native crash that closes Kodi completely. This add-on turned it OFF on 14 Aug 2026 after exactly such a crash. Turn ON only if you would rather have the speed and accept that risk. Takes effect after ONE Kodi restart. On that restart POV notices the change and asks to reload your profile -- say OK and it is active immediately; say Cancel and it is active at the next start instead. It only asks once."
-msgstr "כבוי (ברירת מחדל, בטוח): POV מקבל מפרש פייתון חדש בכל לחיצה בתפריט, ולכן טוען מחדש את הקוד שלו בכל פעם — נמדד כ-1.75 שניות של גלגל מסתובב בכל קטגוריה, בכל לחיצה, וגם ביקור חוזר אינו מהיר יותר. מופעל: POV שומר מפרש אחד, ולכן טוען את הקוד שלו פעם אחת בכל הפעלת Kodi במקום בכל לחיצה — הלחיצה הראשונה אחרי ההפעלה עדיין משלמת את זה, והלחיצות שאחריה אמורות להיות מהירות בהרבה, אם כי עדיין לא נמדד בכמה בדיוק. אבל אם כמה בקשות של POV רצות באותו רגע (אריחי מסך הבית מתרעננים יחד, או לחיצה נוספת לפני שהרשימה הקודמת הסתיימה) הן חולקות את אותו מפרש, וזו קריסה שסוגרת את Kodi לגמרי. התוסף הזה כיבה את האפשרות ב-14 באוגוסט 2026 בעקבות קריסה כזו בדיוק. הפעילו רק אם אתם מעדיפים את המהירות ומקבלים את הסיכון. נכנס לתוקף אחרי הפעלה מחדש אחת של Kodi. באותה הפעלה POV שם לב לשינוי ושואל אם לטעון מחדש את הפרופיל — אשרו ב-OK וזה פעיל מיד; תבחרו ביטול וזה יהיה פעיל בהפעלה הבאה. הוא שואל פעם אחת בלבד."
 
 msgctxt "#32556"
 msgid "AI translation: gender proofread by a stronger model"

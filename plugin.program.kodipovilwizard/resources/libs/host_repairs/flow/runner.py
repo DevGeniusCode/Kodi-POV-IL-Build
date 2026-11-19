@@ -21,6 +21,7 @@ from resources.libs.host_repairs.flow.pov_steps import _maybe_default_pov_autopl
 from resources.libs.host_repairs.flow.skin_steps import _maybe_default_fentastic_player, _maybe_default_nox_poster_rating, _maybe_enable_osd_autoclose, _point_subtitle_button
 from resources.libs.host_repairs.flow.startup_pass import _run_build_startup_repairs
 from resources.libs.host_repairs.flow.umbrella_steps import _start_service_mirror_keeper
+from resources.libs.system.playlist_timeout import SETTING_ID as PLAYLIST_TIMEOUT_SETTING, PlaylistTimeoutSync
 
 LOCK = 'kodipovil.host_repairs.running'
 LOCK_STALE_SECONDS = 120
@@ -190,6 +191,11 @@ def main():
     window.setProperty(LOCK, str(time.monotonic()))
     threading.Thread(target=_heartbeat, args=(window, monitor, stop), daemon=True).start()
     try:
+        # The Wizard setting playlist_timeout -> <playlisttimeout> in advancedsettings.xml (system/playlist_timeout.py). One look now,
+        # then every idle tick: it also restores the value after a config pack replaced the file with the baked default.
+        from resources.libs.host_repairs import kodi_utils
+        playlist_timeout = PlaylistTimeoutSync(lambda: kodi_utils.get_setting(PLAYLIST_TIMEOUT_SETTING, ''))
+        playlist_timeout.poll()
         _run_build_flow(monitor)
         # The service-mirror keeper (and the other helper threads) are daemons: stay alive until Kodi shuts down.
         # Meanwhile an install or update of any patched add-on (POV, Umbrella, Idan Plus, Arctic Fuse 3: Kodi replaces its
@@ -199,6 +205,7 @@ def main():
             if monitor.waitForAbort(POLL_SECONDS):
                 break
             watch.poll(monitor)
+            playlist_timeout.poll()
     finally:
         stop.set()
         try:

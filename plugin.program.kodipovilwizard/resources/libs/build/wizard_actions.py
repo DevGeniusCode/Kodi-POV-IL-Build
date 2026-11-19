@@ -335,14 +335,3 @@ class Wizard:
         else:
             logging.log_notify(CONFIG.ADDONTITLE,
                                '[COLOR {0}]Theme Install: Cancelled![/COLOR]'.format(CONFIG.COLOR2))
-
-
-def wizard(action, name, url):
-    cls = Wizard()
-
-    if action in ['fresh', 'normal']:
-        cls.build(action, name)
-    elif action == 'gui':
-        cls.gui(name)
-    elif action == 'theme':
-        cls.theme(name, url)

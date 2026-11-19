@@ -30,7 +30,6 @@ from resources.libs.common import tools
 from resources.libs import update
 from resources.libs.profiles import hooks as profile_hooks
 from resources.libs.boot import build_check
-from resources.libs.boot import first_boot
 from resources.libs.boot import gui_ready
 from resources.libs.boot import language_sync
 from resources.libs.boot import maintenance_pass
@@ -101,13 +100,6 @@ if not gui_ready.wait_for_gui_ready():
 # SECONDARY PROFILE HOME (Profiles): stop here until a secondary profile's live home is verified.
 if not profile_hooks.complete_home():
     sys.exit()
-
-# FIRST-BOOT STABILIZER (race shield). Runs ONLY when the one-shot marker from a
-# just-completed install is present. Warms POV up (user-visible countdown) and
-# ReloadSkin()s so the FENtastic home widgets load against a ready POV instead of
-# racing its first-run DB setup -> the "first boot freeze". No-op on every normal
-# boot. Must run BEFORE the first-launch notification/contact modals below.
-first_boot.first_boot_stabilize_if_needed()
 
 # SHOW NOTIFICATIONS
 if (profile_hooks.notifications_allowed() and CONFIG.ENABLE_NOTIFICATION == 'Yes'

@@ -69,7 +69,7 @@
 | RunScript (settings buttons) | `settings.xml` action rows | `open_aistudio`, `test_connection`, `connect_gemini` (also frozen Wizard patch `pov_myservices`), `show_gemini_usage`, `open_tmdb_notice`, `clear_cache`, `pool_share_cache(_run)`, `purge_temp`, `engine_test` (the Telegram buttons `connect_telegram`, `logout_telegram`, `telegram_test` were removed at the end of Phase 1) | **Yes** (action names) |
 | Bare-name import from other interpreters | POV / Umbrella hooks append `…/resources/lib` to `sys.path` | `he_sub_match.py`: `prewarm`, `release_names`, `embedded_names`, `confirmed_releases`, `label_prefix`; stdlib only at module level | **Yes**: file must stay at `resources/lib/he_sub_match.py` |
 | Window properties read by other processes | skins / POV / Wizard | `subs.player_filename` (`subs_filename_publisher`), `MoranSubsChooserOpen`, `povil.embedded_*`, `moransubs.*` | **Yes** (byte-identical) |
-| Settings read by the Wizard | Wizard `host_repairs/kodi_utils.subs_get_*` | `use_builtin_engine`, `pov_fast_navigation` | **Yes** (ids) |
+| Settings read by the Wizard | Wizard `host_repairs/kodi_utils.subs_get_*` | `use_builtin_engine` (`pov_fast_navigation` moved to the Wizard, 20 Nov 2026) | **Yes** (ids) |
 | Dead inbound call (known defect) | Wizard `profiles/build_skin.py:252` | `action=prepare_build_skin` → falls into `unknown action` | n/a |
 
 ### 1.2 Current flow (as built, after Phase 2)
@@ -891,6 +891,8 @@ Each phase appends its rows here. A row is an inactive feature, setting or block
 
 **Phase 2 notes (19 Nov 2026).** Phase 2 deleted no feature, setting or function (a structural phase), so it adds no row. What it left on purpose, for the owner:
 - Inert leftovers of Phase 1, untouched: the `HebrewMachineTranslated` label tests (now in `fetching/providers/engine.py`, `fetching/bridge.py`, `ai_translation/context/gender_reference.py`), `fetching/providers/srt.py` (no importer; MIT notice in `LICENSE.txt`), the orphan string ids 32103, 32231, 32504, 32505, 32534-32537, 32630, 32636, the DarkSubs empty-list toast of the list builder (`fetching/service.list_candidates`), the `gemini_rpm` default conflict.
+- **Closed 20 Nov 2026:** `fetching/providers/srt.py` (and its MIT notice), the DarkSubs empty-list toast of `fetching/search/ai_rows.finish` and the `gemini_rpm` default conflict are gone: `gemini_rpm` is declared (label 32627, help 32628, default 0 = automatic) and read through `ai_translation/dispatch/pacing.gemini_rpm_interval`. Only a pinned 0 / negative value on a free key changed (it paced at 1 request a minute, now means automatic).
+- **Settings visibility audit, applied 20 Nov 2026:** see the matching bullet in `CLAUDE.md` (A1-A6 exposed, `embedded_reference` and `_proofread_quota_exhausted` declared, `auto_translate` / `translate_p` / `auto_remove_hi_tags` deleted, `auto_fix_sub_punctuation` kept because `bridge.py` reads it, contract script resolves `*SETTING*` constants).
 - New small leftovers: the unused constant `ADDON_ID` in `default.py` (it moved nowhere because nothing uses it), the unused locals `engine` (`ui/settings_actions/engine.py`) and `key` (`fetching/embedded/streams.py`, 2 places) and the redefined `_pshare` (`ai_translation/service.py`), all already flagged by pyflakes before the phase.
 - Private helpers called across modules keep their underscore (`core.kodi._home_window`, `ai_translation.proofread.gp_state._gp_*`, ...): the optional rename to public names was not done, so every caller stays byte-identical.
 

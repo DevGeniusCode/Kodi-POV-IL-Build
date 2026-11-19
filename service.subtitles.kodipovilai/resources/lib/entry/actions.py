@@ -10,7 +10,7 @@ try:
 except ImportError:
     # Allow `python -m default --action=search` for local debug.
     xbmc = xbmcgui = xbmcplugin = xbmcvfs = None
-from resources.lib.ui.dialogs import safe_log
+from resources.lib.ui.dialogs import dialogs_title, safe_log
 
 
 # _he_avail_store AND ITS HE_AVAIL_CACHE PATH USED TO LIVE HERE. Both were
@@ -94,3 +94,37 @@ def handle_choose_subs(params):
             xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
         except Exception:
             pass
+
+
+# Link kinds whose resolve() translates: a selection of one of these means a translation is (or was just) running.
+_TRANSLATING_KINDS = ('engine_ai', 'embedded_ai')
+# The marks bg_translate_picker / translate_file keep on the Home window while a live translation runs.
+_LIVE_JOB_PROPS = ('ai_subs.live_translate_active', 'ai_subs.live_translate_source', 'ai_subs.live_translate_job')
+
+
+def handle_cancel_translation(params):
+    """The "ביטול תרגום" button of the subtitles dialog (RunScript action=cancel_translation).
+
+    A translation job lives as long as the subtitle selection that started it (translation_cancelled /
+    subtitle_selection_matches), and the automatic subtitle on play stops the same way
+    (_autosub_owns_player). So cancelling is dropping the current selection: every running job sees it is
+    obsolete, spends no further request, saves nothing and publishes nothing. What is already on screen stays."""
+    try:
+        from resources.lib.core import link_codec, selection as core_selection
+        win = xbmcgui.Window(10000)
+        running = any(win.getProperty(p) for p in _LIVE_JOB_PROPS)
+        if not running:
+            payload = link_codec.decode_link_safe(core_selection.get_current_subtitle() or '')
+            running = isinstance(payload, dict) and payload.get('type') in _TRANSLATING_KINDS
+        if not running:
+            msg = 'אין תרגום פעיל'
+        else:
+            core_selection.set_current_subtitle('')
+            for prop in _LIVE_JOB_PROPS:
+                win.clearProperty(prop)
+            safe_log('cancel_translation: the current selection was dropped', level='INFO')
+            msg = 'התרגום בוטל'
+        # always shown, whatever the subtitle-notifications switch says: it answers a button the viewer pressed
+        xbmcgui.Dialog().notification(dialogs_title(), msg, xbmcgui.NOTIFICATION_INFO, 3000, False)
+    except Exception as e:
+        safe_log('cancel_translation crashed: {0}'.format(e), level='WARNING')

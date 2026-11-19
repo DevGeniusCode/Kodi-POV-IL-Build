@@ -94,20 +94,17 @@ _ENGINE_DEFAULTS = {
     'language_arab': 'false',
     'all_lang': 'true',
     'retry_search_with_all_langs': 'true',
-    'auto_translate': 'false',
-    'translate_p': '0',
     # max_search_time is NOT here on purpose: it's a user-facing setting now
     # (Settings > engine), so we must never force-overwrite the user's choice.
-    'subtitle_trans_cache': '15',
+    'subtitle_trans_cache': '200',
     'enable_autosub_notifications': 'true',
     'auto_fix_sub_punctuation': 'true',
-    'auto_remove_hi_tags': 'false',
     'show_debug': 'false',
 }
 
 # Bump when _ENGINE_DEFAULTS changes so the new values are force-applied to
 # installs that already have the old values written.
-_ENGINE_DEFAULTS_VERSION = '4'
+_ENGINE_DEFAULTS_VERSION = '5'
 
 
 def ensure_engine_settings():

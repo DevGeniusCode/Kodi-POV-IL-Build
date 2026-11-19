@@ -290,15 +290,29 @@ sx = ET.parse(os.path.join(ADDON, 'resources', 'settings.xml')).getroot()
 declared = {e.get('id') for e in sx.iter('setting') if e.get('id')}
 for s in BASE['wizard_read_settings']:
     check('settings id the Wizard reads is declared: %s' % s, s in declared)
-read = set()
+# Module-level constants that name a setting (SETTING_COUNT, EXHAUSTED_SETTING, _EMB_REF_SETTING, ...): a name
+# containing SETTING whose value is a string. Their values count as setting ids, and a call that passes the
+# constant (SETTING_DATE, EXHAUSTED_SETTING) is resolved to the value.
+SETTING_CONSTS = {}
+for m, t in TREES.items():
+    for n in t.body:
+        if (isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
+                and 'SETTING' in n.targets[0].id and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)):
+            SETTING_CONSTS[n.targets[0].id] = n.value.value
+read = set(SETTING_CONSTS.values())
 for m, t in TREES.items():
     for n in ast.walk(t):
         if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-                and n.func.attr in ('get_setting', 'get_bool', 'get_int', 'get_float')
-                and n.args and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str)):
-            read.add(n.args[0].value)
+                and n.func.attr in ('get_setting', 'get_bool', 'get_int', 'get_float', 'set_setting')
+                and n.args):
+            a0 = n.args[0]
+            if isinstance(a0, ast.Constant) and isinstance(a0.value, str):
+                read.add(a0.value)
+            elif isinstance(a0, ast.Name) and a0.id in SETTING_CONSTS:
+                read.add(SETTING_CONSTS[a0.id])
 undeclared = sorted(x for x in read if x not in declared and x not in BASE['settings_known_undeclared'])
-check('every setting id read in code is declared in settings.xml (known exceptions: %s)' % BASE['settings_known_undeclared'],
+check('every setting id read or written in code, literal or through a *SETTING* constant (%d constants), is declared in settings.xml '
+      '(known exceptions: %s)' % (len(SETTING_CONSTS), BASE['settings_known_undeclared']),
       not undeclared, undeclared)
 labels = set()
 for el in sx.iter():

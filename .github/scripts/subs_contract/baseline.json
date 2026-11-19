@@ -106,16 +106,12 @@
   "connect_gemini",
   "subs.player_filename",
   "MoranSubsChooserOpen",
-  "use_builtin_engine",
-  "pov_fast_navigation"
+  "use_builtin_engine"
  ],
  "wizard_read_settings": [
-  "use_builtin_engine",
-  "pov_fast_navigation"
+  "use_builtin_engine"
  ],
- "settings_known_undeclared": [
-  "gemini_rpm"
- ],
+ "settings_known_undeclared": [],
  "placeholder_label_ids": [
   30000
  ],
