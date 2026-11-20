@@ -84,6 +84,34 @@
             <heading>32548</heading>
           </control>
         </setting>
+        <!-- Step 8: the autosub "fast lane". When Ktuvit or Wizdom answers with a strong match
+             (at least 90 and at least autosub_min_match_pct) the subtitle is applied at once,
+             without waiting for the slower sources; the timing check runs in the background
+             and one better match may replace it when the full search ends. -->
+        <setting id="autosub_fast_apply" type="boolean" label="32652" help="32653">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="engine_autosub" operator="is">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <!-- Step 8: the lowest match number autosub may pick (0 = no limit, the old behaviour). -->
+        <setting id="autosub_min_match_pct" type="integer" label="32654" help="32655">
+          <level>0</level>
+          <default>0</default>
+          <constraints>
+            <minimum>0</minimum>
+            <step>5</step>
+            <maximum>100</maximum>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="engine_autosub" operator="is">true</dependency>
+          </dependencies>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+          </control>
+        </setting>
         <setting id="subs_notifications" type="boolean" label="32542" help="32543"> <!-- Show subtitle/translation notifications -->
           <level>0</level>
           <default>true</default>

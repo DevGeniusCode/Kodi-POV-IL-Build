@@ -19,7 +19,7 @@ class SearchState(object):
     the old single function without their leading underscore."""
     __slots__ = (
         # arguments of resolve()
-        'info', 'modal_progress', 'quick',
+        'info', 'modal_progress', 'quick', 'on_provider',
         # first set in the stage "context"
         'episode', 'filepath', 'imdb_id', 'season', 'sources', 'tmdb_id',
         # first set in the stage "local_files"
@@ -36,8 +36,8 @@ class SearchState(object):
         'ai_entries',
     )
 
-    def __init__(self, info, modal_progress, quick,
-                 ):
+    def __init__(self, info, modal_progress, quick, on_provider=None):
+        self.on_provider = on_provider   # autosub's fast lane (bridge.search), None for every other caller
         self.info = info
         self.modal_progress = modal_progress
         self.quick = quick

@@ -40,7 +40,7 @@ class OverlayText:
         
         
         self._icon = xbmcgui.ControlImage(x2, y2, w2, h2, iconx)
-        self._background = xbmcgui.ControlImage(x3, y3, w3, h3, os.path.join(addonPath,"resources","art","background.png"))
+        self._background = xbmcgui.ControlImage(x3, y3, w3, h3, os.path.join(addonPath,"resources","media","overlay_bg.png"))
         self._background.setColorDiffuse("0xD0000000")
 
     def __enter__(self):

@@ -17,8 +17,14 @@ try:
 except Exception:
     common = None
 from resources.lib.core.link_codec import decode_link_safe
+from resources.lib.scoring_matching.ranking import release_similarity
 from resources.lib.sync.probes.bundle import cached_reference_bundle, verify_file_bundle
 from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, load_verdicts, store_verdict
+
+
+# Step 8: two rows of the same tier and pct are told apart by release_similarity (0-1000)
+# only when one is at least this much closer to the playing file than the row on top.
+SIM_MARGIN = 60
 
 
 def ready_candidate_text(info, candidate):
@@ -58,7 +64,7 @@ def is_human_hebrew_candidate(payload):
     return False
 
 
-def _names_other_episode(name, info):
+def names_other_episode(name, info):
     try:
         return bool(video_context.release_conflicts_with_episode(
             name, (info or {}).get('season'), (info or {}).get('episode')))
@@ -102,7 +108,7 @@ def diverse_human_alternatives(candidates, limit=6, info=None):
         seen_links.add(link)
         release = next((value.strip() for value in release_fields
             if isinstance(value, str) and value.strip()), '')
-        if info is not None and _names_other_episode(release, info):
+        if info is not None and names_other_episode(release, info):
             continue
         try:
             parsed = scoring_matching_release.parse(release)
@@ -182,19 +188,25 @@ def rank_ready_candidates(info, candidates, max_candidates=4, cached_only=False)
             except Exception:
                 pct, tier = 0, ''
             rank = tier_rank.get(tier, 0)
-            if _names_other_episode(rel, info):
+            if names_other_episode(rel, info):
                 # A row explicitly naming another episode ("...2014.201...",
                 # "S02E01") is never a first choice, whatever its score.
                 rank = -1
             meta.append({'index': index, 'pct': int(pct or 0),
-                         'tier': tier, 'rank': rank, 'release': rel})
+                         'tier': tier, 'rank': rank, 'release': rel,
+                         'sim': release_similarity(playing, rel)})
         if len(meta) >= 2:
             first = meta[0]
+            # Same tier and same pct: the row whose FULL name (resolution, codec, audio,
+            # spelling) is closest to the playing file wins, by a clear margin only.
             best = max(meta, key=lambda item: (
-                item['rank'], item['pct'], -item['index']))
+                item['rank'], item['pct'], item['sim'], -item['index']))
             clear_win = (best['rank'] > first['rank'] or
                          (best['rank'] == first['rank']
-                          and best['pct'] >= first['pct'] + 4))
+                          and best['pct'] >= first['pct'] + 4) or
+                         (best['rank'] == first['rank']
+                          and best['pct'] == first['pct']
+                          and best['sim'] >= first['sim'] + SIM_MARGIN))
             if clear_win and best['index'] != first['index']:
                 picked = rows[best['index']]
                 # Swap only human slots.  In particular, an interleaved AI row

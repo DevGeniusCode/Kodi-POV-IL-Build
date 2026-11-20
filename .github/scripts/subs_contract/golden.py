@@ -304,6 +304,7 @@ for i, (a, b) in enumerate(PAIRS):
     rec('rm.parse.%d' % i, get('parse', RM), b)
     rec('rm.best_pct.%d' % i, get('best_pct', RM), a, [b])
     rec('rm.explain.%d' % i, get('explain', RM), a, b)
+    rec('rm.similarity.%d' % i, get('similarity', RM), a, b)
     rec('rm.synthetic.%d' % i, get('is_synthetic', RM), a)
 
 # ---- settings / selection state machine (dict-backed Window and addon stubs)
@@ -505,6 +506,9 @@ rec('tr.parse_download_url', anyfn('_parse_download_url'), 'plugin://service.sub
 
 exec(compile(open(os.path.join(SP, 'golden_list_part.py'), encoding='utf-8').read(), 'golden_list_part.py', 'exec'))
 exec(compile(open(os.path.join(SP, 'golden_pr_part.py'), encoding='utf-8').read(), 'golden_pr_part.py', 'exec'))
+exec(compile(open(os.path.join(SP, 'golden_fast_part.py'), encoding='utf-8').read(), 'golden_fast_part.py', 'exec'))
+# LAST: it replaces functions of several modules by fakes
+exec(compile(open(os.path.join(SP, 'golden_autosub_part.py'), encoding='utf-8').read(), 'golden_autosub_part.py', 'exec'))
 
 with open(OUT, 'w', encoding='utf-8') as f:
     json.dump(R, f, ensure_ascii=False, indent=0, sort_keys=True)

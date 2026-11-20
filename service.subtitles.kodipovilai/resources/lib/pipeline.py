@@ -12,10 +12,14 @@
 # import cycles between the feature packages stay broken.
 
 
-def search(info, modal_progress=True, quick=False):
-    """The rows of the subtitle list for the playing video (what list_candidates returns)."""
+def search(info, modal_progress=True, quick=False, on_provider=None):
+    """The rows of the subtitle list for the playing video (what list_candidates returns).
+    on_provider(name, rows): autosub's fast lane, told when Ktuvit / Wizdom finish (bridge.search)."""
     from resources.lib.fetching import service
-    return service.list_candidates(info, modal_progress=modal_progress, quick=quick)
+    if on_provider is None:
+        return service.list_candidates(info, modal_progress=modal_progress, quick=quick)
+    return service.list_candidates(info, modal_progress=modal_progress, quick=quick,
+                                   on_provider=on_provider)
 
 
 def resolve(link, info, **kwargs):

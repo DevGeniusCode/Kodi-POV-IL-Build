@@ -188,3 +188,17 @@ with open(os.path.join(ROOT, 'resources', 'skins', 'Default', '1080i', 'script.m
     _xml_props = set(_re_st.findall(r'ListItem\.Property\((\w+)\)', _xf.read()))
 R['chooserrow.xml_props_missing'] = json.dumps(sorted(_xml_props - _ROWPROPS))
 R['chooserrow.xml_props_count'] = json.dumps(len(_xml_props))
+
+# Step 8: equal pct -> the row whose FULL release name is closest to the playing file first (pool rows here; the engine
+# rows are tie-broken inside the bridge, recorded below)
+_run_list('pool_tied_pct', pool=[
+    {'kind': 'ai', 'hash': 't1', 'release': 'Movie.2020.2160p.WEB-DL.HEVC-GRP', 'source_lang': 'en'},
+    {'kind': 'ai', 'hash': 't2', 'release': 'Movie.2020.720p.WEB-DL.x264-GRP', 'source_lang': 'en'},
+    {'kind': 'ai', 'hash': 't3', 'release': 'Movie.2020.1080p.WEB-DL.x264-GRP.REAL', 'source_lang': 'en'}])
+_tb_rows = [{'_engine_kind': 'human_he', 'language': 'he', '_pct': p, 'n': n} for p, n in (
+    (97, 'Movie.2020.2160p.WEB-DL.HEVC-GRP'), (97, 'Movie.2020.1080p.WEB-DL.x264-GRP.v2'),
+    (97, 'Movie.2020.1080p.WEB-DL.AAC2.0.x264-GRP'), (58, 'Movie.2020.WEB.XYZ'), (97, 'Movie.2020.720p.WEB-DL.x264-GRP'))]
+_tb_rows[-1]['_engine_kind'] = 'mt_he'
+_sim = _il.import_module('resources.lib.scoring_matching.ranking').release_similarity
+_tb = _bridge._break_ties(_tb_rows, [_sim(_REL, r['n']) for r in _tb_rows])
+R['bridge.break_ties'] = json.dumps([r['n'] for r in _tb])

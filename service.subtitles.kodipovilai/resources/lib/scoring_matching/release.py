@@ -702,6 +702,39 @@ def match_tier(video_name, sub_name):
         return TIER_FUZZY
 
 
+_SIM_MEMO = {}
+
+
+def similarity(video_name, sub_name):
+    """How close the FULL names are, 0-1000 (1000 = the same spelling). Unlike
+    match_pct it counts EVERYTHING: resolution, codec, audio, HDR and the exact
+    filename. It is a TIE-BREAK only (candidates with the same pct, e.g. two 97%
+    matches of one group); it never feeds pct and is never shown as a match %.
+    Never raises."""
+    try:
+        if not (video_name or '').strip() or not (sub_name or '').strip():
+            return 0
+        key = (video_name, sub_name) if (isinstance(video_name, str)
+                                         and isinstance(sub_name, str)) else None
+        if key is not None:
+            hit = _SIM_MEMO.get(key)
+            if hit is not None:
+                return hit
+        va, sa = normalize(video_name), normalize(sub_name)
+        if va == sa:
+            value = 1000
+        else:
+            tok = difflib.SequenceMatcher(
+                None, _toks(video_name), _toks(sub_name)).ratio()
+            chars = difflib.SequenceMatcher(None, va, sa).ratio()
+            value = min(999, int(round((0.7 * tok + 0.3 * chars) * 1000)))
+        if key is not None:
+            _memo_put(_SIM_MEMO, key, value)
+        return value
+    except Exception:
+        return 0
+
+
 def explain(video_name, sub_name):
     """Why a subtitle release got its number, for the chooser's info panel.
 

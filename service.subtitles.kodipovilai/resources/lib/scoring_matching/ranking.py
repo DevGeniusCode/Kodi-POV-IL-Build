@@ -32,6 +32,18 @@ def match_pct(video_name, sub_name):
         return 0
 
 
+def release_similarity(video_name, sub_name):
+    """Closeness of the FULL release names, 0-1000 (resolution, codec, audio and the
+    exact filename all count). The TIE-BREAK of every ranking that sorts by match %:
+    it only orders candidates whose pct is equal and never changes a pct. 0 on any
+    problem (so a failure keeps the existing order)."""
+    try:
+        from resources.lib.scoring_matching import release as _rm
+        return _rm.similarity(video_name, sub_name)
+    except Exception:
+        return 0
+
+
 def is_same_source(video_name, sub_name):
     """True only when the two release names are the SAME source (normalized
     identical -- release_match's TIER_EXACT). Used to gate embedded-sourced pool

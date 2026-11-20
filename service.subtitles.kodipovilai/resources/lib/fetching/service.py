@@ -22,7 +22,7 @@ STAGES = (
 )
 
 
-def list_candidates(info, modal_progress=True, quick=False):
+def list_candidates(info, modal_progress=True, quick=False, on_provider=None):
     """Build the list Kodi's subtitle dialog will render.
 
     quick=True makes no network request: the provider search is used only
@@ -30,10 +30,12 @@ def list_candidates(info, modal_progress=True, quick=False):
     '_list_pending' = True when either was left out, so the caller can
     complete the list later (the "בחירת כתוביות" window opens on this one).
 
+    on_provider (autosub's fast lane): see bridge.search.
+
     Returns a list of dicts with keys: filename, language, link,
     sync, rating. Empty list if nothing plausible is available.
     """
-    S = SearchState(info, modal_progress, quick)
+    S = SearchState(info, modal_progress, quick, on_provider)
     for stage in STAGES:
         result = stage(S)
         if result is not NEXT:

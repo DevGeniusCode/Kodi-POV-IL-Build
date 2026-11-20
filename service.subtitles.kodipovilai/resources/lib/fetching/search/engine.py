@@ -53,8 +53,9 @@ def engine(S):
             kodi.log('engine embedded_candidates failed: {0}'.format(e),
                            level='WARNING')
         try:
+            _hook = {'on_provider': S.on_provider} if S.on_provider else {}
             _found = bridge.search(
-                S.info, modal_progress=S.modal_progress, cache_only=S.quick)
+                S.info, modal_progress=S.modal_progress, cache_only=S.quick, **_hook)
             if _found is None:
                 S.info['_list_pending'] = True
                 _found = []

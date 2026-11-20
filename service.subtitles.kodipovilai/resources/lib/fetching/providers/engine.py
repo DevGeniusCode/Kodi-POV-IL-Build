@@ -349,7 +349,10 @@ def _finish_timing_timeout(threads, all_sources, timeout_s=0.5):
         result += source.global_var
     return result
         
-def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
+def c_get_subtitles(video_data, all_lang_override=False, timing_only=False, on_provider_done=None):
+    """on_provider_done(name, rows) (Step 8, autosub's fast lane): called once for each provider the
+    moment its thread has ended, with a copy of what it found, while the others may still run.
+    It runs in this loop's thread and must not raise (an exception is swallowed)."""
     global last_search_cut_short
         
     log.warning(f"DEBUG | c_get_subtitles | START | all_lang_override={all_lang_override} | timing_only={timing_only}")
@@ -439,6 +442,7 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
     # enabled. Keep that a clean empty result instead of referencing the loop's
     # accumulator before it has ever been assigned.
     f_result=[]
+    _notified=set()   # providers on_provider_done has already been told about
 
     while 1:
         elapsed_time = time.time() - start_time
@@ -457,6 +461,12 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
                 if not thread[yy].is_alive():
                   num_live=num_live+1
                   tt[yy]="lightgreen"
+                  if on_provider_done is not None and yy not in _notified:
+                    _notified.add(yy)
+                    try:
+                      on_provider_done(all_sources[yy][0], list(all_sources[yy][1].global_var))
+                    except Exception:
+                      pass
                 else:
                   still_alive=1
                   tt[yy]="red"
@@ -512,7 +522,7 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
             from resources.lib.fetching.providers.general import notify
             notify("לא נמצאו כתוביות. מחפש שוב בכל השפות...")
         log.warning("DEBUG | c_get_subtitles | No results found, retrying with all_lang=true...")
-        f_result = c_get_subtitles(video_data, all_lang_override=True)
+        f_result = c_get_subtitles(video_data, all_lang_override=True, on_provider_done=on_provider_done)
     #################################################### Retry all languages END ####################################################
     
     if not timing_only and (Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying()):
@@ -521,7 +531,7 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
     
     return f_result
     
-def get_subtitles(video_data):
+def get_subtitles(video_data, on_provider_done=None):
     # For settings changes to take effect.
     Addon=xbmcaddon.Addon()
     from resources.lib.fetching.providers import general
@@ -530,6 +540,6 @@ def get_subtitles(video_data):
         # If searching subtitles from context menu - will show the message.
         general.show_msg='מחפש כתוביות'
     
-    f_result=c_get_subtitles(video_data)
+    f_result=c_get_subtitles(video_data, on_provider_done=on_provider_done)
     xbmc.sleep(100)
     return f_result

@@ -657,3 +657,19 @@ msgstr "תרגום AI: בדיקת זכר/נקבה במודל חזק"
 msgctxt "#32557"
 msgid "When an AI translation finishes (a subtitle picked from the list, or the automatic translation on play), one request to a stronger Gemini model (3.7 Flash, then 3.8, then 3.6 -- about 20 requests a day each on a free key) reads the whole title and corrects the masculine/feminine and singular/plural forms the translator got wrong (who speaks to whom). Only gendered forms change (word endings, את/אתה, הוא/היא...); a correction that touches anything else is dropped. The subtitles show as usual; the corrected file replaces them a few minutes later. When these models are busy or out of quota, the translation stays as it is. A translation made before -- from the cache or the community pool -- is proofread once, the first time it is opened (a pooled one when the subtitle it was translated from is in the list), and the corrected file goes to the pool for everyone. With a paid key this is one more request per title. Measured, of the lines it changed: 3.7 on two films fixed 56 and broke none, 3.8 on one film fixed 34 and broke 1."
 msgstr "כשתרגום AI מסתיים (כתובית שנבחרה מהרשימה, או התרגום האוטומטי בהפעלה), בקשה אחת למודל Gemini חזק יותר (Flash 3.7, אחריו 3.8 ואחריו 3.6 -- כ-20 בקשות ביום לכל אחד במפתח חינמי) קוראת את כל הכותר ומתקנת צורות זכר/נקבה ויחיד/רבים שהתרגום טעה בהן (מי מדבר אל מי). רק צורות המגדר משתנות (סיומות, את/אתה, הוא/היא...); תיקון שנוגע בכל דבר אחר נזרק. הכתוביות מוצגות כרגיל, והקובץ המתוקן מחליף אותן כעבור כמה דקות. כשהמודלים האלה עמוסים או שנגמרה להם המכסה, התרגום נשאר כמו שהוא. תרגום קודם -- מהמטמון או מהמאגר הקהילתי -- נבדק פעם אחת, כשהוא נפתח לראשונה (תרגום מהמאגר -- כשהכתובית שממנה תורגם נמצאת ברשימה), והקובץ המתוקן עובר למאגר לטובת כולם. במפתח בתשלום זו בקשה אחת נוספת לכל כותר. נמדד, מהשורות ששונו: 3.7 על שני סרטים תיקן 56 ולא שבר אף אחת, 3.8 על סרט אחד תיקן 34 ושבר אחת."
+
+msgctxt "#32652"
+msgid "Instant subtitles from Ktuvit / Wizdom"
+msgstr "כתוביות מיידיות מ-Ktuvit / Wizdom"
+
+msgctxt "#32653"
+msgid "When Ktuvit or Wizdom returns a strong match (90 or more, and at least the minimum below) the subtitle is applied at once, without waiting for the slower sources. The timing is still checked in the background, and one clearly better match can replace it when the full search ends."
+msgstr "כש-Ktuvit או Wizdom מחזירים התאמה חזקה (90 ומעלה, ולפחות המינימום שמוגדר למטה) הכתובית נטענת מיד, בלי לחכות למקורות האיטיים יותר. הסנכרון ממשיך להיבדק ברקע, ובתום החיפוש המלא התאמה טובה יותר בבירור יכולה להחליף אותה."
+
+msgctxt "#32654"
+msgid "Minimum match for automatic subtitles"
+msgstr "התאמה מינימלית לכתוביות אוטומטיות"
+
+msgctxt "#32655"
+msgid "Auto-sub skips every subtitle whose release match is below this number (in percent). 0 turns the limit off. Rows with no match number (the video's own subtitle, a file beside the video) are not filtered. The instant lane always needs at least 90."
+msgstr "הכתוביות האוטומטיות מדלגות על כל כתובית שהתאמת השחרור שלה נמוכה מהמספר הזה (באחוזים). 0 מבטל את ההגבלה. שורות בלי מספר התאמה (הכתובית המובנית בסרט, קובץ לצד הסרט) לא מסוננות. המסלול המיידי דורש תמיד לפחות 90."

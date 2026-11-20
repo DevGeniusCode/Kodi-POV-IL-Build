@@ -197,7 +197,7 @@ class _PairWindow(xbmcgui.WindowDialog):
 
         # Dim background so QR is readable and Kodi behind is muted.
         bg_path = ('special://home/addons/service.subtitles.kodipovilai/'
-                   'resources/lib/icons/dark_bg.png')
+                   'resources/media/dark_bg.png')
         bg = xbmcgui.ControlImage(0, 0, 1280, 720, bg_path,
                                   colorDiffuse='EE000000', aspectRatio=2)
         self.addControl(bg)

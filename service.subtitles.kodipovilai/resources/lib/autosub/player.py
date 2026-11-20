@@ -8,6 +8,7 @@ try:
     import xbmc
 except ImportError:
     xbmc = None
+from resources.lib.autosub import fast_lane, policy as autosub_policy
 from resources.lib.autosub.policy import AI_ROW_TYPES, CHECKED_HEADINGS, EMBEDDED_MISS_LINES, LOADED_HEADINGS, SYNC_CHECK_END_TOAST_MS, SYNC_CHECK_START_TOAST_MS, ask_ai_translation, wait_for_sync_check, ai_when_no_hebrew
 
 
@@ -173,6 +174,7 @@ def autosub_on_play():
         STATE['active_file'] = _playback_file
         STATE['busy'] = True
     _eng_general = None
+    _lane_stop = threading.Event()   # Step 8: ends the fast-lane worker (set when the run ends)
     _overlay_thread = [None]    # the top overlay's thread (_overlay_show)
     _run_t0 = time.time()       # what translate reports after this is this run's
     try:
@@ -434,7 +436,92 @@ def autosub_on_play():
         # Non-modal search (the overlay above is the progress). list_candidates
         # returns everything in priority order; the first 'he' row is the best
         # Hebrew (embedded > human > pool > MT).
-        cands = pipeline.search(info, modal_progress=False)
+        # ---- Step 8: the fast lane + the minimum match number ---------------------------------------
+        # autosub_min_match_pct (0 = off) keeps every automatic pick at or above that match number.
+        # The fast lane applies a Ktuvit / Wizdom subtitle at max(90, that number) the moment the
+        # provider answers (see autosub/fast_lane.py); it uses the same claim -> resolve -> apply as
+        # the loop below, and the delivery gate still checks its timing in the background.
+        _min_pct = autosub_policy.min_match_pct(settings)
+        _fast = {'entry': None, 'selection': None, 'link': '', 'name': '', 'cache': False}
+        _first_applied = []      # seconds from the start of this run to the first subtitle on screen
+        _lane = None
+        _lane_thread = None
+        _on_provider = None
+
+        def _note_first_applied(how, name):
+            if not _first_applied:
+                _first_applied.append(time.time() - _run_t0)
+                kodi.log('autosub: first subtitle applied after %.1fs (%s: %s)' % (
+                    _first_applied[0], how, name or '?'))
+
+        try:
+            if autosub_policy.fast_apply_enabled(settings):
+                _expected = set(n for n in autosub_policy.FAST_SOURCES
+                                if settings.get_bool(n, True))
+                if _expected:
+                    _lane = fast_lane.FastLane(
+                        autosub_policy.fast_threshold(_min_pct), _expected, info,
+                        video_context.release_name(info, 'scored') or '')
+        except Exception as e:
+            _lane = None
+            kodi.log('autosub: fast lane unavailable: %r' % (e,), level='WARNING')
+
+        if _lane is not None:
+            def _apply_fast(entry):
+                link = entry['row'].get('link') or ''
+                if not _autosub_owns_player():
+                    return False
+                sel = _claim_candidate(link)
+                if not sel:
+                    return False
+                try:
+                    path = pipeline.resolve(link, info, selection=sel)
+                except Exception:
+                    path = None
+                if not _autosub_owns_player():
+                    return False
+                if not (path and core_selection.subtitle_selection_matches(
+                        sel.get('token') or '', sel.get('link_hash') or '',
+                        sel.get('stream_hash') or '')):
+                    return False
+                if not core_selection.apply_subtitle_file(path, selection=sel):
+                    return False
+                name = (entry['payload'].get('filename') or '').strip()
+                try:
+                    from_cache = bool(bridge.LAST_DOWNLOAD_FROM_CACHE)
+                except Exception:
+                    from_cache = False
+                _fast.update(entry=entry, selection=sel, link=link, name=name,
+                             cache=from_cache)
+                _note_first_applied('fast lane', '%s %s%% %s' % (
+                    entry['provider'], entry['pct'], name))
+                _overlay_show('[COLOR lightblue]כתובית נטענה\n' + name + '[/COLOR]')
+                return True
+
+            def _lane_worker():
+                try:
+                    fast_lane.run(
+                        _lane, _apply_fast, time.monotonic, _lane_stop.wait,
+                        lambda: _lane_stop.is_set() or not _autosub_owns_player())
+                except Exception as e:
+                    kodi.log('autosub: fast lane worker failed: %r' % (e,),
+                             level='WARNING')
+
+            def _lane_hook(name, rows):
+                _lane.offer(name, rows, time.monotonic())
+
+            _on_provider = _lane_hook
+
+            _lane_thread = threading.Thread(target=_lane_worker, daemon=True)
+            _lane_thread.start()
+
+        cands = pipeline.search(info, modal_progress=False,
+                                on_provider=_on_provider)
+        if _lane is not None:
+            # the search is over: let a subtitle that is being applied finish, then stop the worker
+            _lane.end_search()
+            _lane_thread.join(30)
+            _lane_stop.set()
         if not _autosub_owns_player():
             return
         # (list_candidates already queued every human Ktuvit release for the
@@ -509,7 +596,43 @@ def autosub_on_play():
         chosen_link = None
         chosen_name = ''
         chosen_from_cache = False
-        failed_sources = set()
+        # a source whose subtitle the fast lane already failed to apply is not tried again
+        failed_sources = set(_lane.failed) if _lane is not None else set()
+        _min_skipped = 0
+        if _min_pct:
+            he_list, _min_skipped = autosub_policy.filter_min(he_list, _min_pct)
+            if _min_skipped:
+                kodi.log('autosub: %d candidate(s) below the minimum match of %d%% '
+                         'skipped' % (_min_skipped, _min_pct))
+        _swap_row = None
+        if _fast['link']:
+            # A fast-lane subtitle is on screen. Replace it only by a strictly better human Hebrew
+            # row (at most once), never after the viewer opened the chooser and never over a timing
+            # verdict SubSync proved; otherwise it stays and the loop below has nothing to do.
+            try:
+                import xbmcgui as _gui
+                _chooser_open = bool(_gui.Window(10000).getProperty('MoranSubsChooserOpen'))
+            except Exception:
+                _chooser_open = False
+            _why_not = autosub_policy.swap_blocked(
+                core_selection.get_subtitle_sync_status(_fast['link']), _chooser_open)
+            if not _why_not and _autosub_owns_player():
+                _swap_row = autosub_policy.swap_choice(
+                    _fast['entry']['payload'], _fast['entry']['pct'], he_list, info,
+                    video_context.release_name(info, 'scored') or '', _min_pct)
+            if _swap_row is None:
+                kodi.log('autosub: the fast-lane subtitle stays%s' % (
+                    ' (%s)' % _why_not if _why_not else ''))
+                he_list = []
+                applied = True
+                chosen_link = _fast['link']
+                chosen_name = _fast['name']
+                chosen_from_cache = _fast['cache']
+                selection = _fast['selection']
+            else:
+                kodi.log('autosub: a better match arrived, swapping the fast-lane subtitle for %r'
+                         % ((link_codec.decode_link(_swap_row.get('link') or '') or {}).get('filename'),))
+                he_list = [_swap_row]
         for c in he_list[:12]:
             link2 = c.get('link') or ''
             try:
@@ -601,6 +724,20 @@ def autosub_on_play():
             if src:
                 failed_sources.add(src)
 
+        if _fast['link'] and _swap_row is not None and not applied:
+            # the swap failed: the fast-lane file is still what the player shows
+            _again = _claim_candidate(_fast['link'])
+            kodi.log('autosub: the swap failed, the fast-lane subtitle stays')
+            applied = True
+            chosen_link = _fast['link']
+            chosen_name = _fast['name']
+            chosen_from_cache = _fast['cache']
+            selection = _again or _fast['selection']
+        if applied and not _first_applied:
+            _note_first_applied('full list', '%s%% %s' % (
+                next((c.get('pct') for c in cands if c.get('link') == chosen_link), '?'),
+                chosen_name))
+
         # No Hebrew anywhere -- not embedded, not human, not the community pool,
         # not machine-translated. ONLY in that case, auto-translate the best
         # foreign sub (the highest-match English, which list_candidates already
@@ -623,7 +760,8 @@ def autosub_on_play():
                         p2 = link_codec.decode_link(c.get('link') or '')
                     except Exception:
                         p2 = None
-                    if p2 and p2.get('type') == 'engine_ai':
+                    if (p2 and p2.get('type') == 'engine_ai'
+                            and autosub_policy.passes_min(c, _min_pct)):
                         _eng_ai = True
                         break
             if _eng_ai:
@@ -640,6 +778,9 @@ def autosub_on_play():
                 except Exception:
                     p2 = None
                 if p2 and p2.get('type') == 'engine_ai':
+                    if not autosub_policy.passes_min(c, _min_pct):
+                        _min_skipped += 1
+                        continue
                     if _eng_general is not None:
                         try:
                             _eng_general.show_msg = (
@@ -696,6 +837,10 @@ def autosub_on_play():
                                '[COLOR lightblue]' + EMBEDDED_MISS_LINES.get(
                                    _miss, EMBEDDED_MISS_LINES['']) + '[/COLOR]',
                                hold=7.0)
+            elif _min_skipped:
+                _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]\n'
+                               '[COLOR lightblue]אף כתובית לא הגיעה להתאמה המינימלית '
+                               '(%d) · אפשר לשנות בהגדרות[/COLOR]' % _min_pct, hold=6.0)
             elif (_ai_offered and _when != 'auto' and _have_key and _ai_ok
                     and _ai_answer[:1] != [True]):
                 # left to the user: say where the translation is
@@ -797,6 +942,7 @@ def autosub_on_play():
         except Exception:
             pass
     finally:
+        _lane_stop.set()
         with _STATE_LOCK:
             _still_active = STATE['run_id'] == _run_id
             if _still_active:

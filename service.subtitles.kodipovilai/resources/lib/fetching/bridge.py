@@ -33,6 +33,7 @@ from resources.lib.core import kodi, settings, video_context
 from resources.lib.fetching import provider_adapter
 from resources.lib.delivery.rtl import mark_logical_source, render_hebrew_rtl_copy, is_logical_source
 from resources.lib.fetching.embedded.streams import LANG_NORMALIZE, enabled
+from resources.lib.scoring_matching.ranking import release_similarity
 from resources.lib.fetching.search_cache import CUT_PROP, RECENT_PROP, cache_get, cache_put, recent_get, recent_put
 from resources.lib.fetching.subs_cache import cached_subs_dir, cached_subs_keybase, cached_subs_lookup, cached_subs_prune, cached_subs_store, looks_like_subtitle
 
@@ -200,13 +201,17 @@ def _parse_download_url(url):
     }
 
 
-def search(info, modal_progress=True, cache_only=False):
+def search(info, modal_progress=True, cache_only=False, on_provider=None):
     """Return MoranSubs candidate dicts for the subtitles the engine
     found. Empty list when the gate is off or anything fails.
 
     modal_progress: show the DarkSubs-style modal progress dialog while
     searching (manual "Download Subtitles" flow). The auto-on-play path
     passes False -- it shows its own non-modal banner instead.
+
+    on_provider (Step 8, autosub's fast lane): called as on_provider(name, rows) the moment the
+    'ktuvit' or 'wizdom' provider finishes, with the human-Hebrew candidate rows that one found
+    (each carries 'pct'), while the other providers are still running. Never raises.
 
     Each candidate matches translate.list_candidates' schema, carries a
     link of type 'engine' that resolve() routes back here for download,
@@ -244,7 +249,8 @@ def search(info, modal_progress=True, cache_only=False):
         return None           # nothing cached: the caller searches later
     try:
         started = time.monotonic()
-        out = _search_inner(info, modal_progress=modal_progress)
+        out = _search_inner(info, modal_progress=modal_progress,
+                            on_provider=on_provider)
         # NEVER cache an empty / failed search. A transient timeout, rate-limit
         # (429) or network hiccup returns [] -- caching that would hide every
         # source for 24h (the user sees only the community pool). DarkSubs's
@@ -382,7 +388,8 @@ def search_all_languages_for_timing(info):
         return None
 
 
-def _search_inner(info, modal_progress=True, all_lang_override=False):
+def _search_inner(info, modal_progress=True, all_lang_override=False,
+                  on_provider=None):
     # Make sure the engine's internal settings have real values before the
     # engine module (and general.py) is imported -- otherwise int('') / empty
     # language flags break it. Safe to call every time.
@@ -427,7 +434,11 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
                             video_data, all_lang_override=True,
                             timing_only=True)
                         if all_lang_override
-                        else engine.get_subtitles(video_data))
+                        else (engine.get_subtitles(
+                                  video_data, on_provider_done=_provider_callback(
+                                      engine, video_data, on_provider))
+                              if on_provider is not None
+                              else engine.get_subtitles(video_data)))
             # Read under the lock: another thread's search resets the flag.
             _SEARCH_STATE.finished = not (
                 getattr(engine, 'last_search_cut_short', True)
@@ -449,10 +460,40 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
                         'subs_engine_bridge: progress dialog did not close '
                         'within 500ms', level='WARNING')
 
+    return _engine_rows(sorted_subs, video_data.get('file_original_path') or '')
+
+
+FAST_PROVIDERS = ('ktuvit', 'wizdom')
+
+
+def _provider_callback(engine, video_data, on_provider):
+    """The engine's on_provider_done hook: turns what ONE finished provider found into candidate rows
+    (the same conversion as the full search) and hands the human-Hebrew ones of the fast providers
+    to `on_provider`. A failure here only costs the fast lane, never the search."""
+    def hook(name, raw_rows):
+        try:
+            if name not in FAST_PROVIDERS or not raw_rows:
+                on_provider(name, [])
+                return
+            playing = video_data.get('file_original_path') or ''
+            rows = _engine_rows(engine.sort_subtitles(raw_rows, video_data, silent=True),
+                                playing, log=False)
+            on_provider(name, [dict(r, pct=r.get('_pct')) for r in rows
+                               if r.get('_engine_kind') == 'human_he'])
+        except Exception as e:
+            kodi.log('fast lane provider hook failed: {0}'.format(e), level='WARNING')
+    return hook
+
+
+def _engine_rows(sorted_subs, playing, log=True):
+    """The candidate dicts of the engine's sorted tuples (sort_subtitles), in the order the engine
+    sorted them, with the Step 8 tie-break applied. `playing` is the release the percentages were
+    computed against. Used by the full search and by the per-provider fast lane."""
     if not sorted_subs:
         return []
 
     out = []
+    sims = []   # release_similarity of each row of `out` (the tie-break), same index
     seen = set()
     for t in sorted_subs:
         # tuple layout (sort_subtitles.append_subtitles):
@@ -535,10 +576,31 @@ def _search_inner(info, modal_progress=True, all_lang_override=False):
             # gender oracle (MT defaults to masculine).
             '_is_mt': is_mt,
         })
+        sims.append(release_similarity(playing, parsed['filename']))
 
-    kodi.log('subs_engine_bridge: {0} engine results'.format(len(out)),
-                   level='INFO')
+    out = _break_ties(out, sims)
+    if log:
+        kodi.log('subs_engine_bridge: {0} engine results'.format(len(out)),
+                       level='INFO')
     return out
+
+
+def _break_ties(rows, sims):
+    """Step 8: within each run of rows that share kind, language AND match %, the
+    row whose FULL release name is closest to the playing file comes first (a stable
+    sort: equal closeness keeps the engine's own order, which is by provider). The
+    match % itself never changes. The engine sorts by %, so equal ones are adjacent."""
+    order = []
+    i, n = 0, len(rows)
+    while i < n:
+        key = (rows[i]['_engine_kind'], rows[i]['language'], rows[i]['_pct'])
+        j = i + 1
+        while j < n and (rows[j]['_engine_kind'], rows[j]['language'],
+                         rows[j]['_pct']) == key:
+            j += 1
+        order.extend(sorted(range(i, j), key=lambda k: -sims[k]))
+        i = j
+    return [rows[k] for k in order]
 
 
 # Language-name -> ISO code for the buckets sort_subtitles produces by

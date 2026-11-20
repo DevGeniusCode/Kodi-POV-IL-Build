@@ -121,3 +121,125 @@ def ask_ai_translation(google=False):
             return bool(xbmcgui.Dialog().yesno(*args, **kw))   # Kodi 19
     except Exception:
         return False
+
+
+# ---- Step 8: the minimum match number and the Wizdom / Ktuvit fast lane ----------------------------------------
+# The two Israeli providers whose strong match autosub applies without waiting for the slower sources (the same
+# names fetching.bridge.FAST_PROVIDERS hands to the fast lane).
+FAST_SOURCES = ('ktuvit', 'wizdom')
+# The lowest match number the fast lane ever accepts (the setting autosub_min_match_pct can only raise it).
+FAST_MIN_PCT = 90
+# A first hit below 100 waits this long for the other Israeli provider, so a 100 arriving a moment later wins
+# without a swap.
+FAST_GRACE_S = 1.0
+# A swap after the full list needs a candidate at least this many points above the applied one (the same
+# "clear win" margin as sync.candidates.rank_ready_candidates).
+SWAP_MARGIN = 4
+
+
+def min_match_pct(settings):
+    """autosub_min_match_pct, 0..100 (0 = no limit, the behaviour before Step 8)."""
+    try:
+        return max(0, min(100, int(settings.get_int('autosub_min_match_pct', 0))))
+    except Exception:
+        return 0
+
+
+def fast_apply_enabled(settings):
+    """autosub_fast_apply (default on)."""
+    try:
+        return bool(settings.get_bool('autosub_fast_apply', True))
+    except Exception:
+        return True
+
+
+def fast_threshold(min_pct):
+    """The effective match number of the fast lane: max(90, the user's minimum)."""
+    return max(FAST_MIN_PCT, int(min_pct or 0))
+
+
+def row_pct(row):
+    """The row's match number, None when it has none (embedded, a file beside the video, an AI action)."""
+    value = (row or {}).get('pct')
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def passes_min(row, min_pct):
+    """False only for a row that HAS a match number below the minimum; rows without one cannot be judged and pass."""
+    if not min_pct:
+        return True
+    pct = row_pct(row)
+    return pct is None or pct >= min_pct
+
+
+def filter_min(rows, min_pct):
+    """(kept rows, number skipped): the rows autosub may pick at the minimum match number, in their order."""
+    kept = [row for row in rows or [] if passes_min(row, min_pct)]
+    return kept, len(rows or []) - len(kept)
+
+
+def _payload(row):
+    from resources.lib.core.link_codec import decode_link_safe
+    payload = decode_link_safe((row or {}).get('link') or '') or {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def fast_payload(row, info, threshold):
+    """The link payload of a row the fast lane may apply, else None: a human Hebrew subtitle that came straight from
+    the 'ktuvit' or 'wizdom' provider (not a pooled copy, not machine translated, not the video's own track), whose
+    match number reaches `threshold` and whose name does not point at another episode."""
+    from resources.lib.sync import candidates
+    payload = _payload(row)
+    if payload.get('type') != 'engine' or payload.get('embedded'):
+        return None
+    if str(payload.get('source') or '').strip().lower() not in FAST_SOURCES:
+        return None
+    if not candidates.is_human_hebrew_candidate(payload):
+        return None
+    pct = row_pct(row)
+    if pct is None or pct < threshold:
+        return None
+    if candidates.names_other_episode(payload.get('filename') or '', info):
+        return None
+    return payload
+
+
+def same_subtitle(a, b):
+    """True when two link payloads are the same subtitle (a provider row and its twin in the full list)."""
+    keys = ('type', 'source', 'filename', 'release', 'path', 'hash')
+    return all((a.get(k) or '') == (b.get(k) or '') for k in keys)
+
+
+def swap_choice(applied_payload, applied_pct, rows, info, playing, min_pct):
+    """The ONE row that is strictly better than the subtitle the fast lane applied, or None: a human Hebrew subtitle
+    at least SWAP_MARGIN points above it, over the minimum, not another episode; the closest full name wins a tie."""
+    from resources.lib.scoring_matching.ranking import release_similarity
+    from resources.lib.sync import candidates
+    best = None
+    for row in rows or []:
+        payload = _payload(row)
+        if not payload or same_subtitle(payload, applied_payload):
+            continue
+        if not candidates.is_human_hebrew_candidate(payload):
+            continue
+        pct = row_pct(row)
+        if pct is None or pct < int(applied_pct or 0) + SWAP_MARGIN or not passes_min(row, min_pct):
+            continue
+        rel = payload.get('filename') or payload.get('release') or ''
+        if candidates.names_other_episode(rel, info):
+            continue
+        key = (pct, release_similarity(playing, rel))
+        if best is None or key > best[0]:
+            best = (key, row)
+    return best[1] if best else None
+
+
+def swap_blocked(status, chooser_open):
+    """Why a swap must not happen now, '' when it may: the viewer opened the chooser, or the applied subtitle already
+    has a timing verdict that SubSync proved (a confirmation that only came from its release name is not one)."""
+    if chooser_open:
+        return 'chooser open'
+    status = status or {}
+    if status.get('state') in ('confirmed', 'fixed') and (status.get('source') or '') != 'release':
+        return 'timing proven'
+    return ''

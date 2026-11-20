@@ -349,7 +349,7 @@ service.subtitles.kodipovilai/
         ├── delivery/
         │   ├── kodi_player.py        # named delivery, registration confirm, next-Hebrew fallback
         │   └── rtl.py                # ONE RTL renderer
-        ├── autosub/                  # ex autosub_service.py: player.py (events) + policy.py (gates, choice)
+        ├── autosub/                  # ex autosub_service.py: player.py (events) + policy.py (gates, choice, Step 8 rules) + fast_lane.py (Step 8)
         ├── ui/
         │   ├── listing.py            # Candidate -> ListItem (stars from Candidate.pct, not from the label)
         │   ├── quick_toggles.py      # §2.2
@@ -823,6 +823,18 @@ Each phase is split into steps. After each step the agent stops, writes `output.
 
 **Contract.** `golden_expected.json` re-recorded on purpose: 1,299 cases (was 1,217): 12 release-score records changed (`rm.score` / `rm.best_pct` / `tr.match_pct`), 8 `list.*` scenarios changed ONLY in the `%` inside a label (the order of every row is identical), the 29 `classify.*` records became 29 `chooserrow.*` records of the new row builder, 9 new release pairs (+ `rm.explain.*`) and a check that every `ListItem.Property` the XML reads is produced. Stub import 153 of 153; the other nets (628 + 56) are untouched.
 
+### Step 8 result (20 Nov 2026, owner-approved): tie-break, the Ktuvit / Wizdom fast lane, the minimum match number, one media folder
+
+**Tie-break (8A).** `release.similarity` (0-1000 over ALL tokens and the exact filename) orders candidates of EQUAL `pct`: `bridge._break_ties` (engine rows), the pool sort key of `ai_rows`, and `rank_ready_candidates` (on the same tier and pct, a swap needs `SIM_MARGIN` = 60). `pct` itself is unchanged.
+
+**Minimum match number.** Setting `autosub_min_match_pct` (General, auto-sub group, integer slider 0-100 step 5, default 0 = the old behaviour; strings 32654 / 32655). `autosub.policy.filter_min` drops every Hebrew row whose `pct` is below it from the automatic pick (rows with no number, i.e. the video's own track, a file beside the video and AI actions, cannot be judged and pass); the auto-translate of a foreign subtitle (`engine_ai`) honours it too; when it removes everything the overlay says so.
+
+**Fast lane (`autosub_fast_apply`, default on; strings 32652 / 32653).** `engine.c_get_subtitles(on_provider_done=...)` reports each provider the moment its thread ends; `bridge._provider_callback` converts what ONE of `ktuvit` / `wizdom` found into candidate rows (the same conversion as the full search, `bridge._engine_rows`) and `pipeline.search(on_provider=...)` hands the human-Hebrew ones to `autosub/fast_lane.FastLane`. A row is eligible when it came straight from the provider (not a pooled copy: the pool threading model is untouched), is human Hebrew, is not another episode and has `pct >= max(90, autosub_min_match_pct)`. A hit below 100 waits `FAST_GRACE_S` = 1.0 s for the other Israeli provider that is still expected (a 100, every expected provider done, or the end of the search applies at once). `fast_lane.run` (worker thread, started before the search) applies with the SAME claim -> `resolve` -> `apply_subtitle_file` as the loop, so the delivery gate still checks the timing in the background. After the full list, ONE guarded swap (`policy.swap_choice`): a human Hebrew row at least `SWAP_MARGIN` = 4 points above the applied one, over the minimum; never when the chooser is open (`MoranSubsChooserOpen`) or when the applied subtitle has a timing verdict SubSync proved (a confirmation that only came from the release name does not count); a failed swap keeps the fast-lane file. Log line: `autosub: first subtitle applied after X.Xs (fast lane | full list: ...)`, measured from the start of the run. Known gap: a fast-lane row has no `fallback_links` for the deep verification job (the full list does not exist yet when it is resolved).
+
+**Media.** One tree, `resources/media/`: `flags/` (the `uk` / `ukr` codes now map to `uk.png`), `overlay_bg.png` (ex `resources/art/background.png`, used by `fetching/providers/general.py`), `dark_bg.png` (ex `resources/lib/icons/`, used by `ui/settings_actions/gemini.py`), `gemini.png` (kept for the Wizard step that copies it into POV's skin media). Deleted: `flags/-.png`, the skin's `icon_cc.png` / `icon_sync.png` / `shadow.png`, `wyzie.png`, `splash.jpg`; `resources/art/`, `resources/lib/icons/` and `resources/lib/media_assets/` are gone. Kept in place: the root `icon.png`, `skins/Default/media/white.png` (Kodi resolves a window's relative textures there).
+
+**Contract.** `golden_expected.json`: 1,414 cases. New: `fast.*` (the policy matrices, FastLane and `run` on a virtual clock, `bridge._provider_callback` with a fake engine, the REAL engine search loop with fake providers, swap rules) and `fast.autosub.*` (`autosub_on_play` end to end with a fake player / search / resolve / apply: the fast lane, the grace, the minimum, the guarded swap and its blocks). `golden_autosub_part.py` runs LAST because it replaces functions of several modules. No earlier record changed.
+
 ## Part 5: Deletion Report
 
 Each phase appends its rows here. A row is an inactive feature, setting or block of code that was **removed**. "Revive" says what bringing it back would take, so the owner can decide. The bypassed upstream features of the Phase 0 merge are listed in `CLAUDE.md` "SKIPPED UPSTREAM FEATURES", not here. Names and paths in the rows are those of the code when it was deleted: `kodi_utils.py` was renamed `sub_utils.py` at the end of Phase 1, and the Telegram files no longer exist.
@@ -1052,4 +1064,13 @@ Measured from the repo, never estimated. Method:
 4. Colours: gold / green / amber / magenta follow the legend; the focused row has the green bar (magenta for the applied one); the buttons' focused text is readable.
 5. Scoring on a real title: two subtitles of the same group at different resolutions now show the SAME `%`; a subtitle of another episode (season packs) drops to a low `%`; the "תזמון" row shows "מאומת" after SubSync has proved a row.
 6. `explain` says "שונה" in red only for a real contradiction (episode, cut, frame rate, source class, group, service); resolution and codec are never shown as a fact.
+
+## Appendix C (Step 8): Kodi checklist for the fast lane and the minimum match (nothing below was tested in Kodi)
+
+1. Start a title whose Wizdom / Ktuvit result is a strong match (90 or more): the log shows `autosub: first subtitle applied after N s (fast lane: ...)` BEFORE the other providers finish, and the subtitle is on screen while the search overlay is still up. Compare with `autosub_fast_apply` off (`full list`).
+2. A 97 from one provider and a 100 from the other within a second: the 100 is applied and no swap follows; a 100 that arrives later than 1 s replaces the 97 once, after the full list.
+3. Set `autosub_min_match_pct` to 98: a 97 is never applied (not by the fast lane, not by the list); with nothing at 98 the overlay says no subtitle reached the minimum; with 0 nothing changes.
+4. Open the chooser right after the fast-lane apply: no swap happens. Pick a subtitle by hand while the search is still running: autosub stands down, one subtitle only.
+5. The Gemini pairing window (`gemini.py`) and the provider search overlay (`general.py`) still draw their dark backgrounds from `resources/media/`; the chooser shows the Ukrainian flag for a Ukrainian row.
+6. Watch for a second `setSubtitles` call right after the first (the swap) and for the first subtitle being replaced by the deep verification's retimed copy: both must leave exactly one subtitle on screen.
 

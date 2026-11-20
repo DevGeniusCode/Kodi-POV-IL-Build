@@ -9,7 +9,7 @@ from resources.lib.core.cache import translation_cache
 from resources.lib.core import kodi, settings
 from resources.lib.core.link_codec import decode_link, encode_link
 from resources.lib.scoring_matching.badges import finalize
-from resources.lib.scoring_matching.ranking import gender_src_rank, is_same_source, is_sdh_ext, lang_display, lang_display_he, match_pct
+from resources.lib.scoring_matching.ranking import gender_src_rank, is_same_source, is_sdh_ext, lang_display, lang_display_he, match_pct, release_similarity
 from resources.lib.ai_translation.policy import embedded_translation_policy
 from resources.lib.ai_translation.source_prep import source_id_for_ai
 from resources.lib.fetching.embedded.extraction import playing_video_url
@@ -40,7 +40,9 @@ def ai_sort_key(S, v):
     # 'en', and 'pt-BR'/'pt-PT' tie-break identically.
     src = (v.get('source_lang') or 'en').strip().lower()[:2]
     g = gender_src_rank(src) if is_emb else 1
-    return (0 if is_emb else 1, g, -pct, src)
+    # Equal pct: the release whose FULL name is closest to the playing file first (Step 8).
+    return (0 if is_emb else 1, g, -pct,
+            -release_similarity(S.video_ref, rel) if rel else 0, src)
 
 
 def ai_variants(S):
