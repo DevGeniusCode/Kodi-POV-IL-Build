@@ -1,3 +1,6 @@
+1.0.41
+- The 11 view-type previews of the lock-view picker (media/viewtypes/*.png, 1280x720 screenshots, 10.3 MB) are recompressed to 256-colour palette PNGs with libimagequant (3.7 MB): same file names, same size, no XML change, so the skin zip is about 6.6 MB smaller and Kodi has less to unpack while it replaces the active skin (the screen is empty until it has).
+
 1.0.40
 - The shift the subtitle add-on applied automatically is shown on the subtitle sync / delay control of the player (window properties subs.sync.offset / subs.sync.mode of service.subtitles.kodipovilai 0.3.105; marker AUTO_SYNC_BADGE_v1): Includes_VideoOsd1.xml above the hover caption while the sync item is hovered, Includes_VideoOsd2.xml under the sync icon, Includes_VideoOsd3.xml above the button row, Includes_VideoOsd4.xml on a second line of the delay button. The value is always its own label (or its own line), never mixed into a Hebrew sentence. Nothing is shown while no automatic sync is active; focus navigation is unchanged. DialogSubtitles.xml is not changed (it is only the fallback now; the chooser has the cancel button).
 
