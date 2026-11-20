@@ -37,7 +37,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `.po` merged into POV's strings table, P3 decisions) are done. Step 2 (Category C: the 17 runtime patchers of Umbrella, Idan
   Plus and AF3, reference Umbrella 6.8.02, Idan Plus 4.0.6, AF3 3.5.2) is applied: Idan Plus (3) and Umbrella (5 of its 10) became
   registry entries, Umbrella's settings are baked into `userdata` (`config_version` 2.0.8), the AF3 search patcher was rewritten
-  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 149 entries (119
+  for AF3 3.5, the AF3 touch-cleanup and autoscroll XML edits became registry entries. The registry stands at 150 entries (120
   POV, 13 Umbrella, 12 Idan Plus, 5 AF3; the QA Phase 4 `pov_curtain_start` + `patches/pov_curtain.py` were removed in Wizard 0.5.5: the black curtain left a black screen on exit). Runtime patchers that remain because the registry cannot express them (they REPLACE
   lines or need function-scoped anchors): `umbrella_tmdb_apikey`, `umbrella_list_order`, `af3_dialog_subtitles`, `af3_home`
   (data seeding, font) and the data copies `umbrella_hebrew_ui`, `umbrella_watch_*` (see "Architectural decision" below). The AF3
@@ -108,6 +108,16 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `art_infodict`: when the title is Hebrew and the only logo is not (`for_ui` returns ''), `clearlogo`, `tvshow.clearlogo` and `povil_logo` are all empty, so every
   skin that shows the title when the clearlogo is empty (FENtastic, NOX, AF3, Estuary, Onyx) shows the Hebrew title. Not covered: the season / episode lists
   (`menus/seasons.py` builds its own art) and POV's own windows (`meta['clearlogo']`). Kodi check: a Hebrew title with an English-only logo shows text in each skin.
+  TorBox first click ends in "No results" (Phase 6, Kodi log of 20 Nov 2026; owner-approved fix, Wizard 0.5.9): POV's `parse_magnet_pack` looks a TorBox transfer up
+  (`mylist?id=`) right after `createtorrent`; TorBox answered that lookup with a 404 or an empty file list, POV took it as final (no wait, no retry), and `play_file`
+  tried the next source until `limit_resolve` (10), then showed "No results" (a retry played). Registry `pov_torbox_wait_for_files` (`append_after` the lookup line,
+  `patches/pov_torbox_wait.py`): up to 4 more lookups 1 s apart, one 8 s budget per playback attempt (the budget restarts after 10 s of silence; state in the
+  Home window property `povil.torbox_wait`), the same request as `torrent_info`, one `[TorBox wait] id=... try=N http=... state=... files=N` line per poll, fail-open
+  (any exception returns POV's own answer). Why TorBox answers that way is NOT proven (read-after-write lag, or the source was not really cached): the log lines
+  decide. Upstream leaves a transfer in the account when the lookup returns an EMPTY list (`if files and torrent_id` is false), unchanged by this patch. Registry: 150 entries (120 POV).
+  Verified in the scratchpad: real `PatchEngine` on a copy of POV 6.11.03 (applies once, second run a no-op, only `torbox_api.py` differs, compiles, no new pyflakes
+  message, disabling it reverts byte for byte), 25 behaviour checks through the engine-patched `parse_magnet_pack` against a fake TorBox, `patches_config.py` 150 / 0,
+  stub import 173 of 174 (only `pov_combined_discover`). Not tested in Kodi.
   Clean reinstall (Phase 6): Maintenance -> "התקנה מחדש של הבילד נקי" (`mode=clean_reinstall`, `provisioning/clean_reinstall.py`; README §3.B): pre-flight
   (manifest + every download answers) before any deletion, keep choices (Account Manager + POV, Umbrella, `profiles.xml`; none pre-selected), two confirmations,
   `install.wipe()` with the keep flags set in memory only, then POV leftovers / stale Addons DB rows / the Wizard's retained pack, settings and `kodipovil.*`

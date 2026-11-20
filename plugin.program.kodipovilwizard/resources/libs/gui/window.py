@@ -406,6 +406,13 @@ def split_notify(notify):
         return False, False
 
 
+def _set_image(control, url):
+    """control.setImage(url) unless url is empty or a bare scheme ('http://' is uservar's "not set"): Kodi would try to fetch it."""
+    url = str(url or '').strip()
+    if url and not url.endswith('://'):
+        control.setImage(url)
+
+
 def show_notification(msg, test=False):
     class Notification(xbmcgui.WindowXMLDialog):
 
@@ -424,7 +431,7 @@ def show_notification(msg, test=False):
             self.show_dialog()
 
         def show_dialog(self):
-            self.getControl(self.image).setImage(CONFIG.BACKGROUND)
+            _set_image(self.getControl(self.image), CONFIG.BACKGROUND)
             self.getControl(self.image).setColorDiffuse('9FFFFFFF')
             msg_text = CONFIG.THEME6.format(self.msg)
             self.getControl(self.textbox).setText(msg_text)
@@ -432,7 +439,7 @@ def show_notification(msg, test=False):
             if CONFIG.HEADERTYPE == 'Text':
                 self.getControl(self.titlebox).setLabel(CONFIG.THEME3.format(CONFIG.HEADERMESSAGE))
             else:
-                self.getControl(self.titleimage).setImage(CONFIG.HEADERIMAGE)
+                _set_image(self.getControl(self.titleimage), CONFIG.HEADERIMAGE)
 
         # def do_remind(self):
             # if not test:
@@ -483,7 +490,7 @@ def show_notification_with_extra_image(msg, image_id, ExtraImageURL):
             self.show_dialog()
 
         def show_dialog(self):
-            self.getControl(self.image).setImage(CONFIG.BACKGROUND)
+            _set_image(self.getControl(self.image), CONFIG.BACKGROUND)
             self.getControl(self.image).setColorDiffuse('9FFFFFFF')
             msg_text = CONFIG.THEME6.format(self.msg)
             self.getControl(self.textbox).setText(msg_text)
@@ -491,8 +498,8 @@ def show_notification_with_extra_image(msg, image_id, ExtraImageURL):
             if CONFIG.HEADERTYPE == 'Text':
                 self.getControl(self.titlebox).setLabel(CONFIG.THEME3.format(CONFIG.HEADERMESSAGE))
             else:
-                self.getControl(self.titleimage).setImage(CONFIG.HEADERIMAGE)
-                self.getControl(self.ExtraImage).setImage(ExtraImageURL)
+                _set_image(self.getControl(self.titleimage), CONFIG.HEADERIMAGE)
+                _set_image(self.getControl(self.ExtraImage), ExtraImageURL)
 
         # def do_remind(self):
             # self.close()

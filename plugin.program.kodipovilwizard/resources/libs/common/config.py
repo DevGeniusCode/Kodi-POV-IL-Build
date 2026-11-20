@@ -133,10 +133,13 @@ class Config:
         self.HEADERTYPE = getattr(uservar, 'HEADERTYPE', 'Text')
         self.FONTHEADER = getattr(uservar, 'FONTHEADER', 'Font14')
         self.HEADERMESSAGE = getattr(uservar, 'HEADERMESSAGE', '')
-        self.HEADERIMAGE = getattr(uservar, 'HEADERIMAGE', '')
+        # A bare 'http://' / 'https://' means "not set" in uservar.py (as for CONTACTICON above). It is not an image: handed to a
+        # control, Kodi tried to fetch it ("CCurlFile::Stat - <http://> Failed").
+        header_image = getattr(uservar, 'HEADERIMAGE', '')
+        self.HEADERIMAGE = self.ADDON_ICON if header_image.endswith('://') else header_image
         self.FONTSETTINGS = getattr(uservar, 'FONTSETTINGS', 'Font13')
         self.BACKGROUND = getattr(uservar, 'BACKGROUND', '')
-        self.BACKGROUND = self.BACKGROUND if not self.BACKGROUND == '' else self.ADDON_FANART
+        self.BACKGROUND = self.BACKGROUND if self.BACKGROUND and not self.BACKGROUND.endswith('://') else self.ADDON_FANART
 
     def init_paths(self):
         # Static variables

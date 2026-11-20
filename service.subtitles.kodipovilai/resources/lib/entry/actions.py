@@ -62,27 +62,13 @@ def handle_he_avail(params):
 def handle_choose_subs(params):
     """Open the subtitle chooser for the player's 'בחר כתוביות' button.
 
-    On FENtastic we open Kodi's NATIVE subtitle window -- that's Tal's own
-    redesigned DialogSubtitles, the real thing, so it stays exactly as he made
-    it. On every OTHER skin (Estuary / Arctic Fuse 3 / ...) the native
-    dialog is plain, so we open our self-contained WindowXMLDialog instead, which
-    brings the same gorgeous look everywhere. Both flows use the same candidate
-    list + background AI translation. Guarded fallbacks at each step."""
-    skin = ''
-    if xbmc is not None:
-        try:
-            skin = (xbmc.getSkinDir() or '').strip()
-        except Exception:
-            skin = ''
-    # FENtastic -> Tal's native window (unchanged).
-    if skin == 'skin.fentastic' and xbmc is not None:
-        try:
-            xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
-            return
-        except Exception as e:
-            safe_log('open SubtitleSearch failed: {0}'.format(e),
-                      level='WARNING')
-    # Other skins -> our rich custom window.
+    Every skin (FENtastic included) gets our self-contained WindowXMLDialog
+    (ui/chooser.py, script.moransubs.chooser.xml + ui/chooser_rows.py): one row
+    per candidate and an info panel with the match breakdown. Kodi's NATIVE
+    subtitle window (the skin's DialogSubtitles) is only the fallback, when the
+    chooser cannot be opened; the chooser's own "Download" button also reaches
+    it on purpose. Both flows use the same candidate list + background AI
+    translation."""
     opened = False
     try:
         from resources.lib.ui import chooser

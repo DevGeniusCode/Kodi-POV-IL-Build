@@ -1440,6 +1440,23 @@ PATCH_CONFIG = [
             )
         )
     },
+    {
+        "id": "pov_torbox_wait_for_files",
+        "name": "TorBox Wait For File List",
+        "description": "TorBox can answer the lookup that follows createtorrent with a 404 or an empty file list; POV takes that as final and the first click ends in No results. Polls the lookup up to 4 times (1 s apart, one 8 s budget per playback attempt) via pov_torbox_wait; fails open to POV's own answer.",
+        "category": "reliability",
+        "priority": "major",
+        "addon_id": "plugin.video.pov",
+        "enabled": True,
+        "target_file": "resources/lib/indexers/torbox_api.py",
+        "marker": "# WIZARD_POV_TB_WAIT_FILES_v1",
+        "anchor": "\t\t\ttorrent_files = self.torrent_info(torrent_id, path)",
+        "action": "append_after",
+        "hook": _build_patch_hook(
+            module_name="pov_torbox_wait",
+            custom_logic="torrent_files = pov_torbox_wait.wait_for_files(self, torrent_id, path, torrent_files)"
+        )
+    },
     # ======================================================================
     # ================= TRAKT RE-AUTH & SHARED HTTP SESSION ================
     # ======================================================================

@@ -1,3 +1,11 @@
+0.5.9
+- POV: the first click on a TorBox source no longer ends in "No results" when TorBox is slow to list a new transfer. POV looks the transfer up right after creating it; TorBox can answer that lookup with a 404 or an empty file list, POV took it as final, deleted the transfer and tried the next source, ten times, until "No results" (a retry then played). New registry entry pov_torbox_wait_for_files (+ patches/pov_torbox_wait.py) asks the lookup again up to 4 times, 1 s apart, within one 8 s budget per playback attempt, and logs `[TorBox wait] id=... try=N http=... state=... files=N` per poll so the next log shows why TorBox answered that way. It falls back to POV's own answer on any failure. The registry stands at 150 entries (120 POV). Not yet confirmed in Kodi.
+
+0.5.8
+- The Wizard's own log file (wizard.log) is written again under Kodi's Hebrew UI: the cleanup-date check used time.strptime, which raised "unknown locale: he-he", so every line was dropped ("could not write the wizard log"). It now uses tools.parse_date (no locale). The log cleanup, which had never been reached, now runs once a day and its due date is kept in memory for the session.
+- Notification windows no longer ask Kodi to fetch "http://": uservar.BACKGROUND = 'http://' (meaning "not set") was passed to an image control (CCurlFile::Stat - <http://> Failed). config.py treats a bare scheme as unset for BACKGROUND and HEADERIMAGE, and gui/window.py sets an image only when the URL is usable.
+- provisioner.py: the comments now say that plugin.video.youtube comes from whichever of Kodi's official repository and repository.povil.upstream has the higher version (no behaviour change).
+
 0.5.7
 - Maintenance menu icons: the round labelled PNGs of resources/media are wired to the menu entries (builds, maintenance, speed test, APK / add-on installers, save data, Trakt / debrid / login, information, settings, and the Wizard title row). All Wizard artwork now lives in resources/media; the unused artwork folder, fonts, PSD and example files were deleted.
 - POV: the Gemini icon of the Account Manager row is copied from the subtitle add-on into POV's media folder at start-up and after a POV update (silent when POV or the subtitle add-on is missing).

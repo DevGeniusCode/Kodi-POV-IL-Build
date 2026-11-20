@@ -370,6 +370,20 @@ def get_date(days=0, formatted=False):
     return value if not formatted else time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(value))
 
 
+def parse_date(text):
+    """'YYYY-MM-DD HH:MM:SS' (local time, the shape get_date(formatted=True) writes) -> epoch seconds.
+
+    time.strptime is NOT used: it reads the C locale, and under Kodi's Hebrew UI that is 'he-he', which Python cannot parse
+    ("unknown locale: he-he"). Raises ValueError for text that is not in that shape."""
+    import time
+
+    match = re.match(r'\s*(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})', str(text))
+    if not match:
+        raise ValueError('not a YYYY-MM-DD HH:MM:SS date: {0!r}'.format(text))
+    year, month, day, hour, minute, second = (int(part) for part in match.groups())
+    return time.mktime((year, month, day, hour, minute, second, 0, 0, -1))
+
+
 def basecode(text, encode=True):
     import base64
     if encode:

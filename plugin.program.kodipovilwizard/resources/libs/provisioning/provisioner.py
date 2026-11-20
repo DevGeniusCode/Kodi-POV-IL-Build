@@ -38,6 +38,10 @@ from resources.libs.skins import skin_catalog
 # Zaxxon709 through our filtered index in repository.povil.upstream; the others come from repository.povil.upstream or Kodi's
 # official repository.
 #
+# plugin.video.youtube is in BOTH: Kodi's official repository and the Umbrella index inside repository.povil.upstream (a copy with an
+# "a" version suffix). Kodi installs the highest version of an id across the repositories, so it comes from whichever is newer; on a
+# device checked on 20 Nov 2026 that was repository.povil.upstream (7.4.4a against Kodi's 7.4.4). The Wizard does not choose.
+#
 # plugin.video.otaku and plugin.video.umbrella are NOT here: they are OPTIONAL, installed on demand from the Wizard's "optional
 # add-ons and skins" screen (addons/otaku.py, addons/umbrella.py). Keeping them out of this list also keeps heal_missing_addons()
 # from putting them back after the user removed them. Their baked settings are still seeded by the config pack.
@@ -45,7 +49,7 @@ PROVISION_IDS = [
     'script.module.acctmgr',            # <- repository.povil.upstream (Zaxxon709, filtered index; its zips stay on their server)
     'plugin.video.pov',                 # <- repository.povil.upstream (kodifitzwell; patched at runtime)
     'plugin.video.idanplus',            # <- repository.povil.upstream (Fishenzon)
-    'plugin.video.youtube',             # <- Kodi official repository
+    'plugin.video.youtube',             # <- the higher version of Kodi's official repository and repository.povil.upstream (Umbrella index copy)
     'resource.language.he_il',          # <- Kodi official repository (Hebrew language pack)
     'script.xbmc.unpausejumpback',      # <- Kodi official repository (unpause jumpback)
 ]

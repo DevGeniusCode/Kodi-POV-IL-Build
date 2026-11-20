@@ -513,7 +513,7 @@ Each patch configuration is declared as a structured Python dictionary within th
 (`patches_config.py`). New patches are appended to the registry; existing patches are never reordered, so branches stay
 diffable. The registry file holds entries only, grouped under large banner comments (one per domain: navigator, MDBList,
 continue watching, parental control, …); `_build_patch_hook`, the shared `_*_HOOK` constants and `validate_registry` live in
-`patches/patches_registry_utils.py`. The registry currently holds 149 entries (119 for `plugin.video.pov`, 13 for
+`patches/patches_registry_utils.py`. The registry currently holds 150 entries (120 for `plugin.video.pov`, 13 for
 `plugin.video.umbrella`, 12 for `plugin.video.idanplus`, 5 for `skin.arctic.fuse.3`).
 
 ```python
@@ -1330,7 +1330,7 @@ reintroduce them or references to them**:
 │       │   ├── {config_apply,fresh_install,provision_progress,patch_engine,downloader,extract,db}.py
 │       │   ├── boot/ provisioning/ build/ skins/ addons/ accounts_auth/ system/ host_repairs/   # domain folders (Phase 1 / 3)
 │       │   ├── common/ gui/                 # CONFIG, logging, router, tools · Wizard menus and windows
-│       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 149 entries) & 43 decoupled logic modules
+│       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 150 entries) & 44 decoupled logic modules
 │       │   └── profiles/                    # the Profiles feature (§9); hooks.py is its only engine‑facing surface (+ build_skin, profile_bootstrap)
 │       ├── skins/Default/1080i/             # Wizard windows: Profiles.xml + shared ChildHome.xml / ProfileLogin.xml templates
 │       └── media/profile-ui/                # Wizard artwork: menu icons, qricon, tonight, kodi_rd_il_icon, skins_bg; profile-ui/ = picker / child‑home / login

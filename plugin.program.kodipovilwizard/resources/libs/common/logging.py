@@ -23,9 +23,11 @@ import xbmcvfs
 
 import os
 import re
-import time
 
-import _strptime
+try:
+    import _strptime  # pre-import (thread race); it raises ValueError("unknown locale: ...") when imported under a broken C locale
+except Exception:
+    pass
 
 from resources.libs.common import tools
 from resources.libs.common.config import CONFIG
@@ -90,8 +92,15 @@ def log(msg, level=xbmc.LOGINFO):
         if lastcheck == 0:
             lastcheck = tools.get_date()
 
-        if getattr(CONFIG, 'CLEANWIZLOG', 'false') == 'true' and time.mktime(time.strptime(lastcheck, "%Y-%m-%d %H:%M:%S")) <= tools.get_date():
-            check_log()
+        # tools.parse_date, not time.strptime: strptime reads the C locale and raises "unknown locale: he-he" under Kodi's
+        # Hebrew UI, which dropped every line of the Wizard's own log.
+        if getattr(CONFIG, 'CLEANWIZLOG', 'false') == 'true':
+            try:
+                due = lastcheck if isinstance(lastcheck, (int, float)) else tools.parse_date(lastcheck)
+            except ValueError:
+                due = 0  # an unreadable stored date: clean now, which stores a new one
+            if due <= tools.get_date():
+                check_log()
 
         line = "[{0}] {1}".format(tools.get_date(formatted=True), msg)
         line = line.rstrip('\r\n') + '\n'
@@ -129,6 +138,7 @@ def check_log():
             start = len(lines) - int(maxlines/2)
             newfile = lines[start:]
             tools.write_to_file(CONFIG.WIZLOG, '\n'.join(newfile))
+    CONFIG.NEXTCLEANDATE = next  # CONFIG reads the setting once at start-up; without this every log() would clean again
     CONFIG.set_setting('nextwizcleandate', next)
 
 
