@@ -18,7 +18,11 @@ PROFILE_PATH = os.path.join(
 
 def check_for_update(skin_id):
     property_version = window.getProperty("%s.installed_version" % skin_id)
-    installed_version = Addon(id=skin_id).getAddonInfo("version")
+    try:
+        installed_version = Addon(id=skin_id).getAddonInfo("version")
+    except RuntimeError:
+        # Kodi is replacing the skin's folder right now ("Unknown addon id"): the next Home load asks again.
+        return
     if not property_version:
         return set_installed_version(skin_id, installed_version)
     if property_version == installed_version:
