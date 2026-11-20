@@ -1,3 +1,11 @@
+0.5.7
+- Maintenance menu icons: the round labelled PNGs of resources/media are wired to the menu entries (builds, maintenance, speed test, APK / add-on installers, save data, Trakt / debrid / login, information, settings, and the Wizard title row). All Wizard artwork now lives in resources/media; the unused artwork folder, fonts, PSD and example files were deleted.
+- POV: the Gemini icon of the Account Manager row is copied from the subtitle add-on into POV's media folder at start-up and after a POV update (silent when POV or the subtitle add-on is missing).
+- The hidden settings storage_low_warned and pov_remember_source are declared (pov_remember_source has a Hebrew label).
+
+0.5.6
+- Start-up update deadlock hardening (found in a Kodi 21.3 log, where Kodi's own repository check updated the Wizard, the subtitle add-on and FENtastic within 20 s of launch and the GUI thread went silent): a GUI watchdog (host_repairs/flow/gui_watchdog.py, reads and logs only), time-limited probes of the GUI-bound calls of the update wait (common/gui_probe.py), the settle wait stands down while Kodi is updating the Wizard itself, and the config pack is deferred to the runner (provisioning/config_retry.py) when updates are in flight at boot. Not yet confirmed in Kodi: the next log shows gui_watchdog and wait_until_settled lines.
+
 0.5.5
 - Removed the POV patch pov_curtain_start and patches/pov_curtain.py (with skin.fentastic 1.0.36 no longer drawing the curtain): the black screen it left on exit was worse than the 1-3 s of Home between POV's windows. The registry stands at 150 entries. A device that already applied the patch keeps the hook in POV's sources.py until POV is updated or reinstalled; the hook is guarded (it logs "Wizard Patch Error [pov_curtain]" at each source search and carries on).
 
