@@ -6,7 +6,8 @@ add-ons (repository.povil) and the third-party content add-ons (repository.povil
 
   * installs   -> Kodi's own InstallAddon(<id>): Kodi resolves the add-on and its whole dependency tree from the repositories
                   (install_native below; a watchdog accepts only the Yes/No prompt that builtin shows);
-  * updates    -> Kodi's native updater (the Wizard only asks it to check at start-up: UpdateAddonRepos);
+  * updates    -> Kodi's native updater, opened by the Wizard for one controlled window (provisioning/update_window.py): the build keeps
+                  general.addonupdates at NOTIFY, so Kodi never replaces add-ons at boot;
   * userdata   -> the Wizard: the versioned config pack (config_apply), merged value by value, never overwriting user settings;
   * patches    -> the PatchEngine (host_repairs), re-applied after any add-on update (host_repairs/flow/addon_update_watch.py).
 
@@ -30,8 +31,8 @@ from resources.libs.common import logging
 from resources.libs.common import tools
 from resources.libs import config_apply
 from resources.libs.provisioning import addon_state
-from resources.libs.provisioning import config_retry
 from resources.libs.provisioning import repo_bootstrap
+from resources.libs.provisioning import update_window
 from resources.libs.skins import skin_catalog
 
 # Third-party content add-ons, provisioned by a fresh install and healed at every start. script.module.acctmgr comes from
@@ -261,7 +262,7 @@ def install_native(ids, per_addon_timeout=240, progress=None, view=None, ticker=
     if not pending:
         return []
 
-    xbmc.executebuiltin('UpdateAddonRepos', True)
+    addon_state.check_repositories(monitor)
     if monitor.waitForAbort(2):
         return pending
 
@@ -287,8 +288,8 @@ def install_native(ids, per_addon_timeout=240, progress=None, view=None, ticker=
 
             landed = _install_one(addon_id, per_addon_timeout, monitor, _wait)
             if not landed and not monitor.abortRequested():
-                xbmc.executebuiltin('UpdateAddonRepos', True)
-                if not monitor.waitForAbort(5):
+                addon_state.check_repositories(monitor, timeout=20)
+                if not monitor.waitForAbort(2):
                     landed = _install_one(addon_id, min(int(per_addon_timeout), 90), monitor, _wait)
             _view(view, 'item_state', addon_id, 'done' if landed else 'failed')
     finally:
@@ -443,53 +444,23 @@ def run_fresh_install(progress=None, view=None):
 def run_update_check(background=True):
     """The start-up pass and the manual "check for updates".
 
-    Makes sure our repositories are installed, asks Kodi to check them (Kodi installs the add-on updates itself), and applies a
-    newer config pack, waiting first for any add-on Kodi is installing or updating (config_apply). Returns True when the check
-    itself could run.
+    Start-up (background=True): only make sure our two repositories are installed. Nothing is installed or applied here: Kodi
+    itself only checks and notifies at boot (general.addonupdates = NOTIFY), and the update window of the host-repair runner
+    (provisioning/update_window.py) installs the updates and applies a newer config pack once the GUI is idle.
 
-    At start-up (background=True) the service never waits for Kodi's installs: when Kodi is downloading or unpacking add-ons
-    (file-based check, no GUI call) the pack is handed to the host-repair runner (config_retry), which applies it once Kodi is
-    quiet. Kodi stops a service it is about to replace and force-kills it after 5 s; see config_retry."""
+    Manual (background=False): ask the runner for a window now; it reports through a notification when it is done. Returns True
+    when the check could be started."""
     dialog = xbmcgui.Dialog()
     logging.log("[Update] check (background={0})".format(background), level=xbmc.LOGINFO)
-    config_retry.clear()
     repo_bootstrap.ensure_repositories()
-    xbmc.executebuiltin('UpdateAddonRepos')
-
-    info = config_apply.load_config_info()
-    if not info:
-        if not background:
-            dialog.ok(CONFIG.ADDONTITLE, "שגיאה בתקשורת מול שרת העדכונים.")
-        return False
-
-    if config_apply.config_pending(info):
-        busy = addon_state.updates_in_flight() if background else []
-        if busy:
-            logging.log("[Update] config {0} deferred: Kodi is downloading / unpacking {1}; the runner applies it when Kodi is "
-                        "quiet".format(info.get('config_version'), busy), level=xbmc.LOGINFO)
-            config_retry.request()
-            return True
-        # Kodi's refresh was just requested: an update of a skin may start within seconds, so wait for it (a grace period).
-        result = config_apply.apply_config_pack(info, fresh=False, background=background, wait_grace=WAIT_GRACE_SECONDS)
-        if result.get('deferred'):
-            logging.log("[Update] config {0} deferred: Kodi is still updating an add-on; {1}".format(
-                info.get('config_version'), 'the runner retries when Kodi is quiet' if background else 'it is retried at the next start'),
-                level=xbmc.LOGWARNING)
-            if background:
-                config_retry.request()
-            else:
-                dialog.ok(CONFIG.ADDONTITLE, "Kodi עדיין מעדכן תוספים. הגדרות הבילד יוחלו בהפעלה הבאה.")
-            return True
-        if result.get('skin_touched'):
-            xbmc.executebuiltin('ReloadSkin()')
-        if not background:
-            dialog.ok(CONFIG.ADDONTITLE, "הגדרות הבילד עודכנו.")
+    if background:
         return True
-
-    if not background:
-        dialog.ok(CONFIG.ADDONTITLE, "הגדרות הבילד מעודכנות. Kodi מעדכן את התוספים אוטומטית ברקע.")
-    return True
-
-
-# How long a config apply waits after UpdateAddonRepos for an announced update to start (config_apply.wait_for_native_updates).
-WAIT_GRACE_SECONDS = 30
+    state = update_window.request_manual()
+    if state == 'queued':
+        dialog.ok(CONFIG.ADDONTITLE, "בדיקת העדכונים התחילה ברקע. תתקבל הודעה בסיומה.")
+        return True
+    if state == 'running':
+        dialog.ok(CONFIG.ADDONTITLE, "עדכון כבר מתבצע ברקע.")
+        return True
+    dialog.ok(CONFIG.ADDONTITLE, "שירות העדכונים אינו פעיל. הפעל מחדש את Kodi ונסה שוב.")
+    return False

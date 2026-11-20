@@ -702,16 +702,16 @@ def pack_target_addon_ids(policy_files, work_dir):
     return sorted(ids)
 
 
-def _native_installs_settled(target_ids, fresh, grace):
+def _native_installs_settled(target_ids, fresh):
     """True when Kodi is not installing / updating any of the target add-ons (waits, bounded). See apply_config_pack."""
     if not target_ids:
         return True
     from resources.libs.provisioning import addon_state
     return addon_state.wait_until_settled(
-        target_ids, timeout=WAIT_TIMEOUT_FRESH if fresh else WAIT_TIMEOUT_UPDATE, grace=0 if fresh else grace)
+        target_ids, timeout=WAIT_TIMEOUT_FRESH if fresh else WAIT_TIMEOUT_UPDATE)
 
 
-def apply_config_pack(info, fresh=False, background=True, progress=None, wait_grace=0):
+def apply_config_pack(info, fresh=False, background=True, progress=None):
     """Download + verify + apply the config pack described by `info` (the parsed config/config.json).
 
     Returns a dict: {'applied': bool, 'skin_touched': bool, 'version': str}.
@@ -727,8 +727,8 @@ def apply_config_pack(info, fresh=False, background=True, progress=None, wait_gr
     Before anything is written the pack WAITS (bounded) for Kodi to finish installing or updating the add-ons whose settings it
     carries: a native install / update replaces the add-on folder and could otherwise reset what was just written. On an
     existing device a wait that times out DEFERS the pack (result['deferred'] = True, nothing written, the version stays
-    unapplied so the next start retries); on a fresh install it proceeds anyway. ``wait_grace`` (seconds) additionally holds
-    the apply back while Kodi announces an update it has not started yet (right after UpdateAddonRepos).
+    unapplied so the next update window retries); on a fresh install it proceeds anyway. The update window
+    (provisioning/update_window.py) applies the pack only after its installs have settled.
     """
     import xbmc
     from resources.libs.common.config import CONFIG
@@ -811,7 +811,7 @@ def apply_config_pack(info, fresh=False, background=True, progress=None, wait_gr
         tools.remove_file(zip_path)
         return result
 
-    if not _native_installs_settled(pack_target_addon_ids(policy_files, work_dir), fresh, wait_grace) and not fresh:
+    if not _native_installs_settled(pack_target_addon_ids(policy_files, work_dir), fresh) and not fresh:
         logging.log('[config_apply] Kodi is still installing / updating an add-on of config {0}; deferred'.format(version),
                     level=xbmc.LOGWARNING)
         result['deferred'] = True

@@ -2,17 +2,18 @@
 
 No installing and no network: Kodi downloads, installs and updates add-ons itself (see provisioning/provisioner.py). Only the
 repository bootstrap (provisioning/repo_bootstrap.py) extracts a zip, and it registers what it extracted through here.
-The functions below were moved from the retired ModularUpdater; tree_stamp / wait_until_settled are new.
+The functions below were moved from the retired ModularUpdater; tree_stamp / wait_until_settled / the repository check are new.
+Nothing here asks the GUI thread anything except has_addon (System.HasAddon).
 """
 import json
 import os
+import re
 import time
 import xml.etree.ElementTree as ET
 
 import xbmc
 
 from resources.libs.common.config import CONFIG
-from resources.libs.common import gui_probe
 from resources.libs.common import logging
 from resources.libs import db
 
@@ -115,46 +116,6 @@ def tree_stamp(addon_id, limit=20000):
 # Kodi is installing / updating something when a package zip or an unpack folder is younger than this (see updates_in_flight).
 UPDATE_QUIET_SECONDS = 15.0
 
-_hung = set()
-
-
-def _gui(name, call, default):
-    """A GUI-bound question with a timeout (common/gui_probe): a GUI that stops answering must never hold the calling thread
-    (a service that cannot return is force-killed by Kodi after 5 s). `default` is the answer when there is none. The first
-    unanswered call of a kind is logged, and so is its recovery."""
-    started = time.monotonic()
-    answered, value = gui_probe.ask(call, key=name)
-    if answered:
-        if name in _hung:
-            _hung.discard(name)
-            logging.log("[AddonState] GUI call '{0}' answers again".format(name), level=xbmc.LOGINFO)
-        elapsed = time.monotonic() - started
-        if elapsed >= 1.0:
-            logging.log("[AddonState] GUI call '{0}' was slow: {1:.1f}s".format(name, elapsed), level=xbmc.LOGINFO)
-        return value
-    if name not in _hung:
-        _hung.add(name)
-        logging.log("[AddonState] GUI call '{0}' did not answer within {1:.1f}s: the GUI looks stalled (taking '{2}')".format(
-            name, time.monotonic() - started, default), level=xbmc.LOGWARNING)
-    return default
-
-
-def install_dialog_active():
-    """Kodi's own modal install progress dialog is up (an InstallAddon / a manual install is running). A GUI that does not answer
-    counts as "up": not settled, try later."""
-    return bool(_gui('install_dialog', lambda: xbmc.getCondVisibility('Window.IsActive(extendedprogressdialog)'), True))
-
-
-def updates_announced():
-    """Kodi knows about add-on updates it has not installed yet (System.AddonUpdateCount; 0 when the label is unknown). A GUI that
-    does not answer counts as "yes": not settled, try later (the caller bounds this with its grace period)."""
-    def count():
-        try:
-            return int(xbmc.getInfoLabel('System.AddonUpdateCount') or 0) > 0
-        except ValueError:
-            return False
-    return bool(_gui('update_count', count, True))
-
 
 def _recent_files(directory, quiet, only_zips):
     found = []
@@ -179,65 +140,97 @@ def updates_in_flight(quiet=UPDATE_QUIET_SECONDS):
     """File-based (NO GUI call) check that Kodi is downloading or unpacking an add-on: what shows it, [] when it is quiet.
 
     Kodi writes `<id>-<version>.zip` into addons/packages while it downloads and unpacks through a GUID folder in addons/temp; a
-    file younger than `quiet` seconds counts. Our own config pack (build_config.zip) is not one. An update Kodi has announced but
-    not started shows nothing here (updates_announced asks for that, through the timeout probe)."""
+    file younger than `quiet` seconds counts. Our own config pack (build_config.zip) is not one. An update Kodi has found but not
+    started shows nothing here: callers give Kodi a grace period after asking it to check (provisioning/update_window.py)."""
     return (['packages/' + n for n in _recent_files(CONFIG.PACKAGES, quiet, True)] +
             ['temp/' + n for n in _recent_files(os.path.join(CONFIG.ADDONS, 'temp'), quiet, False)])
 
 
-def own_update_in_flight(quiet=UPDATE_QUIET_SECONDS):
-    """Kodi is downloading / installing a new version of the Wizard itself (file-based, no GUI call). That update stops the
-    Wizard's service and waits for it, so nothing in the service may wait for the update to finish."""
-    prefix = CONFIG.ADDON_ID + '-'
-    return [n for n in _recent_files(CONFIG.PACKAGES, quiet, True) if n.startswith(prefix)]
-
-
-def _manifest_stamp(addon_id):
-    """(mtime_ns, size) of the add-on's addon.xml (a replaced add-on has a new one); None when absent. Never raises."""
+def versions_snapshot():
+    """{add-on id: version} of every add-on folder under special://home/addons (addon.xml read, 4 KB each). Never raises."""
+    found = {}
     try:
-        st = os.stat(os.path.join(CONFIG.ADDONS, addon_id, 'addon.xml'))
-        return (st.st_mtime_ns, st.st_size)
+        names = os.listdir(CONFIG.ADDONS)
     except OSError:
-        return None
+        return found
+    for name in names:
+        path = os.path.join(CONFIG.ADDONS, name, 'addon.xml')
+        try:
+            with open(path, 'rb') as handle:
+                match = _VERSION_RE.search(handle.read(4096))
+        except OSError:
+            continue
+        found[name] = match.group(1).decode('utf-8', 'replace') if match else ''
+    return found
 
 
-def wait_until_settled(ids, timeout=120.0, quiet=4.0, grace=0.0, sleep=1.0, monitor=None):
-    """Wait until Kodi is not installing or updating any of `ids`. True when settled; False on timeout, when Kodi is closing, or
-    AT ONCE when Kodi is updating the Wizard itself (that update is waiting for the calling service to exit).
+_VERSION_RE = re.compile(br'<addon\b[^>]*?\sversion="([^"]*)"')
 
-    Settled = none of the add-ons' folders changed for `quiet` seconds and no install dialog is up. Within the first `grace`
-    seconds an announced-but-not-started update (updates_announced) also counts as "not settled": right after UpdateAddonRepos
-    an update starts a few seconds later. An add-on that is not on disk is only watched for appearing. Every GUI-bound question
-    goes through a timeout probe (_gui); enter / leave and the reason are logged."""
+
+def wait_until_settled(ids, timeout=120.0, quiet=4.0, sleep=1.0, monitor=None):
+    """Wait until Kodi is not installing or updating any of `ids`. True when settled; False on timeout or when Kodi is closing.
+
+    Settled = none of the add-ons' folders changed for `quiet` seconds and no add-on zip / unpack folder is being written
+    (updates_in_flight). An add-on that is not on disk is only watched for appearing. File-based: it never asks the GUI. Enter /
+    leave and the reason are logged."""
     ids = list(dict.fromkeys(ids))
     if not ids:
         return True
     monitor = monitor or xbmc.Monitor()
     start = last_change = time.monotonic()
-    logging.log("[AddonState] wait_until_settled enter: {0} (timeout {1}s, grace {2}s)".format(ids, int(timeout), int(grace)),
-                level=xbmc.LOGINFO)
+    logging.log("[AddonState] wait_until_settled enter: {0} (timeout {1}s)".format(ids, int(timeout)), level=xbmc.LOGINFO)
 
     def leave(result, why):
         logging.log("[AddonState] wait_until_settled leave: {0} ({1}, {2:.1f}s)".format(
             'settled' if result else 'not settled', why, time.monotonic() - start), level=xbmc.LOGINFO)
         return result
 
-    own = CONFIG.ADDON_ID
-    own_stamp = _manifest_stamp(own)
-    if own_update_in_flight():
-        return leave(False, 'Kodi is updating the Wizard itself')
     previous = {i: tree_stamp(i) for i in ids}
     while time.monotonic() - start < timeout:
         if monitor.waitForAbort(sleep):
             return leave(False, 'Kodi is closing')
-        if _manifest_stamp(own) != own_stamp or own_update_in_flight():
-            return leave(False, 'Kodi is updating the Wizard itself')
         current = {i: tree_stamp(i) for i in ids}
         now = time.monotonic()
-        if current != previous or install_dialog_active():
+        if current != previous or updates_in_flight(quiet):
             last_change, previous = now, current
-        expecting = (now - start) < grace and updates_announced()
-        if now - last_change >= quiet and not expecting:
+        if now - last_change >= quiet:
             return leave(True, 'quiet')
     logging.log("[AddonState] still installing / updating after {0}s: {1}".format(int(timeout), ids), level=xbmc.LOGWARNING)
     return leave(False, 'timeout')
+
+
+# ---- Asking Kodi to check the repositories (never blocks the GUI thread) ----------------------------------------------------
+def repo_check_stamp():
+    """The `lastcheck` column of every repository in Kodi's Addons database, as a tuple (None when the database cannot be read right
+    now: Kodi is writing it). Kodi writes it when a repository check finishes, whether or not anything changed. Read only."""
+    try:
+        from sqlite3 import dbapi2 as database
+        path = os.path.join(CONFIG.DATABASE, db.latest_db('Addons'))
+        connection = database.connect('file:{0}?mode=ro'.format(path.replace('\\', '/')), uri=True, timeout=1.0)
+        try:
+            rows = connection.execute('SELECT addonID, lastcheck FROM repo ORDER BY addonID').fetchall()
+        finally:
+            connection.close()
+        return tuple(rows)
+    except Exception:
+        return None
+
+
+def check_repositories(monitor=None, timeout=30.0):
+    """Post UpdateAddonRepos (a builtin posted without `wait`: the calling thread is never held by the GUI thread) and wait until
+    Kodi has written a new check time for a repository. True when it did. When the database cannot be read the wait is a fixed
+    short pause, and the answer is False. What Kodi does with the updates it finds depends on general.addonupdates (update_mode)."""
+    monitor = monitor or xbmc.Monitor()
+    before = repo_check_stamp()
+    xbmc.executebuiltin('UpdateAddonRepos')
+    if before is None:
+        monitor.waitForAbort(3.0)
+        return False
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if monitor.waitForAbort(1.0):
+            return False
+        now = repo_check_stamp()
+        if now is not None and now != before:
+            return True
+    return False

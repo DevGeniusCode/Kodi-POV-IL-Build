@@ -16,16 +16,17 @@ except ImportError:
     xbmc = None
 
 from resources.libs.host_repairs.flow.af3_steps import _maybe_patch_af3_dialog_subtitles, _maybe_patch_hub_search, _maybe_restore_af3_font_early
-from resources.libs.host_repairs.flow import gui_watchdog
 from resources.libs.host_repairs.flow.addon_update_watch import POLL_SECONDS, AddonUpdateWatch, _busy
 from resources.libs.host_repairs.flow.pov_steps import _maybe_default_pov_autoplay, _maybe_revert_pov_always_resume, _maybe_revert_pov_autoplay
 from resources.libs.host_repairs.flow.skin_steps import _maybe_default_fentastic_player, _maybe_default_nox_poster_rating, _maybe_enable_osd_autoclose
 from resources.libs.host_repairs.flow.startup_pass import _run_build_startup_repairs
 from resources.libs.host_repairs.flow.umbrella_steps import _start_service_mirror_keeper
-from resources.libs.provisioning.config_retry import ConfigRetry
+from resources.libs.provisioning.update_window import RUNNER_LOCK, UpdateWindow
+from resources.libs.common import thread_report
+from resources.libs.common.config import CONFIG
 from resources.libs.system.playlist_timeout import SETTING_ID as PLAYLIST_TIMEOUT_SETTING, PlaylistTimeoutSync
 
-LOCK = 'kodipovil.host_repairs.running'
+LOCK = RUNNER_LOCK     # provisioning/update_window.py reads it too: the Maintenance update check asks this runner for a window
 LOCK_STALE_SECONDS = 120
 LOCK_REFRESH_SECONDS = 30
 
@@ -145,14 +146,16 @@ def _run_build_flow(monitor):
 
 
 def _heartbeat(window, monitor, stop):
-    """Keep the single-runner lock fresh while this script lives, so a second launch can tell a live runner from a dead one."""
+    """Keep the single-runner lock fresh while this script lives, so a second launch can tell a live runner from a dead one. Ends
+    the moment `stop` is set (the lock is cleared right after it, so nothing may write it again)."""
     while not stop.is_set():
         try:
             window.setProperty(LOCK, str(time.monotonic()))
         except Exception:
             pass
-        if monitor.waitForAbort(LOCK_REFRESH_SECONDS) or stop.is_set():
+        if monitor.abortRequested():
             return
+        stop.wait(LOCK_REFRESH_SECONDS)
 
 
 def main():
@@ -169,9 +172,10 @@ def main():
     monitor = xbmc.Monitor()
     stop = threading.Event()
     window.setProperty(LOCK, str(time.monotonic()))
-    threading.Thread(target=_heartbeat, args=(window, monitor, stop), daemon=True).start()
-    # Diagnostics: the log says when the GUI stops answering at start-up (reads and logs only).
-    threading.Thread(target=gui_watchdog.run, args=(monitor,), name='povil_gui_watchdog', daemon=True).start()
+    beat = threading.Thread(target=_heartbeat, args=(window, monitor, stop), name='povil_runner_heartbeat', daemon=True)
+    beat.start()
+    update = UpdateWindow(_busy)
+    hand_over = False
     try:
         # The Wizard setting playlist_timeout -> <playlisttimeout> in advancedsettings.xml (system/playlist_timeout.py). One look now,
         # then every idle tick: it also restores the value after a config pack replaced the file with the baked default.
@@ -183,17 +187,26 @@ def main():
         # Meanwhile an install or update of any patched add-on (POV, Umbrella, Idan Plus, Arctic Fuse 3: Kodi replaces its
         # files and wipes the patches) is repaired within seconds of Kodi finishing unpacking it.
         watch = AddonUpdateWatch()
-        # A config pack the start-up service deferred because Kodi was installing add-ons (provisioning/config_retry.py).
-        config_retry = ConfigRetry(_busy)
         while not monitor.abortRequested():
             if monitor.waitForAbort(POLL_SECONDS):
                 break
             watch.poll(monitor)
             playlist_timeout.poll()
-            config_retry.poll()
+            # The update window (provisioning/update_window.py): the only moment Kodi installs add-on updates. True = Kodi just
+            # replaced the Wizard itself, and this runner (old code) must give way to a new instance.
+            if update.poll(monitor):
+                hand_over = True
+                break
     finally:
+        update.join(3)          # a window that is closing puts Kodi's update mode back
         stop.set()
+        beat.join(2)
         try:
             window.clearProperty(LOCK)
         except Exception:
             pass
+        thread_report.log_stragglers('the host-repair runner')
+    if hand_over:
+        # The lock is free: the new Wizard's runner (it may already have been refused once, while this one held the lock) starts
+        # now and finishes the window: the config pack.
+        xbmc.executebuiltin('RunScript(special://home/addons/{0}/host_repairs_service.py)'.format(CONFIG.ADDON_ID))

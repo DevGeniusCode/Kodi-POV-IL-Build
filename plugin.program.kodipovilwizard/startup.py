@@ -22,6 +22,12 @@ import xbmc
 import os
 import sys
 
+# FIRST, before anything below: Kodi must not be left in "install updates automatically" (a window that did not close). Kodi installs
+# add-on updates only inside the Wizard's update window (provisioning/update_window.py, run by the host-repair runner); at boot it
+# only checks and notifies. This import loads nothing of the Wizard but xbmc.
+from resources.libs.provisioning import update_mode
+update_mode.settle_at_start()
+
 from resources.libs.common.config import CONFIG
 from resources.libs import check
 from resources.libs import db

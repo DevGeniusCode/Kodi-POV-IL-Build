@@ -10,15 +10,15 @@ PatchEngine registry patches (POV, Umbrella, Idan Plus, Arctic Fuse 3) with the 
 
   1. DETECT: one cheap stat per poll, the stamp (version, mtime) of its addon.xml. A first install (None -> stamp) counts.
   2. SETTLE (never patch a half-unpacked add-on): after a change, wait until the add-on's whole folder (file count, bytes, newest
-     mtime) and its addon.xml stay identical for SETTLE_SECONDS in a row AND Kodi's install dialog is not up. If that does not
-     happen within SETTLE_LIMIT_SECONDS the host is left for the next poll; its change is not forgotten.
+     mtime) and its addon.xml stay identical for SETTLE_SECONDS in a row. If that does not happen within SETTLE_LIMIT_SECONDS the
+     host is left for the next poll; its change is not forgotten.
   3. REPAIR under one lock (the repairs are idempotent, additive and marker-fenced): the PatchEngine for that add-on, then its
      runtime patchers. The repairs' own writes (the POV guard rewrites addon.xml) are stamped afterwards, so they never count as
      an update.
 
-Skins are watched too (every skin of skin_catalog). They carry no patch of ours; the repair is skin_gui_guard.recover: Kodi
-unloads the ACTIVE skin to update it, and on 19 Nov 2026 it never loaded it again (frozen GUI). If the GUI has no window some
-seconds after the update settled, ReloadSkin() (and ActivateWindow(home)) are posted. The AF3 repair does the same first.
+Kodi installs updates only inside the Wizard's update window (provisioning/update_window.py); this watcher repairs whatever a window,
+a manual install or a repository install changed. A skin that Kodi updates is Kodi's business: it reloads the skin itself
+(CSkinInfo::OnPostInstall posts ReloadSkin), and a skin without patches of ours needs no repair.
 
 It stands down while the clean reinstall is wiping Kodi, while a fresh install is still provisioning (its finalize step runs the
 whole PatchEngine itself) and, for POV, while POV patching is switched off.
@@ -28,8 +28,6 @@ import re
 import threading
 import time
 
-from resources.libs.common import gui_probe
-from resources.libs.host_repairs.flow import skin_gui_guard
 from resources.libs.host_repairs.flow.pov_steps import _maybe_install_pov_gemini_icon, _skip_pov_patchers
 from resources.libs.host_repairs.flow.startup_pass import _maybe_patch_pov_language_invoker
 
@@ -87,16 +85,6 @@ def _tree_stamp(addon_id):
         return None
 
 
-def _kodi_installing():
-    try:
-        import xbmc
-        # asked with a timeout: while Kodi swaps the active skin the GUI may not answer at all, and the poll loop must survive that
-        answered, value = gui_probe.ask(lambda: xbmc.getCondVisibility('Window.IsActive(extendedprogressdialog)'), key='install_dialog')
-        return bool(value) if answered else False
-    except Exception:
-        return False
-
-
 def _busy():
     """The clean reinstall is wiping Kodi, or a fresh install is provisioning: never patch in the middle of either."""
     try:
@@ -135,7 +123,6 @@ def _repair_idanplus():
 
 
 def _repair_af3():
-    skin_gui_guard.recover('skin.arctic.fuse.3')   # Kodi may have left the GUI without a skin after updating it
     stats = _engine('skin.arctic.fuse.3')
     from resources.libs.host_repairs.flow.af3_steps import (
         _maybe_patch_af3_dialog_subtitles, _maybe_patch_af3_home, _maybe_patch_hub_search)
@@ -161,36 +148,20 @@ HOSTS = (
 )
 
 
-def _skin_guard(skin_id):
-    def repair():
-        return skin_gui_guard.recover(skin_id)
-    return repair
-
-
-def _hosts():
-    """HOSTS plus every other skin of the catalog (their repair is only the GUI guard)."""
-    try:
-        from resources.libs.skins import skin_catalog
-        known = set(host[0] for host in HOSTS)
-        return HOSTS + tuple((sid, _skin_guard(sid), None) for sid in skin_catalog.ids() if sid not in known)
-    except Exception:
-        return HOSTS
-
-
 class AddonUpdateWatch(object):
     def __init__(self):
-        self._hosts = _hosts()
+        self._hosts = HOSTS
         self._seen = {addon_id: _stamp(addon_id) for addon_id, _repair, _skip in self._hosts}
 
     def _settle(self, addon_id, monitor):
-        """Wait until the add-on's folder and addon.xml stop changing and Kodi is not installing. Returns (settled, addon.xml stamp)."""
+        """Wait until the add-on's folder and addon.xml stop changing. Returns (settled, addon.xml stamp)."""
         deadline = time.monotonic() + SETTLE_LIMIT_SECONDS
         last = (_stamp(addon_id), _tree_stamp(addon_id))
         while time.monotonic() < deadline:
             if monitor.waitForAbort(SETTLE_SECONDS):
                 return False, last[0]
             now = (_stamp(addon_id), _tree_stamp(addon_id))
-            if now == last and not _kodi_installing():
+            if now == last:
                 return True, now[0]
             last = now
         return False, last[0]

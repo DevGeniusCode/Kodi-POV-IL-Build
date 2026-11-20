@@ -118,12 +118,15 @@ in the root. `zips/<id>/` and `upstream/<name>/` are folders nobody browses, so 
 
 - **Install:** `provisioning/provisioner.install_native()` calls Kodi's `InstallAddon(<id>)`, which resolves the add-on and its
   whole dependency tree from the repositories. A tiny watchdog accepts only the dependency Yes/No dialog (window 10100).
-- **Update:** Kodi's own updater (`general.addonupdates` is baked to automatic). The Wizard asks it to check at every start
-  (`UpdateAddonRepos`). Kodi never downgrades: to roll back, publish a **higher** version carrying the old code.
+- **Update:** Kodi's own updater installs them, but only inside the Wizard's **update window** (`provisioning/update_window.py`, run
+  by the host-repair runner). The build keeps `general.addonupdates` at **NOTIFY** (`1`; Kodi 21: `0` = install automatically,
+  `1` = notify, `2` = never; baked in `userdata/guisettings.xml`): at boot Kodi checks the repositories and only shows a toast, it
+  installs nothing, so it never replaces the running Wizard, a running service or the active skin while the build starts (the 20 Nov
+  2026 freeze, see "Update window" below). Kodi never downgrades: to roll back, publish a **higher** version carrying the old code.
 - **After an update:** an add-on that Kodi replaced loses its runtime patches. `host_repairs/flow/addon_update_watch.py` watches
-  every add-on the PatchEngine patches (POV, Umbrella, Idan Plus, Arctic Fuse 3): when one is installed or updated it waits until Kodi
-  has finished unpacking it (the add-on's whole folder and `addon.xml` stable, no Kodi install dialog) and re-applies its patches
-  under one lock, within seconds and without a restart (§6). It stands down during a clean reinstall and a fresh install.
+  every add-on the PatchEngine patches (POV, Umbrella, Idan Plus, Arctic Fuse 3): when one is installed or updated it waits until its
+  folder and `addon.xml` are stable and re-applies its patches under one lock, within seconds and without a restart (§6). It stands
+  down during a clean reinstall and a fresh install. A skin Kodi updates is Kodi's business (it posts `ReloadSkin` itself).
 - **Config vs. updates:** before `config_apply` writes settings it waits (bounded) for Kodi to finish installing or updating the
   add-ons whose `addon_data` the pack carries, so an update cannot overwrite what was just written; on an existing device a timeout
   defers the pack to the next start (§4).
@@ -219,8 +222,10 @@ Owner modules (all in `resources/libs/provisioning/`):
 |---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `repo_bootstrap.py` | `ensure_repositories()`: installs / enables `repository.povil` and `repository.povil.upstream` from the site's `-latest.zip` (sha256-checked, only an `<id>/` folder is extracted), then `UpdateLocalAddons` + `UpdateAddonRepos`. The **only** place the Wizard extracts an add-on zip. |
 | `provisioner.py`    | The id lists (`PROVISION_IDS`, `CORE_PROVISION_IDS`, `OWN_PROVISION_IDS`), the `.provisioned` marker, `install_native()`, `provision()`, `run_fresh_install()`, `run_update_check()`, `heal_missing_addons()`. |
-| `addon_state.py`    | `has_addon`, `on_disk`, `enable_addon` (JSON-RPC), `register_and_enable` (Addons DB), `local_version`. No network.                                                |
-| `build_sync.py`     | The start-up pass called by `startup.py`: `run_update_check` then `heal_missing_addons`.                                                                           |
+| `addon_state.py`    | `has_addon`, `on_disk`, `enable_addon` (JSON-RPC), `register_and_enable` (Addons DB), `local_version`, `versions_snapshot`, the file-based settle signals (`tree_stamp`, `updates_in_flight`, `wait_until_settled`) and `check_repositories()` (a non-blocking `UpdateAddonRepos`, then waits for a new `lastcheck` in the Addons DB). No network, nothing asks the GUI but `has_addon`. |
+| `update_mode.py`    | Kodi's `general.addonupdates` through JSON-RPC (`get_mode`, `set_mode`, `ON` / `NOTIFY` / `NEVER`), the "an update window is open" flag, and `settle_at_start()` (the first call of `startup.py`). Imports nothing of the Wizard. |
+| `update_window.py`  | `UpdateWindow` (the runner's idle loop calls `poll()`), `request_manual()` (Maintenance "check for updates"). See "Update window". |
+| `build_sync.py`     | The start-up pass called by `startup.py`: `run_update_check` (repositories only) then `heal_missing_addons`.                                                       |
 
 **`install_native(ids)`** — for each add-on not yet enabled: one that is on disk but disabled is only **enabled** (never
 reinstalled: the "enable loop"); the rest get `InstallAddon(<id>)` and a bounded wait for `System.HasAddon`, with a second attempt
@@ -232,9 +237,41 @@ skin and `PROVISION_IDS`) → `config` (`config_apply.apply_config_pack`, always
 config version applied) → write the `.provisioned` marker. Idempotent: a resumed run only does the missing work. The banner
 phases are `repos / content / config / finalize` (`provision_progress.PHASES`).
 
-**`run_update_check(background)`** — the start-up pass and the manual "check for updates" (`mode=modular_update` /
-`wizardupdate`, Quick Update): bootstrap the repositories if needed, `UpdateAddonRepos`, then apply a newer config pack
-(`config_apply.config_pending`) and `ReloadSkin()` when it touched the active skin. Kodi installs the add-on updates itself.
+**`run_update_check(background)`** — the start-up pass and the manual "check for updates" (`mode=modular_update` / `wizardupdate`,
+Quick Update). Start-up (`background=True`): bootstrap the repositories if needed, nothing else (no check is posted, no pack applied:
+the update window does both). Manual: asks the runner for a window and returns (a Hebrew dialog says "started in the background" /
+"already running" / "the service is not running"); the window ends with a notification.
+
+**Update window** (`provisioning/update_window.py`; 20 Nov 2026 freeze: with automatic installs Kodi's own check, 3 s after launch,
+replaced the running Wizard, a running service and the active skin while a dozen services were starting; stopping a service holds a
+lock the GUI thread takes on every frame, and replacing the active skin needs a blocking round trip to the GUI thread). The runner
+opens a window at the first idle moment 60 s after it starts, every 6 hours after that, and on a manual request:
+
+1. **Gate** (automatic runs only): `Window.IsActive(home) + !Player.HasMedia + !System.HasActiveModalDialog`, asked on the window's own
+   worker thread (a GUI that does not answer can only hold that thread). A busy GUI retries after 2 minutes. `NEVER` (the owner's
+   choice in Maintenance -> Toggle Addon Updates) skips automatic windows. A clean reinstall or a fresh install in progress skips all.
+2. **Open:** `update_mode.set_mode(ON)`, the flag `povil.update_window` (a monotonic stamp, refreshed every 2 s), then a posted
+   `UpdateAddonRepos` (Kodi reads the mode when its repository check job **completes**, so it must be ON until the installs start).
+3. **Settle**, file-based: wait until installs started and nothing was written to `addons/packages` / `addons/temp` for 15 s; when
+   none start, until the check is done (a new `lastcheck` in the Addons DB) plus 12 s, at most 45 s; hard limit 20 minutes.
+4. **Close**, always (`try / finally`): the mode goes back (NOTIFY, or the owner's NEVER), the flag is cleared.
+5. **After:** if the Wizard itself was updated, this runner still runs the old code: it asks the runner to hand over (the runner
+   releases its lock, then starts `host_repairs_service.py` again, and the new instance applies the config pack: flag
+   `povil.update_window.resume`). Otherwise the newer config pack is applied now (`config_apply` waits for the add-ons it writes to),
+   and the active skin is reloaded once if the pack touched it.
+
+**Service shutdown.** After a script's `main` returns, Kodi (`CPythonInvoker::execute`) waits, without a timeout of its own, for
+**every** thread of the script's interpreter, daemon or not; whoever asked the service to stop (Kodi's installer, an exit) is held
+meanwhile and Kodi kills the script after 5 s ("script didn't stop in 5 seconds"). So every long-lived thread must **end** within a
+moment of Kodi's abort request (`monitor.waitForAbort`, never a long `sleep` or a call without a timeout). `common/thread_report.py`
+(the runner, the startup service) and `core/threads.py` of the subtitle add-on log, when a script ends, one WARNING per thread that is
+still alive: its name, whether it is a daemon, and the frames it waits in (`[Threads] ... is still alive, in: ...`).
+
+Crash safety: a JSON-RPC change is not written to `guisettings.xml` at once (Kodi saves settings when it exits), so a crash or a
+force-kill inside a window normally leaves NOTIFY on disk; a clean exit inside a window is repaired by `update_mode.settle_at_start()`,
+the first call of `startup.py` (ON becomes NOTIFY unless a window is open: a Kodi update of the Wizard restarts `startup.py` in the
+middle of one). Residual risk: Kodi's own boot check runs about 3 s after launch, before any service, so an ON that reached the disk
+would still be used once. `update.addon_updates('reset')` (after a wipe) always returns to NOTIFY.
 
 **What the user sees** (`gui/install_progress.py`, skin `DialogInstallProgress.xml`; the same branded panel the old installer had, now
 only a *view*): a header, a one-line **stage** ("מתקין את מאגרי הבילד" → "מתקין תוספים (3/11): POV" → "מחיל את הגדרות הבילד" → "בודק שהכול הותקן" →
@@ -360,16 +397,11 @@ no‑fanart defaults. The fix added it to the policy as:
   in‑memory settings, so `fresh_install.apply_live_defaults()` applies them through JSON‑RPC instead of overwriting the
   file.
 - **Waits for Kodi's installs.** `apply_config_pack` first collects the add-ons whose `addon_data` the pack writes and calls
-  `addon_state.wait_until_settled()`: none of their folders changed for 4 s, Kodi's install dialog is not up, and (right after
-  `UpdateAddonRepos`, `wait_grace` 30 s) `System.AddonUpdateCount` announces nothing pending. Timeouts: 60 s on a fresh install (it
-  proceeds anyway), 120 s on an existing device, where a timeout **defers** the pack (`result['deferred']`, nothing written, the version stays
-  unapplied, the next start retries) so a Kodi update cannot overwrite freshly applied settings.
-  **The start-up service never waits for Kodi's installs** (20 Nov 2026 freeze, see CLAUDE.md "Start-up update deadlock"): at boot
-  `provisioner.run_update_check(background=True)` first looks, file-based and without a GUI call, whether Kodi is downloading /
-  unpacking an add-on (`addon_state.updates_in_flight`: an add-on zip in `addons/packages` or a folder in `addons/temp` younger than
-  15 s). If so, the pack is handed to the host-repair runner (`provisioning/config_retry.py`, marker `userdata/kodipovil.config_retry`;
-  the runner polls it every idle tick and runs the same check when Kodi is quiet). `wait_until_settled` asks the GUI only through
-  `common/gui_probe.ask` (a timeout; a stalled GUI counts as "not settled") and returns at once when Kodi is updating the Wizard itself.
+  `addon_state.wait_until_settled()`: none of their folders changed for 4 s and no add-on zip / unpack folder was written for 15 s
+  (`updates_in_flight`; file-based, no GUI call). Timeouts: 60 s on a fresh install (it proceeds anyway), 120 s on an existing
+  device, where a timeout **defers** the pack (`result['deferred']`, nothing written, the version stays unapplied, the next update
+  window retries) so a Kodi update cannot overwrite freshly applied settings. The pack is applied by the **update window**, after
+  its installs, never at boot.
 - **Retained verified pack.** When `config.json` supplies a sha256 and the pack verifies, `config_apply` keeps a copy in
   the **master** profile (`addon_data/plugin.program.kodipovilwizard/config_pack/build_config.zip` plus a
   `build_config.json` receipt). Secondary profiles are seeded from it through `config_apply.open_verified_pack()`; the
@@ -772,8 +804,8 @@ settings API, accepts Kodi's own retention question with the scoped confirmer, a
 
 **Quick Update** is the user‑facing "fast update" button: a favourite/menu action
 `PlayMedia(plugin://plugin.program.kodipovilwizard/?mode=install&action=quick_update&...)`
-that runs `provisioner.run_update_check()` (repositories installed, `UpdateAddonRepos`, then a newer config pack merged;
-Kodi installs the add-on updates itself). It is **not** a monolithic re‑download.
+that runs `provisioner.run_update_check()` (the manual form: it asks the runner for an update window, see "Update window"; Kodi installs the
+add-on updates itself, a newer config pack is merged after them). It is **not** a monolithic re‑download.
 
 **Force‑close** (`Wizard.force_close_kodi_in_5_seconds(...)`, `build/wizard_actions.py`) is used **only** when
 a critical update genuinely requires a restart (the wizard itself or the active
@@ -1353,7 +1385,7 @@ one or two files. Every new folder lives inside `plugin.program.kodipovilwizard/
 | Folder           | Modules                                                                                    | Responsibility                                                                                                                                                                                |
 |------------------|--------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `boot/`          | `gui_ready`, `notifications`, `build_check`, `maintenance_pass`, `resource_check`, `language_sync` | `startup.py` helpers: wait for video / the Home window / the home rows, start-up notices, the low-memory / big-cache question, APK build registration and the installed-build check, start-up housekeeping, the POV Hebrew strings sync |
-| `provisioning/`  | `banner`, `auto_install`, `provisioner`, `repo_bootstrap`, `addon_state`, `build_sync`, `clean_reinstall`                                         | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, the start-up OTA pass (`run_startup_ota`), and the Maintenance "clean reinstall" (`mode=clean_reinstall`)  |
+| `provisioning/`  | `banner`, `auto_install`, `provisioner`, `repo_bootstrap`, `addon_state`, `update_mode`, `update_window`, `build_sync`, `clean_reinstall`            | Fresh install / resume (`fresh_build_auto_install_if_needed`), its persistent progress banner, the start-up OTA pass (`run_startup_ota`), and the Maintenance "clean reinstall" (`mode=clean_reinstall`)  |
 | `build/`         | `wizard_actions`                                                                           | The `Wizard` class: fresh / normal install, GUI fix, theme, quick update, restart, force-close                                                                                                |
 | `skins/`         | `skin_catalog`, `skin_manager`, `skin_packs`, `switcher`, `af3_tools`, `favourites_sync`, `skin_settings`, `fentastic_manager`, `onyx_home/` (`favourites_row`, `pvr_row`, `hero_details`), `search_provider_picker` | The skin catalog (default skin, on-demand rule, seeding guard), the Skin Manager menu (browse / install / switch), on-demand skins (Estuary / NOX / Onyx / AF3) and their auto-update, the Switch Skin flow, the AF3 tools menu, the favourites rewrite on a switch; `skin_settings`: the `lookandfeel.*` JSON-RPC helpers (`switch_to_skin`, `skin_to_default`, `look_and_feel_data`); `fentastic_manager`: FENtastic helper data / skin XMLs kept across a wipe and the home-widget layout a quick update leaves alone; `onyx_home/`: the Onyx home's favourites / live TV rows and its hero details. |
 | `addons/`        | `umbrella`, `debrid_notice`                                                                                 | Add-on install / management (today Umbrella + CocoScrapers, from their official repositories); the home for all add-on management (POV, Umbrella, Idan Plus, a future POV/Umbrella selector)                                     |

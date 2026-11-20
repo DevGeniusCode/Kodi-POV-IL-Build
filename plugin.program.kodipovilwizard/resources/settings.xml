@@ -38,7 +38,6 @@
         <setting id="default.soundskin" type="text" label="Default lookandfeel.soundskin:" enable="false" default="" visible="false"/>
         <setting id="default.startupwindow" type="text" label="Default lookandfeel.startupwindow:" enable="false" default="" visible="false"/>
         <setting id="default.stereostrength" type="text" label="Default lookandfeel.stereostrength:" enable="false" default="" visible="false"/>
-        <setting id="default.addonupdate" type="text" label="Default general.addonupdate:" enable="false" default="" visible="false"/>
         <!-- Hidden state of the host repairs, moved from the subtitle add-on (Phase 3, step 5). Kodi silently drops an UNDECLARED
              setting, so every key a repair writes through host_repairs/kodi_utils must be declared here. -->
         <setting id="_fen_osd_autoclose_v1" type="text" label="Marker: skin_steps" visible="false" default=""/>

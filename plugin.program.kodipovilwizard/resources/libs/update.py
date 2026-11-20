@@ -21,7 +21,6 @@ import xbmc
 import xbmcgui
 
 import os
-import re
 
 from resources.libs.common.config import CONFIG
 
@@ -38,40 +37,24 @@ def wizard_update():
 
 
 def addon_updates(do=None):
-    setting = '"general.addonupdates"'
+    """'set': Kodi checks for nothing while the Wizard wipes or removes add-ons. 'reset': back to the build's mode (NOTIFY: only the
+    Wizard's update window installs updates, see provisioning/update_mode.py). Never back to "install automatically"."""
+    from resources.libs.provisioning import update_mode
     if do == 'set':
-        query = '{{"jsonrpc":"2.0", "method":"Settings.GetSettingValue","params":{{"setting":{0}}}, "id":1}}'.format(setting)
-        response = xbmc.executeJSONRPC(query)
-        match = re.compile('{"value":(.+?)}').findall(response)
-        if len(match) > 0:
-            default = match[0]
-        else:
-            default = 0
-        CONFIG.set_setting('default.addonupdate', str(default))
-        query = '{{"jsonrpc":"2.0", "method":"Settings.SetSettingValue","params":{{"setting":{0},"value":{1}}}, "id":1}}'.format(setting, '2')
-        response = xbmc.executeJSONRPC(query)
+        update_mode.set_mode(update_mode.NEVER)
     elif do == 'reset':
-        try:
-            value = int(float(CONFIG.get_setting('default.addonupdate')))
-        except:
-            value = 0
-        if value not in [0, 1, 2]:
-            value = 0
-        query = '{{"jsonrpc":"2.0", "method":"Settings.SetSettingValue","params":{{"setting":{0},"value":{1}}}, "id":1}}'.format(setting, value)
-        response = xbmc.executeJSONRPC(query)
-        
-        
+        update_mode.set_mode(update_mode.NOTIFY)
+
+
 def toggle_addon_updates():
+    """Maintenance -> Toggle Addon Updates: the Wizard's update window (NOTIFY), or no update check at all (NEVER)."""
     from resources.libs.common import logging
-    
-    setting = '"general.addonupdates"'
-    selected = 0
-    options = ['Install updates automatically', 'Notify, but don\'t install updates', 'Never check for updates']
-    set_query = '{{"jsonrpc":"2.0", "method":"Settings.SetSettingValue","params":{{"setting":"general.addonupdates","value":{0}}}, "id":1}}'
-    
-    dialog = xbmcgui.Dialog()
-    
-    selected = dialog.select(CONFIG.ADDONTITLE, options)
-            
-    logging.log_notify(CONFIG.ADDONTITLE, 'Updates changed to "{0}"'.format(options[selected]))
-    xbmc.executeJSONRPC(set_query.format(selected))
+    from resources.libs.provisioning import update_mode
+
+    options = [('Wizard updates (recommended)', update_mode.NOTIFY), ('Never check for updates', update_mode.NEVER)]
+    selected = xbmcgui.Dialog().select(CONFIG.ADDONTITLE, [name for name, _value in options])
+    if selected < 0:
+        return
+    name, value = options[selected]
+    update_mode.set_mode(value)
+    logging.log_notify(CONFIG.ADDONTITLE, 'Updates changed to "{0}"'.format(name))

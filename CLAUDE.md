@@ -157,7 +157,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   set_stage` (every call guarded, a window that cannot load returns `None`). Kodi's `InstallAddon` builtin is MODAL and shows its own Yes/No
   ("install X?") and progress dialogs, which sit on top; the confirmer accepts window 10100 only. Progress phases are `repos / content / config /
   finalize`. Phase 7 step 4 (done): `addon_update_watch` covers POV, Umbrella, Idan Plus and Arctic Fuse 3 (detect by `addon.xml` stamp, settle =
-  whole folder + `addon.xml` stable and no Kodi install dialog, repair under one lock, ReloadSkin for an active AF3; stands down during a clean
+  whole folder + `addon.xml` stable (the install-dialog condition was dropped in the 20 Nov update-window change), repair under one lock, ReloadSkin for an active AF3; stands down during a clean
   reinstall and a fresh install); `config_apply` waits for Kodi's installs of the add-ons it writes to (`addon_state.wait_until_settled`; a timeout
   defers the pack on an existing device); baked `userdata/sources.xml` now holds one source, our Pages URL; `config_version` 2.0.13;
   `skin_catalog.Skin.floor` removed (`source` is now `povil` / `upstream`). NOT tested in Kodi: native `InstallAddon` right after the bootstrap (the
@@ -167,22 +167,33 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `pov_combined_discover`), pyflakes (one old message), 76 behaviour checks (bootstrap, provisioner, window plan, settle-wait, config deferral,
   update watcher) against a local copy of the generated site.
 
-- **START-UP UPDATE DEADLOCK (20 Nov 2026, owner-approved Steps A, B, D; found in a Windows log, Kodi 21.3):** Kodi's own repository check updated the
-  Wizard, the subtitle add-on and FENtastic within 20 s of launch; the GUI thread went silent (last line: a toast `Window Init`, no `Deinit`), both services
-  needed Kodi's 5 s force-kill ("script didn't stop in 5 seconds"), the restarted Wizard hung in its first `getCondVisibility`, and the skin install never
-  unpacked. The lock that the GUI thread waited on is NOT proven (inference: a lock-order deadlock between Kodi's update job and GUI-bound calls from our
-  service threads). Changes: (A) `host_repairs/flow/gui_watchdog.py` (the runner starts it: every 2 s a timeout probe of the GUI, a log line on every change
-  ok / none / hung for the first 120 s, longer while hung; reads and logs only), `addon_state.wait_until_settled` logs enter / leave with the reason and every
-  GUI-bound call that did not answer, the subtitle service's six worker threads are named `subs-*`. (B) `common/gui_probe.ask(call, timeout, key)` (a daemon
-  thread with a timeout, single-flight per key; it replaces `skin_gui_guard.ask`) wraps `install_dialog_active` / `updates_announced` (no answer = "not
-  settled"); `wait_until_settled` returns False at once when Kodi is updating the Wizard itself (a fresh `<wizard id>-*.zip` in `addons/packages` or its
-  `addon.xml` changed: that update waits for the service to exit); at boot `run_update_check` defers the config pack when `addon_state.updates_in_flight()`
-  (file-based) and hands it to the runner (`provisioning/config_retry.py`, `ConfigRetry.poll()` in the runner's idle loop). The manual check keeps the inline wait.
-  (D, own bug fix) `subtitle_trans_cache` declares `<step>1</step>` / `<maximum>1000</maximum>` (an integer without a maximum made Kodi reject the stored value:
-  "failed to load value 15"; the reading of Kodi's validation is from memory, unverified). Verified: pyflakes clean, 36 behaviour checks (probe, file checks,
-  stalled-GUI wait, deferral and hand-off, watchdog), 176 of 177 Wizard modules import, `check_subs_contract.py` 60 / 60. NOT tested in Kodi: whether the
-  freeze is gone; the next log shows `gui_watchdog:` lines and `[AddonState] wait_until_settled` lines. The first call of the start-up pass that is still
-  GUI-bound and unprotected is `addon_state.has_addon` (`System.HasAddon`; `heal_missing_addons`, the Wizard's own checks) and `gui_ready.wait_for_gui_ready`.
+- **START-UP UPDATE DEADLOCK: ONE UPDATE WINDOW (20 Nov 2026, owner-approved; found in a Windows log, Kodi 21.3; SUPERSEDES the first attempt Steps A / B, whose
+  `gui_probe`, `gui_watchdog`, `skin_gui_guard`, `config_retry` and the GUI-bound settle helpers are DELETED).** Cause (log forensics + Kodi Omega source): with
+  `general.addonupdates` = install automatically, Kodi's own repository check, 3 s after launch, replaced the running Wizard, a running service and the ACTIVE skin
+  while a dozen services started. Stopping a service holds `CScriptInvocationManager::m_critSection` (the GUI thread takes it every frame) for up to 5 s, and
+  `CSkinInfo::OnPreInstall` of the active skin does a BLOCKING `SendMsg(UnloadSkin)` to the GUI thread: the GUI wedged for good (which GUI call it was stuck in
+  is NOT proven: only a process dump of a frozen Kodi can say). The old watchdog could not see it (`getCurrentWindowId` takes only the gfx lock; `getCondVisibility`
+  also takes `m_frameMoveGuard`). New design: the build bakes `general.addonupdates` = **1 (NOTIFY)** (Kodi 21: 0 = ON, 1 = NOTIFY, 2 = NEVER; `userdata/guisettings.xml`,
+  `config_version` 2.0.19), so at boot Kodi checks and only shows a toast; `provisioning/update_window.py` (run by the host-repair runner's idle loop) is the ONLY
+  place updates are installed: gate (Home active, nothing playing, no modal; automatic runs only), mode ON + posted `UpdateAddonRepos`, file-based settle
+  (`addon_state.updates_in_flight`), mode back in a `finally`, then the config pack. Opens 60 s after the runner starts, every 6 h, and on the Maintenance manual
+  check (`provisioner.run_update_check(background=False)` only requests it); `run_update_check(background=True)` (boot) only ensures the repositories. NEVER (Maintenance ->
+  Toggle Addon Updates, now NOTIFY / NEVER only) is respected by automatic windows. `provisioning/update_mode.py` (stdlib + xbmc) holds the mode helpers and the window
+  flag; `update_mode.settle_at_start()` is the FIRST call of `startup.py` (ON -> NOTIFY unless a window is open). A Wizard self-update inside a window: the old runner
+  (old code) restores the mode, raises `povil.update_window.resume`, releases the single-runner lock (the heartbeat is joined first) and relaunches
+  `host_repairs_service.py`; the new instance applies the config pack. Also: `addon_state.check_repositories()` replaces the two blocking `UpdateAddonRepos, True` in
+  `provisioner` (non-blocking post, then polls the Addons DB `lastcheck`); `update.addon_updates('set' / 'reset')` = NEVER / NOTIFY (never ON). KEPT from the first
+  attempt: `addon_state.wait_until_settled` (file-based part, no `grace`), `updates_in_flight` / `_recent_files` (the settle signal; NOT deleted as the plan listed, the
+  window needs them), `addon_update_watch` (patch repair only; no skin branch, no GUI question). Thread rule (Kodi's `CPythonInvoker::execute` waits for EVERY thread of a
+  script's interpreter, daemon or not, with no timeout of its own; the 5 s kill ends it): every long-lived thread must END within about a second of the abort request;
+  `common/thread_report.log_stragglers` (runner, startup service) and the subtitle add-on's `core/threads.log_survivors` log each survivor with its name and frames.
+  Verified: 60 stub behaviour checks (window gate / settle / crash / NEVER / manual / abort / Kodi rejecting ON / GUI hang / self-update hand-over, runner lock and
+  relaunch order, addon_state on real files and a real sqlite DB, provisioner, `update.py`, `startup.py` order), 176 of 177 Wizard modules import (only
+  `pov_combined_discover`), no new pyflakes message, `check_subs_contract.py` 61 / 61 (159 of 159 modules; golden scenario `entry_service_main_abort` added),
+  `gen_repo.py` OK (config 2.0.19 carries the NOTIFY value), repo-wide grep clean. NOT tested in Kodi. Unproven / residual: Kodi's own boot check runs before any
+  service, so an ON that reached `guisettings.xml` would still be used once (a JSON-RPC change is saved when Kodi exits, so a crash normally leaves NOTIFY); the straggler
+  thread 48264 of the subtitle service (it held the stop for 5 s) was not identified (no non-daemon thread starts at boot; likely a thread inside a blocking call): the next
+  log names it. Versions were not bumped (Kodi updates an add-on only when its version rises).
 - **SUBTITLE PHASE 0 COMPLETE (19 Nov 2026; owner decision: decouple from MoranSubs).** The last upstream merge (`update-migration`
   @ `96efe59a`, 36 commits since `77880b8`) was resolved and the add-on is now ours (rule "SUBTITLE ADD-ON: DECOUPLED" below). Taken:
   MoranSubs 0.3.75 -> 0.3.96 core (translate / subsync / sync_align / embedded_extract + new `embedded_mp4.py`, `gp_later.py`, gender
@@ -360,6 +371,9 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   sha256 check) and never `<import>`s `repository.povil`. NO third-party code or zip is stored in this repository or on our site (use
   `FILTERED_UPSTREAMS` for an index that carries ids of ours). A new third-party add-on = a `<dir>` there + `check_upstreams.REQUIRED`.
   Versions only go up and stay purely numeric (Kodi never downgrades). `gen_repo.py` / `check_upstreams.py` enforce most of this.
+- **ADD-ON UPDATES ONLY IN THE UPDATE WINDOW (20 Nov 2026):** `general.addonupdates` stays NOTIFY (`1`); only `provisioning/update_window.py` may set it to ON, and always
+  inside a `try / finally` that puts it back. No code may post a blocking builtin (`executebuiltin(..., True)`) for `UpdateAddonRepos`, wait on Kodi's installs from a
+  service, or ask the GUI thread from a poll loop without being able to leave. A long-lived thread of a build script ends within about a second of Kodi's abort request.
 - **NO SHIMS (clean-install build):** move the code, update every import / caller to the new path, delete the old one.
 - **NO EMPTY `__init__.py` IN SUBFOLDERS:** folders under `resources/libs/` are Python 3 namespace packages
   (`xbmc.python` 3.0.0). Keep only `resources/__init__.py`, `resources/libs/__init__.py` and the pre-existing ones in
@@ -418,7 +432,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   cross-module API scan (names exist, signatures fit); repo-wide grep of callers (skins, `userdata/`, other add-ons) for old
   paths and strings; behavior tests under the stubs for any new code. Compare each against the snapshot. Baselines: Wizard
   176 of 177 `resources/` modules import (Phase 7 stub harness, counted again 20 Nov 2026) (only `patches/pov_combined_discover`, needs POV's `indexers`); subtitle add-on: with
-  `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, every module imports (the Telegram source was deleted, so `telegram_impl` no longer fails): 158 of 158 after Subtitle Step 10 (`fetching/season_pack.py`, `fetching/standalone_ids.py`), 154 of 154 modules after Subtitle Step 8 (`autosub/fast_lane.py`), 153 of 153 after Subtitle Step 6 (`ui/chooser_rows.py`), 152 of 152 after Subtitle Phase 4 (140 of 140 modules with the Subtitle Phase 3 harness, also run by `.github/scripts/check_subs_contract.py`; 138 of 138 before Phase 3 added `core/addon.py` and `core/cache/profile_dir.py`; 72 of 72 before the Phase 2 split, `requests` stubbed too, one fresh `python -I` per module, `service` counted as importing when it starts its main loop).
+  `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, every module imports (the Telegram source was deleted, so `telegram_impl` no longer fails): 159 of 159 after the update-window change (`core/threads.py`), 158 of 158 after Subtitle Step 10 (`fetching/season_pack.py`, `fetching/standalone_ids.py`), 154 of 154 modules after Subtitle Step 8 (`autosub/fast_lane.py`), 153 of 153 after Subtitle Step 6 (`ui/chooser_rows.py`), 152 of 152 after Subtitle Phase 4 (140 of 140 modules with the Subtitle Phase 3 harness, also run by `.github/scripts/check_subs_contract.py`; 138 of 138 before Phase 3 added `core/addon.py` and `core/cache/profile_dir.py`; 72 of 72 before the Phase 2 split, `requests` stubbed too, one fresh `python -I` per module, `service` counted as importing when it starts its main loop).
 - **WORKFLOW:** stop after each step; the user reviews and commits. No version bump or changelog per step.
 - **LINE ENDINGS:** sources and docs use CRLF (a file that is LF stays LF).
 - **Output Mirroring:** For every single response you generate in this project, you MUST automatically write your full, exact textual response into a file named `output.txt` in the root directory. Overwrite the file completely each time (do not append).

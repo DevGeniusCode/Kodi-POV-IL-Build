@@ -54,6 +54,9 @@ def start_guard():
         service = _load('profile_service')
         if service is not None:
             service.run()
+        # The last thread of the startup service: name what could still keep Kodi's stop waiting (common/thread_report.py).
+        from resources.libs.common import thread_report
+        thread_report.log_stragglers('the startup service')
     try:
         threading.Thread(target=run, name='POVILProfileGuard').start()
     except Exception as exc:
