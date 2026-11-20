@@ -29,7 +29,7 @@ class SearchState(object):
         # first set in the stage "ai_prep"
         'embedded_foreign',
         # first set in the stage "pool"
-        'pool_variants', 'video_ref',
+        'pool_variants', 'video_ref', 'video_ep',
         # first set in the stage "ai_variants"
         'ai_translation_on', 'ai_variants',
         # first set in the stage "ai_entries"

@@ -60,7 +60,7 @@ def _picker(i):
     seen = []
     name = 'match_pct'
     real = _swap_name(name, None, None)         # the scorer as it is now (it may be imported by name in several modules)
-    _swap_name(name, real, lambda a, b: (seen.append(a), 0)[1])
+    _swap_name(name, real, lambda a, b, c='': (seen.append(a), 0)[1])
     _SETTINGS.clear()
     _PROPS.clear()
     _streams.enabled = lambda: False

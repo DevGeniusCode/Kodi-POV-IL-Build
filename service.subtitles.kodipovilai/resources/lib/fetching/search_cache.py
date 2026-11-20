@@ -3,6 +3,7 @@
 # The provider search caches: the 24 h result cache on disk and the short "recent search"
 # window property.
 
+import glob
 import json
 import hashlib
 import os
@@ -130,13 +131,39 @@ def _cache_dir():
     return profile_subdir('engine_cache')
 
 
-def cache_get(info, variant=''):
+def _release_file(key, info):
+    """File stem of the 24 h list of this media AND this playing release. The match % of every row was computed against
+    the release that played when the list was searched; a list kept for the media alone showed that old % beside a panel
+    scored live against the CURRENT release (a 15 % row whose every attribute matched, field of 20 Nov 2026). The 2-minute
+    window (recent_put) already keyed on the release; the disk list now does too."""
+    return '{0}_r{1}'.format(key, _release_key(info))
+
+
+def _newest_release_file(d, key):
+    """The newest list of this media for ANY release (the gender reference reads other languages, not a %), or None."""
+    try:
+        found = glob.glob(os.path.join(d, glob.escape(key) + '_r' + '[0-9a-f]' * 16 + '.json'))
+        return max(found, key=os.path.getmtime) if found else None
+    except Exception:
+        return None
+
+
+def cache_get(info, variant='', any_release=False):
+    """The kept list for this media and playing release (`variant` lists, like the SubSync timing set, are keyed by media
+    alone: they carry no %). `any_release`: the newest list of the media whatever release it was scored against."""
     key = _cache_key(info)
     d = _cache_dir()
     if not key or not d:
         return None
     suffix = ('.' + variant) if variant else ''
-    p = os.path.join(d, key + suffix + '.json')
+    if variant:
+        p = os.path.join(d, key + suffix + '.json')
+    elif any_release:
+        p = _newest_release_file(d, key)
+        if not p:
+            return None
+    else:
+        p = os.path.join(d, _release_file(key, info) + '.json')
     try:
         if not os.path.isfile(p):
             return None
@@ -154,7 +181,7 @@ def cache_put(info, candidates, variant=''):
     if not key or not d:
         return
     suffix = ('.' + variant) if variant else ''
-    p = os.path.join(d, key + suffix + '.json')
+    p = os.path.join(d, (key + suffix) if variant else _release_file(key, info)) + '.json'
     try:
         tmp = p + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:

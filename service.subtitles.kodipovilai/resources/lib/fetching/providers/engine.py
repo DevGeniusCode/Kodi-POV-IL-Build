@@ -161,12 +161,19 @@ def sort_subtitles(f_result,video_data,silent=False):
         ################### Calculate Sync Percentage #################################################
         if _release_match is not None:
             # Structured scorer on the raw strings (also avoids the legacy
-            # path's cross-iteration array mutation).
+            # path's cross-iteration array mutation). A playing name with no
+            # SxxEyy of its own (a bare "S01") takes Kodi's season / episode.
             percent = max(
-                _release_match.match_pct(video_data['file_original_path'],
-                                         json_value['filename']),
-                _release_match.match_pct(video_data['Tagline'],
-                                         json_value['filename']))
+                _release_match.match_pct_ep(
+                    video_data['file_original_path'], json_value['filename'],
+                    _release_match.fallback_episode(
+                        video_data['file_original_path'],
+                        video_data.get('season'), video_data.get('episode'))),
+                _release_match.match_pct_ep(
+                    video_data['Tagline'], json_value['filename'],
+                    _release_match.fallback_episode(
+                        video_data['Tagline'],
+                        video_data.get('season'), video_data.get('episode'))))
         else:
             # Clean subtitle name
             subtitle_name_array = clean_string_and_create_array(json_value['filename'])

@@ -19,6 +19,7 @@ import re
 from resources.lib.core.link_codec import decode_link_safe
 from resources.lib.scoring_matching import provenance as scoring_matching_provenance
 from resources.lib.scoring_matching import release as scoring_matching_release
+from resources.lib.sync.align.common import SCALE_MAX, SCALE_MIN
 
 # ---- language flags (images render on every skin) -----------------------------------------------------------------
 # resources/media/flags, 32x32 PNGs (resources/lib/ui/chooser_rows.py -> three dirnames up is resources/).
@@ -312,21 +313,29 @@ def _fact(key, a, b, state):
 # `want` words (the manual query) match a whole token too (every part of a compound one). Pure string work; the
 # highlight never changes a number.
 #
-# RED (conflict) tokens: a WHOLE token of the subtitle's release that says the subtitle was made for ANOTHER timeline than
-# the playing file (conflict_mask): a pre-retail capture against a retail file (CAM / TS / SCREENER ... vs WEB-DL / WEBRip /
-# BluRay / DVDRip, both ways), bonus content the playing file is not (Trailer, Making.Of, Sample ...), another cut or edition
-# (Extended, Director's.Cut, Unrated ...; an untagged file counts as the theatrical cut), a broadcast capture against a WEB /
-# BluRay file (HDTV / PDTV / SDTV / PAL / NTSC, both ways; PAL against NTSC), another frame rate (25fps vs 23.976fps; PAL is
-# 25), another streaming service (NF vs AMZN ...) and another episode (S01E02 vs S01E01; S01E01E02 vs S01E01). A token is red
-# only when the playing release says something ELSE on the same point; a point the playing release does not mention is
-# never a conflict (bonus content and a special cut excepted: their absence is the statement). WEB against BluRay is NOT
-# red (the match % already says "source mismatch"). Display only, like the green: no number moves.
+# Two kinds of CONFLICT tokens: a WHOLE token of the subtitle's release that says the subtitle was made for ANOTHER timeline
+# than the playing file. A token is painted only when the playing release says something ELSE on the same point; a point the
+# playing release does not mention is never a conflict (bonus content and a special cut excepted: their absence is the
+# statement). WEB against BluRay is NOT painted (the match % already says "source mismatch"). Display only, like the green:
+# no number moves.
+#  - RED (conflict_mask): SubSync cannot be expected to fix it. A pre-retail capture against a retail file (CAM / TS /
+#    SCREENER ... vs WEB-DL / WEBRip / BluRay / DVDRip, both ways), bonus content the playing file is not (Trailer, Making.Of,
+#    Sample ...), another cut or edition (Extended, Director's.Cut, Unrated ...; an untagged file counts as the theatrical
+#    cut), another episode (S01E02 vs S01E01; S01E01E02 vs S01E01) and a frame rate whose ratio is outside the scale window
+#    of sync/align (25fps vs 30fps / 29.97fps: ratio 1.2 > SCALE_MAX).
+#  - ORANGE = AMBER (fixable_mask): a conflict SubSync CAN typically fix against a timing reference (the audit of sync/ in
+#    README 5.9): another streaming service (NF vs AMZN ...: another master, a constant offset or a few short steps), a
+#    broadcast capture against a WEB / BluRay file (HDTV / PDTV / SDTV / PAL / NTSC, both ways; PAL against NTSC: ad-break
+#    bumpers are piecewise steps, PAL's 25 fps is a clock ratio of the scale grid) and another frame rate inside the scale
+#    window (25fps vs 23.976fps / 24fps; PAL is 25). Typically, not always: the window gives no proof.
+# A token that clashes on a red AND an orange point is red.
 _SEP = r'[ ._-]?'
 _WORD_RE = re.compile(r'[A-Za-z0-9]+')
 _TOKEN_PATTERNS = (
     ('res', re.compile(r'(?<![a-z0-9])(?:4320p|2160p|1440p|1080[pi]|720p|576p|480p|4k|uhd)(?![a-z0-9])', re.I)),
     ('src', re.compile(r'(?<![a-z0-9])(?:hdcam|camrip|cam|hdts|telesync|ts|telecine|tc|dvd' + _SEP + r'scr(?:eener)?|screener|scr|r5|'
-                       r'workprint|web' + _SEP + r'dl|web' + _SEP + r'rip|webdl|webrip|web|blu' + _SEP + r'ray|bdrip|brrip|'
+                       r'workprint|web' + _SEP + r'mux(?:ed)?|web' + _SEP + r'dl|web' + _SEP + r'rip|webdl|webrip|web|'
+                       r'(?:bd|blu' + _SEP + r'ray|dvd)' + _SEP + r'remux|blu' + _SEP + r'ray|bdrip|brrip|'
                        r'remux|hdtv|pdtv|sdtv|dvd' + _SEP + r'rip|dvdr|hdrip)(?![a-z0-9])', re.I)),
     ('hdr', re.compile(r'(?<![a-z0-9])(?:hdr10\+|hdr10plus|hdr10|hdr|dolby' + _SEP + r'vision|dovi|dv|hlg|sdr)(?![a-z0-9+])', re.I)),
     ('codec', re.compile(r'(?<![a-z0-9])(?:x265|h' + _SEP + r'265|hevc|x264|h' + _SEP + r'264|avc|av1|xvid|vp9)(?![a-z0-9])', re.I)),
@@ -361,6 +370,10 @@ def _token_canon(cat, text):
     if cat == 'src':
         if key in ('bluray', 'bdrip', 'brrip'):
             return 'bluray'
+        if key in ('bdremux', 'blurayremux'):
+            return 'remux'
+        if key in ('webmux', 'webmuxed'):
+            return 'webmux'    # ONE tag (scoring_matching.release reads it as source class web): never a green 'WEB' inside it
         if key in ('dvdrip', 'dvdr'):
             return 'dvd'
         return 'dvdscr' if key == 'dvdscreener' else key
@@ -481,9 +494,9 @@ def shared_mask(release, playing, want=None):
 # the conflict facets of one token: (facet, class). Two tokens conflict when they carry the same facet with another class.
 _PRE_RETAIL = frozenset({'cam', 'hdcam', 'camrip', 'ts', 'hdts', 'telesync', 'tc', 'telecine', 'scr', 'screener', 'dvdscr',
                          'r5', 'workprint'})
-_RETAIL = frozenset({'webdl', 'webrip', 'web', 'bluray', 'remux', 'dvd'})
+_RETAIL = frozenset({'webdl', 'webrip', 'webmux', 'web', 'bluray', 'remux', 'dvd', 'dvdremux'})
 _BROADCAST = frozenset({'hdtv', 'pdtv', 'sdtv'})
-_WEB_DISC = frozenset({'webdl', 'webrip', 'web', 'bluray', 'remux'})
+_WEB_DISC = frozenset({'webdl', 'webrip', 'webmux', 'web', 'bluray', 'remux'})
 
 
 def _facets_of(cat, val):
@@ -518,49 +531,95 @@ def _clashes(facet, cls, playing):
     return bool(have)
 
 
+# the facets SubSync can typically fix (see the header): another master (service), a broadcast capture (ad-break steps,
+# PAL's clock) and a frame rate inside the scale window
+_FIXABLE_FACETS = frozenset({'service', 'broadcast', 'tvstd'})
+
+
+def _fps_fixable(cls, have):
+    """True when the subtitle's frame rate `cls` is within the scale window of sync/align (SCALE_MIN..SCALE_MAX, the
+    clock ratios 23.976 / 24 / 25 / 29.97 / 30 and the drift estimators) of EVERY frame rate the playing file names."""
+    try:
+        return all(SCALE_MIN <= float(cls) / float(h) <= SCALE_MAX for h in have)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return False
+
+
+def _clash_level(facet, cls, playing):
+    """None (no conflict), AMBER (a conflict SubSync can typically fix) or RED for one facet of a subtitle token."""
+    if not _clashes(facet, cls, playing):
+        return None
+    if facet in _FIXABLE_FACETS:
+        return AMBER
+    if facet == 'fps':
+        return AMBER if _fps_fixable(cls, playing.get('fps') or ()) else RED
+    return RED
+
+
 def _conflict_spans(release, playing):
+    """[(start, end, level)] of the whole tokens of `release` that contradict `playing`; level is RED or AMBER (RED wins
+    when one token clashes on both kinds of point)."""
     if not (release and playing):
         return []
     facets = {}
     for _a, _b, c, v in release_spans(playing):
         for facet, cls in _facets_of(c, v):
             facets.setdefault(facet, set()).add(cls)
-    return [(a, b) for a, b, cat, val in release_spans(release)
-            if any(_clashes(facet, cls, facets) for facet, cls in _facets_of(cat, val))]
+    out = []
+    for a, b, cat, val in release_spans(release):
+        levels = {_clash_level(facet, cls, facets) for facet, cls in _facets_of(cat, val)}
+        if RED in levels:
+            out.append((a, b, RED))
+        elif AMBER in levels:
+            out.append((a, b, AMBER))
+    return out
+
+
+def _level_mask(release, playing, level):
+    release = release or ''
+    mask = [False] * len(release)
+    words = []
+    for a, b, lv in _conflict_spans(release, playing):
+        if lv == level:
+            for i in range(a, b):
+                mask[i] = True
+            words.append(release[a:b])
+    return mask, words
 
 
 def conflict_mask(release, playing):
     """(mask, words): `mask` has one bool per character of `release`, True inside a WHOLE token that contradicts the playing
-    release (another source tier, bonus content, another cut / edition, a broadcast capture, another frame rate,
-    streaming service or episode: the header of this section); `words` lists those tokens as written in `release`."""
-    release = release or ''
-    mask = [False] * len(release)
-    words = []
-    for a, b in _conflict_spans(release, playing):
-        for i in range(a, b):
-            mask[i] = True
-        words.append(release[a:b])
-    return mask, words
+    release in a way SubSync cannot be expected to fix (RED: another source tier, bonus content, another cut / edition,
+    another episode, a frame rate outside the scale window: the header of this section); `words` lists those tokens as
+    written in `release`."""
+    return _level_mask(release, playing, RED)
+
+
+def fixable_mask(release, playing):
+    """(mask, words) like conflict_mask, for the tokens SubSync can typically fix (ORANGE: another streaming service, a
+    broadcast capture against a WEB / BluRay file, a frame rate inside the scale window)."""
+    return _level_mask(release, playing, AMBER)
 
 
 def release_mask(release, playing, want=None):
-    """(mask, shared, conflicts): one colour per character of `release` (RED inside a conflict token, MATCH inside a
-    shared one, None elsewhere) and the two word lists. A conflict wins over a manual-query word: it is a fact about
-    the playing file."""
+    """(mask, shared, conflicts, fixable): one colour per character of `release` (RED inside a conflict token, AMBER inside
+    a fixable one, MATCH inside a shared one, None elsewhere) and the three word lists. A conflict wins over a
+    manual-query word: it is a fact about the playing file."""
     release = release or ''
     mask = [None] * len(release)
-    shared, conflicts = [], []
-    red = _conflict_spans(release, playing)
-    for a, b in red:
+    shared, conflicts, fixable = [], [], []
+    spans = _conflict_spans(release, playing)
+    for a, b, level in spans:
         for i in range(a, b):
-            mask[i] = RED
-        conflicts.append(release[a:b])
+            mask[i] = level
+        (conflicts if level == RED else fixable).append(release[a:b])
+    painted = {(a, b) for a, b, _lv in spans}
     for a, b in _shared_spans(release, playing, want):
-        if (a, b) not in red:
+        if (a, b) not in painted:
             for i in range(a, b):
                 mask[i] = MATCH
             shared.append(release[a:b])
-    return mask, shared, conflicts
+    return mask, shared, conflicts, fixable
 
 
 def _mask_color(flag):
@@ -735,7 +794,14 @@ def _prov_props(c, typ, is_he, is_mt, source_text, prov):
     return props, (_c(PROV_BLUE, badge) if badge else '')
 
 
-def build(c, playing, want=None, ai=None, prov=None):
+def playing_episode(playing, info):
+    """The playing file's SxxEyy from Kodi's own metadata ('S01E01') when its release name carries none, else '' (the
+    `video_ep` of build; scoring_matching.release.fallback_episode)."""
+    info = info if isinstance(info, dict) else {}
+    return scoring_matching_release.fallback_episode(playing, info.get('season'), info.get('episode'))
+
+
+def build(c, playing, want=None, ai=None, prov=None, video_ep=''):
     """One candidate -> {'label', 'flag', 'props'}: the ListItem label, the flag
     image and every property the window XML binds (strings only, colours baked
     as BBCode like the rest of the window). `playing` is the playing release
@@ -743,14 +809,14 @@ def build(c, playing, want=None, ai=None, prov=None):
     AI-availability context (no_ai_reason); `prov` the provenance Allowlist
     (scoring_matching.provenance; None = only the studio forms count). Never raises."""
     try:
-        return _build(c, playing, want, ai, prov)
+        return _build(c, playing, want, ai, prov, video_ep)
     except Exception:
         name = (c.get('filename') or '').strip() if isinstance(c, dict) else ''
         return {'label': name, 'flag': '',
                 'props': {'release': _c(WHITE, name), 'has_panel': ''}}
 
 
-def _build(c, playing, want=None, ai=None, prov=None):
+def _build(c, playing, want=None, ai=None, prov=None, video_ep=''):
     name = strip_bbcode(c.get('filename'))
     lang = (c.get('language') or '').strip()
     payload = decode_link_safe(c.get('link') or '') or {}
@@ -781,7 +847,7 @@ def _build(c, playing, want=None, ai=None, prov=None):
 
     explained = None
     if playing and release:
-        explained = scoring_matching_release.explain(playing, release)
+        explained = scoring_matching_release.explain(playing, release, video_ep)
     tier = _tier_word(pct, explained) if pct is not None else ''
 
     prov_props, prov_chip = _prov_props(c, typ, is_he, is_mt, source_text, prov)
@@ -818,9 +884,12 @@ def _build(c, playing, want=None, ai=None, prov=None):
     title = _row_title(typ, payload, embedded)
     if title:
         primary = title   # those stages label the row in English ("AI Hebrew (translate ...)") or by a bare "[מובנה] EN"
-    mask, shared, conflicts = (release_mask(release, playing, want) if (release and primary == release and (playing or want))
-                               else ([], [], []))
-    painted = bool(shared or conflicts)
+    # the episode of Kodi's metadata stands in front of a playing name that has none, so a subtitle of ANOTHER episode is
+    # painted red against it too (a prefix: the playing release's own group stays the trailing token)
+    mask_playing = '{0}.{1}'.format(video_ep, playing) if (video_ep and playing) else playing
+    mask, shared, conflicts, fixable = (release_mask(release, mask_playing, want) if (release and primary == release and (playing or want))
+                                        else ([], [], [], []))
+    painted = bool(shared or conflicts or fixable)
     shown = '[B]{0}[/B]'.format(paint(primary, mask, WHITE)) if painted else '[B]{0}[/B]'.format(_c(WHITE, primary))
     props = {
         'release': shown,

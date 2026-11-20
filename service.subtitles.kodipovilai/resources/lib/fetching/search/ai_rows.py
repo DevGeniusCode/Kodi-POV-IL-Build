@@ -27,7 +27,7 @@ def emb_ok(S, v):
 
 def ai_sort_key(S, v):
     rel = pool_release(v)
-    pct = match_pct(S.video_ref, rel) if rel else 0
+    pct = match_pct(S.video_ref, rel, S.video_ep) if rel else 0
     is_emb = (v.get('kind') or '') == 'ai_emb'
     # Embedded items lead (0). Among the (tied at 100%) embedded items for
     # THIS source, order by the source language's gender strength -- the most
@@ -75,7 +75,7 @@ def ai_variants(S):
             label = ('{0}  —  {1}'.format(_emb_base, release) if release else _emb_base)
             pct = 100
         else:
-            pct = match_pct(S.video_ref, release) if release else 0
+            pct = match_pct(S.video_ref, release, S.video_ep) if release else 0
             # Only show a % when we actually have a meaningful match (a 0% almost
             # always means we couldn't read the video's release name, not a real
             # zero -- showing "0%" is misleading).

@@ -9,7 +9,7 @@ try:
 except ImportError:
     xbmc = None
 from resources.lib.autosub import fast_lane, policy as autosub_policy
-from resources.lib.autosub.policy import AI_ROW_TYPES, CHECKED_HEADINGS, EMBEDDED_MISS_LINES, LOADED_HEADINGS, SYNC_CHECK_END_TOAST_MS, SYNC_CHECK_START_TOAST_MS, ask_ai_translation, wait_for_sync_check, ai_when_no_hebrew
+from resources.lib.autosub.policy import AI_ROW_TYPES, CHECKED_HEADINGS, EMBEDDED_MISS_LINES, LOADED_HEADINGS, SYNC_CHECK_END_TOAST_MS, SYNC_CHECK_START_TOAST_MS, ask_ai_translation, banner_name, banner_text, wait_for_sync_check, ai_when_no_hebrew
 
 
 STATE = {'last_file': None, 'busy': False, 'player': None, 'snap_file': None,
@@ -486,7 +486,7 @@ def autosub_on_play():
                     return False
                 if not core_selection.apply_subtitle_file(path, selection=sel):
                     return False
-                name = (entry['payload'].get('filename') or '').strip()
+                name = banner_name(entry['payload'], entry['row'])
                 try:
                     from_cache = bool(bridge.LAST_DOWNLOAD_FROM_CACHE)
                 except Exception:
@@ -495,7 +495,7 @@ def autosub_on_play():
                              cache=from_cache)
                 _note_first_applied('fast lane', '%s %s%% %s' % (
                     entry['provider'], entry['pct'], name))
-                _overlay_show('[COLOR lightblue]כתובית נטענה\n' + name + '[/COLOR]')
+                _overlay_show(banner_text('כתובית נטענה', name, entry['pct'], from_cache))
                 return True
 
             def _lane_worker():
@@ -595,6 +595,7 @@ def autosub_on_play():
         applied = False
         chosen_link = None
         chosen_name = ''
+        chosen_pct = None
         chosen_from_cache = False
         # a source whose subtitle the fast lane already failed to apply is not tried again
         failed_sources = set(_lane.failed) if _lane is not None else set()
@@ -627,6 +628,7 @@ def autosub_on_play():
                 applied = True
                 chosen_link = _fast['link']
                 chosen_name = _fast['name']
+                chosen_pct = _fast['entry']['pct']
                 chosen_from_cache = _fast['cache']
                 selection = _fast['selection']
             else:
@@ -695,6 +697,7 @@ def autosub_on_play():
                     applied = True
                     chosen_link = link2
                     chosen_name = 'תרגום מובנה בעברית'
+                    chosen_pct = None
                     break
             if (path and core_selection.subtitle_selection_matches(
                     selection.get('token') or '',
@@ -710,8 +713,8 @@ def autosub_on_play():
                     chosen_link = link2
                     # Full subtitle name + cache note for the overlay status,
                     # exactly like DarkSubs's "כתובית מוכנה\n{name}".
-                    chosen_name = (pl.get('filename')
-                                   or c.get('filename') or '').strip()
+                    chosen_name = banner_name(pl, c)
+                    chosen_pct = c.get('pct')
                     try:
                         if pl.get('type') == 'engine':
                             chosen_from_cache = bool(
@@ -731,6 +734,7 @@ def autosub_on_play():
             applied = True
             chosen_link = _fast['link']
             chosen_name = _fast['name']
+            chosen_pct = _fast['entry']['pct']
             chosen_from_cache = _fast['cache']
             selection = _again or _fast['selection']
         if applied and not _first_applied:
@@ -875,12 +879,9 @@ def autosub_on_play():
         except Exception:
             _sync_state = ''
         def _status_line(heading):
-            line = '[COLOR lightblue]' + heading
-            if chosen_name:
-                line += '\n' + chosen_name
-            if chosen_from_cache:
-                line += '\n(נטענה מהקאש)'
-            return line + '[/COLOR]'
+            # the heading, the subtitle's name (a cache hit shows it like a fresh download), and one line with the
+            # match percentage and the cache note (autosub/policy.banner_text)
+            return banner_text(heading, chosen_name, chosen_pct, chosen_from_cache)
 
         if _sync_state != 'checking' or _eng_general is None:
             # the subtitle is on screen and its timing needs no check: a

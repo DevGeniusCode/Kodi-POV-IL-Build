@@ -893,6 +893,7 @@ def _show():
                     self.setProperty('subs.head', video_context.release_name(self.info, 'chooser') or '')
                     # the release the rows are compared with (the one the list was scored against)
                     self.playing = video_context.release_name(self.info, 'picker') or ''
+                    self.playing_ep = chooser_rows.playing_episode(self.playing, self.info)
                     self.ai_ctx = _ai_context(self.info)
                     self.prov_allow = provenance_allowlist.current()
                     try:
@@ -945,7 +946,8 @@ def _show():
                     else:
                         rows.append(chooser_rows.build(
                             c, getattr(self, 'playing', ''), want=want,
-                            ai=getattr(self, 'ai_ctx', None), prov=getattr(self, 'prov_allow', None)))
+                            ai=getattr(self, 'ai_ctx', None), prov=getattr(self, 'prov_allow', None),
+                            video_ep=getattr(self, 'playing_ep', '')))
                 return rows
 
             def _fill(self, items=None):

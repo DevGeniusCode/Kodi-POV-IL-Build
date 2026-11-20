@@ -3,7 +3,7 @@
 # Ranking helpers of the subtitle list: release-name match %, the same-source test, the SDH
 # and gender-source ranks and the language names shown in the rows.
 
-def match_pct(video_name, sub_name):
+def match_pct(video_name, sub_name, video_ep=''):
     """Release-name match % via the ONE structured scorer (release_match,
     SubSync S1): exact release=100, same group+source ~90, cross-source
     (WEB vs BluRay) capped low -- so the picker %, the source-screen badge
@@ -11,7 +11,7 @@ def match_pct(video_name, sub_name):
     likelihood. Legacy token-similarity kept only as an import fallback."""
     try:
         from resources.lib.scoring_matching import release as _rm
-        return _rm.match_pct(video_name, sub_name)
+        return _rm.match_pct_ep(video_name, sub_name, video_ep)
     except Exception:
         pass
     import re as _re

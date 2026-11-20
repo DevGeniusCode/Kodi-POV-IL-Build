@@ -54,11 +54,12 @@ _RES_RE = re.compile(r'\b(2160p|1080p|720p|576p|480p|4k|uhd)\b', re.I)
 
 # Source classes. Order matters only for readability; detection is by token.
 _SOURCE_CLASSES = (
-    ('bluray', ('bluray', 'blueray', 'bdrip', 'brrip', 'brip', 'bdremux',
+    ('bluray', ('bluray', 'blueray', 'bdrip', 'brrip', 'brip', 'bdremux', 'blurayremux',
                 'bd25', 'bd50', 'bd66', 'bd100', 'remux')),
-    ('web', ('web', 'webdl', 'webrip', 'webhd', 'webdlrip')),
+    # 'webmux' / 'webmuxed': a WEB source remuxed into MKV ("WEBMux", "WEB-Mux" is the two tokens web + mux)
+    ('web', ('web', 'webdl', 'webrip', 'webhd', 'webdlrip', 'webmux', 'webmuxed')),
     ('hdtv', ('hdtv', 'hdtvrip', 'pdtv', 'sdtv', 'tvrip', 'dsr')),
-    ('dvd', ('dvdrip', 'dvdr', 'dvd', 'dvdfull')),
+    ('dvd', ('dvdrip', 'dvdr', 'dvd', 'dvdfull', 'dvdremux')),
     ('hdrip', ('hdrip',)),
     ('cam', ('cam', 'hdcam', 'camrip', 'ts', 'hdts', 'telesync', 'tc',
              'telecine', 'screener', 'scr', 'dvdscr', 'dvdscreener')),
@@ -98,15 +99,15 @@ _NOT_GROUP = set(
 _HYPHEN_TECH = frozenset({
     'dl', 'rip', 'hd', 'ray', 'ma', 'vision', 'sub', 'subs', 'bit', 'es',
     'dts', 'ac3', 'aac', 'dd', 'ddp', 'hq', 'lq', 'tv', 'track', 'tracks',
-    'dub', 'dubbed', 'cut', 'res', 'rd', 'ld', 'cam', 'sync', 'synced',
+    'dub', 'dubbed', 'cut', 'res', 'rd', 'ld', 'cam', 'sync', 'synced', 'mux',
 })
 # Tokens that can only FOLLOW a hyphenated technical tag ("WEB-DL.DDP5.1"),
 # never a real group (which is followed at most by language/site decoration).
 _TRAILING_TECH_RE = re.compile(
     r'^(?:\d+|ddp?\d*|dd\d*|aac\d*|e?ac3|dts\d*|truehd|atmos|flac\d*|opus'
     r'|mp3|l?pcm|ma|hd|h|x|[hx]26[45]|hevc|avc|av1|xvid|\d+bit|hdr\d*|dv'
-    r'|dovi|sdr|\d{3,4}p|4k|uhd|web|webdl|webrip|bluray|bdrip|brrip|remux'
-    r'|hdtv|dvdrip)$')
+    r'|dovi|sdr|\d{3,4}p|4k|uhd|web|webdl|webrip|webmux|bluray|bdrip|brrip|remux'
+    r'|bdremux|blurayremux|dvdremux|hdtv|dvdrip)$')
 # Streaming services. Two WEB releases from DIFFERENT services are separate
 # masters: logos, intros and recaps routinely move the timeline by seconds.
 # Detected only after the first technical anchor so titles like "Mad Max" or
@@ -160,8 +161,13 @@ def _memo_put(cache, key, value):
     return value
 
 
+# A caller may decorate the playing file name with the title after a pipe ("Show.S01E01.1080p.WEB-DL-GRP.mkv | Show"):
+# that tail is no part of the release, and it hides the extension from _EXT_RE.
+_TITLE_TAIL_RE = re.compile(r'\s\|\s.*$', re.S)
+
+
 def _strip_ext(name):
-    return _EXT_RE.sub('', (name or '').strip())
+    return _EXT_RE.sub('', _TITLE_TAIL_RE.sub('', (name or '').strip()).strip())
 
 
 def _normalize(name):
@@ -321,6 +327,19 @@ def _episode_of(toks):
     return ''
 
 
+def fallback_episode(video_name, season, episode):
+    """The SxxEyy of Kodi's own metadata ('S01E01') when the playing name carries no explicit SxxEyy tag (a bare season tag
+    "S01", a title or a tokenised path), else ''. A caller passes it as `video_ep` to score / match_pct / explain, so the
+    episode of the playing file is known from the VideoInfoTag, not only from its file name. Never raises."""
+    try:
+        s, e = int(season), int(episode)
+    except (TypeError, ValueError):
+        return ''
+    if s < 0 or e < 1 or not isinstance(video_name, str) or _episode_of(_toks(video_name)):
+        return ''
+    return 'S{0:02d}E{1:02d}'.format(s, e)
+
+
 _SIZE_TOKEN_RE = re.compile(r'\d+(?:kb|mb|gb|tb)')
 
 
@@ -463,9 +482,10 @@ def _token_ratio(a_tokens, b_tokens):
 _SCORE_MEMO = {}
 
 
-def score(video_name, sub_name):
+def score(video_name, sub_name, video_ep=''):
     """Structured match: (pct 0-100, tier, reasons list). Either name empty
-    -> (0, TIER_FUZZY, []).
+    -> (0, TIER_FUZZY, []). `video_ep` ('S01E01', see fallback_episode) is the playing file's episode when its name does
+    not carry one.
 
     The pair is memoised as well as its two halves, because the same release
     routinely appears in a source list several times over -- one row per host
@@ -477,12 +497,12 @@ def score(video_name, sub_name):
 
     memo_key = None
     if isinstance(video_name, str) and isinstance(sub_name, str):
-        memo_key = (video_name, sub_name)
+        memo_key = (video_name, sub_name, video_ep) if video_ep else (video_name, sub_name)
         hit = _SCORE_MEMO.get(memo_key)
         if hit is not None:
             return hit[0], hit[1], list(hit[2])
 
-    pct, tier, reasons = _score(video_name, sub_name)
+    pct, tier, reasons = _score(video_name, sub_name, video_ep=video_ep)
     if memo_key is not None:
         _memo_put(_SCORE_MEMO, memo_key, (pct, tier, tuple(reasons)))
     return pct, tier, reasons
@@ -569,7 +589,7 @@ _CEIL_SAME_SOURCE = 79
 _CEIL_FUZZY = 65
 
 
-def _score(video_name, sub_name, floor=0):
+def _score(video_name, sub_name, floor=0, video_ep=''):
     """The scorer. `floor` is a caller's running maximum: any branch that
     provably cannot exceed it returns None instead of finishing, and the token
     ratio -- a difflib pass, and by far the most expensive thing here -- is
@@ -589,7 +609,7 @@ def _score(video_name, sub_name, floor=0):
     # HARD contradictions first -- these caps are the whole point: the old
     # token scorer let a WEB sub score 70% against a BluRay source.
     # Another episode is another file: nothing else about the names matters.
-    v_ep, s_ep = _episode_of(vt), _episode_of(st)
+    v_ep, s_ep = _episode_of(vt) or (video_ep or '').lower(), _episode_of(st)
     if v_ep and s_ep and v_ep != s_ep:
         if floor >= _CEIL_EPISODE:
             return None
@@ -705,9 +725,17 @@ def _score(video_name, sub_name, floor=0):
 
 
 def match_pct(video_name, sub_name):
-    """Drop-in int replacement for the three legacy scorers."""
+    """Drop-in int replacement for the three legacy scorers. (A frozen public name: POV / Umbrella hooks call it.)"""
     try:
         return score(video_name, sub_name)[0]
+    except Exception:
+        return 0
+
+
+def match_pct_ep(video_name, sub_name, video_ep=''):
+    """match_pct for a playing name whose episode may come from Kodi's metadata (`video_ep`, see fallback_episode)."""
+    try:
+        return score(video_name, sub_name, video_ep)[0]
     except Exception:
         return 0
 
@@ -752,7 +780,7 @@ def similarity(video_name, sub_name):
         return 0
 
 
-def explain(video_name, sub_name):
+def explain(video_name, sub_name, video_ep=''):
     """Why a subtitle release got its number, for the chooser's info panel.
 
     Returns {'pct', 'tier', 'reasons', 'facts'}. `facts` lists the attributes
@@ -763,11 +791,11 @@ def explain(video_name, sub_name):
     'neutral' (shown for information; it never moves the number). Never raises.
     """
     try:
-        pct, tier, reasons = score(video_name, sub_name)
+        pct, tier, reasons = score(video_name, sub_name, video_ep)
         v, s = _parse_c(video_name), _parse_c(sub_name)
         vt, st = _toks(video_name), _toks(sub_name)
         pairs = (
-            ('episode', _episode_of(vt).upper(), _episode_of(st).upper()),
+            ('episode', (_episode_of(vt) or (video_ep or '')).upper(), _episode_of(st).upper()),
             ('edition', v['edition'], s['edition']),
             ('fps', _fps_of(video_name), _fps_of(sub_name)),
             ('source', v['source'], s['source']),

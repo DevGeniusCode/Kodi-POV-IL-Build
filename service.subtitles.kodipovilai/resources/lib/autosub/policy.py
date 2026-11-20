@@ -35,6 +35,60 @@ EMBEDDED_MISS_LINES = {
     '': 'הקריאה של הכתובית המובנית לא הושלמה\n'
         'אפשר לבחור אותה שוב מרשימת הכתוביות',
 }
+# The top overlay is ONE label, 150 px high, vertically centred, and the engine's own underscore line sits under the
+# text: more than three lines of text push the first and the last one out of the box. A banner is therefore at most
+# three lines: the heading, the subtitle's name (cut at BANNER_NAME_MAX characters, two wrapped lines at most) and ONE
+# line that holds the match percentage and the cache note.
+BANNER_NAME_MAX = 90
+
+
+def banner_name(payload, row):
+    """The subtitle's name for the top banner, whatever kind of row it is: the link's own `filename`, else its `release`
+    (a pool row carries only that), else the tail of the row's label ("<provider> · 85%  —  <release>"), else the label
+    itself. '' only when the row has nothing at all. Pure."""
+    payload = payload if isinstance(payload, dict) else {}
+    for key in ('filename', 'release'):
+        value = str(payload.get(key) or '').strip()
+        if value:
+            return value
+    label = str((row or {}).get('filename') or '').strip()
+    for sep in ('  —  ', ' — ', '—'):
+        if sep in label:
+            tail = label.split(sep, 1)[1].strip()
+            if tail:
+                return tail
+    return label
+
+
+def banner_pct(pct):
+    """The match number of the chosen row as an int 0-100, None when the row has none (an embedded track, a row with no
+    release name, the 101 of the embedded marker)."""
+    if isinstance(pct, bool) or not isinstance(pct, (int, float)):
+        return None
+    pct = int(pct)
+    return pct if 0 < pct <= 100 else None
+
+
+def banner_text(heading, name, pct, from_cache):
+    """The top banner once a subtitle is on screen: the heading, the subtitle's name (on a cache hit too), and one line
+    with the match percentage and the cache note. Pure."""
+    lines = [heading]
+    name = (name or '').strip()
+    if len(name) > BANNER_NAME_MAX:
+        name = name[:BANNER_NAME_MAX - 3] + '...'
+    if name:
+        lines.append(name)
+    info = []
+    pct = banner_pct(pct)
+    if pct is not None:
+        info.append('אחוזי התאמה %d%%' % pct)
+    if from_cache:
+        info.append('נטענה מהקאש')
+    if info:
+        lines.append(' · '.join(info))
+    return '[COLOR lightblue]' + '\n'.join(lines) + '[/COLOR]'
+
+
 # The timing check of the subtitle on screen is announced with two corner
 # toasts (no overlay over the picture): one when it starts, one when it ends.
 SYNC_CHECK_START_TOAST_MS = 2500

@@ -145,8 +145,12 @@ def _red(sub, pl):
     return rows_mod.conflict_mask(sub, pl)[1]
 
 
+def _orange(sub, pl):
+    return rows_mod.fixable_mask(sub, pl)[1]
+
+
 def _cols(sub, pl, want=None):
-    m, sh, co = rows_mod.release_mask(sub, pl, want)
+    m, sh, co, _fx = rows_mod.release_mask(sub, pl, want)
     return sh, co
 
 
@@ -190,31 +194,31 @@ check('red: two different editions, both ways; the same edition in two spellings
 check('red: Theatrical is the untagged cut (not red against an untagged file), red against another edition',
       _red('Movie.2020.Theatrical.1080p.BluRay', 'Movie.2020.1080p.BluRay') == []
       and _red('Movie.2020.Theatrical.1080p.BluRay', 'Movie.2020.Extended.1080p.BluRay') == ['Theatrical'])
-check('red: broadcast captures against a WEB / BluRay file (HDTV, PDTV, SDTV, PAL, NTSC)',
-      all(_red('Show.S01E01.%s.x264' % t, 'Show.S01E01.1080p.WEB-DL.x264-GRP') == [t]
+check('orange: broadcast captures against a WEB / BluRay file (HDTV, PDTV, SDTV, PAL, NTSC)',
+      all(_orange('Show.S01E01.%s.x264' % t, 'Show.S01E01.1080p.WEB-DL.x264-GRP') == [t]
           for t in ('HDTV', 'PDTV', 'SDTV', 'PAL', 'NTSC'))
-      and _red('Show.S01E01.HDTV.x264', 'Show.S01E01.1080p.BluRay.x264') == ['HDTV'])
-check('red: symmetric, a WEB / BluRay subtitle against an HDTV file; PAL against NTSC; HDTV vs PDTV is not red',
-      _red('Show.S01E01.1080p.BluRay.x264', 'Show.S01E01.720p.HDTV.x264-LOL') == ['BluRay']
-      and _red('Show.S01E01.1080p.WEB-DL', 'Show.S01E01.PAL.x264') == ['WEB-DL']
-      and _red('Movie.2020.PAL.DVDRip', 'Movie.2020.NTSC.DVDRip') == ['PAL']
-      and _red('Show.S01E01.PDTV.x264', 'Show.S01E01.HDTV.x264') == [])
+      and _orange('Show.S01E01.HDTV.x264', 'Show.S01E01.1080p.BluRay.x264') == ['HDTV'])
+check('orange: symmetric, a WEB / BluRay subtitle against an HDTV file; PAL against NTSC; HDTV vs PDTV is not red',
+      _orange('Show.S01E01.1080p.BluRay.x264', 'Show.S01E01.720p.HDTV.x264-LOL') == ['BluRay']
+      and _orange('Show.S01E01.1080p.WEB-DL', 'Show.S01E01.PAL.x264') == ['WEB-DL']
+      and _orange('Movie.2020.PAL.DVDRip', 'Movie.2020.NTSC.DVDRip') == ['PAL']
+      and _orange('Show.S01E01.PDTV.x264', 'Show.S01E01.HDTV.x264') == [])
 check('red: WEB against BluRay / DVDRip is not red (not a listed conflict; the match % already caps it)',
       _red('Movie.2020.1080p.BluRay.x264-OTHER', _WEB) == [] and _red('Movie.2020.DVDRip-XX', _WEB) == [])
-check('red: another frame rate (25fps vs 23.976fps / 24fps), both ways; PAL is 25 fps; the same rate is green',
-      _red('Movie.2020.1080p.WEB-DL.25fps', 'Movie.2020.1080p.WEB-DL.23.976fps') == ['25fps']
-      and _red('Movie.2020.1080p.WEB-DL.23.976fps', 'Movie.2020.1080p.WEB-DL.25fps') == ['23.976fps']
-      and _red('Movie.2020.1080p.WEB-DL.25fps', 'Movie.2020.1080p.WEB-DL.24fps') == ['25fps']
-      and _red('Movie.2020.DVDRip.PAL', 'Movie.2020.DVDRip.23.976fps') == ['PAL']
+check('orange: another frame rate inside the scale window (25fps vs 23.976fps / 24fps), both ways; PAL is 25 fps; the same rate is green',
+      _orange('Movie.2020.1080p.WEB-DL.25fps', 'Movie.2020.1080p.WEB-DL.23.976fps') == ['25fps']
+      and _orange('Movie.2020.1080p.WEB-DL.23.976fps', 'Movie.2020.1080p.WEB-DL.25fps') == ['23.976fps']
+      and _orange('Movie.2020.1080p.WEB-DL.25fps', 'Movie.2020.1080p.WEB-DL.24fps') == ['25fps']
+      and _orange('Movie.2020.DVDRip.PAL', 'Movie.2020.DVDRip.23.976fps') == ['PAL']
       and _cols('Movie.2020.WEB.23.98fps', 'Movie.2020.WEB.23.976fps')[1] == []
       and '23.98fps' in _cols('Movie.2020.WEB.23.98fps', 'Movie.2020.WEB.23.976fps')[0])
-check('red: another streaming service (NF vs AMZN, DSNP, ATVP, MAX, HULU, PCOK, PMTP), both ways',
-      all(_red('Show.S01E01.1080p.%s.WEB-DL' % t, 'Show.S01E01.1080p.NF.WEB-DL-GRP') == [t]
+check('orange: another streaming service (NF vs AMZN, DSNP, ATVP, MAX, HULU, PCOK, PMTP), both ways',
+      all(_orange('Show.S01E01.1080p.%s.WEB-DL' % t, 'Show.S01E01.1080p.NF.WEB-DL-GRP') == [t]
           for t in ('AMZN', 'DSNP', 'ATVP', 'MAX', 'HULU', 'PCOK', 'PMTP'))
-      and _red('Show.S01E01.1080p.NF.WEB-DL', 'Show.S01E01.1080p.AMZN.WEB-DL') == ['NF'])
-check('red: a service only among the technical tags ("Mad.Max" is a title), an unknown service is no conflict, aliases agree',
-      _red('Mad.Max.2015.1080p.AMZN.WEB-DL', 'Mad.Max.2015.1080p.NF.WEB-DL') == ['AMZN']
-      and _red('Show.S01E01.1080p.AMZN.WEB-DL', 'Show.S01E01.1080p.WEB-DL') == []
+      and _orange('Show.S01E01.1080p.NF.WEB-DL', 'Show.S01E01.1080p.AMZN.WEB-DL') == ['NF'])
+check('orange: a service only among the technical tags ("Mad.Max" is a title), an unknown service is no conflict, aliases agree',
+      _orange('Mad.Max.2015.1080p.AMZN.WEB-DL', 'Mad.Max.2015.1080p.NF.WEB-DL') == ['AMZN']
+      and _orange('Show.S01E01.1080p.AMZN.WEB-DL', 'Show.S01E01.1080p.WEB-DL') == []
       and _cols('Movie.2020.1080p.AMAZON.WEB-DL', 'Movie.2020.1080p.AMZN.WEB-DL') == (
           ['Movie', '2020', '1080p', 'AMAZON', 'WEB-DL'], []))
 check('red: another episode, and a multi-episode file against a single episode (S01E01E02, S01E01-E02, S01E01-02), both ways',
@@ -227,16 +231,23 @@ check('red: the same episode in two spellings is green (S1E1 / S01E01, S01E01E02
       _cols('Show.S1E1.720p', 'Show.S01E01.1080p') == (['Show', 'S1E1'], [])
       and _cols('Show.S01E01E02.720p', 'Show.S01E01-E02.1080p') == (['Show', 'S01E01E02'], []))
 _cm, _cw = rows_mod.conflict_mask('Show.S01E02.HDTV.x264-LOL', 'Show.S01E01.1080p.WEB-DL.x264-GRP')
-check('red: whole tokens only (every character of the token, none outside it)',
-      _cw == ['S01E02', 'HDTV'] and ''.join(ch for ch, f in zip('Show.S01E02.HDTV.x264-LOL', _cm) if f) == 'S01E02HDTV')
-_mk, _sh, _co = rows_mod.release_mask('Show.S01E02.HDTV.x264-LOL', 'Show.S01E01.1080p.WEB-DL.x264-GRP')
-check('red + green in one name: conflict tokens red, shared tokens green, the rest uncoloured',
-      _sh == ['Show', 'x264'] and _co == ['S01E02', 'HDTV']
+_fm, _fw = rows_mod.fixable_mask('Show.S01E02.HDTV.x264-LOL', 'Show.S01E01.1080p.WEB-DL.x264-GRP')
+check('red / orange: whole tokens only (every character of the token, none outside it); the two masks never share a token',
+      _cw == ['S01E02'] and _fw == ['HDTV']
+      and ''.join(ch for ch, f in zip('Show.S01E02.HDTV.x264-LOL', _cm) if f) == 'S01E02'
+      and ''.join(ch for ch, f in zip('Show.S01E02.HDTV.x264-LOL', _fm) if f) == 'HDTV')
+_mk, _sh, _co, _fx = rows_mod.release_mask('Show.S01E02.HDTV.x264-LOL', 'Show.S01E01.1080p.WEB-DL.x264-GRP')
+check('red + orange + green in one name: unfixable tokens red, fixable ones orange (the palette AMBER), shared tokens green, '
+      'the rest uncoloured',
+      _sh == ['Show', 'x264'] and _co == ['S01E02'] and _fx == ['HDTV'] and rows_mod.AMBER == 'FFF0A93A'
       and rows_mod.paint('Show.S01E02.HDTV.x264-LOL', _mk, rows_mod.WHITE) ==
-      '[COLOR {g}]Show[/COLOR][COLOR {w}].[/COLOR][COLOR {r}]S01E02[/COLOR][COLOR {w}].[/COLOR][COLOR {r}]HDTV[/COLOR]'
-      '[COLOR {w}].[/COLOR][COLOR {g}]x264[/COLOR][COLOR {w}]-LOL[/COLOR]'.format(g=rows_mod.MATCH, r=rows_mod.RED, w=rows_mod.WHITE))
+      '[COLOR {g}]Show[/COLOR][COLOR {w}].[/COLOR][COLOR {r}]S01E02[/COLOR][COLOR {w}].[/COLOR][COLOR {o}]HDTV[/COLOR]'
+      '[COLOR {w}].[/COLOR][COLOR {g}]x264[/COLOR][COLOR {w}]-LOL[/COLOR]'.format(
+          g=rows_mod.MATCH, r=rows_mod.RED, o=rows_mod.AMBER, w=rows_mod.WHITE))
 check('red: a conflict wins over a manual-query word (it is a fact about the playing file)',
-      _cols('Show.S01E01.HDTV.x264', 'Show.S01E01.1080p.WEB-DL', ['hdtv']) == (['Show', 'S01E01'], ['HDTV']))
+      _cols('Show.S01E01.HDTV.x264', 'Show.S01E01.1080p.WEB-DL', ['hdtv']) == (['Show', 'S01E01'], [])
+      and _cols('Show.S01E01.AMZN.WEB-DL', 'Show.S01E01.NF.WEB-DL', ['amzn'])[0] == ['Show', 'S01E01', 'WEB-DL']
+      and _orange('Show.S01E01.AMZN.WEB-DL', 'Show.S01E01.NF.WEB-DL') == ['AMZN'])
 check('red: an identical release has no red at all, and the green of the old boolean mask is unchanged',
       _cols(_WEB, _WEB)[1] == [] and rows_mod.paint('A.B', [True, False, True], None) ==
       '[COLOR %s]A[/COLOR].[COLOR %s]B[/COLOR]' % (rows_mod.MATCH, rows_mod.MATCH))
@@ -258,7 +269,7 @@ _ok = rows_mod.build(dict(_rrow, link=_enc_red({'type': 'engine', 'source': 'ktu
                                                  'language': 'Hebrew'})), 'Show.S01E01.1080p.WEB-DL.x264-GRP')
 check('red: a chooser row paints its conflicts red in the release column and the panel, the % is the row\'s own',
       '[COLOR %s]S01E02[/COLOR]' % rows_mod.RED in _rb['props']['release']
-      and '[COLOR %s]HDTV[/COLOR]' % rows_mod.RED in _rb['props']['p_release']
+      and '[COLOR %s]HDTV[/COLOR]' % rows_mod.AMBER in _rb['props']['p_release']
       and '30%' in _rb['props']['pct'] and 'COLOR %s' % rows_mod.RED not in _ok['props']['release']
       and 'COLOR %s' % rows_mod.RED not in _ok['props']['p_release'])
 _sc = _rel.score('Show.S01E01.1080p.WEB-DL.x264-GRP', 'Show.S01E02.HDTV.x264-LOL')

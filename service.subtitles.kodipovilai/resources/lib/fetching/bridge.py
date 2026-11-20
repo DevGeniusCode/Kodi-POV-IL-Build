@@ -288,7 +288,7 @@ def reusable_results(info):
         return []
     try:
         if release_ready(info):
-            cached = cache_get(info)
+            cached = cache_get(info, any_release=True)
             if cached:
                 return cached
         for prop in (RECENT_PROP, CUT_PROP):

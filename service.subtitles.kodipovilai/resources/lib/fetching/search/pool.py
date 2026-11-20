@@ -4,6 +4,7 @@
 
 from resources.lib.core import video_context
 from resources.lib.core.link_codec import decode_link, encode_link
+from resources.lib.scoring_matching import release as scoring_matching_release
 from resources.lib.scoring_matching.ranking import match_pct
 from resources.lib.fetching.search.rows import clean, norm_rel, pool_release
 from resources.lib.fetching.search.state import NEXT
@@ -17,7 +18,7 @@ except Exception:
 
 
 def pool_entry(S, v, release):
-    pct = match_pct(S.video_ref, release) if release else 0
+    pct = match_pct(S.video_ref, release, S.video_ep) if release else 0
     if release and pct > 0:
         label = 'כתובית · מאגר · {0}%  —  {1}'.format(pct, release)
     elif release:
@@ -53,6 +54,7 @@ def pool(S):
     # One lookup keeps the request count identical to the AI-only pool.
     S.pool_variants = []
     S.video_ref = ''
+    S.video_ep = ''
     if S.quick and pool_contribute is not None and pool_client.use_enabled():
         S.info['_list_pending'] = True
     elif pool_contribute is not None and pool_client.use_enabled():
@@ -64,6 +66,7 @@ def pool(S):
         # (when picked_release/tagline/label are all blank), which would make the
         # embedded same-source gate wrongly hide the viewer's OWN item on replay.
         S.video_ref = video_context.release_name(S.info, 'picker')
+        S.video_ep = scoring_matching_release.fallback_episode(S.video_ref, S.info.get('season'), S.info.get('episode'))
         try:
             S.pool_variants = pool_client.lookup(S.info)
         except Exception:
