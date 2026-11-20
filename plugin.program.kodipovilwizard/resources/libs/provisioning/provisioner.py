@@ -30,6 +30,7 @@ from resources.libs.common import logging
 from resources.libs.common import tools
 from resources.libs import config_apply
 from resources.libs.provisioning import addon_state
+from resources.libs.provisioning import config_retry
 from resources.libs.provisioning import repo_bootstrap
 from resources.libs.skins import skin_catalog
 
@@ -440,9 +441,14 @@ def run_update_check(background=True):
 
     Makes sure our repositories are installed, asks Kodi to check them (Kodi installs the add-on updates itself), and applies a
     newer config pack, waiting first for any add-on Kodi is installing or updating (config_apply). Returns True when the check
-    itself could run."""
+    itself could run.
+
+    At start-up (background=True) the service never waits for Kodi's installs: when Kodi is downloading or unpacking add-ons
+    (file-based check, no GUI call) the pack is handed to the host-repair runner (config_retry), which applies it once Kodi is
+    quiet. Kodi stops a service it is about to replace and force-kills it after 5 s; see config_retry."""
     dialog = xbmcgui.Dialog()
     logging.log("[Update] check (background={0})".format(background), level=xbmc.LOGINFO)
+    config_retry.clear()
     repo_bootstrap.ensure_repositories()
     xbmc.executebuiltin('UpdateAddonRepos')
 
@@ -453,12 +459,21 @@ def run_update_check(background=True):
         return False
 
     if config_apply.config_pending(info):
+        busy = addon_state.updates_in_flight() if background else []
+        if busy:
+            logging.log("[Update] config {0} deferred: Kodi is downloading / unpacking {1}; the runner applies it when Kodi is "
+                        "quiet".format(info.get('config_version'), busy), level=xbmc.LOGINFO)
+            config_retry.request()
+            return True
         # Kodi's refresh was just requested: an update of a skin may start within seconds, so wait for it (a grace period).
         result = config_apply.apply_config_pack(info, fresh=False, background=background, wait_grace=WAIT_GRACE_SECONDS)
         if result.get('deferred'):
-            logging.log("[Update] config {0} deferred: Kodi is still updating an add-on; it is retried at the next start".format(
-                info.get('config_version')), level=xbmc.LOGWARNING)
-            if not background:
+            logging.log("[Update] config {0} deferred: Kodi is still updating an add-on; {1}".format(
+                info.get('config_version'), 'the runner retries when Kodi is quiet' if background else 'it is retried at the next start'),
+                level=xbmc.LOGWARNING)
+            if background:
+                config_retry.request()
+            else:
                 dialog.ok(CONFIG.ADDONTITLE, "Kodi עדיין מעדכן תוספים. הגדרות הבילד יוחלו בהפעלה הבאה.")
             return True
         if result.get('skin_touched'):

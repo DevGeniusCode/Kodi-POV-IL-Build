@@ -157,6 +157,22 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `pov_combined_discover`), pyflakes (one old message), 76 behaviour checks (bootstrap, provisioner, window plan, settle-wait, config deferral,
   update watcher) against a local copy of the generated site.
 
+- **START-UP UPDATE DEADLOCK (20 Nov 2026, owner-approved Steps A, B, D; found in a Windows log, Kodi 21.3):** Kodi's own repository check updated the
+  Wizard, the subtitle add-on and FENtastic within 20 s of launch; the GUI thread went silent (last line: a toast `Window Init`, no `Deinit`), both services
+  needed Kodi's 5 s force-kill ("script didn't stop in 5 seconds"), the restarted Wizard hung in its first `getCondVisibility`, and the skin install never
+  unpacked. The lock that the GUI thread waited on is NOT proven (inference: a lock-order deadlock between Kodi's update job and GUI-bound calls from our
+  service threads). Changes: (A) `host_repairs/flow/gui_watchdog.py` (the runner starts it: every 2 s a timeout probe of the GUI, a log line on every change
+  ok / none / hung for the first 120 s, longer while hung; reads and logs only), `addon_state.wait_until_settled` logs enter / leave with the reason and every
+  GUI-bound call that did not answer, the subtitle service's six worker threads are named `subs-*`. (B) `common/gui_probe.ask(call, timeout, key)` (a daemon
+  thread with a timeout, single-flight per key; it replaces `skin_gui_guard.ask`) wraps `install_dialog_active` / `updates_announced` (no answer = "not
+  settled"); `wait_until_settled` returns False at once when Kodi is updating the Wizard itself (a fresh `<wizard id>-*.zip` in `addons/packages` or its
+  `addon.xml` changed: that update waits for the service to exit); at boot `run_update_check` defers the config pack when `addon_state.updates_in_flight()`
+  (file-based) and hands it to the runner (`provisioning/config_retry.py`, `ConfigRetry.poll()` in the runner's idle loop). The manual check keeps the inline wait.
+  (D, own bug fix) `subtitle_trans_cache` declares `<step>1</step>` / `<maximum>1000</maximum>` (an integer without a maximum made Kodi reject the stored value:
+  "failed to load value 15"; the reading of Kodi's validation is from memory, unverified). Verified: pyflakes clean, 36 behaviour checks (probe, file checks,
+  stalled-GUI wait, deferral and hand-off, watchdog), 176 of 177 Wizard modules import, `check_subs_contract.py` 60 / 60. NOT tested in Kodi: whether the
+  freeze is gone; the next log shows `gui_watchdog:` lines and `[AddonState] wait_until_settled` lines. The first call of the start-up pass that is still
+  GUI-bound and unprotected is `addon_state.has_addon` (`System.HasAddon`; `heal_missing_addons`, the Wizard's own checks) and `gui_ready.wait_for_gui_ready`.
 - **SUBTITLE PHASE 0 COMPLETE (19 Nov 2026; owner decision: decouple from MoranSubs).** The last upstream merge (`update-migration`
   @ `96efe59a`, 36 commits since `77880b8`) was resolved and the add-on is now ours (rule "SUBTITLE ADD-ON: DECOUPLED" below). Taken:
   MoranSubs 0.3.75 -> 0.3.96 core (translate / subsync / sync_align / embedded_extract + new `embedded_mp4.py`, `gp_later.py`, gender
@@ -359,7 +375,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   `symtable` for undefined names and new unused imports; fresh-interpreter import of every module under `resources/`;
   cross-module API scan (names exist, signatures fit); repo-wide grep of callers (skins, `userdata/`, other add-ons) for old
   paths and strings; behavior tests under the stubs for any new code. Compare each against the snapshot. Baselines: Wizard
-  171 of 172 `resources/` modules import (Phase 7 stub harness) (only `patches/pov_combined_discover`, needs POV's `indexers`); subtitle add-on: with
+  176 of 177 `resources/` modules import (Phase 7 stub harness, counted again 20 Nov 2026) (only `patches/pov_combined_discover`, needs POV's `indexers`); subtitle add-on: with
   `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, every module imports (the Telegram source was deleted, so `telegram_impl` no longer fails): 154 of 154 modules after Subtitle Step 8 (`autosub/fast_lane.py`), 153 of 153 after Subtitle Step 6 (`ui/chooser_rows.py`), 152 of 152 after Subtitle Phase 4 (140 of 140 modules with the Subtitle Phase 3 harness, also run by `.github/scripts/check_subs_contract.py`; 138 of 138 before Phase 3 added `core/addon.py` and `core/cache/profile_dir.py`; 72 of 72 before the Phase 2 split, `requests` stubbed too, one fresh `python -I` per module, `service` counted as importing when it starts its main loop).
 - **WORKFLOW:** stop after each step; the user reviews and commits. No version bump or changelog per step.
 - **LINE ENDINGS:** sources and docs use CRLF (a file that is LF stays LF).

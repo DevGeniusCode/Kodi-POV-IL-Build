@@ -28,6 +28,7 @@ import re
 import threading
 import time
 
+from resources.libs.common import gui_probe
 from resources.libs.host_repairs.flow import skin_gui_guard
 from resources.libs.host_repairs.flow.pov_steps import _skip_pov_patchers
 from resources.libs.host_repairs.flow.startup_pass import _maybe_patch_pov_language_invoker
@@ -90,7 +91,7 @@ def _kodi_installing():
     try:
         import xbmc
         # asked with a timeout: while Kodi swaps the active skin the GUI may not answer at all, and the poll loop must survive that
-        answered, value = skin_gui_guard.ask(lambda: xbmc.getCondVisibility('Window.IsActive(extendedprogressdialog)'))
+        answered, value = gui_probe.ask(lambda: xbmc.getCondVisibility('Window.IsActive(extendedprogressdialog)'), key='install_dialog')
         return bool(value) if answered else False
     except Exception:
         return False

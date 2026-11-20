@@ -182,7 +182,7 @@ def _start_pool_queue_drainer(monitor):
             pass
 
     try:
-        threading.Thread(target=_loop, daemon=True).start()
+        threading.Thread(target=_loop, name='subs-pool-queue-drainer', daemon=True).start()
     except Exception:
         pass
 
@@ -208,7 +208,7 @@ def _start_gp_later_runner(monitor):
             pass
 
     try:
-        threading.Thread(target=_loop, daemon=True).start()
+        threading.Thread(target=_loop, name='subs-gp-later-runner', daemon=True).start()
     except Exception:
         pass
 
@@ -311,7 +311,7 @@ def _start_he_warm_drainer(monitor):
             pass
 
     try:
-        threading.Thread(target=_loop, daemon=True).start()
+        threading.Thread(target=_loop, name='subs-he-warm-drainer', daemon=True).start()
     except Exception:
         pass
 
@@ -350,7 +350,7 @@ def _start_subsync_drainer(monitor):
                 pass
 
     try:
-        threading.Thread(target=_loop, daemon=True).start()
+        threading.Thread(target=_loop, name='subs-subsync-drainer', daemon=True).start()
     except Exception:
         pass
 
@@ -453,7 +453,7 @@ def _start_subsync_delay_watch(monitor):
             pass
 
     try:
-        threading.Thread(target=_loop, daemon=True).start()
+        threading.Thread(target=_loop, name='subs-subsync-delay-watch', daemon=True).start()
     except Exception:
         pass
 
@@ -494,7 +494,7 @@ def _start_shared_sdh_refresh(monitor):
         _maybe_refresh_shared_sdh()
 
     try:
-        threading.Thread(target=_worker, daemon=True).start()
+        threading.Thread(target=_worker, name='subs-shared-sdh-refresh', daemon=True).start()
     except Exception:
         pass
 

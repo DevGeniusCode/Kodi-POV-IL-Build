@@ -364,6 +364,12 @@ no‑fanart defaults. The fix added it to the policy as:
   `UpdateAddonRepos`, `wait_grace` 30 s) `System.AddonUpdateCount` announces nothing pending. Timeouts: 60 s on a fresh install (it
   proceeds anyway), 120 s on an existing device, where a timeout **defers** the pack (`result['deferred']`, nothing written, the version stays
   unapplied, the next start retries) so a Kodi update cannot overwrite freshly applied settings.
+  **The start-up service never waits for Kodi's installs** (20 Nov 2026 freeze, see CLAUDE.md "Start-up update deadlock"): at boot
+  `provisioner.run_update_check(background=True)` first looks, file-based and without a GUI call, whether Kodi is downloading /
+  unpacking an add-on (`addon_state.updates_in_flight`: an add-on zip in `addons/packages` or a folder in `addons/temp` younger than
+  15 s). If so, the pack is handed to the host-repair runner (`provisioning/config_retry.py`, marker `userdata/kodipovil.config_retry`;
+  the runner polls it every idle tick and runs the same check when Kodi is quiet). `wait_until_settled` asks the GUI only through
+  `common/gui_probe.ask` (a timeout; a stalled GUI counts as "not settled") and returns at once when Kodi is updating the Wizard itself.
 - **Retained verified pack.** When `config.json` supplies a sha256 and the pack verifies, `config_apply` keeps a copy in
   the **master** profile (`addon_data/plugin.program.kodipovilwizard/config_pack/build_config.zip` plus a
   `build_config.json` receipt). Secondary profiles are seeded from it through `config_apply.open_verified_pack()`; the

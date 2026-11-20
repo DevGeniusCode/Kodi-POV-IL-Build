@@ -16,11 +16,13 @@ except ImportError:
     xbmc = None
 
 from resources.libs.host_repairs.flow.af3_steps import _maybe_patch_af3_dialog_subtitles, _maybe_patch_hub_search, _maybe_restore_af3_font_early
-from resources.libs.host_repairs.flow.addon_update_watch import POLL_SECONDS, AddonUpdateWatch
+from resources.libs.host_repairs.flow import gui_watchdog
+from resources.libs.host_repairs.flow.addon_update_watch import POLL_SECONDS, AddonUpdateWatch, _busy
 from resources.libs.host_repairs.flow.pov_steps import _maybe_default_pov_autoplay, _maybe_revert_pov_always_resume, _maybe_revert_pov_autoplay
 from resources.libs.host_repairs.flow.skin_steps import _maybe_default_fentastic_player, _maybe_default_nox_poster_rating, _maybe_enable_osd_autoclose, _point_subtitle_button
 from resources.libs.host_repairs.flow.startup_pass import _run_build_startup_repairs
 from resources.libs.host_repairs.flow.umbrella_steps import _start_service_mirror_keeper
+from resources.libs.provisioning.config_retry import ConfigRetry
 from resources.libs.system.playlist_timeout import SETTING_ID as PLAYLIST_TIMEOUT_SETTING, PlaylistTimeoutSync
 
 LOCK = 'kodipovil.host_repairs.running'
@@ -190,6 +192,8 @@ def main():
     stop = threading.Event()
     window.setProperty(LOCK, str(time.monotonic()))
     threading.Thread(target=_heartbeat, args=(window, monitor, stop), daemon=True).start()
+    # Diagnostics: the log says when the GUI stops answering at start-up (reads and logs only).
+    threading.Thread(target=gui_watchdog.run, args=(monitor,), name='povil_gui_watchdog', daemon=True).start()
     try:
         # The Wizard setting playlist_timeout -> <playlisttimeout> in advancedsettings.xml (system/playlist_timeout.py). One look now,
         # then every idle tick: it also restores the value after a config pack replaced the file with the baked default.
@@ -201,11 +205,14 @@ def main():
         # Meanwhile an install or update of any patched add-on (POV, Umbrella, Idan Plus, Arctic Fuse 3: Kodi replaces its
         # files and wipes the patches) is repaired within seconds of Kodi finishing unpacking it.
         watch = AddonUpdateWatch()
+        # A config pack the start-up service deferred because Kodi was installing add-ons (provisioning/config_retry.py).
+        config_retry = ConfigRetry(_busy)
         while not monitor.abortRequested():
             if monitor.waitForAbort(POLL_SECONDS):
                 break
             watch.poll(monitor)
             playlist_timeout.poll()
+            config_retry.poll()
     finally:
         stop.set()
         try:

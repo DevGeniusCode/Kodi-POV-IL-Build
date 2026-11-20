@@ -831,6 +831,8 @@
           <default>200</default>
           <constraints>
             <minimum>1</minimum>
+            <step>1</step>
+            <maximum>1000</maximum>
           </constraints>
           <dependencies>
             <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>

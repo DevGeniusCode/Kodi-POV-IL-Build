@@ -14,12 +14,12 @@ recover(skin_id) runs after the update watcher saw the skin's files change and s
 What it cannot do: if the GUI thread is deadlocked (not just waiting for a skin), nothing a script posts is ever processed. The log
 line says which of the two it was ("ok", "none" = no window, "hung" = no answer) so the next log settles it.
 """
-import threading
 import time
 import xml.etree.ElementTree as ET
 
+from resources.libs.common import gui_probe
+
 GUI_WAIT_SECONDS = 6.0      # Kodi's own reload normally comes within a second or two of the end of the install
-PROBE_TIMEOUT = 2.5         # a GUI call that takes longer than this is "hung"
 AFTER_RELOAD_SECONDS = 8.0  # how long a ReloadSkin() gets before home is activated by hand
 WINDOW_INVALID = 9999       # xbmcgui.getCurrentWindowId() with no window at all
 
@@ -45,33 +45,13 @@ def saved_active_skin():
     return None
 
 
-def ask(call, timeout=PROBE_TIMEOUT):
-    """(True, value) when call() answered within `timeout`; (False, None) when it did not (the thread is left to its fate: it is
-    a daemon, and a GUI call that never returns would otherwise take the caller with it)."""
-    box = []
-
-    def run():
-        try:
-            box.append(call())
-        except Exception:
-            box.append(None)
-
-    thread = threading.Thread(target=run, name='povil_gui_probe')
-    thread.daemon = True
-    thread.start()
-    thread.join(timeout)
-    if box:
-        return True, box[0]
-    return False, None
-
-
 def gui_state():
     """'ok' (a window is up), 'none' (the GUI answers but has no window) or 'hung' (no answer)."""
     try:
         import xbmcgui
     except ImportError:
         return 'ok'
-    answered, window_id = ask(xbmcgui.getCurrentWindowId)
+    answered, window_id = gui_probe.ask(xbmcgui.getCurrentWindowId, key='window_id')
     if not answered:
         return 'hung'
     if not window_id or window_id == WINDOW_INVALID:
