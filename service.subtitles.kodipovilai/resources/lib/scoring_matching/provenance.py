@@ -115,7 +115,7 @@ def load_allowlist(path, custom=''):
 
 # ---- the verdict -----------------------------------------------------------------------------------------------------------
 def empty_verdict():
-    return {'badge': '', 'label': '', 'reasons': [], 'translator': '', 'sync': [], 'known_syncers': [], 'notes': [],
+    return {'badge': '', 'label': '', 'reasons': [], 'translator': '', 'sync': [], 'sync_values': [], 'known_syncers': [], 'notes': [],
             'uploader': '', 'by_ear': False, 'fixed': False, 'date': '', 'downloads': None, 'provider': ''}
 
 
@@ -177,6 +177,36 @@ def _dedupe(reasons):
     return out
 
 
+def relevant_lines(cue_texts, allow=None):
+    """The normalised lines of a file's first and last 8 cues that the classifier can use, for the download-time sidecar: a line that
+    is credit-like (a role word or a studio form) or names an allowlisted studio, team, translator or custom handle. Dialogue is not
+    kept (the sidecar stores credits, never subtitle text). Never raises."""
+    out = []
+    try:
+        allow = allow if isinstance(allow, Allowlist) else Allowlist()
+        names = [toks for cat in ('studios', 'teams', 'translators') for toks, _n in allow.name_tokens[cat]]
+        names += [cr.tokens(n) for n in allow.custom.values()]
+        for text in cr.edge_texts(cue_texts):
+            info = cr.scan_cue(text)
+            if info is None:
+                continue
+            if (info.credit_like or any(cr.has_sequence(info.tokens, toks) for toks in names)) and info.norm not in out:
+                out.append(info.norm)
+    except Exception:
+        pass
+    return out
+
+
+def cue_infos(lines):
+    """The credits.LineInfo of the lines relevant_lines() stored (what classify(cue_infos=) takes)."""
+    out = []
+    for line in lines or ():
+        info = cr.scan_line(line) if isinstance(line, str) else None
+        if info is not None:
+            out.append(info)
+    return out
+
+
 def _pick(reasons):
     for badge in BADGES:
         if any(r['badge'] == badge for r in reasons):
@@ -191,7 +221,8 @@ def classify(meta, allow, *, hebrew, provider='', cue_infos=None):
 
     Returns a dict: badge (one of BADGES or ''), label (its Hebrew text), reasons (every evidence found, each with badge /
     source / field / text / match), and for the panel: translator (the raw translator value), sync (the raw sync / fetch /
-    fix credits), known_syncers, notes, uploader, by_ear, fixed, date, downloads, provider. Never raises."""
+    fix credits) and sync_values (only their names, as written), known_syncers, notes, uploader, by_ear, fixed, date,
+    downloads, provider. Never raises."""
     v = empty_verdict()
     try:
         if not hebrew or not isinstance(meta, dict):
@@ -218,6 +249,8 @@ def classify(meta, allow, *, hebrew, provider='', cue_infos=None):
                     reasons.append(_reason(VERIFIED_TRANSLATOR, provider, 'credits', c.raw, 'by_ear'))
             if c.roles & cr.SYNC_FAMILY:
                 v['sync'].append(c.raw)
+                if c.value:
+                    v['sync_values'].append(c.value)
                 for name in c.names:
                     if cr.name_key(name) in allow.keys['syncers']:
                         v['known_syncers'].append(name)
@@ -230,6 +263,7 @@ def classify(meta, allow, *, hebrew, provider='', cue_infos=None):
                 _line_evidence(allow, info, provider, 'comments', reasons)
                 if info.roles & cr.SYNC_FAMILY and 'translation' not in info.roles:
                     v['sync'].append(info.norm[:120])
+                    v['sync_values'].append(info.norm[:120])
         raw_release = meta.get('release_raw')
         if isinstance(raw_release, str) and cr.STUDIO_WORD in cr.tokens(raw_release):
             reasons.append(_reason(VERIFIED_STUDIO, provider, 'release', raw_release, cr.STUDIO_WORD))

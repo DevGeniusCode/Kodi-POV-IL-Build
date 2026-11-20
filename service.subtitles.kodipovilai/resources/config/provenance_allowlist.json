@@ -1,8 +1,8 @@
 {
  "_comment": [
-  "DRAFT for owner review (Provenance P2). Built-in allowlist of the Hebrew subtitle provenance badges; the user adds more handles in the setting custom_trusted_uploaders.",
+  "Built-in allowlist of the Hebrew subtitle provenance badges (Provenance P2 / P3, reviewed and approved by the owner on 20 Nov 2026); the user adds more handles in the setting custom_trusted_uploaders.",
   "Entries are a name or {name, aliases, status, evidence}. Names are matched WHOLE and case-insensitively, ignoring spaces, dots, underscores and hyphens (yoav_1610 = Yoav1610). A name shorter than 3 letters / digits is never loaded.",
-  "status \"proposed\" = a suggestion that is NOT loaded until you delete that field. evidence is a note for the reviewer and is ignored at runtime.",
+  "status \"proposed\" on an entry = a suggestion that is NOT loaded until that field is deleted (none is left now). evidence is a note for the reviewer and is ignored at runtime.",
   "studios -> VERIFIED_STUDIO; teams -> VERIFIED_TEAM (translator role, or a team account as uploader); translators -> VERIFIED_TRANSLATOR (translator role only); uploaders -> TRUSTED_UPLOADER (uploader field only); syncers -> shown in the panel as known sync / fetch names, never a badge; never -> never counted as anything."
  ],
  "version": 1,
@@ -71,8 +71,7 @@
   },
   {
    "name": "PetaBit",
-   "status": "proposed",
-   "evidence": "Telegram corpus 2019-20: 50 lines of the top 250, mixed: translator 9, team 27, sync 14; counts only in a translation line"
+   "evidence": "Telegram corpus 2019-20: 50 lines of the top 250, mixed: translator 9, team 27, sync 14; counts only in a translation line; approved by the owner 20 Nov 2026"
   }
  ],
  "translators": [
@@ -154,13 +153,11 @@
   },
   {
    "name": "הפלאש",
-   "status": "proposed",
-   "evidence": "Telegram corpus 2019-20: a nickname, 23 lines of the top 250"
+   "evidence": "Telegram corpus 2019-20: a nickname, 23 lines of the top 250; approved by the owner 20 Nov 2026"
   },
   {
    "name": "פיפו",
-   "status": "proposed",
-   "evidence": "Telegram corpus 2019-20: a nickname, 20 lines of the top 250"
+   "evidence": "Telegram corpus 2019-20: a nickname, 20 lines of the top 250; approved by the owner 20 Nov 2026"
   }
  ],
  "uploaders": [
@@ -201,18 +198,15 @@
   },
   {
    "name": "avi054",
-   "status": "proposed",
-   "evidence": "live probe 20 Nov 2026: Ktuvit uploader of 6 of 71 rows (Sinners, The Last of Us, Oppenheimer)"
+   "evidence": "live probe 20 Nov 2026: Ktuvit uploader of 6 of 71 rows (Sinners, The Last of Us, Oppenheimer); approved by the owner 20 Nov 2026"
   },
   {
    "name": "varod",
-   "status": "proposed",
-   "evidence": "live probe 20 Nov 2026: OpenSubtitles account that mirrors Ktuvit studio translations, 11 of the 33 non-importer rows"
+   "evidence": "live probe 20 Nov 2026: OpenSubtitles account that mirrors Ktuvit studio translations, 11 of the 33 non-importer rows; approved by the owner 20 Nov 2026"
   },
   {
    "name": "Just_Good",
-   "status": "proposed",
-   "evidence": "live probe 20 Nov 2026: OpenSubtitles \"Trusted member\", credits in the comments of 3 rows"
+   "evidence": "live probe 20 Nov 2026: OpenSubtitles \"Trusted member\", credits in the comments of 3 rows; approved by the owner 20 Nov 2026"
   }
  ],
  "syncers": [

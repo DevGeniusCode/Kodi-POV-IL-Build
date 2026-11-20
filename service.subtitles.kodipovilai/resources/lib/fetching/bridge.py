@@ -864,7 +864,8 @@ def download_inner(payload, for_delivery=True):
             # a season pack's files are cached per episode (fetching/season_pack.py): the playing episode's own entry
             # comes first; the untagged stem is every other download's
             pack_tag = _playing_pack_tag()
-            hit = (cached_subs_lookup(keybase + '.' + pack_tag) if pack_tag else None) or cached_subs_lookup(keybase)
+            tagged = cached_subs_lookup(keybase + '.' + pack_tag) if pack_tag else None
+            hit = tagged or cached_subs_lookup(keybase)
             if hit:
                 kodi.log('subs_engine_bridge: cached file hit ({0})'
                                .format(os.path.basename(hit)), level='INFO')
@@ -876,6 +877,8 @@ def download_inner(payload, for_delivery=True):
                 # serving the same unreadable copy for as long as the entry
                 # lives -- and keeps failing to mirror it to the pool.
                 ensure_utf8(hit)
+                # Provenance P4: a file fetched before its credits were ever read is scanned once, from the disk (never overwritten)
+                _note_file_credits(payload, language, hit, member=pack_tag if tagged else '', overwrite=False)
                 if (for_delivery
                         and settings.get_bool(
                             'auto_fix_sub_punctuation', True)
@@ -894,7 +897,7 @@ def download_inner(payload, for_delivery=True):
             keybase = None
 
     sub_file = module.download(download_data, sub_folder)
-    pack = _handle_season_pack(sub_file, sub_folder, language, keybase)
+    pack = _handle_season_pack(sub_file, sub_folder, language, keybase, payload)
     if pack:
         sub_file = pack['file']
     if not sub_file or not os.path.isfile(sub_file):
@@ -935,6 +938,9 @@ def download_inner(payload, for_delivery=True):
         # would serve this episode's file for every episode of the pack
         source_file = cached_subs_lookup(keybase + '.' + pack['tag']) or sub_file
     mark_logical_source(source_file)
+    # Provenance P4: the credits of the first and last 8 cues of the file just downloaded (a pack's members were noted above)
+    if not pack:
+        _note_file_credits(payload, language, source_file)
 
     # The old vendored fixer is intentionally gone. One canonical MoranSubs
     # processor owns Hebrew playback, on a disposable local copy only.
@@ -966,7 +972,33 @@ def _playing_pack_tag():
         return ''
 
 
-def _handle_season_pack(sub_file, sub_folder, language, keybase):
+# Provenance P4 (fetching/provenance_sidecar.py): what a download that happens anyway tells about who made the subtitle. Never raises.
+_MAX_PACK_MEMBERS = 80
+
+
+def _note_file_credits(payload, language, path, member='', overwrite=True):
+    try:
+        if 'Hebrew' not in (language or ''):
+            return
+        from resources.lib.fetching import provenance_sidecar
+        provenance_sidecar.record(payload, path, member=member, overwrite=overwrite)
+    except Exception:
+        pass
+
+
+def _note_pack_credits(payload, language, episodes):
+    """The credits of every file of a season pack ({(season, episode): path}), each under its episode tag."""
+    try:
+        if 'Hebrew' not in (language or ''):
+            return
+        from resources.lib.fetching import provenance_sidecar, season_pack
+        members = {season_pack.tag(s, e): path for (s, e), path in sorted(episodes.items())[:_MAX_PACK_MEMBERS]}
+        provenance_sidecar.record_many(payload, members)
+    except Exception:
+        pass
+
+
+def _handle_season_pack(sub_file, sub_folder, language, keybase, payload=None):
     """A download that unpacked a whole season (fetching/season_pack.py): the file of the playing episode is delivered and
     cached per episode, and the next episode's file is kept for it. None for every other download."""
     try:
@@ -978,8 +1010,11 @@ def _handle_season_pack(sub_file, sub_folder, language, keybase):
                 cached_subs_store(keybase + '.' + tag, path)
 
         # a file of the pack must be UTF-8 before it is cached or remembered (the provider normalised only its own pick)
-        for _ep, path in season_pack.scan_folder(sub_folder, season_pack.playing_release(info)).items():
+        episodes = season_pack.scan_folder(sub_folder, season_pack.playing_release(info))
+        for path in episodes.values():
             ensure_utf8(path)
+        if payload is not None and season_pack.is_pack(episodes):
+            _note_pack_credits(payload, language, episodes)
         return season_pack.handle_download(sub_file, sub_folder, info, language, cache_store=_store)
     except Exception as e:
         kodi.log('subs_engine_bridge: season pack step skipped: {0}'.format(e), level='DEBUG')

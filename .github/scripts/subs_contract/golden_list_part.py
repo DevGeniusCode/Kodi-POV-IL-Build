@@ -182,6 +182,57 @@ _run_list('video_ref_li_filename', engine=_H + _O, pool=_PV,
 _run_list('video_ref_label', engine=_H, pool=_PV, info={'filepath': '', 'imdb_id': 'tt1', 'label': _REL, 'title': 'Movie'})
 _run_list('video_ref_title_only', engine=_H, pool=_PV, info={'filepath': '', 'imdb_id': 'tt1', 'title': 'Movie 2020'})
 
+# Provenance P3: engine rows that carry the provider's `_meta` go through the REAL search stages (list_candidates); the record
+# proves the metadata is still on the rows the chooser window gets (the contract also asserts it)
+_PM = [dict(_eng('h', 'ktuvit', 'Hebrew', 'Movie.2020.1080p.WEB-DL.x264-GRP', 100),
+            _meta={'credits': 'תרגום: אולפנים', 'uploader': 'yoav_1610', 'date': '2025-05-11', 'downloads': 1920}),
+       dict(_eng('h', 'wizdom', 'Hebrew', 'Movie.2020.720p.BluRay.x264-OTHER', 62),
+            _meta={'credits': 'תרגום: TheInitiative (HDSubs)', 'date': '2018-03-11'}),
+       _eng('h', 'ktuvit', 'Hebrew', 'Movie.2020.1080p.WEB.h264-AAA', 85)]
+_run_list('provenance_meta_rows', engine=_PM + _O[:2])
+
+# Provenance P3: the chooser rows of Hebrew provider candidates that carry `_meta` (badge chip, metadata properties), with the
+# shipped allowlist and one user handle, against the playing release. Hand-made candidates, one per case.
+_prov = _il.import_module('resources.lib.scoring_matching.provenance')
+_pallow = _prov.load_allowlist(os.path.join(ROOT, 'resources', 'config', 'provenance_allowlist.json'), 'My Friend')
+
+
+def _pc(meta=None, typ='engine', lang='he', pct=90, mt=False, current=False, release=_REL, source='ktuvit'):
+    head = ('[תרגום מכונה] ' if mt else '') + 'Ktuvit · %d%%' % pct
+    c = {'filename': ('» נוכחית · ' if current else '') + head + '  —  ' + release, 'language': lang, 'pct': pct,
+         'link': _ENC({'type': typ, 'source': source, 'language': 'Hebrew', 'filename': release, 'download_data': {}, 'hi': 'false'})}
+    if meta is not None:
+        c['_meta'] = meta
+    return c
+
+
+_PCASES = [
+    ('studio_ktuvit', _pc({'credits': 'תרגום: אולפנים | הביא וסנכרן: avi054 | תואם לגרסאות WEB', 'uploader': 'yoav_1610', 'date': '2025-05-11', 'downloads': 1920})),
+    ('studio_current_fixed', _pc({'credits': 'תרגום: אולפנים | תיקון: אריאל אפרתי', 'uploader': 'greatoz', 'date': '2019-12-05', 'downloads': 1657, 'fixed': True}, current=True)),
+    ('team_wizdom', _pc({'credits': 'תרגום: TheInitiative (HDSubs)', 'date': '2018-03-11'}, source='wizdom')),
+    ('translator', _pc({'credits': 'תרגום וסנכרון: Afenla', 'uploader': 'D N A'})),
+    ('by_ear', _pc({'credits': 'תורגם משמיעה: Somebody'})),
+    ('uploader_only', _pc({'credits': 'תרגום: אלמוני', 'uploader': 'NightRider', 'date': '2026-01-28'}, source='wizdom')),
+    ('custom_handle', _pc({'uploader': 'my_friend'})),
+    ('no_evidence_with_meta', _pc({'credits': 'תרגום: dorrr | התרגום אינו מיטבי', 'uploader': 'blade_trinity', 'date': '2023-11-10', 'downloads': 3628})),
+    ('sync_only_known_name', _pc({'credits': 'תרגום: אלמוני | סנכרון: SnoWhite'})),
+    ('opensubtitles_release_tag', _pc({'release_raw': '* תרגום אולפנים * Movie.2020.1080p.WEB-DL.x264-GRP', 'uploader': 'varod', 'uploader_rank': 'Administrator',
+                                       'date': '2025-10-09', 'downloads': 524}, source='opensubtitles')),
+    ('opensubtitles_importer', _pc({'uploader': 'os-auto', 'uploader_rank': 'Application Developers', 'date': '2013-05-11', 'downloads': 3531}, source='opensubtitles')),
+    ('no_meta', _pc()),
+    ('file_credits_only', dict(_pc(), _file_credits=['Afenla :תרגום וסנכרון'])),
+    ('file_credits_studio_over_metadata', dict(_pc({'credits': 'תרגום: dorrr', 'uploader': 'blade_trinity'}), _file_credits=['הפקת כתוביות אולפני אלרום'])),
+    ('file_credits_empty', dict(_pc({'credits': 'תרגום: dorrr'}), _file_credits=[])),
+    ('foreign_with_meta', _pc({'credits': 'תרגום: אולפנים'}, lang='en')),
+    ('machine_translated_with_meta', _pc({'credits': 'תרגום: אולפנים'}, mt=True)),
+    ('ai_row_with_meta', _pc({'credits': 'תרגום: אולפנים'}, typ='engine_ai', lang='en')),
+]
+for _n, _c in _PCASES:
+    _row = _rows.build(_c, _REL, prov=_pallow)
+    _ROWPROPS.update(_row['props'])
+    R['chooserprov.' + _n] = json.dumps(_row, ensure_ascii=False, sort_keys=True).replace(
+        json.dumps(ROOT.replace(os.sep, '/'))[1:-1], '<A>').replace(json.dumps(ROOT)[1:-1], '<A>')
+
 # Step 6: every list-item property the chooser window XML reads is produced for a real row (a name that only the XML
 # knows would show an empty column; the contract expects an empty list here)
 with open(os.path.join(ROOT, 'resources', 'skins', 'Default', '1080i', 'script.moransubs.chooser.xml'), encoding='utf-8') as _xf:

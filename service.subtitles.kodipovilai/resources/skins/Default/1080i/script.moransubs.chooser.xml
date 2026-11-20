@@ -11,6 +11,10 @@
      edition, frame rate, source, group, streaming service, proven timing), and the provider / type / language /
      accessibility of the subtitle. Rows and properties are built in ui/chooser_rows.py; the colours are baked
      into the property text (BBCode), a per-row <textcolor>$INFO[...]</textcolor> is unreliable in Kodi.
+     PROVENANCE (Hebrew provider rows): a badge chip in the row's chips and, in the right panel between the release name and the
+     match rows, the "איכות ומקור הכתובית" block with the provider's own metadata and the credits read inside the downloaded file
+     (p_prov, p_prov_src, p_translator, p_sync, p_uploader, p_date, p_downloads, p_fixed; has_meta shows / hides the block).
+     Positive only: a row without evidence has no badge and no "unverified" text.
      Ids: list 100, manual search 202, back to the automatic list 203 (only while a manual result is shown: window
      property subs.manual), cancel translation 204, subtitle settings 205, cancel the automatic sync 206 (only while
      the current subtitle was synced automatically: window property subs.sync.mode), close 201. Button row (left to
@@ -55,13 +59,6 @@
             <font>font14</font>
             <label>[B]$INFO[Window.Property(subs.brand)][/B]</label>
             <textcolor>FF8FE0FF</textcolor>
-            <aligny>center</aligny>
-        </control>
-        <control type="label">
-            <left>330</left><top>30</top><width>520</width><height>50</height>
-            <font>font14</font>
-            <label>[B]בחירת כתוביות[/B]</label>
-            <textcolor>FFF2F5F8</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="label">
@@ -350,224 +347,144 @@
                 <texture colordiffuse="26FFFFFF">white.png</texture>
             </control>
 
-            <!-- the full release filename -->
-            <control type="label">
-                <left>24</left><top>118</top><width>512</width><height>28</height>
-                <font>font12</font>
-                <label>[B]שם השחרור[/B]</label>
-                <textcolor>FF8FE0FF</textcolor>
-                <aligny>center</aligny>
+            <!-- RIGHT PANEL, below the match number: ONE vertical list of fixed-height rows. A row whose property is empty is
+                 hidden and the rows below move up (the quality block is hidden as a whole for a row without metadata).
+                 Order: release name -> quality and provenance -> how it matches your file -> subtitle details. The worst
+                 case (every row shown) is 696 of the 714 pixels of this list. -->
+            <control type="grouplist">
+                <left>0</left><top>114</top><width>560</width><height>714</height>
+                <orientation>vertical</orientation><itemgap>0</itemgap>
+            <!-- the full release filename: 2 lines (the wrapped text is built in ui/chooser_rows.py) -->
+            <control type="group">
+                <width>560</width><height>28</height>
+                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]שם השחרור[/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
-            <control type="textbox">
-                <left>24</left><top>148</top><width>512</width><height>180</height>
-                <font>font13</font>
-                <label>$INFO[Container(100).ListItem.Property(p_release)]</label>
-                <textcolor>FFF2F5F8</textcolor>
-                <align>left</align>
+            <control type="group">
+                <width>560</width><height>72</height>
+                <control type="textbox"><left>24</left><top>0</top><width>512</width><height>72</height><font>font13</font><label>$INFO[Container(100).ListItem.Property(p_release)]</label><textcolor>FFF2F5F8</textcolor><align>left</align></control>
             </control>
+            <control type="group">
+                <width>560</width><height>6</height>
 
-            <!-- why it matched: yours vs the subtitle's -->
-            <control type="label">
-                <left>24</left><top>338</top><width>512</width><height>28</height>
-                <font>font12</font>
-                <label>[B]התאמה לקובץ שלך[/B]</label>
-                <textcolor>FF8FE0FF</textcolor>
-                <aligny>center</aligny>
             </control>
-            <control type="label">
-                <left>24</left><top>364</top><width>512</width><height>26</height>
-                <font>font12</font>
-                <label>ערכים: הקובץ שלך מול הכתובית</label>
-                <textcolor>FF6F767C</textcolor>
-                <aligny>center</aligny>
+            <!-- SUBTITLE QUALITY AND PROVENANCE (Provenance P3 / P4): the provider's own metadata, and the credits read inside the downloaded file -->
+            <control type="group">
+                <width>560</width><height>28</height>
+                <visible>!String.IsEmpty(Container(100).ListItem.Property(has_meta))</visible>
+                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]איכות ומקור הכתובית[/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
-
-            <control type="label">
-                <left>16</left><top>396</top><width>156</width><height>34</height>
-                <font>font12</font><label>פרק</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <visible>!String.IsEmpty(Container(100).ListItem.Property(p_prov))</visible>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>אימות מקור</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>190</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_prov)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="group"><left>0</left><top>0</top><visible>!String.IsEmpty(Container(100).ListItem.Property(p_prov_src))</visible><control type="label"><left>386</left><top>0</top><width>44</width><height>30</height><font>font12</font><label>לפי</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control><control type="label"><left>436</left><top>0</top><width>104</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_prov_src)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control></control>
             </control>
-            <control type="label">
-                <left>186</left><top>396</top><width>240</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(f_episode)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <visible>!String.IsEmpty(Container(100).ListItem.Property(p_translator))</visible>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>מתרגם</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_translator)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny><scroll>true</scroll></control>
             </control>
-            <control type="label">
-                <left>430</left><top>396</top><width>110</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(fs_episode)]</label>
-                <align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <visible>!String.IsEmpty(Container(100).ListItem.Property(p_sync))</visible>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>סנכרון / תיקון</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_sync)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny><scroll>true</scroll></control>
             </control>
-
-            <control type="label">
-                <left>16</left><top>430</top><width>156</width><height>34</height>
-                <font>font12</font><label>מהדורה</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <visible>!String.IsEmpty(Container(100).ListItem.Property(p_uploader))</visible>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>הועלה ע"י</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_uploader)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny><scroll>true</scroll></control>
             </control>
-            <control type="label">
-                <left>186</left><top>430</top><width>240</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(f_edition)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <visible>!String.IsEmpty(Container(100).ListItem.Property(p_date)) | !String.IsEmpty(Container(100).ListItem.Property(p_downloads))</visible>
+                <control type="group"><left>0</left><top>0</top><visible>!String.IsEmpty(Container(100).ListItem.Property(p_date))</visible><control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>תאריך</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control><control type="label"><left>186</left><top>0</top><width>130</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_date)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control></control>
+                <control type="group"><left>0</left><top>0</top><visible>!String.IsEmpty(Container(100).ListItem.Property(p_downloads))</visible><control type="label"><left>320</left><top>0</top><width>104</width><height>30</height><font>font12</font><label>הורדות</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control><control type="label"><left>430</left><top>0</top><width>110</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_downloads)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control></control>
             </control>
-            <control type="label">
-                <left>430</left><top>430</top><width>110</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(fs_edition)]</label>
-                <align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <visible>!String.IsEmpty(Container(100).ListItem.Property(p_fixed))</visible>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>תיקון</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_fixed)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
-
-            <control type="label">
-                <left>16</left><top>464</top><width>156</width><height>34</height>
-                <font>font12</font><label>קצב פריימים</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>10</height>
+                <visible>!String.IsEmpty(Container(100).ListItem.Property(has_meta))</visible>
+                <control type="image"><left>24</left><top>5</top><width>512</width><height>1</height><texture colordiffuse="26FFFFFF">white.png</texture></control>
             </control>
-            <control type="label">
-                <left>186</left><top>464</top><width>240</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(f_fps)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>פרק</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>240</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_episode)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>430</left><top>0</top><width>110</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_episode)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
-            <control type="label">
-                <left>430</left><top>464</top><width>110</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(fs_fps)]</label>
-                <align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>מהדורה</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>240</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_edition)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>430</left><top>0</top><width>110</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_edition)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
-
-            <control type="label">
-                <left>16</left><top>498</top><width>156</width><height>34</height>
-                <font>font12</font><label>סוג מקור</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>קצב פריימים</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>240</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_fps)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>430</left><top>0</top><width>110</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_fps)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
-            <control type="label">
-                <left>186</left><top>498</top><width>240</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(f_source)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>סוג מקור</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>240</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_source)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>430</left><top>0</top><width>110</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_source)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
-            <control type="label">
-                <left>430</left><top>498</top><width>110</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(fs_source)]</label>
-                <align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>קבוצת שחרור</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>240</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_group)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>430</left><top>0</top><width>110</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_group)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
-
-            <control type="label">
-                <left>16</left><top>532</top><width>156</width><height>34</height>
-                <font>font12</font><label>קבוצת שחרור</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>שירות סטרימינג</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>240</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_service)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>430</left><top>0</top><width>110</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_service)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
-            <control type="label">
-                <left>186</left><top>532</top><width>240</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(f_group)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>תזמון</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>240</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_timing)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>430</left><top>0</top><width>110</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_timing)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
-            <control type="label">
-                <left>430</left><top>532</top><width>110</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(fs_group)]</label>
-                <align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>14</height>
+                <control type="image"><left>24</left><top>7</top><width>512</width><height>1</height><texture colordiffuse="26FFFFFF">white.png</texture></control>
             </control>
-
-            <control type="label">
-                <left>16</left><top>566</top><width>156</width><height>34</height>
-                <font>font12</font><label>שירות סטרימינג</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>28</height>
+                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]פרטי הכתובית[/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
-            <control type="label">
-                <left>186</left><top>566</top><width>240</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(f_service)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>ספק</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_provider)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
-            <control type="label">
-                <left>430</left><top>566</top><width>110</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(fs_service)]</label>
-                <align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>סוג</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_kind)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny><scroll>true</scroll></control>
             </control>
-
-            <control type="label">
-                <left>16</left><top>600</top><width>156</width><height>34</height>
-                <font>font12</font><label>תזמון</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>שפה</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_lang)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
-            <control type="label">
-                <left>186</left><top>600</top><width>240</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(f_timing)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>נגישות</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_access)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
-            <control type="label">
-                <left>430</left><top>600</top><width>110</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(fs_timing)]</label>
-                <align>right</align><aligny>center</aligny>
-            </control>
-
-            <control type="image">
-                <left>24</left><top>646</top><width>512</width><height>1</height>
-                <texture colordiffuse="26FFFFFF">white.png</texture>
-            </control>
-
-            <!-- the subtitle itself -->
-            <control type="label">
-                <left>24</left><top>654</top><width>512</width><height>28</height>
-                <font>font12</font>
-                <label>[B]פרטי הכתובית[/B]</label>
-                <textcolor>FF8FE0FF</textcolor>
-                <aligny>center</aligny>
-            </control>
-
-            <control type="label">
-                <left>16</left><top>686</top><width>156</width><height>34</height>
-                <font>font12</font><label>ספק</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
-            </control>
-            <control type="label">
-                <left>186</left><top>686</top><width>354</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(p_provider)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny>
-            </control>
-
-            <control type="label">
-                <left>16</left><top>720</top><width>156</width><height>34</height>
-                <font>font12</font><label>סוג</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
-            </control>
-            <control type="label">
-                <left>186</left><top>720</top><width>354</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(p_kind)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny><scroll>true</scroll>
-            </control>
-
-            <control type="label">
-                <left>16</left><top>754</top><width>156</width><height>34</height>
-                <font>font12</font><label>שפה</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
-            </control>
-            <control type="label">
-                <left>186</left><top>754</top><width>354</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(p_lang)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny>
-            </control>
-
-            <control type="label">
-                <left>16</left><top>788</top><width>156</width><height>34</height>
-                <font>font12</font><label>נגישות</label>
-                <textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny>
-            </control>
-            <control type="label">
-                <left>186</left><top>788</top><width>354</width><height>34</height>
-                <font>font12</font>
-                <label>$INFO[Container(100).ListItem.Property(p_access)]</label>
-                <textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny>
             </control>
         </control>
 

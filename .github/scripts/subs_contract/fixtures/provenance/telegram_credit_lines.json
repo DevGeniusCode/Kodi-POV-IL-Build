@@ -239,7 +239,7 @@
   {
    "line": "\"תורגם על ידי \"הפלאש",
    "corpus_guess": "translator",
-   "badge": ""
+   "badge": "VERIFIED_TRANSLATOR"
   },
   {
    "line": "Qsubs חברי צוות",
@@ -254,7 +254,7 @@
   {
    "line": "תורגם וסונכרן על-ידי פיפו",
    "corpus_guess": "translator",
-   "badge": ""
+   "badge": "VERIFIED_TRANSLATOR"
   },
   {
    "line": "עברית: יעל אדמי",
@@ -449,7 +449,7 @@
   {
    "line": "תורגם וסונכרן ע\"י פיפו",
    "corpus_guess": "translator",
-   "badge": ""
+   "badge": "VERIFIED_TRANSLATOR"
   },
   {
    "line": "danSW הובא וסנכרן ע\"י",
@@ -794,7 +794,7 @@
   {
    "line": "תורגם על ידי הפלאש",
    "corpus_guess": "translator",
-   "badge": ""
+   "badge": "VERIFIED_TRANSLATOR"
   },
   {
    "line": ":סונכרן לגרסה זו על-ידי Mithrandir-עופר ו, katanov",
@@ -839,7 +839,7 @@
   {
    "line": "Highlander-תרגום ע\"י \"הפלאש\" ו",
    "corpus_guess": "translator",
-   "badge": ""
+   "badge": "VERIFIED_TRANSLATOR"
   },
   {
    "line": "Highlander הגהה, תיקון וסנכרון ע\"י",
@@ -909,7 +909,7 @@
   {
    "line": "תורגם וסונכרן על ידי PetaBit",
    "corpus_guess": "translator",
-   "badge": ""
+   "badge": "VERIFIED_TEAM"
   },
   {
    "line": "d#oo#m :הובא סנכרון: יוביבי",
@@ -919,7 +919,7 @@
   {
    "line": "PetaBit תורגם וסונכרן על ידי מוקדש לפולי שלי",
    "corpus_guess": "translator",
-   "badge": ""
+   "badge": "VERIFIED_TEAM"
   },
   {
    "line": ":תרגום וסנכרון MsG",

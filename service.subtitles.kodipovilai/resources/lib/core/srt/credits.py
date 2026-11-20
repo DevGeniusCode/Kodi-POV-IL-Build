@@ -72,7 +72,7 @@ def has_sequence(haystack, needle):
 
 # ---- role words ----------------------------------------------------------------------------------------------------------
 # Word level (prefix 'ו' = and). The same alternatives, wrapped in word boundaries, find the roles in a line.
-_TRANS_W = r'ו?(?:תורגם|תורגמו|תורגמה|תרגום|תרגם|תרגמו|תירגם|translated|translation)'
+_TRANS_W = r'ו?(?:תורגם|תורגמו|תורגמה|תרגום|תרגם|תרגמו|תירגום|תירגם|תירגמו|translated|translation)'
 _SYNC_W = r'ו?(?:סונכרן|סונכרנו|סונכרנה|סנכרן|סינכרן|סנכרון|סינכרון|סנכון|resync(?:ed|hed)?|sync(?:ed|hed)?)'
 _FIX_W = r'ו?(?:תיקון|תיקונים|תיקן|תוקן|הגהה|הגהות|נערכו|נערך|עריכה|corrected|fixed)'
 _FETCH_W = r'ו?(?:הובא|הובאו|הביא|נקרע|קודד|הוספת)'
@@ -89,16 +89,17 @@ _BY_EAR_RE = re.compile(_B + r'(?:משמיעה|משמיע)' + _E)
 # Forms only a studio or an official source writes (never a bare brand word: 'Disney', 'Yes', 'HOT' are noise, and so is the
 # Netflix title card 'סדרה מקורית של NETFLIX').
 _STUDIO_FORMS = (
-    ('production', re.compile(_B + r'ו?הפקת\s+(?:תרגום|כתוביות)')),
-    ('subtitle_credit', re.compile(_B + r'תרגום\s+(?:כתוביות|כותרות)' + _E)),
+    ('production', re.compile(_B + r'ו?הפקת\s+(?:תי?רגום|כתוביות)')),
+    ('subtitle_credit', re.compile(_B + r'תי?רגום\s+(?:כתוביות|כותרות)' + _E)),
     ('hebrew_credit', re.compile(_B + r'עברית\s*:')),
     ('source_tag', re.compile(r'subtitles?\s+source\s*:', re.I)),
-    ('studio_translation', re.compile(_B + r'תרגום\s*:?\s*' + STUDIO_WORD + _E)),
+    ('studio_translation', re.compile(_B + r'תי?רגום\s*:?\s*' + STUDIO_WORD + _E)),
 )
 _QUALIFIER_RE = re.compile(r'\((?:' + STUDIO_WORD + r'|נטפליקס)\)')     # 'תרגום: <name> (אולפנים)' / '(נטפליקס)'
 # The label phrases that name the studio form on their own ('תרגום כתוביות: <name>'): a metadata label.
 STUDIO_LABELS = frozenset(('תרגום כתוביות', 'תרגום כותרות', 'הפקת תרגום', 'הפקת כתוביות', 'הפקת תרגום וכתוביות',
-                           'תרגום והפקת כתוביות', 'עברית'))
+                           'תרגום והפקת כתוביות', 'עברית', 'תירגום כתוביות', 'תירגום כותרות', 'הפקת תירגום',
+                           'הפקת תירגום וכתוביות', 'תירגום והפקת כתוביות'))
 
 
 def _word_roles(token):
@@ -130,6 +131,47 @@ def is_credit_word(word):
     """Whether one word is a role word (translated, synced, fixed, fetched) or a glue word of a credit label."""
     t = normalize(word).strip(' .:-')
     return bool(t) and (bool(_word_roles(t)) or t.casefold() in _GLUE)
+
+
+# ---- a downloaded subtitle file (Provenance P4) ----------------------------------------------------------------------------
+_TIME_LINE_RE = re.compile(r'\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->')
+MAX_FILE_BYTES = 2 * 1024 * 1024
+
+
+def decode_bytes(data):
+    """The text of a subtitle file's bytes: BOM-marked UTF-8 / UTF-16, plain UTF-8, then cp1255 (what most Hebrew files are),
+    then cp1255 with replacements. '' for nothing."""
+    if not data:
+        return ''
+    data = bytes(data[:MAX_FILE_BYTES])
+    try:
+        if data.startswith(b'\xef\xbb\xbf'):
+            return data[3:].decode('utf-8', 'replace')
+        if data[:2] in (b'\xff\xfe', b'\xfe\xff'):
+            return data.decode('utf-16')
+        return data.decode('utf-8')
+    except UnicodeError:
+        pass
+    try:
+        return data.decode('cp1255')
+    except UnicodeError:
+        return data.decode('cp1255', 'replace')
+
+
+def cue_texts(srt_text):
+    """The text of every cue of an SRT text, in order (a cue's lines joined by a space; a block without a time line or without
+    text is skipped). A tolerant block reader, not a validator."""
+    text = str(srt_text or '').replace('\r\n', '\n').replace('\r', '\n').lstrip('\ufeff')
+    out = []
+    for block in re.split(r'\n\s*\n', text):
+        lines = block.strip('\n').split('\n')
+        for i, line in enumerate(lines):
+            if _TIME_LINE_RE.search(line):
+                body = ' '.join(x.strip() for x in lines[i + 1:] if x.strip())
+                if body:
+                    out.append(body)
+                break
+    return out
 
 
 # ---- a metadata string -----------------------------------------------------------------------------------------------------

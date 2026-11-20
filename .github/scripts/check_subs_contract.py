@@ -380,6 +380,11 @@ if '--static' not in sys.argv:
                         seen.add(r['link'].get('type'))
         check('the 7 link types appear in the list scenarios', types <= seen, sorted(types - seen))
         check('star mapping scenarios present', len([k for k in got if k.startswith('liststars.')]) >= 29)
+        # Provenance P3: the provider's `_meta` is still on the rows after the real search stages, and a row without it has none
+        _pm = json.loads(got['list.provenance_meta_rows'])['rows']
+        check('provenance: _meta survives list_candidates to the chooser rows (the 2 rows that carry it still do, the others have none)',
+              sum(1 for r in _pm if '_meta' in r) == 2 and all(r['_meta'].get('credits') for r in _pm if '_meta' in r)
+              and not any('_meta' in r for r in _pm if r.get('language') != 'he'))
     # the embedded-subtitle extractor on synthetic Matroska files (Subtitle Phase 4, step 4e)
     xout = os.path.join(tempfile.mkdtemp(prefix='contract_ext_'), 'extract.json')
     p = subprocess.run([sys.executable, '-I', '-B', os.path.join(FIX, 'golden_extract.py'), ADDON, xout],
@@ -427,6 +432,22 @@ if '--static' not in sys.argv:
     bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
     check('unit_provenance: credit grammar (both text orders), the four positive badges, sync credits never a badge, the allowlist, '
           'the fixture rows and 250 Telegram credit lines (%d checks)'
+          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
+          bad[:3] or (p.stderr or '')[-300:])
+    # the provenance UI (Provenance P3, 20 Nov 2026): the badge chip, the metadata properties, the XML strip, the setting and its strings, the loader
+    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_provenance_ui.py')],
+                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
+    check('unit_provenance_ui: badge chip and its priority, metadata properties, positive only, the right-panel quality block, the custom_trusted_uploaders setting '
+          'and strings, the allowlist loader, a real row end to end (%d checks)'
+          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
+          bad[:3] or (p.stderr or '')[-300:])
+    # the download-time provenance sidecar (Provenance P4, 20 Nov 2026): file helpers, the key, store / prune / attach, the hooks of download_inner
+    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_provenance_sidecar.py')],
+                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
+    check('unit_provenance_sidecar: the yod spellings, the file helpers, the key, store / prune / attach, and the hooks of download_inner '
+          '(fresh download, cache hit, season pack) (%d checks)'
           % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
           bad[:3] or (p.stderr or '')[-300:])
 

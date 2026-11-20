@@ -81,6 +81,11 @@ check('the grammar knows every Hebrew word of the older cues._CREDIT_RE filter (
       all(cr.is_credit_word(w) and cues._CREDIT_RE.search(w) for w in ('תורגם', 'תרגום', 'סונכרן', 'סנכרון', 'כתוביות', 'הובא')))
 
 # ---- 2. metadata credits ---------------------------------------------------------------------------------------------------
+check('the yod spellings: תירגום / תירגם are recognised like תרגום / תורגם (verb, label, studio forms, badges)',
+      all(cr.scan_line(x).roles == {'translation'} for x in ('תירגום: SnoWhite', 'תירגם על ידי Afenla', 'SnoWhite :תירגום', 'תורגם X', 'תרגום Y'))
+      and cr.label_roles('תירגום') == {'translation'} and cr.scan_line('תירגום כתוביות: דנה כהן').studio_forms == ('subtitle_credit',)
+      and cr.scan_line('הפקת תירגום וכתוביות אולפני אלרום').studio_forms == ('production',) and cr.scan_line('תירגום: אולפנים').studio_forms == ('studio_translation',)
+      and cr.is_credit_word('תירגום') and cr.is_credit_word('וסנכרון'))
 check('label_roles: translation, sync family, mixed labels, studio labels',
       cr.label_roles('תרגום') == {'translation'} and cr.label_roles('הביא, תיקן וסנכרן') == {'fetch', 'fix', 'sync'}
       and cr.label_roles('תרגום וסנכרון') == {'translation', 'sync'} and cr.label_roles('סנכרון ותיקון') == {'sync', 'fix'}
@@ -158,10 +163,11 @@ check('the shipped allowlist holds the owner-approved names (20 Nov 2026)',
       and all(cr.name_key(n) in SHIPPED.keys['uploaders'] for n in ('NightRider', 'minime', 'dixie', 'The Duke', 'Yoav1610', 'הנהלה', 'איש צוות', 'מערכת'))
       and all(cr.name_key(n) in SHIPPED.keys['studios'] for n in ('אולפני אלרום', 'טרנס טייטלס', 'אולפני נ.ל.ס', 'SDI Media Group', 'אולפנים'))
       and all(cr.name_key(n) in SHIPPED.never for n in ('os-auto', 'אלמוני', 'אנונימי')))
-check('the shipped allowlist keeps suggestions out until the owner removes "proposed" (avi054, varod, Just_Good, PetaBit)',
-      not {'avi054', 'varod', 'justgood'} & set(SHIPPED.keys['uploaders']) and 'petabit' not in SHIPPED.keys['teams']
-      and sum(1 for c in ('teams', 'translators', 'uploaders') for e in raw[c] if e.get('status') == 'proposed') == len(
-          [1 for c, n in SHIPPED.skipped if n]))
+check('the six entries the owner approved on 20 Nov 2026 are loaded (avi054, varod, Just_Good, PetaBit, הפלאש, פיפו) and no suggestion is left',
+      {'avi054', 'varod', 'justgood'} <= set(SHIPPED.keys['uploaders']) and 'petabit' in SHIPPED.keys['teams']
+      and {cr.name_key('הפלאש'), cr.name_key('פיפו')} <= set(SHIPPED.keys['translators'])
+      and not [e for c in ('studios', 'teams', 'translators', 'uploaders', 'syncers') for e in raw[c] if isinstance(e, dict) and e.get('status')]
+      and SHIPPED.skipped == [])
 check('no shipped name is shorter than the minimum, and no name is both a team and a translator',
       all(len(k) >= pv.MIN_KEY for c in SHIPPED.keys.values() for k in c) and not set(SHIPPED.keys['teams']) & set(SHIPPED.keys['translators']))
 
@@ -196,7 +202,7 @@ check('a translated-by-ear credit -> translator, with the flag', cls({'credits':
       and cls({'credits': 'תורגם משמיעה: Somebody'})['by_ear'] and not cls({'credits': 'תרגום: Somebody'})['by_ear'])
 check('an allowlisted uploader (or staff, ranks and case aside) -> trusted uploader; an unknown one -> nothing',
       badge({'uploader': 'NightRider'}) == 'TRUSTED_UPLOADER' and badge({'uploader': 'yoav_1610'}) == 'TRUSTED_UPLOADER'
-      and badge({'uploader': 'איש צוות'}) == 'TRUSTED_UPLOADER' and badge({'uploader': 'D N A'}) == '' and badge({'uploader': 'avi054'}) == '')
+      and badge({'uploader': 'איש צוות'}) == 'TRUSTED_UPLOADER' and badge({'uploader': 'D N A'}) == '' and badge({'uploader': 'nobody_known'}) == '' and badge({'uploader': 'avi054'}) == 'TRUSTED_UPLOADER')
 check('precedence: studio > team > translator > uploader, and every evidence is listed',
       badge({'credits': 'תרגום: אולפנים', 'uploader': 'NightRider'}) == 'VERIFIED_STUDIO'
       and [r['badge'] for r in cls({'credits': 'תרגום: אולפנים', 'uploader': 'NightRider'})['reasons']] == ['VERIFIED_STUDIO', 'TRUSTED_UPLOADER']

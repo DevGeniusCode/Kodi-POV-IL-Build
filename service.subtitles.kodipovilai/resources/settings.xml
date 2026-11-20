@@ -372,6 +372,16 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <setting id="custom_trusted_uploaders" type="string" label="32656" help="32657"> <!-- Extra trusted uploaders / translators (comma separated) -->
+          <level>1</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="edit" format="string">
+            <heading>32656</heading>
+          </control>
+        </setting>
       </group>
     </category>
 

@@ -673,3 +673,11 @@ msgstr "התאמה מינימלית לכתוביות אוטומטיות"
 msgctxt "#32655"
 msgid "Auto-sub skips every subtitle whose release match is below this number (in percent). 0 turns the limit off. Rows with no match number (the video's own subtitle, a file beside the video) are not filtered. The instant lane always needs at least 90."
 msgstr "הכתוביות האוטומטיות מדלגות על כל כתובית שהתאמת השחרור שלה נמוכה מהמספר הזה (באחוזים). 0 מבטל את ההגבלה. שורות בלי מספר התאמה (הכתובית המובנית בסרט, קובץ לצד הסרט) לא מסוננות. המסלול המיידי דורש תמיד לפחות 90."
+
+msgctxt "#32656"
+msgid "Trusted uploaders and translators"
+msgstr "מעלים ומתרגמים מהימנים נוספים"
+
+msgctxt "#32657"
+msgid "Extra names of Hebrew-subtitle uploaders or translators to highlight with a \"known uploader\" / \"known translator\" badge in the subtitle chooser, separated by commas (for example: First Name, another_handle). They are added to the built-in list. A badge only highlights a row: it never hides, reorders or blocks anything."
+msgstr "שמות נוספים של מעלים או מתרגמים של כתוביות בעברית, מופרדים בפסיקים (לדוגמה: שם ראשון, another_handle), שיסומנו בתגית \"מעלה בולט\" או \"מתרגם מוכר\" בחלון בחירת הכתוביות. הם מתווספים לרשימה המובנית. התגית רק מדגישה שורה: היא אף פעם לא מסתירה, משנה סדר או חוסמת כלום."

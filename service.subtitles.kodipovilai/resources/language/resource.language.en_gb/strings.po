@@ -685,3 +685,11 @@ msgstr "Minimum match for automatic subtitles"
 msgctxt "#32655"
 msgid "Auto-sub skips every subtitle whose release match is below this number (in percent). 0 turns the limit off. Rows with no match number (the video's own subtitle, a file beside the video) are not filtered. The instant lane always needs at least 90."
 msgstr "Auto-sub skips every subtitle whose release match is below this number (in percent). 0 turns the limit off. Rows with no match number (the video's own subtitle, a file beside the video) are not filtered. The instant lane always needs at least 90."
+
+msgctxt "#32656"
+msgid "Trusted uploaders and translators"
+msgstr "Trusted uploaders and translators"
+
+msgctxt "#32657"
+msgid "Extra names of Hebrew-subtitle uploaders or translators to highlight with a \"known uploader\" / \"known translator\" badge in the subtitle chooser, separated by commas (for example: First Name, another_handle). They are added to the built-in list. A badge only highlights a row: it never hides, reorders or blocks anything."
+msgstr "Extra names of Hebrew-subtitle uploaders or translators to highlight with a \"known uploader\" / \"known translator\" badge in the subtitle chooser, separated by commas (for example: First Name, another_handle). They are added to the built-in list. A badge only highlights a row: it never hides, reorders or blocks anything."

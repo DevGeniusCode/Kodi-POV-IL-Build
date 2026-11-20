@@ -352,6 +352,13 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   Verified: `check_subs_contract.py` 61 / 61 (stub import 158 of 158, 1,414 + 628 + 56 golden records, 44 unit checks in `subs_contract/unit_session.py`), pyflakes on the touched files = the same 14 messages as `HEAD` (all in the Ktuvit / Subscene / SubSource provider files), every touched `.py` compiles with warnings as errors, the 8 touched XML parse, `check_favourites.py` OK,
   `gen_repo.py` OK (12 add-ons, config 2.0.18; the built subtitle zip holds no `kodi_delay`; the config pack carries the three filecache values). Not tested in Kodi: the chooser's single prompt and green words, `rar://`, the providers' answers to free text, the FENtastic sliders, the cache values on a real Shield.
 
+- **SUBTITLE PROVENANCE (20 Nov 2026; owner-approved, P0-P4 + layout revision; Hebrew-only positive badges; full description `service.subtitles.kodipovilai/README.md` §5.7).**
+  Four badges (`תרגום אולפנים` / `צוות תרגום מוביל` / `מתרגם מוכר` / `מעלה בולט`) for Hebrew provider rows, from the provider's metadata (`fetching/providers/meta.py` -> row `meta` -> 11th engine tuple field -> candidate `_meta`), the credits read inside
+  a downloaded file (`fetching/provenance_sidecar.py`, `<profile>/provenance/credits.json`, written ONLY from `bridge.download_inner`, read by the chooser's `attach`) and the viewer's handles (`custom_trusted_uploaders`). Pure core: `core/srt/credits.py`
+  (grammar, both text orders, the `תירגום` spellings, Hebrew final letters) and `scoring_matching/provenance.py` (`classify`); allowlist `resources/config/provenance_allowlist.json` (entries with `"status": "proposed"` are not loaded). Chooser: a chip in `b1..b3`
+  and the `איכות ומקור הכתובית` block in the RIGHT panel (one `grouplist` of fixed-height rows; empty rows collapse; worst case 696 of 714 px, asserted by the contract); the list is 780 px again, the header lost `בחירת כתוביות` and `נמצאו N כתוביות`.
+  Contract 66 checks (4 provenance unit files, 164 modules, 1,435 golden cases). NOT tested in Kodi: the panel geometry, the chip colour, the sidecar on a device. No add-on version bump / changelog yet (Kodi updates an add-on only when its version rises).
+
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
 - **STRUCTURAL REFACTORING ONLY:** NO bug fixing, NO logic optimization. A fix is made only when the user explicitly
@@ -419,6 +426,9 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 - **SUBTITLE ADD-ON: PUBLIC NAMES, SINGLE ROUTE, CONTRACT TEST (Subtitle Phase 3).** No module imports or reads a `_name` of another module (a name another module needs is public in its home), except the frozen `fetching/pool_client._lookup_raw` (listed in `.github/scripts/subs_contract/baseline.json`; the two `he_sub_match` names became public in Phase 4: `dbg`, `warm_queue_dir`). Everything outside `fetching/` and `ai_translation/` reaches `list_candidates` / `resolve` only through `resources/lib/pipeline.py`. The playing release comes only from
   `core.video_context.release_name(info, policy)` (a new caller picks one of the six policies; never write a seventh copy) and the token test from `core.video_context.looks_like_token`. `core/addon.py` stays a leaf (it imports nothing of this add-on).
   Run `python .github/scripts/check_subs_contract.py` before every subtitle change is reported done (it needs Windows `os.path` for the golden part; `--static` skips the interpreter part).
+- **SUBTITLE PROVENANCE IS POSITIVE-ONLY AND DISPLAY-ONLY (owner rule, 20 Nov 2026).** Hebrew provider rows only; no "unverified" / "AI" state and no word for a row without evidence; a badge never hides, reorders, demotes or blocks auto-sub; sync / fetch / fix credits never give a badge;
+  OpenSubtitles' `from_trusted` is not a signal; `os-auto` / rank `Application Developers` is never trusted. Nothing scans or writes the sidecar during a search (only `bridge.download_inner` records; only the chooser attaches); `core/srt/credits.py` and `scoring_matching/provenance.py` stay stdlib-only.
+  A new credit word needs a unit case (final letters ם ן ך ף ץ matter); a new allowlist name is one entry with its `evidence`.
 - **HOME ROUTES COME BEFORE THE CHILD GATE:** `Router.dispatch` answers the Onyx modes (`favourites_row`, `favourite_run`,
   `pvr_row`, `pvr_play`, `hero_details`, `hero_warm`) and `tonight`, `search_provider`, `debrid_notice_settings` BEFORE
   `profile_hooks.deny_in_child_profile`: the Onyx modules apply the child policy themselves, and the other three were

@@ -14,6 +14,7 @@
 
 import os
 
+from resources.lib.core import provenance_allowlist
 from resources.lib.ui import chooser_rows
 
 try:
@@ -714,8 +715,15 @@ def _chooser_items(info, quick=False):
             _log('candidate timing-rank skipped: {0}'.format(e), level='DEBUG')
     else:
         cands = _current_first(cands)
-    return [c for c in cands
+    rows = [c for c in cands
             if isinstance(c, dict) and c.get('link') and c.get('filename')]
+    # Provenance P4: the credits read from the files of these rows when they were downloaded before (a local file, no network)
+    try:
+        from resources.lib.fetching import provenance_sidecar, season_pack
+        provenance_sidecar.attach(rows, season_pack.playing_tag(info))
+    except Exception as e:
+        _log('provenance sidecar not attached: {0}'.format(e), level='DEBUG')
+    return rows
 
 
 def _current_first(cands):
@@ -854,6 +862,7 @@ def _show():
                     # the release the rows are compared with (the one the list was scored against)
                     self.playing = video_context.release_name(self.info, 'picker') or ''
                     self.ai_ctx = _ai_context(self.info)
+                    self.prov_allow = provenance_allowlist.current()
                     try:
                         xbmcgui.Window(10000).setProperty(
                             'MoranSubsChooserOpen', '1')
@@ -882,10 +891,9 @@ def _show():
                 pos = lst.getSelectedPosition() if lst.size() else -1
                 was = (self.items[pos].get('link')
                        if 0 <= pos < len(self.items) else None)
-                real = [c for c in items if not c.get('_placeholder')]
-                self.setProperty('subs.count', 'מחפש כתוביות נוספות…'
-                                 if self.pending else
-                                 'נמצאו {0} כתוביות'.format(len(real)))
+                # the position counter of the header ("20 / 369") already says how many rows there are: this label only
+                # tells that more are still coming
+                self.setProperty('subs.count', 'מחפש כתוביות נוספות…' if self.pending else '')
                 rows = []
                 for c in items:
                     # One column per field (chooser_rows): the colours are baked
@@ -896,7 +904,7 @@ def _show():
                     else:
                         row = chooser_rows.build(
                             c, getattr(self, 'playing', ''), want=getattr(self, 'want', None),
-                            ai=getattr(self, 'ai_ctx', None))
+                            ai=getattr(self, 'ai_ctx', None), prov=getattr(self, 'prov_allow', None))
                     li = xbmcgui.ListItem(row['label'])
                     if row['flag']:
                         li.setArt({'thumb': row['flag']})

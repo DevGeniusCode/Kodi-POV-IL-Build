@@ -17,6 +17,7 @@ import os
 import re
 
 from resources.lib.core.link_codec import decode_link_safe
+from resources.lib.scoring_matching import provenance as scoring_matching_provenance
 from resources.lib.scoring_matching import release as scoring_matching_release
 
 # ---- language flags (images render on every skin) -----------------------------------------------------------------
@@ -442,6 +443,11 @@ def wrap_lines(release, width=28, max_lines=5):
     return lines
 
 
+# the info panel's release-name box holds 2 lines (script.moransubs.chooser.xml); a longer name ends in "..."
+RELEASE_WIDTH = 32
+RELEASE_LINES = 2
+
+
 def wrap_release(release, width=28, max_lines=5, mask=None):
     """The release name broken at its own separators into lines of at most
     `width` characters, joined with Kodi's [CR]. Never cuts the text short
@@ -519,21 +525,64 @@ def no_ai_reason(typ, is_ai, is_he, embedded, ai):
     return ''
 
 
-def build(c, playing, want=None, ai=None):
+# ---- provenance (Provenance P3): the badge chip and the metadata strip under the list ----------------------------------------
+# Hebrew rows of a provider only; the strip shows the provider's own metadata even when there is no badge (a row with no
+# evidence stays visually clean: no "unverified" word anywhere). Every string is ONE direction: the XML holds the Hebrew
+# captions, a property holds one value as the provider wrote it, so a Latin handle never mixes with a Hebrew word.
+PROV_KEYS = ('p_prov', 'p_prov_src', 'p_translator', 'p_sync', 'p_uploader', 'p_date', 'p_downloads', 'p_fixed', 'has_meta')
+FIXED_TEXT = 'כתובית מתוקנת'
+FILE_SOURCE_TEXT = 'קובץ הכתובית'     # the source column when the badge comes from the credits read inside the downloaded file
+_MAX_SYNC_TEXT = 80
+
+
+def _prov_props(c, typ, is_he, is_mt, source_text, prov):
+    """(props, chip): every provenance property of one row ('' when it has none) and the badge chip text ('' without a
+    badge). A row that is not a Hebrew provider subtitle, a machine translation, or has no metadata gets nothing."""
+    props = {k: '' for k in PROV_KEYS}
+    meta = c.get('_meta')
+    meta = meta if isinstance(meta, dict) else {}
+    file_lines = c.get('_file_credits')      # the credit lines read from this row's file when it was downloaded (P4)
+    file_lines = file_lines if isinstance(file_lines, list) else []
+    if not (typ == 'engine' and is_he and not is_mt and (meta or file_lines)):
+        return props, ''
+    v = scoring_matching_provenance.classify(meta, prov, hebrew=True, provider=source_text,
+                                             cue_infos=scoring_matching_provenance.cue_infos(file_lines))
+    names = []
+    for s in v['sync_values']:
+        s = strip_bbcode(s)
+        if s and s not in names:
+            names.append(s)
+    badge = v['label']
+    if badge:
+        top = next((r for r in v['reasons'] if r['badge'] == v['badge']), None)
+        props['p_prov'] = '[B]{0}[/B]'.format(_c(PALE, badge))
+        props['p_prov_src'] = FILE_SOURCE_TEXT if (top and top['source'] == 'file') else strip_bbcode(source_text)
+    props['p_translator'] = strip_bbcode(v['translator'])
+    props['p_sync'] = ', '.join(names)[:_MAX_SYNC_TEXT]
+    props['p_uploader'] = strip_bbcode(v['uploader'])
+    props['p_date'] = v['date']
+    props['p_downloads'] = '{0:,}'.format(v['downloads']) if isinstance(v['downloads'], int) else ''
+    props['p_fixed'] = FIXED_TEXT if v['fixed'] else ''
+    props['has_meta'] = '1' if any(props[k] for k in PROV_KEYS[:-1]) else ''
+    return props, (_c(PALE, badge) if badge else '')
+
+
+def build(c, playing, want=None, ai=None, prov=None):
     """One candidate -> {'label', 'flag', 'props'}: the ListItem label, the flag
     image and every property the window XML binds (strings only, colours baked
     as BBCode like the rest of the window). `playing` is the playing release
     name ('' when unknown); `want` the release words of a manual query; `ai` the
-    AI-availability context (no_ai_reason). Never raises."""
+    AI-availability context (no_ai_reason); `prov` the provenance Allowlist
+    (scoring_matching.provenance; None = only the studio forms count). Never raises."""
     try:
-        return _build(c, playing, want, ai)
+        return _build(c, playing, want, ai, prov)
     except Exception:
         name = (c.get('filename') or '').strip() if isinstance(c, dict) else ''
         return {'label': name, 'flag': '',
                 'props': {'release': _c(WHITE, name), 'has_panel': ''}}
 
 
-def _build(c, playing, want=None, ai=None):
+def _build(c, playing, want=None, ai=None, prov=None):
     name = strip_bbcode(c.get('filename'))
     lang = (c.get('language') or '').strip()
     payload = decode_link_safe(c.get('link') or '') or {}
@@ -567,10 +616,14 @@ def _build(c, playing, want=None, ai=None):
         explained = scoring_matching_release.explain(playing, release)
     tier = _tier_word(pct, explained) if pct is not None else ''
 
+    prov_props, prov_chip = _prov_props(c, typ, is_he, is_mt, source_text, prov)
+
     # ---- chips (at most 3, in priority order; each is ONE direction) ----
     chips = []
     if current:
         chips.append(_c(MAGENTA, 'נוכחית'))
+    if prov_chip:
+        chips.append(prov_chip)
     sync_label = (c.get('_subsync_label') or '').strip()
     if sync_label:
         chips.append(_c(GREEN, sync_label))
@@ -608,7 +661,8 @@ def _build(c, playing, want=None, ai=None):
         'cur': '1' if current else '',
         'has_panel': '1',
         # ---- info panel ----
-        'p_release': wrap_release(release, mask=(mask if shared else None)) if release else _c(DIM, 'ללא שם שחרור'),
+        'p_release': wrap_release(release, width=RELEASE_WIDTH, max_lines=RELEASE_LINES,
+                                  mask=(mask if shared else None)) if release else _c(DIM, 'ללא שם שחרור'),
         'p_why': _c(WHITE, _why(explained, pct) if explained else (
             'כתובית מובנית בקובץ הווידאו: התזמון זהה לווידאו' if embedded else
             'אין שם שחרור להשוואה')),
@@ -617,6 +671,7 @@ def _build(c, playing, want=None, ai=None):
         'p_lang': lang_he or (lang.upper() if lang else '—'),
         'p_access': access_text,
     }
+    props.update(prov_props)
     facts = {f[0]: f for f in (explained['facts'] if explained else [])}
     for key in _FACT_LABELS:
         f = facts.get(key)
