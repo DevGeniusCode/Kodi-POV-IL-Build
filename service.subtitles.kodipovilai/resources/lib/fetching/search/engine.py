@@ -48,7 +48,9 @@ def engine(S):
         # never ran, leaving only the community pool. Failures are logged at
         # WARNING (not DEBUG) so they're visible without a debug log.
         try:
-            S.engine_embedded = streams.embedded_candidates(S.info)
+            # not for a manual search: the embedded tracks belong to the playing file, not to the typed title
+            if not S.info.get('_manual'):
+                S.engine_embedded = streams.embedded_candidates(S.info)
         except Exception as e:
             kodi.log('engine embedded_candidates failed: {0}'.format(e),
                            level='WARNING')
@@ -108,7 +110,9 @@ def engine(S):
         # the long-lived service downloads + uploads them gently. Gated by
         # pool_share; runs on auto-on-play AND a manual "download subtitles".
         try:
-            if pool_contribute is not None and pool_client.share_enabled():
+            # (no harvest for a manual search: its rows are not the playing video's)
+            if (pool_contribute is not None and pool_client.share_enabled()
+                    and not S.info.get('_manual')):
                 _kt = 0
                 for c in S.engine_human:
                     pl = decode_link(c.get('link') or '') or {}

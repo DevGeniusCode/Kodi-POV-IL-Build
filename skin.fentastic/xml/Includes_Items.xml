@@ -29,13 +29,6 @@
 <include name="BasedMenuOsdSecondMenu">
 	<content>
 	<item>
-		<label>הצג חלון כתובית דארקסאבס</label>
-		<label2>$VAR[_ReplaceSubtitle]</label2>
-		<onclick condition="String.IsEmpty(Skin.String(subtitlesearch,darksubs)">Skin.SetString(subtitlesearch,darksubs)</onclick>
-		<onclick condition="Skin.String(subtitlesearch,darksubs)">Skin.SetString(subtitlesearch,kodisubtitle)</onclick>
-		<onclick condition="Skin.String(subtitlesearch,kodisubtitle)">Skin.SetString(subtitlesearch,darksubs)</onclick>
-	</item>	
-	<item>
 		<label>שנה צבע פוקוס בכתפורי הנגן</label>
 		<label2>$INFO[Skin.String(osdbuttonfocuscolor)]</label2>
 		<colorbox>$INFO[Skin.String(osdbuttonfocuscolor)]</colorbox>
@@ -69,37 +62,6 @@
 	</item>
 	<include>changeplayer_osd</include>
 </content>
-</include>
-
-<include name="left_netflix_menu">
-	<content>
-	<item>
-		<icon>osd/fullscreen/buttons/play.png</icon>
-		<onclick>PlayerControl(play)</onclick>
-		<visible>Player.Paused</visible>
-		<property name="id">$NUMBER[52000]</property>
-	</item>
-	<item>
-		<icon>osd/fullscreen/buttons/pause.png</icon>
-		<onclick>PlayerControl(play)</onclick>
-		<visible>!Player.Paused</visible>
-		<property name="id">$NUMBER[52000]</property>
-	</item>
-	<item>
-		<icon>osd/fullscreen/buttons/stop.png</icon>
-		<onclick>PlayerControl(stop)</onclick>
-		<property name="id">$NUMBER[52000]</property>
-	</item>
-	<item>
-	<icon>osd/fullscreen/buttons/subs3.png</icon>
-	<onclick>ActivateWindow(subtitlesearch)</onclick>
-	</item>
-	<item>
-		<icon>osd/fullscreen/buttons/previous.png</icon>
-		<onclick></onclick>
-		<property name="id">$NUMBER[52000]</property>
-		</item>
-	</content>
 </include>
 
 <include name="changeplayer_osd">

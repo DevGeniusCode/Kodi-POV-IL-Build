@@ -217,10 +217,7 @@
 			<label>חפש כתובית</label>
 			<icon>osd/fullscreen/buttons/subs.png</icon>
 			<visible>VideoPlayer.Content(movies) | VideoPlayer.Content(episodes)</visible>
-			<onclick condition="String.IsEqual(Skin.String(subtitlesearch),darksubs)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
-			<!-- ======== WIZARD IL BAKED: choose-subtitles button opens MoranSubs chooser ======== -->
-			<onclick condition="String.IsEqual(Skin.String(subtitlesearch),kodisubtitle)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
-			<!-- ======== END WIZARD IL BAKED ======== -->
+			<onclick>RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
 		</item>	
 		<item>
 			<label>החלף מקור לניגון</label>

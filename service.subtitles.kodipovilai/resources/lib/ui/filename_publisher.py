@@ -150,11 +150,11 @@ class SubsFilenamePublisher(xbmc.Player if xbmc else object):
         if not name:
             return
         # Mirror to both properties so:
-        #  - subs.player_filename → DarkSubs Tagline_From_Fen, AND
-        #    the FENtastic DialogSubtitles patched header.
-        #  - pov_picked_source_name → still consumed by our
-        #    darksubs_filename_fallback_patcher's URL guard. Only
-        #    set if not already set (avoid clobbering POV's value).
+        #  - subs.player_filename is what the skins' subtitle dialogs and pause panels show
+        #    (FENtastic, Estuary, NOX, Onyx and the Arctic Fuse 3 repair read it), AND
+        #  - pov_picked_source_name holds the same release name for the add-on's own
+        #    release naming (_pick_best_name reads it first). Only set if not already
+        #    set (avoid clobbering POV's value).
         w.setProperty('subs.player_filename', name)
         if not w.getProperty('pov_picked_source_name'):
             w.setProperty('pov_picked_source_name', name)

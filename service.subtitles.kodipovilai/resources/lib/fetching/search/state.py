@@ -81,12 +81,14 @@ def local_files(S):
     # locations we look at. By-language dicts, so first match wins
     # per language.
     S.alongside = {}
-    for path, lang in local.find_alongside(S.filepath):
+    # A manual search (fetching/manual.py) is for another title: the subtitle files next to the PLAYING file are not its rows.
+    manual = bool(S.info.get('_manual'))
+    for path, lang in ([] if manual else local.find_alongside(S.filepath)):
         if lang and lang not in S.alongside:
             S.alongside[lang] = path
 
     S.in_temp = {}
-    for entry in local.find_in_temp():
+    for entry in ([] if manual else local.find_in_temp()):
         lang = entry['lang']
         if not lang or lang in S.in_temp:
             continue

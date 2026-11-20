@@ -69,7 +69,7 @@
 | RunScript (settings buttons) | `settings.xml` action rows | `open_aistudio`, `test_connection`, `connect_gemini` (also frozen Wizard patch `pov_myservices`), `show_gemini_usage`, `open_tmdb_notice`, `clear_cache`, `pool_share_cache(_run)`, `purge_temp`, `engine_test` (the Telegram buttons `connect_telegram`, `logout_telegram`, `telegram_test` were removed at the end of Phase 1) | **Yes** (action names) |
 | Bare-name import from other interpreters | POV / Umbrella hooks append `…/resources/lib` to `sys.path` | `he_sub_match.py`: `prewarm`, `release_names`, `embedded_names`, `confirmed_releases`, `label_prefix`; stdlib only at module level | **Yes**: file must stay at `resources/lib/he_sub_match.py` |
 | Window properties read by other processes | skins / POV / Wizard | `subs.player_filename` (`subs_filename_publisher`), `MoranSubsChooserOpen`, `povil.embedded_*`, `moransubs.*` | **Yes** (byte-identical) |
-| Settings read by the Wizard | Wizard `host_repairs/kodi_utils.subs_get_*` | `use_builtin_engine` (`pov_fast_navigation` moved to the Wizard, 20 Nov 2026) | **Yes** (ids) |
+| Settings read by the Wizard | Wizard `host_repairs/kodi_utils.subs_get_*` | none since Step 9 (`use_builtin_engine` was the last; `pov_fast_navigation` moved to the Wizard, 20 Nov 2026) | **Yes** (ids) |
 | Dead inbound call (known defect) | Wizard `profiles/build_skin.py:252` | `action=prepare_build_skin` → falls into `unknown action` | n/a |
 
 ### 1.2 Current flow (as built, after Phase 2)
@@ -575,7 +575,7 @@ Implementation outline (about 60 lines; in Phase 3 it lives in `ui/quick_toggles
 |---|---|---|
 | `translation_mode` | `engine_ai` / `embedded_ai` / local AI rows appear or disappear; foreign subs are shown raw when `none` | translator choice |
 | `pool_use` | pool rows appear or disappear | reuse |
-| `use_builtin_engine` | the whole provider section | — (not offered as a quick toggle: it is the build's master switch and the Wizard reads it) |
+| `use_builtin_engine` | the whole provider section | — (not offered as a quick toggle: it is the build's master switch) |
 | `subsync_verify` | the sync label on "» נוכחית" | retiming on the next pick |
 | `gender_ref_arabic`, `ai_when_no_hebrew` | none | the next AI job / next autosub |
 
@@ -643,7 +643,7 @@ Kodi reads `level` 0 = basic, 1 = standard, 2 = advanced, 3 = expert, 4 = intern
 
 ```
 1. כללי / General                                   (category id="general")
-   ├─ use_builtin_engine            bool  L0  true   "Built-in sources engine" (Wizard reads it)
+   ├─ use_builtin_engine            bool  L0  true   "Built-in sources engine"
    ├─ engine_autosub                bool  L0  true   "Pick a subtitle automatically on play"
    ├─ ai_when_no_hebrew             enum  L0  auto   auto | ask | manual
    ├─ autosub_ask_timeout      NEW  int   L2  10     seconds
@@ -822,6 +822,21 @@ Each phase is split into steps. After each step the agent stops, writes `output.
 **Chooser window.** `ui/chooser_rows.build(candidate, playing)` replaces `chooser._classify` (which parsed the display label): the row is one column per field (flag, `%` + tier word, release filename, provider, up to 3 chips), each column ONE direction, so Kodi's bidi layout cannot reorder or collide pieces. The right panel (no plot, no poster) reads the FOCUSED row's properties (`Container(100).ListItem.Property(...)`, no Python on focus changes): full release name (wrapped at its separators), the match breakdown (episode, edition, frame rate, source, group, service, timing: yours vs the subtitle's, with a Hebrew status word), and provider / type / language / SDH-HI. The window name, `MoranSubsChooserOpen`, ids 100 / 201 / 202 and the `pyxbmct` fallback are unchanged.
 
 **Contract.** `golden_expected.json` re-recorded on purpose: 1,299 cases (was 1,217): 12 release-score records changed (`rm.score` / `rm.best_pct` / `tr.match_pct`), 8 `list.*` scenarios changed ONLY in the `%` inside a label (the order of every row is identical), the 29 `classify.*` records became 29 `chooserrow.*` records of the new row builder, 9 new release pairs (+ `rm.explain.*`) and a check that every `ListItem.Property` the XML reads is produced. Stub import 153 of 153; the other nets (628 + 56) are untouched.
+
+### Step 9 result (20 Nov 2026, owner-approved): the chooser on every skin, manual search, the chooser's buttons, DarkSubs-era cleanup
+
+- **One chooser.** `entry/actions.handle_choose_subs` always tries `ui/chooser.show()`; Kodi's native `SubtitleSearch` (the skin's `DialogSubtitles`) is only the fallback when the chooser cannot open. The skins' subtitle buttons are one unconditional
+  `RunScript(service.subtitles.kodipovilai,action=choose_subs)` (FENtastic three OSD layouts, Estuary, NOX; Onyx already was).
+- **Manual search** (button 202): `ui/manual_prompts.ask(playing)` -> `fetching/manual.build_info(...)` -> `fetching/manual.resolve_ids(search_info)` (the engine's `manual_search_for_imdb_id`, TMDB by title and year; a miss searches by name and
+  toasts) -> `ui/chooser._chooser_items(search_info)` in a thread -> the rows replace list 100 under the window lock. Prompts: movie 2 (title, year), episode 3 (show, season, episode), pre-filled; an emptied box cancels; year 0 = none.
+  `_manual` makes `fetching/search/state.local_files` and `engine` skip the playing file's own rows (files beside it, temp subtitles, embedded tracks) and the Ktuvit pool harvest. The pool lookup, the engine and the AI rows run as usual on the typed
+  title's ids. `self.info` stays the playing video's: delivery, SubSync and the pool use it. A result of a replaced search is dropped (`manual_gen`); `base` holds the automatic list, also when its background completion arrives later.
+  Match %: scored against the playing release while the typed season / episode do not conflict with it (`video_context.release_conflicts_with_episode`), else against the typed title only; the info panel's explanation falls back to the plain
+  reading when it cannot reproduce the number (existing guard in `chooser_rows`). Not changed: the pyxbmct fallback window keeps its native "download" button.
+- **Buttons of `script.moransubs.chooser.xml`:** 205 "הגדרות כתוביות" (`Addon.OpenSettings`), 204 "ביטול תרגום" (`action=cancel_translation`), 203 "חזרה לרשימה" (visible while `subs.manual`), 202 manual search, 201 close; the list is 780 px high and the legend
+  moved up 52 px. Navigation: every button goes up to the list, left / right walk the row (Kodi follows a hidden control's own navigation), the list goes right / down to 202.
+- **Cleanup:** the Wizard no longer sets the skins' subtitle-button settings; the Wizard reads no setting of this add-on. See CLAUDE.md "SUBTITLE STEP 9" for the list and for what was left on purpose.
+- **Statistics:** +2 modules (`fetching/manual.py` 136 lines, `ui/manual_prompts.py` 68 lines), stub import 156 of 156; `chooser.py` +85 lines; the three skins lost about 90 lines of dead XML.
 
 ### Step 8 result (20 Nov 2026, owner-approved): tie-break, the Ktuvit / Wizdom fast lane, the minimum match number, one media folder
 
@@ -1064,6 +1079,16 @@ Measured from the repo, never estimated. Method:
 4. Colours: gold / green / amber / magenta follow the legend; the focused row has the green bar (magenta for the applied one); the buttons' focused text is readable.
 5. Scoring on a real title: two subtitles of the same group at different resolutions now show the SAME `%`; a subtitle of another episode (season packs) drops to a low `%`; the "תזמון" row shows "מאומת" after SubSync has proved a row.
 6. `explain` says "שונה" in red only for a real contradiction (episode, cut, frame rate, source class, group, service); resolution and codec are never shown as a fact.
+
+## Appendix C (Step 9): Kodi checklist for the chooser on FENtastic, manual search and the buttons (nothing below was tested in Kodi)
+
+1. FENtastic, any OSD layout (Netflix, advanced, simple, pretty): the subtitle button opens the chooser (rows, match %, info panel), not Kodi's window; the pause panel and the seek bar are hidden while it is open and come back on close.
+2. "חיפוש כתוביות ידני" on a movie: two questions (title, year), both pre-filled; Enter, Enter searches the same title again; the header reads `חיפוש ידני: Title (Year)`, rows replace the list, the focus is on the list. On an episode: three questions (show, season, episode).
+3. Escape on any question: nothing changes. A year of 0 searches without a year. A title TMDB does not know: a toast and a search by name.
+4. "חזרה לרשימה" appears only after a manual search and brings the automatic list back (also when the automatic list was still loading when the manual search ended).
+5. Pick a row of a manual list: the subtitle applies to the PLAYING video, the log shows the usual download / translation lines; no embedded tracks or local files of the playing video in a manual list.
+6. "ביטול תרגום" during a live translation stops it with a toast; "הגדרות כתוביות" opens the add-on's settings over the chooser. Remote: Up from any button goes to the list, Left / Right walk the row (205 204 [203] 202 201), Right / Down from the list reach 202.
+7. Estuary, NOX, Onyx: the subtitle button still opens the chooser; their skin settings have no "Choose subtitles opens Kodi window" switch (Estuary / FENtastic).
 
 ## Appendix C (Step 8): Kodi checklist for the fast lane and the minimum match (nothing below was tested in Kodi)
 

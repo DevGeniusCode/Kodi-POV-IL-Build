@@ -19,7 +19,7 @@ from resources.libs.host_repairs.flow.af3_steps import _maybe_patch_af3_dialog_s
 from resources.libs.host_repairs.flow import gui_watchdog
 from resources.libs.host_repairs.flow.addon_update_watch import POLL_SECONDS, AddonUpdateWatch, _busy
 from resources.libs.host_repairs.flow.pov_steps import _maybe_default_pov_autoplay, _maybe_revert_pov_always_resume, _maybe_revert_pov_autoplay
-from resources.libs.host_repairs.flow.skin_steps import _maybe_default_fentastic_player, _maybe_default_nox_poster_rating, _maybe_enable_osd_autoclose, _point_subtitle_button
+from resources.libs.host_repairs.flow.skin_steps import _maybe_default_fentastic_player, _maybe_default_nox_poster_rating, _maybe_enable_osd_autoclose
 from resources.libs.host_repairs.flow.startup_pass import _run_build_startup_repairs
 from resources.libs.host_repairs.flow.umbrella_steps import _start_service_mirror_keeper
 from resources.libs.provisioning.config_retry import ConfigRetry
@@ -43,28 +43,6 @@ def _run_build_flow(monitor):
     # The quickfix no longer ships the skin settings file, so this is what
     # guarantees a valid default without reverting manual choices on update.
     _maybe_default_fentastic_player()
-
-    # When the built-in engine is ON, DarkSubs is intentionally DISABLED
-    # (Phase C). In that case we must NOT touch DarkSubs at all: patching it
-    # and its reload cycle (disable+enable) would re-enable it -- fighting the
-    # disable -- and run its code while disabled, which throws
-    # "Unknown addon id 'service.subtitles.All_Subs'". So the entire DarkSubs
-    # integration block is skipped when the engine is on. (Existing users with
-    # the engine OFF are unaffected: DarkSubs stays enabled + patched as before.)
-    try:
-        from resources.libs.host_repairs import kodi_utils as _ku
-        _engine_on = _ku.subs_get_bool('use_builtin_engine', False)
-    except Exception:
-        _engine_on = False
-
-    # Point the skins' player "Choose subtitles" button at the right target.
-    # The build skins gate it: it opens DarkSubs's picker unless the skin
-    # setting says to open Kodi's native subtitle window. With the engine on,
-    # DarkSubs is DISABLED -- so the DarkSubs button does nothing ("doesn't
-    # work"). Flip the skin settings so the button opens the NATIVE Kodi
-    # subtitle dialog (which now runs MoranSubs). Reverts to DarkSubs when the
-    # engine is off. Affects the active skin (Estuary / FENtastic).
-    _point_subtitle_button(_engine_on)
 
     # Arctic Fuse 3 ships its subtitle dialog layout in a separate
     # file (Dialog_DialogSubtitles.xml) referenced via a named

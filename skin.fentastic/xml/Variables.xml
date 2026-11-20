@@ -1422,11 +1422,6 @@
     <value>plugin://plugin.video.pov/?mode=build_trakt_list.search_trakt_lists&amp;query=$INFO[Skin.String(SearchInputTraktEncoded)]</value>
 	</variable>
 
-	<variable name="_ReplaceSubtitle">
-	<value condition="String.IsEqual(Skin.String(subtitlesearch),darksubs)">חיפוש כתובית דרך דארקסאבס</value>
-	<value condition="String.IsEqual(Skin.String(subtitlesearch),kodisubtitle)">חיפוש כתובית דרך קודי</value>
-	</variable>
-
 	<!-- RATINGS INFOPANEL VARIABLES -->
 	<!-- Released -->
 	<variable name="RI_Year">

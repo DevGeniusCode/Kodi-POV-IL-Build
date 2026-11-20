@@ -54,8 +54,9 @@ def handle_search(handle, params):
     for c in candidates:
         try:
             label = c.get('filename', 'AI Hebrew')
-            # Star rating (0-5) reflects the match % so Tal's DialogSubtitles
-            # shows a meaningful star count (101%/100% -> 5 stars, 60% -> 3...).
+            # Star rating (0-5) reflects the match % so Kodi's native subtitle window
+            # (the fallback of the chooser) shows a meaningful star count
+            # (101%/100% -> 5 stars, 60% -> 3...).
             # No % (pct is None: e.g. an AI-translate-from-foreign action) -> use
             # the candidate's own rating, defaulting high (it's a good option).
             _pct = c.get('pct')

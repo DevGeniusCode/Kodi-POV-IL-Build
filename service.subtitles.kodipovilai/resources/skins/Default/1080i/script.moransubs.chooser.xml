@@ -11,7 +11,11 @@
      edition, frame rate, source, group, streaming service, proven timing), and the provider / type / language /
      accessibility of the subtitle. Rows and properties are built in ui/chooser_rows.py; the colours are baked
      into the property text (BBCode), a per-row <textcolor>$INFO[...]</textcolor> is unreliable in Kodi.
-     Ids: list 100, Download 202, Close 201. The window name stays script.moransubs.chooser.xml and the
+     Ids: list 100, manual search 202, back to the automatic list 203 (only while a manual result is shown: window
+     property subs.manual), cancel translation 204, subtitle settings 205, close 201. Button row (left to right):
+     205 204 203 | 202 201; every button goes up to the list, left / right walk the row (a hidden 203 is skipped).
+     Manual search (ui/chooser.py, ui/manual_prompts.py, fetching/manual.py) asks for a title and a year, or a show, a
+     season and an episode, and shows the rows here; "חזרה לרשימה" brings the automatic list back. The window name stays script.moransubs.chooser.xml and the
      property MoranSubsChooserOpen is set by ui/chooser.py (both read by skins). -->
 <window type="dialog">
     <defaultcontrol always="true">100</defaultcontrol>
@@ -81,9 +85,9 @@
 
         <!-- Results list -->
         <control type="list" id="100">
-            <left>40</left><top>134</top><width>1240</width><height>828</height>
+            <left>40</left><top>134</top><width>1240</width><height>780</height>
             <onleft>100</onleft><onright>202</onright>
-            <onup>100</onup><ondown>100</ondown>
+            <onup>100</onup><ondown>202</ondown>
             <scrolltime tween="cubic">300</scrolltime>
             <itemlayout width="1240" height="92">
                 <control type="image">
@@ -245,44 +249,44 @@
 
         <!-- Legend of the match colours -->
         <control type="image">
-            <left>60</left><top>990</top><width>14</width><height>14</height>
+            <left>60</left><top>938</top><width>14</width><height>14</height>
             <texture colordiffuse="FFFFD700">white.png</texture>
         </control>
         <control type="label">
-            <left>84</left><top>982</top><width>220</width><height>30</height>
+            <left>84</left><top>930</top><width>220</width><height>30</height>
             <font>font12</font>
             <label>התאמה גבוהה</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="image">
-            <left>320</left><top>990</top><width>14</width><height>14</height>
+            <left>320</left><top>938</top><width>14</width><height>14</height>
             <texture colordiffuse="FF7BE38C">white.png</texture>
         </control>
         <control type="label">
-            <left>344</left><top>982</top><width>220</width><height>30</height>
+            <left>344</left><top>930</top><width>220</width><height>30</height>
             <font>font12</font>
             <label>התאמה בינונית</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="image">
-            <left>580</left><top>990</top><width>14</width><height>14</height>
+            <left>580</left><top>938</top><width>14</width><height>14</height>
             <texture colordiffuse="FFF0A93A">white.png</texture>
         </control>
         <control type="label">
-            <left>604</left><top>982</top><width>300</width><height>30</height>
+            <left>604</left><top>930</top><width>300</width><height>30</height>
             <font>font12</font>
             <label>שפה זרה (תתורגם)</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="image">
-            <left>920</left><top>990</top><width>14</width><height>14</height>
+            <left>920</left><top>938</top><width>14</width><height>14</height>
             <texture colordiffuse="FFFF00FE">white.png</texture>
         </control>
         <control type="label">
-            <left>944</left><top>982</top><width>260</width><height>30</height>
+            <left>944</left><top>930</top><width>260</width><height>30</height>
             <font>font12</font>
             <label>הכתובית הנוכחית</label>
             <textcolor>FF9AA0A6</textcolor>
@@ -547,7 +551,37 @@
             </control>
         </control>
 
-        <!-- Buttons -->
+        <!-- Buttons: 205 204 203 | 202 201 (203 only while a manual result is shown) -->
+        <control type="button" id="205">
+            <left>40</left><top>976</top><width>300</width><height>60</height>
+            <texturefocus colordiffuse="FF8FB4E0">white.png</texturefocus>
+            <texturenofocus colordiffuse="338FB4E0">white.png</texturenofocus>
+            <label>[B]הגדרות כתוביות[/B]</label>
+            <font>font13</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
+            <onleft>201</onleft><onright>204</onright><onup>100</onup><ondown>205</ondown>
+            <onclick>Addon.OpenSettings(service.subtitles.kodipovilai)</onclick>
+        </control>
+        <control type="button" id="204">
+            <left>352</left><top>976</top><width>300</width><height>60</height>
+            <texturefocus colordiffuse="FFF0A93A">white.png</texturefocus>
+            <texturenofocus colordiffuse="33F0A93A">white.png</texturenofocus>
+            <label>[B]ביטול תרגום[/B]</label>
+            <font>font13</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
+            <onleft>205</onleft><onright>203</onright><onup>100</onup><ondown>204</ondown>
+            <onclick>RunScript(service.subtitles.kodipovilai,action=cancel_translation)</onclick>
+        </control>
+        <control type="button" id="203">
+            <left>664</left><top>976</top><width>300</width><height>60</height>
+            <texturefocus colordiffuse="FF8FE0FF">white.png</texturefocus>
+            <texturenofocus colordiffuse="338FE0FF">white.png</texturenofocus>
+            <label>[B]חזרה לרשימה[/B]</label>
+            <font>font13</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
+            <onleft>204</onleft><onright>202</onright><onup>100</onup><ondown>203</ondown>
+            <visible>!String.IsEmpty(Window.Property(subs.manual))</visible>
+        </control>
         <control type="button" id="202">
             <left>1320</left><top>976</top><width>274</width><height>60</height>
             <texturefocus colordiffuse="FF46C46A">white.png</texturefocus>
@@ -555,7 +589,7 @@
             <label>[B]חיפוש כתוביות ידני[/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>100</onleft><onright>201</onright><onup>100</onup><ondown>100</ondown>
+            <onleft>203</onleft><onright>201</onright><onup>100</onup><ondown>202</ondown>
         </control>
         <control type="button" id="201">
             <left>1606</left><top>976</top><width>274</width><height>60</height>
@@ -564,7 +598,7 @@
             <label>[B]סגור[/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor>
-            <onleft>202</onleft><onright>100</onright><onup>100</onup><ondown>100</ondown>
+            <onleft>202</onleft><onright>205</onright><onup>100</onup><ondown>201</ondown>
         </control>
     </controls>
 </window>

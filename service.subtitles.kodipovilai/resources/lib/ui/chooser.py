@@ -796,6 +796,11 @@ def _show():
 
         class _ChooserXML(xbmcgui.WindowXMLDialog):
             closed = False
+            # manual search (button 202): the typed search replaces the rows, `base` keeps the automatic list
+            manual = False
+            manual_gen = 0
+            manual_busy = False
+            base = None
 
             def onInit(self):
                 try:
@@ -868,7 +873,8 @@ def _show():
                 except Exception as e:
                     _log('chooser background list failed: {0}'.format(e),
                          level='WARNING')
-                    items = [c for c in self.items if not c.get('_placeholder')]
+                    items = [c for c in (self.base['items'] if self.manual and self.base else self.items)
+                             if not c.get('_placeholder')]
                 _log('chooser: full list {0} candidate(s) after {1:.1f}s more'.format(
                     len(items), time.monotonic() - t))
                 if self.closed:
@@ -879,10 +885,97 @@ def _show():
                 try:
                     # pending and the rows change together, under the click lock
                     with self.lock:
-                        self.pending = False
-                        self._redraw(items)
+                        if self.manual:
+                            # a manual search is on screen: the automatic list waits behind "חזרה לרשימה"
+                            self.base = {'items': items, 'pending': False,
+                                         'head': (self.base or {}).get('head', '')}
+                        else:
+                            self.pending = False
+                            self._redraw(items)
                 except Exception as e:
                     _log('chooser refresh failed: {0}'.format(e), level='WARNING')
+
+            def _start_manual(self):
+                """Button 202: ask for a title (and a year, or a season and episode), search by hand and show the
+                rows in this window. The playing video's `info` (self.info) stays the one a pick is delivered with."""
+                if self.manual_busy:
+                    return
+                from resources.lib.fetching import manual
+                from resources.lib.ui import manual_prompts
+                query = manual_prompts.ask(self.info)
+                if not query:
+                    return
+                search_info = manual.build_info(self.info, query['title'], query['year'],
+                                                query['season'], query['episode'])
+                with self.lock:
+                    self.manual_gen += 1
+                    gen = self.manual_gen
+                    self.manual_busy = True
+                    self.setProperty('subs.count', 'מחפש כתוביות…')
+                import threading
+                t = threading.Thread(target=self._run_manual, args=(gen, search_info))
+                t.daemon = True
+                t.start()
+
+            def _run_manual(self, gen, search_info):
+                """The manual search, off the window thread: the typed title's IMDb id, then the normal list. A result
+                of a search that was replaced meanwhile (another manual search, or "חזרה לרשימה") is dropped."""
+                from resources.lib.fetching import manual
+                items = []
+                try:
+                    try:
+                        search_info, found = manual.resolve_ids(search_info)
+                        if not found:
+                            kodi.notify('לא נמצא כותר ב-TMDB, מחפש לפי השם', time_ms=3000)
+                    except Exception as e:
+                        _log('manual search: id lookup failed: {0}'.format(e), level='WARNING')
+                    items = _chooser_items(search_info)
+                    _log('chooser: manual search {0!r} -> {1} candidate(s)'.format(
+                        manual.head(search_info), len(items)))
+                except Exception as e:
+                    _log('chooser: manual search failed: {0}'.format(e), level='WARNING')
+                try:
+                    with self.lock:
+                        if self.closed or self.manual_gen != gen:
+                            return
+                        if not items:
+                            items = [{'filename': 'לא נמצאו כתוביות לחיפוש הזה', 'language': '',
+                                      'link': '', '_placeholder': True}]
+                        if not self.manual:
+                            self.base = {'items': self.items, 'pending': self.pending,
+                                         'head': self.getProperty('subs.head')}
+                        self.manual = True
+                        self.pending = False
+                        self.setProperty('subs.manual', '1')
+                        self.setProperty('subs.head', manual.head(search_info))
+                        self._redraw(items)
+                    try:
+                        self.setFocusId(100)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    _log('chooser manual refresh failed: {0}'.format(e), level='WARNING')
+                finally:
+                    if self.manual_gen == gen:
+                        self.manual_busy = False
+
+            def _back_to_list(self):
+                """Button 203 ("חזרה לרשימה"): leave the manual results, show the automatic list again."""
+                with self.lock:
+                    self.manual_gen += 1      # a manual search still running is dropped
+                    self.manual_busy = False
+                    base, self.base = self.base, None
+                    if not self.manual or not base:
+                        return
+                    self.manual = False
+                    self.pending = bool(base.get('pending'))
+                    self.clearProperty('subs.manual')
+                    self.setProperty('subs.head', base.get('head') or '')
+                    self._redraw(base['items'])
+                try:
+                    self.setFocusId(100)
+                except Exception:
+                    pass
 
             def close(self):
                 self.closed = True
@@ -904,11 +997,10 @@ def _show():
                         self.close()
                         return
                     if controlId == 202:
-                        self.close()
-                        try:
-                            xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
-                        except Exception:
-                            pass
+                        self._start_manual()
+                        return
+                    if controlId == 203:
+                        self._back_to_list()
                         return
                     if controlId == 100:
                         if not self.lock.acquire(timeout=2):

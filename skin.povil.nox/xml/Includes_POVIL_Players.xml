@@ -2680,10 +2680,7 @@
 						<height>76</height>
 						<texturenofocus colordiffuse="grey_a">kodirdil/subtitles_window/choose_subs.png</texturenofocus>
 						<texturefocus colordiffuse="button_focus">kodirdil/subtitles_window/choose_subs.png</texturefocus>
-						<onclick condition="!Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
-						<!-- ======== WIZARD IL BAKED: choose-subtitles button opens MoranSubs chooser ======== -->
-						<onclick condition="Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)">RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
-						<!-- ======== END WIZARD IL BAKED ======== -->
+						<onclick>RunScript(service.subtitles.kodipovilai,action=choose_subs)</onclick>
 						<visible>!VideoPlayer.Content(LiveTV) | VideoPlayer.HasSubtitles</visible>
 						<visible>!String.Contains(Player.Folderpath, plugin.video.idanplus)</visible>
 					</control>

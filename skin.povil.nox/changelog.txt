@@ -1,3 +1,6 @@
+1.0.23
+- The player's subtitle button (Includes_POVIL_Players) is one RunScript(service.subtitles.kodipovilai,action=choose_subs): the two identical branches gated by the dead setting ChooseSubtitlesButtonOpensKodiWindow are collapsed.
+
 1.0.21
 - Movie networks tiles (Apple TV+, Disney+, Netflix; main menu) pass company= instead of network_id=, which POV 6.11.03 reads; the Wizard no longer rewrites them at runtime.
 

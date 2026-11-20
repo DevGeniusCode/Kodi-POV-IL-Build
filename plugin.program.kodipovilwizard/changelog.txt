@@ -1,3 +1,6 @@
+0.5.10
+- The start-up repair pass no longer sets the skins' "choose subtitles" settings (_point_subtitle_button in host_repairs/flow/skin_steps, its call and the use_builtin_engine read in flow/runner are gone): every skin's subtitle button now opens the subtitle add-on's own chooser, so there is nothing left to point. The Wizard reads no setting of the subtitle add-on any more (host_repairs/kodi_utils.subs_get_* has no caller).
+
 0.5.9
 - POV: the first click on a TorBox source no longer ends in "No results" when TorBox is slow to list a new transfer. POV looks the transfer up right after creating it; TorBox can answer that lookup with a 404 or an empty file list, POV took it as final, deleted the transfer and tried the next source, ten times, until "No results" (a retry then played). New registry entry pov_torbox_wait_for_files (+ patches/pov_torbox_wait.py) asks the lookup again up to 4 times, 1 s apart, within one 8 s budget per playback attempt, and logs `[TorBox wait] id=... try=N http=... state=... files=N` per poll so the next log shows why TorBox answered that way. It falls back to POV's own answer on any failure. The registry stands at 150 entries (120 POV). Not yet confirmed in Kodi.
 

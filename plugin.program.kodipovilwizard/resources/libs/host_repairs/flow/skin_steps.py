@@ -213,40 +213,6 @@ def _maybe_default_nox_poster_rating():
             pass
 
 
-def _point_subtitle_button(engine_on):
-    """Make the skins' player "Choose subtitles" button open the right thing.
-
-    The build skins ship the button gated two ways:
-      * Estuary / FENtastic(VideoOsd3): Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)
-      * FENtastic(VideoOsd1):           Skin.String(subtitlesearch) == kodisubtitle|darksubs
-    When the engine is ON, DarkSubs is disabled, so the DarkSubs branch is a
-    dead button. Set both skin settings to the "Kodi native subtitle window"
-    side (it runs MoranSubs as the default service). When OFF, restore DarkSubs.
-    Only touches the ACTIVE skin; cheap; safe if the setting doesn't exist."""
-    if xbmc is None:
-        return
-    # Write only what differs. Every Skin.Set*/Reset makes Kodi re-evaluate
-    # the open windows, and the home screen then asks every widget again:
-    # QA (NOX and FENtastic) loaded each home row twice at every start-up,
-    # the second round right after this ran with nothing to change.
-    try:
-        has_kodi_window = xbmc.getCondVisibility(
-            'Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)')
-        search = xbmc.getInfoLabel('Skin.String(subtitlesearch)')
-        if engine_on:
-            if not has_kodi_window:
-                xbmc.executebuiltin('Skin.SetBool(ChooseSubtitlesButtonOpensKodiWindow)')
-            if search != 'kodisubtitle':
-                xbmc.executebuiltin('Skin.SetString(subtitlesearch,kodisubtitle)')
-        else:
-            if has_kodi_window:
-                xbmc.executebuiltin('Skin.Reset(ChooseSubtitlesButtonOpensKodiWindow)')
-            if search != 'darksubs':
-                xbmc.executebuiltin('Skin.SetString(subtitlesearch,darksubs)')
-    except Exception:
-        pass
-
-
 def _maybe_default_fentastic_player():
     """Heal the FENtastic player choice ONLY when it's unset.
 

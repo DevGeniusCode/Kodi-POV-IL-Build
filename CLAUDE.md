@@ -308,6 +308,20 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   excluded on purpose), then at most one guarded swap after the full list (+4 points, never with the chooser open, never over a proven timing verdict). (C) One media tree,
   `resources/media/` (`flags/`, `overlay_bg.png`, `dark_bg.png`, `gemini.png`); 6 orphan files deleted; `uk` maps to `uk.png`. Contract: 1,414 golden cases (`fast.*`, `fast.autosub.*`;
   `golden_autosub_part.py` runs last and patches modules). New string ids 32652-32655 (inside 30000-32999). Stub import 154 of 154. Kodi has not been tested (Appendix C Step 8).
+- **SUBTITLE STEP 9 COMPLETE (20 Nov 2026; owner-approved; subtitles 0.3.101, FENtastic 1.0.37, Estuary 4.0.11, NOX 1.0.23, Wizard 0.5.10; `ARCHITECTURE_SUBTITLES.md` Part 4 "Step 9 result", Appendix C Step 9).**
+  The player's subtitle button opens OUR chooser on every skin (Subtitles 0.3.100: `entry/actions.handle_choose_subs` has no `skin.fentastic` branch; Kodi's native `SubtitleSearch` is only the failure fallback). Manual search (button 202 of
+  `script.moransubs.chooser.xml`, no longer the native window): `ui/manual_prompts.ask` (a movie: 2 pre-filled prompts, title + year; an episode: 3, show + season + episode; the playing item decides; an emptied box / Escape cancels,
+  a year of 0 = none), `fetching/manual.py` (PURE: `build_info(playing, title, year, season, episode)` keeps the release / file fields, clears `imdb_id` / `tmdb_id` / `dbid`, sets `_manual`; `resolve_ids` asks the engine's own
+  `manual_search_for_imdb_id` through `provider_adapter`, found or not; `head`), `ui/chooser._start_manual` / `_run_manual` / `_back_to_list` (a generation counter drops a result that was replaced; `base` keeps the automatic list, also
+  when its background completion lands meanwhile; window properties `subs.manual`, `subs.head`). `self.info` is NEVER replaced: a pick is delivered (download, translation, SubSync, pool) with the PLAYING video's info. A manual search skips
+  what belongs to the playing file only: `fetching/search/state.local_files` (files next to it, the temp folder), `engine` (its embedded tracks, the Ktuvit pool harvest). The match % of a manual list is scored against the playing release
+  while `release_conflicts_with_episode` allows it, else against the typed title. The chooser also has "ביטול תרגום" (204) and "הגדרות כתוביות" (205) and a row of buttons with full remote navigation (203 only while `subs.manual`).
+  Dead DarkSubs-era logic removed: Wizard `skin_steps._point_subtitle_button` + its call + the `use_builtin_engine` read in `flow/runner` (the Wizard now reads NO setting of the subtitle add-on; `host_repairs/kodi_utils.subs_get_*`
+  has no caller left), FENtastic's `_ReplaceSubtitle` row / variable, the `ChooseSubtitlesButtonOpensKodiWindow` radio (FENtastic, Estuary) with its string, `left_netflix_menu`, the doubled `<onclick condition=...>` of the subtitle
+  button (FENtastic 3 layouts, Estuary, NOX); `Custom_1128_Seek` hides on `MoranSubsChooserOpen`. LEFT ON PURPOSE (inert, owner may remove later): the baked `subtitlesearch` / `ChooseSubtitlesButtonOpensKodiWindow` skin settings in
+  `userdata/addon_data/skin.fentastic|skin.estuary|skin.arctic.fuse.3/settings.xml` (removing them needs a `config_version` bump), the `subtitlesearch` row of `script.fentastic.helper/.../settings_sorter.py`, and `host_repairs/kodi_utils.subs_get_*`.
+  Verified: contract 60 / 60 (stub import 156 of 156), pyflakes clean on every touched Python file, 51 stubbed checks (manual.py, prompts, the chooser window with a fake `WindowXMLDialog`: manual search, back, cancel, stale result,
+  late background list; the search-stage gates), Wizard stub import 173 of 174 (only `pov_combined_discover`), every touched XML parses (three FENtastic files were already not well-formed at HEAD and are unchanged in that). Kodi has not been tested.
 
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
@@ -363,8 +377,8 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   (set by `ui/chooser.py`; those two modules may move, the strings and the chooser XML file name may not); `resources/lib/he_sub_match.py`
   (imported by bare name after a `sys.path` append by POV / Umbrella hooks and frozen `patches/pov_prewarm`, `pov_sub_match_v2`:
   stdlib-only at module level; API `prewarm`, `release_names`, `embedded_names`, `confirmed_releases`, `label_prefix`; this
-  file's path is PINNED). The Wizard reads only `use_builtin_engine` (`flow/runner.py`) from it, and only through
-  `host_repairs/kodi_utils.subs_get_*` (`pov_fast_navigation` is the WIZARD's own setting since 20 Nov 2026: Maintenance -> POV, read by `pov_language_invoker_guard` through `kodi_utils.get_bool`; the subtitle add-on declares no Wizard setting); it names the add-on id only as an existence / required-add-on reference
+  file's path is PINNED). The Wizard reads NO setting of it any more (Step 9 removed the last read, `use_builtin_engine` in `flow/runner.py`; the helpers
+  `host_repairs/kodi_utils.subs_get_*` are the only sanctioned way if one is ever needed) (`pov_fast_navigation` is the WIZARD's own setting since 20 Nov 2026: Maintenance -> POV, read by `pov_language_invoker_guard` through `kodi_utils.get_bool`; the subtitle add-on declares no Wizard setting); it names the add-on id only as an existence / required-add-on reference
   (`build/wizard_actions`, `fresh_install`, `auto_install`, `build_profiles`, `pyc_warm`, `clear`, `manifest.json`).
 - **SUBTITLE ADD-ON: PUBLIC NAMES, SINGLE ROUTE, CONTRACT TEST (Subtitle Phase 3).** No module imports or reads a `_name` of another module (a name another module needs is public in its home), except the frozen `fetching/pool_client._lookup_raw` (listed in `.github/scripts/subs_contract/baseline.json`; the two `he_sub_match` names became public in Phase 4: `dbg`, `warm_queue_dir`). Everything outside `fetching/` and `ai_translation/` reaches `list_candidates` / `resolve` only through `resources/lib/pipeline.py`. The playing release comes only from
   `core.video_context.release_name(info, policy)` (a new caller picks one of the six policies; never write a seventh copy) and the token test from `core.video_context.looks_like_token`. `core/addon.py` stays a leaf (it imports nothing of this add-on).
