@@ -53,8 +53,6 @@ notices, and the terms above do not apply to them:
 - resources/patches/darksubs/opensubtitles.py: a modified copy of DarkSubs'
   OpenSubtitles provider.
 - resources/media/flags/: from the FENtastic flag set (CC BY-SA 4.0).
-- resources/lib/media_assets/fonts/NotoSans-Regular.ttf: Noto Sans by
-  Google (SIL Open Font License 1.1).
 - resources/lib/gender_guard.py and resources/lib/srt_wire.py, and parts of
   resources/lib/gemini.py and resources/lib/translate.py, adapt code, prompts
   and word lists from SRT AI Translator NG

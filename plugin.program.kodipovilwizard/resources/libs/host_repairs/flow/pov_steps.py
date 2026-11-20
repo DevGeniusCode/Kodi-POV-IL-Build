@@ -4,12 +4,14 @@
 
 Moved verbatim from service.subtitles.kodipovilai/service.py (Phase 3, step 3); only the import prefix differs.
 """
+import os
+
 try:
     import xbmc
 except ImportError:
     xbmc = None
 
-from resources.libs.host_repairs.flow.common import ADDON_ID
+from resources.libs.host_repairs.flow.common import ADDON_ID, _translate_path
 
 
 def _maybe_repair_addon_settings_integrity():
@@ -345,3 +347,39 @@ def _maybe_revert_pov_always_resume():
                            level='WARNING')
         except Exception:
             pass
+
+
+def _maybe_install_pov_gemini_icon():
+    """Put the subtitle add-on's gemini.png into POV's own media folder.
+
+    Account Manager's service list (patches/pov_myservices: the "gemini-ai" row) draws its icon from POV's
+    resources/skins/Default/media/gemini.png, a file POV does not ship. Idempotent (byte compare), atomic (temp file
+    + replace), silent when POV, the subtitle add-on or the source file is missing, and off with the POV
+    patching master switch. A POV update erases the copy, so flow/addon_update_watch runs this step again.
+    Returns True when it wrote the file."""
+    try:
+        if _skip_pov_patchers():
+            return False
+        src = _translate_path('special://home/addons/service.subtitles.kodipovilai/resources/media/gemini.png')
+        media = _translate_path('special://home/addons/plugin.video.pov/resources/skins/Default/media')
+        if not src or not media or not os.path.isfile(src) or not os.path.isdir(media):
+            return False
+        dst = os.path.join(media, 'gemini.png')
+        with open(src, 'rb') as fh:
+            data = fh.read()
+        if os.path.isfile(dst):
+            with open(dst, 'rb') as fh:
+                if fh.read() == data:
+                    return False
+        tmp = dst + '.tmp'
+        with open(tmp, 'wb') as fh:
+            fh.write(data)
+        os.replace(tmp, dst)
+        try:
+            from resources.libs.host_repairs import kodi_utils
+            kodi_utils.log('POV media: gemini.png installed for the Account Manager list', level='INFO')
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False

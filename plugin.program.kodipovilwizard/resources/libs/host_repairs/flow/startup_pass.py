@@ -14,7 +14,8 @@ except ImportError:
 
 from resources.libs.host_repairs.flow.af3_steps import _maybe_patch_af3_home, _maybe_show_af3_first_launch_dialog
 from resources.libs.host_repairs.flow.common import _addon_version, _background_settle_seconds, _background_ui_busy
-from resources.libs.host_repairs.flow.pov_steps import _maybe_repair_addon_settings_integrity, _skip_pov_patchers
+from resources.libs.host_repairs.flow.pov_steps import (
+    _maybe_install_pov_gemini_icon, _maybe_repair_addon_settings_integrity, _skip_pov_patchers)
 from resources.libs.host_repairs.flow.tonight_steps import _maybe_add_tonight_entry
 from resources.libs.host_repairs.flow.umbrella_steps import _maybe_patch_umbrella
 
@@ -162,6 +163,8 @@ def _run_build_startup_repairs():
         # them, so POV never shows its mismatch dialog. Do not move it down on
         # the strength of the old sentence.
         _maybe_patch_pov_language_invoker,
+        # Gemini's icon for Account Manager's service list lives in POV's media folder (one file copy).
+        _maybe_install_pov_gemini_icon,
         # AF3's compact 32-bit rows read these local shortcut folders. Seed or
         # upgrade them before AF3 exposes the rows, so a fresh profile cannot
         # race the skin and momentarily render an empty personal/network/genre

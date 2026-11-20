@@ -60,22 +60,6 @@ def highlight_text(msg):
     return msg
 
 
-def get_artwork(file):
-    if file == 'button':
-        return os.path.join(CONFIG.SKIN, 'Button', 'button-focus_lightblue.png'),\
-               os.path.join(CONFIG.SKIN, 'Button', 'button-focus_grey.png')
-    elif file == 'radio' :
-        return os.path.join(CONFIG.SKIN, 'RadioButton', 'MenuItemFO.png'),\
-               os.path.join(CONFIG.SKIN, 'RadioButton', 'MenuItemNF.png'),\
-               os.path.join(CONFIG.SKIN, 'RadioButton', 'radiobutton-focus.png'),\
-               os.path.join(CONFIG.SKIN, 'RadioButton', 'radiobutton-nofocus.png')
-    elif file == 'slider':
-        return os.path.join(CONFIG.SKIN, 'Slider', 'osd_slider_nib.png'),\
-               os.path.join(CONFIG.SKIN, 'Slider', 'osd_slider_nibNF.png'),\
-               os.path.join(CONFIG.SKIN, 'Slider', 'slider1.png'),\
-               os.path.join(CONFIG.SKIN, 'Slider', 'slider1.png')
-
-
 def while_window(window, active=False, count=0, counter=15):
     windowopen = xbmc.getCondVisibility('Window.IsActive({0})'.format(window))
     logging.log("{0} is {1}".format(window, windowopen))
@@ -440,7 +424,6 @@ def show_notification(msg, test=False):
             self.show_dialog()
 
         def show_dialog(self):
-            self.testimage = os.path.join(CONFIG.ART, 'text.png')
             self.getControl(self.image).setImage(CONFIG.BACKGROUND)
             self.getControl(self.image).setColorDiffuse('9FFFFFFF')
             msg_text = CONFIG.THEME6.format(self.msg)
@@ -500,7 +483,6 @@ def show_notification_with_extra_image(msg, image_id, ExtraImageURL):
             self.show_dialog()
 
         def show_dialog(self):
-            self.testimage = os.path.join(CONFIG.ART, 'text.png')
             self.getControl(self.image).setImage(CONFIG.BACKGROUND)
             self.getControl(self.image).setColorDiffuse('9FFFFFFF')
             msg_text = CONFIG.THEME6.format(self.msg)

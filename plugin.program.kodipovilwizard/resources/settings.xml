@@ -23,6 +23,7 @@
         <setting id="installed" type="text" label="Build Installed" visible="false" default="false" />
         <setting id="resource_check_due" type="text" label="Next start-up cache / memory check (unix time)" visible="false" default="" />
         <setting id="kodi_update_notified" type="text" label="Newest Kodi version the user was told about" visible="false" default="" />
+        <setting id="storage_low_warned" type="text" label="Last low-disk warning (unix time)" visible="false" default="" />
         <setting id="extract" type="number" label="Extract Build %" visible="false" default="100" />
         <setting id="errors" type="number" label="Extract Error" visible="false" default="0" />
         <setting id="defaultskin" type="text" label="Default Skin: " enable="false" default="" visible="false"/>
@@ -70,7 +71,7 @@
         <!-- Moved from the subtitle add-on (Step 3 of the 20 Nov 2026 cleanup; there it was pov_fast_navigation, level 3, strings.po #32554 / #32555).
              pov_language_invoker_guard reads it from the Wizard now. Its original help text (Hebrew): "כבוי (ברירת מחדל, בטוח): POV מקבל מפרש פייתון חדש בכל לחיצה בתפריט, ולכן טוען מחדש את הקוד שלו בכל פעם — נמדד כ-1.75 שניות של גלגל מסתובב בכל קטגוריה, בכל לחיצה. מופעל: POV שומר מפרש אחד, ולכן טוען את הקוד שלו פעם אחת בכל הפעלת Kodi — אבל אם כמה בקשות של POV רצות באותו רגע (אריחי מסך הבית מתרעננים יחד, או לחיצה נוספת לפני שהרשימה הקודמת הסתיימה) הן חולקות את אותו מפרש, וזו קריסה שסוגרת את Kodi לגמרי. הפעילו רק אם אתם מעדיפים את המהירות ומקבלים את הסיכון. נכנס לתוקף אחרי הפעלה מחדש אחת של Kodi; POV שואל פעם אחת אם לטעון מחדש את הפרופיל." Legacy settings have no help text. -->
         <setting id="pov_fast_navigation" type="bool" label="POV: ניווט מהיר (שימוש חוזר במפרש פייתון)" default="false"/>
-        <setting id="pov_remember_source" type="bool" label="32504" default="true"/>
+        <setting id="pov_remember_source" type="bool" label="POV: סימון המקור שנצפה לאחרונה ברשימת המקורות" default="true"/>
         <setting type="lsep" label="העלאת לוג"/>
         <setting id="oldlog" type="bool" label="כלול Kodi.Old.Log" default="false"/>
         <setting id="wizlog" type="bool" label="כלול לוג Wizard" default="false"/>

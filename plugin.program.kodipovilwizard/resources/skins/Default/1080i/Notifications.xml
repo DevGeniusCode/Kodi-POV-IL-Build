@@ -30,7 +30,7 @@
                 <aligny>center</aligny>
                 <visible>Skin.String(headertexttype)</visible>
             </control>
-            <!-- KODI-RD-IL Icon - resources\kodi_rd_israel_art\kodi_rd_il_icon.png -->
+            <!-- KODI-RD-IL Icon - resources\media\kodi_rd_il_icon.png -->
             <control type="image" id="103">
                 <centerleft>44%</centerleft>
                 <top>74%</top>

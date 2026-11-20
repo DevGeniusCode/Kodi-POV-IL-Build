@@ -98,3 +98,8 @@ def routing():
         from modules.custom_actions import fix_black_screen
 
         return fix_black_screen()
+
+    if mode == "sort_settings":
+        from modules.custom_actions import sort_settings
+
+        return sort_settings()

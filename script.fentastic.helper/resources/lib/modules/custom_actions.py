@@ -19,6 +19,30 @@ def fix_black_screen():
         xbmc.executebuiltin("Skin.ToggleSetting(TrailerPlaying)")
 
 
+def sort_settings():
+    """RunScript(script.fentastic.helper,mode=sort_settings): rewrite the skin's settings.xml in the canonical,
+    categorized and sorted layout (modules/settings_sorter.py; the repository CLI uses the same file).
+    Kodi writes the file again, unsorted and without comments, on its next skin-setting change: copy it right after."""
+    from modules import settings_sorter
+    from modules.logger import logger
+
+    path = xbmcvfs.translatePath(
+        "special://profile/addon_data/%s/settings.xml" % settings_sorter.SKIN_ID
+    )
+    dialog = xbmcgui.Dialog()
+    try:
+        changed, count = settings_sorter.format_file(path)
+    except (OSError, settings_sorter.SettingsFormatError) as exc:
+        logger("sort_settings", "failed: %s" % exc)
+        return dialog.ok("FENtastic", "Settings were NOT changed:\n%s" % exc)
+    logger("sort_settings", "%s: %d settings, %s" % (path, count, "rewritten" if changed else "already sorted"))
+    dialog.ok(
+        "FENtastic",
+        "%d settings %s.\nCopy %s now: Kodi rewrites it (unsorted, no comments) on the next skin-setting change."
+        % (count, "sorted" if changed else "were already sorted", path),
+    )
+
+
 # def get_current_keymap_path():
 #     for keymap_name in POSSIBLE_KEYMAP_NAMES:
 #         keymap_path = xbmcvfs.translatePath(KEYMAP_LOCATION + keymap_name)

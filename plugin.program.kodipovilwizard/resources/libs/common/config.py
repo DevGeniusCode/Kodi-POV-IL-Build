@@ -81,6 +81,9 @@ class Config:
         icon_settings = getattr(uservar, 'ICONSETTINGS', self.ADDON_ICON)
         self.ICONSETTINGS = icon_settings if not icon_settings.endswith('://') else self.ADDON_ICON
 
+        icon_wizard = getattr(uservar, 'ICONWIZARD', self.ADDON_ICON)
+        self.ICONWIZARD = icon_wizard if not icon_wizard.endswith('://') else self.ADDON_ICON
+
         self.HIDESPACERS = getattr(uservar, 'HIDESPACERS', 'No')
         self.SPACER = getattr(uservar, 'SPACER', 'None')
         self.COLOR1 = getattr(uservar, 'COLOR1', 'gold')
@@ -199,8 +202,7 @@ class Config:
         self.ADDON_DATA = os.path.join(self.USERDATA, 'addon_data')
         self.PLUGIN_DATA = os.path.join(self.ADDON_DATA, self.ADDON_ID)
         self.ARCHIVE_CACHE = os.path.join(self.TEMP, 'archive_cache')
-        self.ART = os.path.join(self.PLUGIN, 'resources', 'art')
-        self.CUSTOM_ART = os.path.join(self.PLUGIN, 'resources', 'kodi_rd_israel_art')
+        self.ART = os.path.join(self.PLUGIN, 'resources', 'media')
 
         # Target addon_data paths for selective preservation
         self.ACCTMGR_DATA = os.path.join(self.ADDON_DATA, 'script.module.acctmgr')

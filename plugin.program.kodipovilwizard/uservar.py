@@ -11,7 +11,6 @@ import os
 ADDON_ID = 'plugin.program.kodipovilwizard'
 PATH = xbmcaddon.Addon(ADDON_ID).getAddonInfo('path')
 ART = os.path.join(PATH, 'resources', 'media')
-CUSTOM_ART = os.path.join(PATH, 'resources', 'kodi_rd_israel_art')
 #########################################################
 
 #########################################################
@@ -66,23 +65,23 @@ ADVANCEDFILE = 'http://'
 #########################################################
 #        Theming Menu Items                             #
 #########################################################
-# If you want to use locally stored icons the place them in the Resources/Art/
-# folder of the wizard then use os.path.join(ART, 'imagename.png')
-# do not place quotes around os.path.join
-# Example:  ICONMAINT     = os.path.join(ART, 'mainticon.png')
-#           ICONSETTINGS  = 'https://www.yourhost.com/repo/wizard/settings.png'
-# Leave as http:// for default icon
-ICONBUILDS = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONMAINT = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONSPEED = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONAPK = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONADDONS = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONSAVE = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONTRAKT = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONREAL = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONLOGIN = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONCONTACT = os.path.join(CUSTOM_ART, 'wizard.jpg')
-ICONSETTINGS = os.path.join(CUSTOM_ART, 'wizard.jpg')
+# Locally stored icons live in the add-on's resources/media/ folder: use os.path.join(ART, 'imagename.png')
+# (do not place quotes around os.path.join). A remote URL also works, and 'http://' means "use the add-on icon".
+# Example:  ICONSETTINGS  = 'https://www.yourhost.com/repo/wizard/settings.png'
+# KODI-POV-IL: one round labelled PNG per menu role (512x512, speed.png is 1024x1024). They are resolved
+# through CONFIG.ICON* (common/config.py), which falls back to the add-on icon for a missing / 'http://' value.
+ICONBUILDS = os.path.join(ART, 'builds.png')
+ICONMAINT = os.path.join(ART, 'maintenance.png')
+ICONSPEED = os.path.join(ART, 'speed.png')
+ICONAPK = os.path.join(ART, 'apkinstaller.png')
+ICONADDONS = os.path.join(ART, 'addoninstaller.png')
+ICONSAVE = os.path.join(ART, 'savedata.png')
+ICONTRAKT = os.path.join(ART, 'keeptrakt.png')
+ICONREAL = os.path.join(ART, 'keepdebrid.png')
+ICONLOGIN = os.path.join(ART, 'keeplogin.png')
+ICONCONTACT = os.path.join(ART, 'information.png')
+ICONSETTINGS = os.path.join(ART, 'settings.png')
+ICONWIZARD = os.path.join(ART, 'wizard.png')
 # Hide the section separators 'Yes' or 'No'
 HIDESPACERS = 'No'
 # Character used in separator
@@ -155,7 +154,7 @@ HEADERTYPE = 'Image'
 FONTHEADER = 'Font14'
 HEADERMESSAGE = ''
 # url to image if using Image 424x180
-HEADERIMAGE = os.path.join(CUSTOM_ART, 'kodi_rd_il_icon.png')
+HEADERIMAGE = os.path.join(ART, 'kodi_rd_il_icon.png')
 # Font for Notification Window
 FONTSETTINGS = 'Font13'
 # Background for Notification Window

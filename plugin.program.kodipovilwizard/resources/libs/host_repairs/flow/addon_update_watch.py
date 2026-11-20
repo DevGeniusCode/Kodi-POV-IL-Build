@@ -30,7 +30,7 @@ import time
 
 from resources.libs.common import gui_probe
 from resources.libs.host_repairs.flow import skin_gui_guard
-from resources.libs.host_repairs.flow.pov_steps import _skip_pov_patchers
+from resources.libs.host_repairs.flow.pov_steps import _maybe_install_pov_gemini_icon, _skip_pov_patchers
 from resources.libs.host_repairs.flow.startup_pass import _maybe_patch_pov_language_invoker
 
 POLL_SECONDS = 8
@@ -119,6 +119,7 @@ def _engine(addon_id):
 def _repair_pov():
     # The invoker guard first: POV's own check races it. Then every POV patch.
     _maybe_patch_pov_language_invoker()
+    _maybe_install_pov_gemini_icon()   # a POV update erases the copy
     return _engine('plugin.video.pov')
 
 

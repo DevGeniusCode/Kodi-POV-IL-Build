@@ -35,7 +35,7 @@ class MainMenu:
 
         # KODI-POV-IL - Kodi updates the wizard itself (repository.povil) now, not the
         # retired build.txt, so just show the current version.
-        directory.add_file('{0} [v{1}]'.format(CONFIG.ADDONTITLE, CONFIG.ADDON_VERSION), themeit=CONFIG.THEME2)
+        directory.add_file('{0} [v{1}]'.format(CONFIG.ADDONTITLE, CONFIG.ADDON_VERSION), icon=CONFIG.ICONWIZARD, themeit=CONFIG.THEME2)
         directory.add_file('מי צופה? — פרופילים', {'mode': 'profiles'}, icon=CONFIG.ICONSETTINGS, themeit=CONFIG.THEME1)
         if len(CONFIG.BUILDNAME) > 0:
             version = check.check_build(CONFIG.BUILDNAME, 'version')

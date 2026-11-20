@@ -383,13 +383,32 @@ no‑fanart defaults. The fix added it to the policy as:
 ### Centralized flat icon set
 
 - The canonical **source** of the build's custom icons is a **flat** directory
-  `plugin.program.orderfavourites-hebrew/povil_icons/` (no nested subfolders).
+  `plugin.program.orderfavourites-hebrew/resources/media/povil_icons/` (no nested subfolders; the same `resources/media/` also holds `fonts/` and `splash.jpg`).
 - On startup, `plugin.program.orderfavourites-hebrew/resources/lib/media_installer.py`
   **deploys/overwrites** that set into the **global media cache**
-  `special://home/media/povil_icons/` (and fonts into `special://home/media/Fonts/`).
+  `special://home/media/povil_icons/` (`resources/media/fonts/` goes to `special://home/media/fonts/`; the case of that folder is an open item, see "Known items" below).
   Kodi/skins/favourites read icons from the **global folder**, never by reaching
   into another addon's private folder (avoids cross‑addon containment breaches).
   The installer overwrites on every run so icon updates always reach users.
+
+### Wizard artwork (`plugin.program.kodipovilwizard/resources/media/`)
+
+- `CONFIG.ART` and `uservar.ART` both point at `resources/media/`. The menu icons are the 12 round labelled PNGs there, wired in `uservar.py`:
+  `ICONBUILDS` builds.png, `ICONMAINT` maintenance.png, `ICONSPEED` speed.png, `ICONAPK` apkinstaller.png, `ICONADDONS` addoninstaller.png, `ICONSAVE` savedata.png, `ICONTRAKT` keeptrakt.png,
+  `ICONREAL` keepdebrid.png, `ICONLOGIN` keeplogin.png, `ICONCONTACT` information.png, `ICONSETTINGS` settings.png, `ICONWIZARD` wizard.png (the title row of the main menu).
+  `CONFIG.ICON*` fall back to the add-on icon when a value is missing or `http://`.
+- Other files there: `qricon.jpg` (`CONTACTICON`, the QR of the Contact window), `kodi_rd_il_icon.png` (`HEADERIMAGE`, the notification window), `skins_bg.jpg` (`SKINS_BG`, a placeholder
+  for a future preview composite of the skins), `tonight.png`, and `profile-ui/`. The skins read `profile-ui/*` and `tonight.png` by absolute `special://home/addons/plugin.program.kodipovilwizard/...`
+  paths: never move them.
+- The POV repair step `_maybe_install_pov_gemini_icon` copies the subtitle add-on's `resources/media/gemini.png` into POV's `resources/skins/Default/media/` (the Account Manager list icon).
+
+### Known items (open, not fixed)
+
+- **F1, missing icons.** Code or data name icons that no file provides: `povil_icons/switch_skin_pov_il.png`, three `build_icons/Twilight/...` paths (`host_repairs/af3_home_patcher.py`),
+  `povil_icons/{Shows_Apple_TV, Shows_Disney, Shows_The_CW, icon, power, refresh, settings}.png` (`userdata/.../widget_baselines/*.json`) and `Logo_POV.png` / `wizard.png` in the
+  `skin.arctic.fuse.3` overrides of `favourites_config.json`. All are AF3 / on-demand paths.
+- **F3, font folder case.** The installer writes `special://home/media/fonts/`; Kodi's font manager looks in `special://home/media/Fonts/`. Fine on Windows, to be verified on the Nvidia Shield
+  (Android is case-sensitive) before any path changes. Only `arial.ttf` is used (Estuary, FENtastic, Onyx).
 
 ### JSON‑driven favourites
 
@@ -1293,6 +1312,7 @@ reintroduce them or references to them**:
 │       ├── gen_repo.py                      # build the whole repository site (addons.xml, zips, config/, aliases) and verify it
 │       ├── check_upstreams.py               # health + collision check of repository.povil.upstream
 │       ├── check_favourites.py              # CI: userdata/favourites.xml must match favourites_config.json
+│       ├── format_fentastic_settings.py     # sorts / categorizes skin.fentastic settings.xml (same module as RunScript mode=sort_settings)
 │       └── ...
 ├── repository.povil/                        # OUR repository add-on: one <dir> (this site), verify=sha256 + hashes
 ├── repository.povil.upstream/               # the third-party <dir>s (kodifitzwell, Fishenzon, Umbrella, CocoScrapers, Otaku, jurialmunkey)
@@ -1313,9 +1333,9 @@ reintroduce them or references to them**:
 │       │   ├── patches/                     # UNIFIED directory: patch registry (patches_config.py, 149 entries) & 43 decoupled logic modules
 │       │   └── profiles/                    # the Profiles feature (§9); hooks.py is its only engine‑facing surface (+ build_skin, profile_bootstrap)
 │       ├── skins/Default/1080i/             # Wizard windows: Profiles.xml + shared ChildHome.xml / ProfileLogin.xml templates
-│       └── media/profile-ui/                # picker / child‑home / login artwork
+│       └── media/profile-ui/                # Wizard artwork: menu icons, qricon, tonight, kodi_rd_il_icon, skins_bg; profile-ui/ = picker / child‑home / login
 ├── plugin.program.orderfavourites-hebrew/   # favourites generator + icon/media installer
-│   ├── povil_icons/                         # flat canonical icon set (source of truth)
+│   ├── povil_icons/                         # resources/media/povil_icons/: flat canonical icon set (source of truth)
 │   ├── resources/favourites_config.json     # tiles + per‑skin order + icon_base
 │   └── favourites_generator.py
 ├── service.subtitles.kodipovilai/           # AI Hebrew subtitles
