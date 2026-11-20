@@ -263,6 +263,18 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   Pattern for the remaining duplicates (owner, 19 Nov 2026): "Unified Core + Thin Wrappers" (one pure core, thin wrappers that keep their I/O and policy): ONE pure RTL text-transformation core in `delivery/rtl.py` behind the 3 delivery / file wrappers; ONE `breathe` in `core/kodi.py`
   once `embedded_extract` is unlocked; `gender_reference`'s private SRT parser / aligner merged into `core/srt/` and `sync/align/`.
 
+- **SUBTITLE STEP 6 COMPLETE (20 Nov 2026; owner-approved behaviour change; `ARCHITECTURE_SUBTITLES.md` Part 4 "Step 6 result", Appendix C Step 6).**
+  (A) Match % (`scoring_matching/release.py`): only attributes that change a file's timeline move the number. Resolution, codec, audio, HDR, bit depth and
+  container are sync-neutral (the old +4/+3 and +6/+3 bonuses are gone, the token tie-break ignores those tags: `_core_tokens`); a different episode is capped at 15,
+  a named different frame rate (`23.976fps` / `25fps` / `PAL`) at 30, the same streaming service adds +3 (group tier) / +6 (source tier); edition, PROPER, source
+  class and group keep their caps. `release.explain(video, sub)` is the per-attribute comparison. (B) Chooser window: `ui/chooser_rows.py` (pure, no xbmc) builds one
+  row per candidate as one column per field (each ONE text direction: no bidi collisions) and the info panel's properties (full release name, the match
+  breakdown, provider / type / language / SDH-HI, proven timing); the XML panel reads the focused row's properties (`Container(100).ListItem.Property`), the plot
+  and the poster are gone; `chooser._classify` and the language / flag tables moved there. A new row column = a property in `chooser_rows.build` + a control in the XML
+  (the contract fails when the XML reads a property no row produces). Unchanged: the XML file name, `MoranSubsChooserOpen`, control ids 100 / 201 / 202, the pyxbmct fallback.
+  `golden_expected.json` was re-recorded on purpose (1,299 cases; `list.*` changed only in label `%`, never in order). Stub import 153 of 153. Kodi has not been
+  tested (Appendix C Step 6). Not done, on purpose: runtime / duration is not in a release name, so it is shown only through SubSync's proven-timing label.
+
 ## 🛑 CRITICAL TRAPS & GLOBAL RULES
 
 - **STRUCTURAL REFACTORING ONLY:** NO bug fixing, NO logic optimization. A fix is made only when the user explicitly
@@ -340,7 +352,7 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
   cross-module API scan (names exist, signatures fit); repo-wide grep of callers (skins, `userdata/`, other add-ons) for old
   paths and strings; behavior tests under the stubs for any new code. Compare each against the snapshot. Baselines: Wizard
   171 of 172 `resources/` modules import (Phase 7 stub harness) (only `patches/pov_combined_discover`, needs POV's `indexers`); subtitle add-on: with
-  `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, every module imports (the Telegram source was deleted, so `telegram_impl` no longer fails): 152 of 152 modules after Subtitle Phase 4 (140 of 140 modules with the Subtitle Phase 3 harness, also run by `.github/scripts/check_subs_contract.py`; 138 of 138 before Phase 3 added `core/addon.py` and `core/cache/profile_dir.py`; 72 of 72 before the Phase 2 split, `requests` stubbed too, one fresh `python -I` per module, `service` counted as importing when it starts its main loop).
+  `chardet` / `telethon` / `pyxbmct` / `urllib3` stubbed, every module imports (the Telegram source was deleted, so `telegram_impl` no longer fails): 153 of 153 modules after Subtitle Step 6 (`ui/chooser_rows.py`), 152 of 152 after Subtitle Phase 4 (140 of 140 modules with the Subtitle Phase 3 harness, also run by `.github/scripts/check_subs_contract.py`; 138 of 138 before Phase 3 added `core/addon.py` and `core/cache/profile_dir.py`; 72 of 72 before the Phase 2 split, `requests` stubbed too, one fresh `python -I` per module, `service` counted as importing when it starts its main loop).
 - **WORKFLOW:** stop after each step; the user reviews and commits. No version bump or changelog per step.
 - **LINE ENDINGS:** sources and docs use CRLF (a file that is LF stays LF).
 - **Output Mirroring:** For every single response you generate in this project, you MUST automatically write your full, exact textual response into a file named `output.txt` in the root directory. Overwrite the file completely each time (do not append).

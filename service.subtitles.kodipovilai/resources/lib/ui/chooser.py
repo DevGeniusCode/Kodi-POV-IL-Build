@@ -14,6 +14,8 @@
 
 import os
 
+from resources.lib.ui import chooser_rows
+
 try:
     import xbmc
     import xbmcgui
@@ -38,64 +40,6 @@ def _log(msg, level='INFO'):
         kodi.log('subs_chooser: ' + msg, level=level)
     except Exception:
         pass
-
-
-# Real flag images (32x32, bundled in resources/media/flags) shown in the list's
-# icon column. Images never depend on the skin font, so they ALWAYS render -- the
-# old ★/◆/■ glyphs showed as empty boxes in some skins (e.g. FENtastic). The flag
-# tells the subtitle's language at a glance; foreign rows ALSO get a Hebrew
-# language tag in the text, so they're unmistakable even if an image is missing.
-_FLAG_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'media', 'flags')
-
-_LANG2FLAG = {
-    'he': 'he', 'iw': 'he', 'heb': 'he',
-    'en': 'en', 'eng': 'en',
-    'es': 'es', 'spa': 'es',
-    'de': 'de', 'ger': 'de', 'deu': 'de',
-    'fr': 'fr', 'fre': 'fr', 'fra': 'fr',
-    'pt': 'pt', 'por': 'pt', 'pb': 'pb', 'pob': 'pb',
-    'ru': 'ru', 'rus': 'ru',
-    'ar': 'ar', 'ara': 'ar',
-    'it': 'it', 'ita': 'it',
-    'nl': 'nl', 'dut': 'nl', 'nld': 'nl',
-    'pl': 'pl', 'pol': 'pl',
-    'tr': 'tr', 'tur': 'tr',
-    'zh': 'zh', 'chi': 'zh', 'zho': 'zh',
-    'ja': 'ja', 'jpn': 'ja',
-    'ko': 'ko', 'kor': 'ko',
-    'hi': 'hi', 'hin': 'hi',
-    'ro': 'ro', 'rum': 'ro', 'ron': 'ro',
-    'sv': 'sv', 'swe': 'sv',
-    'cs': 'cs', 'cze': 'cs', 'ces': 'cs',
-    'da': 'da', 'dan': 'da',
-    'fi': 'fi', 'fin': 'fi',
-    'no': 'no', 'nor': 'no',
-    'el': 'el', 'gre': 'el', 'ell': 'el',
-    'hu': 'hu', 'hun': 'hu',
-}
-_LANG_HE = {
-    'en': 'אנגלית', 'es': 'ספרדית', 'de': 'גרמנית', 'fr': 'צרפתית',
-    'pt': 'פורטוגזית', 'pb': 'פורטוגזית', 'ru': 'רוסית', 'ar': 'ערבית',
-    'it': 'איטלקית', 'nl': 'הולנדית', 'pl': 'פולנית', 'tr': 'טורקית',
-    'zh': 'סינית', 'ja': 'יפנית', 'ko': 'קוריאנית', 'hi': 'הינדית',
-    'ro': 'רומנית', 'sv': 'שוודית', 'cs': "צ'כית", 'da': 'דנית',
-    'fi': 'פינית', 'no': 'נורווגית', 'el': 'יוונית', 'hu': 'הונגרית',
-}
-
-
-def _norm_lang(lang):
-    l = (lang or '').strip().lower()
-    return _LANG2FLAG.get(l) or _LANG2FLAG.get(l[:2]) or ''
-
-
-def _flag_path(lang):
-    code = _norm_lang(lang) or 'unknown'
-    p = os.path.join(_FLAG_DIR, code + '.png')
-    if os.path.isfile(p):
-        return p
-    g = os.path.join(_FLAG_DIR, 'unknown.png')
-    return g if os.path.isfile(g) else ''
 
 
 # Legend: plain text + colours only (no glyphs that some skin fonts can't draw).
@@ -135,10 +79,10 @@ def _row_item(c, info, xbmcgui):
     if sync_label:
         disp = '{0} · {1}'.format(sync_label, disp)
 
-    code = _norm_lang(lang)
+    code = chooser_rows.norm_lang(lang)
     is_he = (code == 'he') or (lang.lower() in ('he', 'iw', 'heb'))
     # Foreign (non-Hebrew) row -> prepend a clear Hebrew language tag.
-    he_name = _LANG_HE.get(code or lang[:2].lower())
+    he_name = chooser_rows.LANG_HE.get(code or lang[:2].lower())
     if not is_he and he_name:
         disp = '[{0}] {1}'.format(he_name, disp)
 
@@ -159,7 +103,7 @@ def _row_item(c, info, xbmcgui):
     # Make the match % pop: bright white, inside the row's colour.
     disp = _re.sub(r'(\d{1,3}%)', '[COLOR FFFFFFFF]\\1[/COLOR]', disp)
     label = '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, disp)
-    flag = _flag_path('he' if is_he else lang)
+    flag = chooser_rows.flag_path('he' if is_he else lang)
     try:
         li = xbmcgui.ListItem(label)
         if flag:
@@ -569,56 +513,6 @@ def _show_pyxbmct():
 
 # ---------------- rich WindowXMLDialog chooser (Tal-style, all skins) --------
 
-def _classify(c, info):
-    """Split a candidate into the fields the window XML renders: a bold main
-    line, a dim secondary line, a match-% string, a colour, and a flag image."""
-    import re as _re
-    lang = (c.get('language') or '').strip()
-    name = (c.get('filename') or '').strip()
-    current = name.startswith('» נוכחית')
-    pct = None
-    m = _re.search(r'(\d{1,3})%', name)
-    if m:
-        try:
-            pct = int(m.group(1))
-        except ValueError:
-            pct = None
-    disp = name
-    if current and '· ' in disp:
-        disp = disp.split('· ', 1)[1]
-    disp = _re.sub(r'\s*·\s*\d{1,3}%\s*', ' ', disp).strip()
-    head, rel = disp, ''
-    for sep in ('  —  ', ' — ', '—'):
-        if sep in disp:
-            head, rel = disp.split(sep, 1)
-            break
-    head, rel = head.strip(), rel.strip()
-    sync_label = (c.get('_subsync_label') or '').strip()
-    if sync_label:
-        rel = sync_label + ((' · ' + rel) if rel else '')
-    code = _norm_lang(lang)
-    is_he = (code == 'he') or (lang.lower() in ('he', 'iw', 'heb'))
-    he_name = _LANG_HE.get(code or lang[:2].lower())
-    if not is_he and he_name:
-        head = '[{0}] {1}'.format(he_name, head)
-    if current:
-        col = 'FFFF00FE'
-    elif is_he:
-        if pct is not None and pct >= 80:
-            col = 'FFFFD700'
-        elif pct is not None and pct >= 50:
-            col = 'FF7BE38C'
-        else:
-            col = 'FFBFE9CF'
-    elif lang:
-        col = 'FFF0A93A'
-    else:
-        col = 'FFFFFFFF'
-    pct_txt = ('{0}%'.format(pct)) if pct is not None else ''
-    flag = _flag_path('he' if is_he else lang)
-    return (head or name), rel, pct_txt, col, flag
-
-
 def _deliver_pick(c, info, close_cb):
     """Download/apply the picked candidate (shared by the XML window). Mirrors the
     pyxbmct on_pick: embedded -> switch stream; AI -> close + background
@@ -905,7 +799,10 @@ def _show():
 
             def onInit(self):
                 try:
+                    self.setProperty('subs.brand', _title())
                     self.setProperty('subs.head', video_context.release_name(self.info, 'chooser') or '')
+                    # the release the rows are compared with (the one the list was scored against)
+                    self.playing = video_context.release_name(self.info, 'picker') or ''
                     try:
                         xbmcgui.Window(10000).setProperty(
                             'MoranSubsChooserOpen', '1')
@@ -940,26 +837,19 @@ def _show():
                                  'נמצאו {0} כתוביות'.format(len(real)))
                 rows = []
                 for c in items:
+                    # One column per field (chooser_rows): the colours are baked
+                    # into the property text (BBCode) because a per-row
+                    # <textcolor>$INFO[...]</textcolor> is unreliable in Kodi.
                     if c.get('_placeholder'):
-                        rows.append(xbmcgui.ListItem(
-                            '[COLOR FF9AA0A6]{0}[/COLOR]'.format(c['filename'])))
-                        continue
-                    label, label2, pct, col, flag = _classify(
-                        c, self.info)
-                    # Bake colours into the label text (BBCode): per-row
-                    # <textcolor>$INFO[...]</textcolor> is unreliable in Kodi,
-                    # so the row colour lives in the label string itself.
-                    li = xbmcgui.ListItem(
-                        '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, label))
-                    li.setLabel2(
-                        '[COLOR FF9AA0A6]{0}[/COLOR]'.format(label2)
-                        if label2 else '')
-                    if flag:
-                        li.setArt({'thumb': flag})
-                    li.setProperty(
-                        'pct',
-                        '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, pct)
-                        if pct else '')
+                        row = chooser_rows.placeholder(c['filename'])
+                    else:
+                        row = chooser_rows.build(
+                            c, getattr(self, 'playing', ''))
+                    li = xbmcgui.ListItem(row['label'])
+                    if row['flag']:
+                        li.setArt({'thumb': row['flag']})
+                    for key, value in row['props'].items():
+                        li.setProperty(key, value)
                     rows.append(li)
                 lst.reset()
                 lst.addItems(rows)
@@ -1055,6 +945,7 @@ def _show():
                         'Default', '1080i')
         import threading
         w.info = info
+        w.playing = ''
         w.items = items
         w.pending = pending
         w.started = False

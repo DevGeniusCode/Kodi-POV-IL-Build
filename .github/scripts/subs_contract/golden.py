@@ -287,12 +287,23 @@ PAIRS = [
     ('Movie.2020.EXTENDED.1080p.BluRay.x264-AAA', 'Movie.2020.1080p.BluRay.x264-AAA'),
     ('', 'Movie.2020.1080p'),
     ('Some.Title.2019.2160p.UHD.BluRay.REMUX.HDR.HEVC-FGT', 'Some Title 2019 2160p BluRay x265 10bit-RARBG'),
+    # Step 6: sync-determining attributes drive the number, sync-neutral ones (resolution, codec, audio, container) do not
+    ('Show.S01E02.1080p.AMZN.WEB-DL.DDP5.1.H264-NTb', 'Show.S01E03.1080p.AMZN.WEB-DL.DDP5.1.H264-NTb'),
+    ('Show.S01E02.1080p.AMZN.WEB-DL.H264-NTb', 'Show.S01E02.720p.AMZN.WEB-DL.x265-NTb'),
+    ('Movie.2020.1080p.AMZN.WEB-DL.H264-ABC', 'Movie.2020.1080p.AMZN.WEB-DL.H264-XYZ'),
+    ('Movie.2020.1080p.AMZN.WEB-DL.H264-ABC', 'Movie.2020.1080p.NF.WEB-DL.H264-XYZ'),
+    ('Movie.2020.DVDRip.25fps-AAA', 'Movie.2020.DVDRip.23.976fps-AAA'),
+    ('Movie.2020.DVD.PAL-AAA', 'Movie.2020.DVD.23.976fps-AAA'),
+    ('Movie.2020.1080p.WEB.H264-ABC', 'Movie.2020.720p.WEB.x265-XYZ'),
+    ('Movie.2020.1080p.WEB-DL.H264-GRP', 'Movie 2020 720p x265'),
+    ('Movie.2020.1080p.AMZN.WEB-DL.DDP5.1.H264-GRP', 'Movie.2020.2160p.AMZN.WEB-DL.DDP5.1.HEVC-GRP.mkv'),
 ]
 for i, (a, b) in enumerate(PAIRS):
     rec('rm.score.%d' % i, get('score', RM), a, b)
     rec('rm.normalize.%d' % i, get('normalize', RM), a)
     rec('rm.parse.%d' % i, get('parse', RM), b)
     rec('rm.best_pct.%d' % i, get('best_pct', RM), a, [b])
+    rec('rm.explain.%d' % i, get('explain', RM), a, b)
     rec('rm.synthetic.%d' % i, get('is_synthetic', RM), a)
 
 # ---- settings / selection state machine (dict-backed Window and addon stubs)

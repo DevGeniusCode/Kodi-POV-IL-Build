@@ -354,6 +354,7 @@ service.subtitles.kodipovilai/
         │   ├── listing.py            # Candidate -> ListItem (stars from Candidate.pct, not from the label)
         │   ├── quick_toggles.py      # §2.2
         │   ├── chooser.py            # ex subs_chooser.py (XML name and MoranSubsChooserOpen unchanged)
+        │   ├── chooser_rows.py       # Step 6: one candidate -> the chooser window's row + info-panel properties (pure, no xbmc)
         │   ├── filename_publisher.py # ex subs_filename_publisher.py (subs.player_filename unchanged)
         │   └── settings_actions/     # gemini pairing, engine test, cache actions
         ├── pyxbmct/                  # bundled, chooser fallback (unchanged)
@@ -814,6 +815,14 @@ Each phase is split into steps. After each step the agent stops, writes `output.
 
 **Rules for every phase:** `CLAUDE.md` "SUBTITLE ADD-ON: DECOUPLED" (no shims; pinned public surface; no Wizard names), STRUCTURAL REFACTORING ONLY for behaviour (report bugs, do not fix them silently), CRLF, `output.txt`, a commit snippet per step.
 
+### Step 6 result (20 Nov 2026, owner-approved behaviour change): match scoring and the chooser window
+
+**Match % (`scoring_matching/release.py`).** The number now reflects only what changes a file's TIMELINE. Sync-neutral attributes (resolution, video codec, audio format, HDR, bit depth, container, size) no longer add to or subtract from `pct`: the +4 / +3 (group tier) and +6 / +3 (source tier) resolution / codec bonuses are gone, and the token tie-break runs over the CORE tokens (`_core_tokens` strips those tags). Sync-determining attributes drive it: a different EPISODE (`SxxEyy`) is capped at 15 (it used to score 97 when group and source matched), a named FRAME RATE that differs (`23.976fps` vs `25fps`, `PAL` = 25) is capped at 30, edition / cut, PROPER, source class and release group keep their old caps and tiers, and the same STREAMING SERVICE adds +3 (group tier) / +6 (source tier). Group tier is 94 (same source) / 90 (source untagged) + 3 for the same service. Runtime itself is not in a release name: it stays with SubSync's verdicts (`_subsync_label`), which the chooser shows in the "תזמון" row. `release.explain(video, sub)` returns the per-attribute comparison the info panel reads. `best_pct` stays EXACTLY `max(match_pct)` (20,000 random pairs, six floors) and no branch passes its `_CEIL_*`.
+
+**Chooser window.** `ui/chooser_rows.build(candidate, playing)` replaces `chooser._classify` (which parsed the display label): the row is one column per field (flag, `%` + tier word, release filename, provider, up to 3 chips), each column ONE direction, so Kodi's bidi layout cannot reorder or collide pieces. The right panel (no plot, no poster) reads the FOCUSED row's properties (`Container(100).ListItem.Property(...)`, no Python on focus changes): full release name (wrapped at its separators), the match breakdown (episode, edition, frame rate, source, group, service, timing: yours vs the subtitle's, with a Hebrew status word), and provider / type / language / SDH-HI. The window name, `MoranSubsChooserOpen`, ids 100 / 201 / 202 and the `pyxbmct` fallback are unchanged.
+
+**Contract.** `golden_expected.json` re-recorded on purpose: 1,299 cases (was 1,217): 12 release-score records changed (`rm.score` / `rm.best_pct` / `tr.match_pct`), 8 `list.*` scenarios changed ONLY in the `%` inside a label (the order of every row is identical), the 29 `classify.*` records became 29 `chooserrow.*` records of the new row builder, 9 new release pairs (+ `rm.explain.*`) and a check that every `ListItem.Property` the XML reads is produced. Stub import 153 of 153; the other nets (628 + 56) are untouched.
+
 ## Part 5: Deletion Report
 
 Each phase appends its rows here. A row is an inactive feature, setting or block of code that was **removed**. "Revive" says what bringing it back would take, so the owner can decide. The bypassed upstream features of the Phase 0 merge are listed in `CLAUDE.md` "SKIPPED UPSTREAM FEATURES", not here. Names and paths in the rows are those of the code when it was deleted: `kodi_utils.py` was renamed `sub_utils.py` at the end of Phase 1, and the Telegram files no longer exist.
@@ -1034,3 +1043,13 @@ Measured from the repo, never estimated. Method:
 8. `he_sub_match` in POV and in Umbrella: a source-screen badge appears on the first open and after a warm-up (the file's API is unchanged; only `dbg` / `warm_queue_dir` were renamed, used by the service's warm-queue drainer).
 9. Sync: a retime on a pair with a known offset and a deep verify (they use the shared `make_breather`: the player must not stutter during a long probe).
 10. Quick toggles (4h) are NOT in this build: nothing to check.
+
+## Appendix C (Step 6): Kodi checklist for the chooser window and the scoring (nothing below was tested in Kodi)
+
+1. Open the chooser during playback: the list rows show the flag, a big `%` with its Hebrew tier word, the release filename on line 1, the provider and up to 3 chips on line 2; no Hebrew badge overlaps a release name, and a Hebrew-only row (embedded, AI, pool without a release) reads right.
+2. Move through the list (remote, mouse, touch): the panel on the right changes with the focused row at once; a placeholder row ("מחפש כתוביות…") shows no panel; the position "n / N" counts.
+3. A long release name (over 90 characters) shows whole in the panel (up to 5 lines) and scrolls in the focused row; check at the font sizes of FENtastic, Estuary and AF3 (`font12/13/14` differ per skin, the wrap width is 28 characters).
+4. Colours: gold / green / amber / magenta follow the legend; the focused row has the green bar (magenta for the applied one); the buttons' focused text is readable.
+5. Scoring on a real title: two subtitles of the same group at different resolutions now show the SAME `%`; a subtitle of another episode (season packs) drops to a low `%`; the "תזמון" row shows "מאומת" after SubSync has proved a row.
+6. `explain` says "שונה" in red only for a real contradiction (episode, cut, frame rate, source class, group, service); resolution and codec are never shown as a fact.
+

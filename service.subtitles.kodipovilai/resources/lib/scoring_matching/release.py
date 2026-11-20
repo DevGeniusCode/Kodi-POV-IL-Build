@@ -13,6 +13,15 @@
 #   - cross source class      -> CAPPED LOW (WEB vs BluRay drifts by minutes;
 #     the old scorer happily gave these 60-75% on token overlap alone)
 #   - different edition/PROPER-> capped (different cut / re-release)
+#   - different episode       -> capped very low (another file altogether)
+#   - different frame rate    -> capped low (23.976 vs 25 fps drifts for good)
+#
+# WHAT DECIDES THE NUMBER (Step 6, owner-approved): only attributes that change
+# the TIMELINE of a file -- episode, edition / cut, frame rate, source class,
+# release group, streaming service. Resolution, video codec, audio format, HDR,
+# bit depth and the container never move it: a 720p x264 and a 2160p HEVC encode
+# of the same WEB-DL are the same master and share one timeline, so the number
+# must not drop (or rise) because of them. The token tie-break ignores them too.
 #
 # Self-contained ON PURPOSE (like he_sub_match): POV imports our modules by
 # path with only resources/lib on sys.path, so NO package-relative imports,
@@ -236,6 +245,81 @@ def same_content(video_name, subtitle_name):
                 and (not left[3] or not right[3] or left[3] == right[3]))
 
 
+# SYNC-NEUTRAL tokens: they describe the encode, not the timeline. Stripped
+# before the token tie-break so "1080p.x264" vs "720p.HEVC" costs nothing.
+_NEUTRAL_RE = re.compile(
+    r'^(?:\d{3,4}p|\d{3,4}x\d{3,4}|[hx]26[45]|\d+bit|hdr\d*|hdr10plus|dv|dovi'
+    r'|sdr|ddp?\d*|ddplus|e?ac3|aac\d*|dts|dtshd|dtsx|truehd|atmos|flac\d*|opus'
+    r'|mp3|l?pcm|ma|hd|hevc|avc|av1|xvid|divx|uhd|4k|multi|dual|audio)$')
+_AUDIO_HEAD_RE = re.compile(r'^(?:dd|aac|e?ac3|dts|truehd|atmos|flac|opus)')
+_CORE_MEMO = {}
+
+
+def _core_tokens(toks):
+    """The token tuple without the sync-neutral tags (resolution, codec, audio,
+    HDR, bit depth). Split forms ('h', '264'; 'ddp5', '1') go with them."""
+    cached = _CORE_MEMO.get(toks)
+    if cached is not None:
+        return cached
+    out = []
+    n = len(toks)
+    for i, t in enumerate(toks):
+        prev = toks[i - 1] if i else ''
+        if t in ('h', 'x') and i + 1 < n and toks[i + 1] in ('264', '265'):
+            continue
+        if t in ('264', '265') and prev in ('h', 'x'):
+            continue
+        if len(t) == 1 and t.isdigit() and _AUDIO_HEAD_RE.match(prev):
+            continue
+        if _NEUTRAL_RE.match(t):
+            continue
+        out.append(t)
+    return _memo_put(_CORE_MEMO, toks, tuple(out))
+
+
+# Frame rate named in a release or subtitle name ("23.976fps", "25 fps", "PAL").
+# A frame-rate mismatch makes a subtitle drift for the whole file, so it is a
+# sync-determining attribute. Names rarely carry it; absent on either side is
+# UNKNOWN, never a mismatch.
+_FPS_RE = re.compile(
+    r'(?<!\d)(?<!\d[.,])(23[.,]976|23[.,]98|24|25|29[.,]97|30|50|59[.,]94|60)[\s._-]?fps',
+    re.I)
+_FPS_MEMO = {}
+
+
+def _fps_of(name):
+    """'23.976' / '24' / '25' / ... or '' when the name does not say."""
+    if not isinstance(name, str):
+        return ''
+    cached = _FPS_MEMO.get(name)
+    if cached is not None:
+        return cached
+    value = ''
+    m = _FPS_RE.search(name.replace('_', ' '))
+    if m:
+        value = m.group(1).replace(',', '.')
+        if value == '23.98':
+            value = '23.976'
+    else:
+        toks = _toks(name)
+        anchor = next((i for i, t in enumerate(toks)
+                       if _RES_RE.fullmatch(t)
+                       or any(t in c for _k, c in SOURCE_SETS)), None)
+        # PAL is 25 fps; only read it among the technical tags ("DVD.PAL"),
+        # so a title word is never taken for it.
+        if anchor is not None and 'pal' in toks[anchor:]:
+            value = '25'
+    return _memo_put(_FPS_MEMO, name, value)
+
+
+def _episode_of(toks):
+    """The SxxEyy tag of a name ('' when it has none)."""
+    for t in toks:
+        if _EPISODE_RE.fullmatch(t):
+            return t
+    return ''
+
+
 def _parse(name):
     toks = _toks(name)
     tokset = set(toks)
@@ -349,6 +433,8 @@ def parse(name):
 
 
 def _token_ratio(a_tokens, b_tokens):
+    """Token similarity over the CORE tokens (sync-neutral tags removed)."""
+    a_tokens, b_tokens = _core_tokens(a_tokens), _core_tokens(b_tokens)
     if not a_tokens or not b_tokens:
         return 0.0
     try:
@@ -447,7 +533,7 @@ def best_pct(video_name, sub_names, stop_at=100, floor=0):
 # The most a branch can ever return. Used ONLY to skip work that provably
 # cannot change a maximum -- never to change what a branch returns. Each is
 # read straight off the branch below it: min(25, ...), min(35, ...),
-# min(40, ...); same-source at 55+6+3+int(ratio*15); fuzzy at
+# min(40, ...); same-source at 55+6+int(ratio*15); fuzzy at
 # int(10 + ratio*55).
 #
 # The last two are stated one HIGHER than they can actually reach, and that
@@ -457,6 +543,8 @@ def best_pct(video_name, sub_names, stop_at=100, floor=0):
 # adversarial pairs. Rounding a ceiling UP is always safe here (it skips
 # less); rounding one down would silently lose a match. Round 11 measured
 # both, and the constants stay conservative on purpose.
+_CEIL_EPISODE = 15
+_CEIL_FPS = 30
 _CEIL_EDITION = 25
 _CEIL_SOURCE = 35
 _CEIL_PROPER = 40
@@ -483,6 +571,15 @@ def _score(video_name, sub_name, floor=0):
 
     # HARD contradictions first -- these caps are the whole point: the old
     # token scorer let a WEB sub score 70% against a BluRay source.
+    # Another episode is another file: nothing else about the names matters.
+    v_ep, s_ep = _episode_of(vt), _episode_of(st)
+    if v_ep and s_ep and v_ep != s_ep:
+        if floor >= _CEIL_EPISODE:
+            return None
+        ratio = _token_ratio(vt, st)
+        pct = min(15, int(ratio * 25))
+        return pct, TIER_CROSS, [
+            'different episode ({0} vs {1})'.format(v_ep.upper(), s_ep.upper())]
     if v['edition'] and s['edition'] and v['edition'] != s['edition']:
         if floor >= _CEIL_EDITION:
             return None
@@ -510,11 +607,21 @@ def _score(video_name, sub_name, floor=0):
         ratio = _token_ratio(vt, st)
         pct = min(25, int(ratio * 40))
         return pct, TIER_CROSS, ['possibly different cut/edition']
+    v_fps, s_fps = _fps_of(video_name), _fps_of(sub_name)
+    if v_fps and s_fps and v_fps != s_fps:
+        if floor >= _CEIL_FPS:
+            return None
+        ratio = _token_ratio(vt, st)
+        pct = min(30, int(ratio * 40))
+        return pct, TIER_CROSS, [
+            'frame rate mismatch ({0} vs {1} fps)'.format(v_fps, s_fps)]
 
     same_source = bool(v['source'] and s['source'])  # equal if both set here
     same_group = bool(v['group'] and s['group'] and v['group'] == s['group'])
     other_service = bool(v['service'] and s['service']
                          and v['service'] != s['service'])
+    same_service = bool(v['service'] and s['service']
+                        and v['service'] == s['service'])
 
     # Containment: one normalized name fully inside the other (after the
     # contradiction guards above). Covers provider-decorated variants of the
@@ -538,15 +645,15 @@ def _score(video_name, sub_name, floor=0):
         # both sides (groups like ColdFilm often ship no WEB/BluRay tag at
         # all) it's still group-level trust -- contradicting sources already
         # returned TIER_CROSS above.
-        pct = 90 if same_source else 86
+        # Resolution / codec / container do not move this number (see the
+        # header): the same group + source is one timeline at any encode.
+        pct = 94 if same_source else 90
         reasons.append('same group + source' if same_source
                        else 'same group (source untagged)')
-        if v['resolution'] and v['resolution'] == s['resolution']:
-            pct += 4
-            reasons.append('same resolution')
-        if v['codec'] and v['codec'] == s['codec']:
+        if same_service:
             pct += 3
-            reasons.append('same codec')
+            reasons.append('same streaming service ({0})'.format(
+                v['service'].upper()))
         return min(pct, 99), TIER_GROUP, reasons
 
     if same_source:
@@ -554,11 +661,10 @@ def _score(video_name, sub_name, floor=0):
             return None
         pct = 55
         reasons.append('same source class ({0})'.format(v['source']))
-        if v['resolution'] and v['resolution'] == s['resolution']:
+        if same_service:
             pct += 6
-            reasons.append('same resolution')
-        if v['codec'] and v['codec'] == s['codec']:
-            pct += 3
+            reasons.append('same streaming service ({0})'.format(
+                v['service'].upper()))
         if v['group'] and s['group'] and v['group'] != s['group']:
             pct -= 8
             reasons.append('different group')
@@ -594,6 +700,51 @@ def match_tier(video_name, sub_name):
         return score(video_name, sub_name)[1]
     except Exception:
         return TIER_FUZZY
+
+
+def explain(video_name, sub_name):
+    """Why a subtitle release got its number, for the chooser's info panel.
+
+    Returns {'pct', 'tier', 'reasons', 'facts'}. `facts` lists the attributes
+    in this order -- the sync-deciding ones first (episode, edition, frame
+    rate, source, group, streaming service), then the sync-neutral ones
+    (resolution, codec) -- as (key, video value, subtitle value, state), where
+    state is 'match', 'mismatch', 'unknown' (one side does not say) or
+    'neutral' (shown for information; it never moves the number). Never raises.
+    """
+    try:
+        pct, tier, reasons = score(video_name, sub_name)
+        v, s = _parse_c(video_name), _parse_c(sub_name)
+        vt, st = _toks(video_name), _toks(sub_name)
+        pairs = (
+            ('episode', _episode_of(vt).upper(), _episode_of(st).upper()),
+            ('edition', v['edition'], s['edition']),
+            ('fps', _fps_of(video_name), _fps_of(sub_name)),
+            ('source', v['source'], s['source']),
+            ('group', v['group'], s['group']),
+            ('service', v['service'], s['service']),
+        )
+        facts = []
+        for key, a, b in pairs:
+            if key == 'edition':
+                # an untagged release is the theatrical cut: a cut edition on
+                # ONE side only is a contradiction (the scorer caps it too)
+                if a and b:
+                    state = 'match' if a == b else 'mismatch'
+                elif a in _CUT_EDITIONS or b in _CUT_EDITIONS:
+                    state = 'mismatch'
+                else:
+                    state = 'unknown'
+            else:
+                state = ('unknown' if not (a and b)
+                         else 'match' if a == b else 'mismatch')
+            facts.append((key, a, b, state))
+        for key in ('resolution', 'codec'):
+            facts.append((key, v[key], s[key], 'neutral'))
+        return {'pct': pct, 'tier': tier, 'reasons': list(reasons),
+                'facts': facts}
+    except Exception:
+        return {'pct': 0, 'tier': TIER_FUZZY, 'reasons': [], 'facts': []}
 
 
 def best(video_name, sub_names):

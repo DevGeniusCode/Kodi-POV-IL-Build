@@ -13,9 +13,11 @@ _streams = _il.import_module('resources.lib.fetching.embedded.streams')
 _local = _il.import_module('resources.lib.fetching.local')
 _poolc = _il.import_module('resources.lib.fetching.pool_client')
 _tcache = _il.import_module('resources.lib.core.cache.translation_cache')
-_chooser = _il.import_module('resources.lib.ui.chooser')
+_rows = _il.import_module('resources.lib.ui.chooser_rows')
+_vc = _il.import_module('resources.lib.core.video_context')
 
 _NOTIFY = []
+_ROWPROPS = set()
 _kodi.notify = lambda *a, **k: _NOTIFY.append((a, sorted(k.items())))
 
 
@@ -127,15 +129,19 @@ def _run_list(name, engine=None, embedded=None, pool=None, along=None, temp=None
         d.pop('pct', None)
         rows.append(d)
     R['liststars.' + name] = json.dumps(stars)
-    # what the chooser window renders for every row (Subtitle Phase 4, step 4i): main line, second line, match-%, colour, flag
+    # what the chooser window shows for every row (Step 6: ui/chooser_rows.build, one column per field and the info
+    # panel's properties), against the playing release the rows are scored with
     _cl = []
+    _playing = _vc.release_name(_copy.deepcopy(inf), 'picker') or ''
     for c in out:
         try:
-            _cl.append([str(x).replace(ROOT.replace(os.sep, '/'), '<A>').replace(ROOT, '<A>')
-                        for x in _chooser._classify(dict(c), _copy.deepcopy(inf))])
+            _row = _rows.build(dict(c), _playing)
+            _ROWPROPS.update(_row['props'])
+            _cl.append(json.loads(json.dumps(_row, ensure_ascii=False).replace(
+                json.dumps(ROOT.replace(os.sep, '/'))[1:-1], '<A>').replace(json.dumps(ROOT)[1:-1], '<A>')))
         except Exception as e:      # noqa
             _cl.append('EXC ' + type(e).__name__)
-    R['classify.' + name] = json.dumps(_cl, ensure_ascii=False)
+    R['chooserrow.' + name] = json.dumps(_cl, ensure_ascii=False, sort_keys=True)
     _txt = json.dumps({'rows': rows, 'pending': inf.get('_list_pending'), 'notify': _NOTIFY[:]},
                       ensure_ascii=False, sort_keys=True)
     R['list.' + name] = _txt.replace(json.dumps(_TMP)[1:-1], '<T>').replace(_TMP, '<T>')
@@ -175,3 +181,10 @@ _run_list('video_ref_li_filename', engine=_H + _O, pool=_PV,
                 'li_filename': '/media/' + _REL + '.mkv', 'title': 'Movie'})
 _run_list('video_ref_label', engine=_H, pool=_PV, info={'filepath': '', 'imdb_id': 'tt1', 'label': _REL, 'title': 'Movie'})
 _run_list('video_ref_title_only', engine=_H, pool=_PV, info={'filepath': '', 'imdb_id': 'tt1', 'title': 'Movie 2020'})
+
+# Step 6: every list-item property the chooser window XML reads is produced for a real row (a name that only the XML
+# knows would show an empty column; the contract expects an empty list here)
+with open(os.path.join(ROOT, 'resources', 'skins', 'Default', '1080i', 'script.moransubs.chooser.xml'), encoding='utf-8') as _xf:
+    _xml_props = set(_re_st.findall(r'ListItem\.Property\((\w+)\)', _xf.read()))
+R['chooserrow.xml_props_missing'] = json.dumps(sorted(_xml_props - _ROWPROPS))
+R['chooserrow.xml_props_count'] = json.dumps(len(_xml_props))
