@@ -1087,7 +1087,7 @@ Measured from the repo, never estimated. Method:
 3. Escape on any question: nothing changes. A year of 0 searches without a year. A title TMDB does not know: a toast and a search by name.
 4. "חזרה לרשימה" appears only after a manual search and brings the automatic list back (also when the automatic list was still loading when the manual search ended).
 5. Pick a row of a manual list: the subtitle applies to the PLAYING video, the log shows the usual download / translation lines; no embedded tracks or local files of the playing video in a manual list.
-6. "ביטול תרגום" during a live translation stops it with a toast; "הגדרות כתוביות" opens the add-on's settings over the chooser. Remote: Up from any button goes to the list, Left / Right walk the row (205 204 [203] 202 201), Right / Down from the list reach 202.
+6. "ביטול תרגום" during a live translation stops it with a toast; "הגדרות כתוביות" opens the add-on's settings over the chooser. Remote (0.3.109 layout): the bar is `205 204 202 201`, Left / Right walk it; Down from the list reaches 205, Right from the list reaches 202; Up from 205 / 204 goes to the list, Up from 202 / 201 goes to the conditional 203 / 206 (above the bar, in the legend card) or, when hidden, to the list.
 7. Estuary, NOX, Onyx: the subtitle button still opens the chooser; their skin settings have no "Choose subtitles opens Kodi window" switch (Estuary / FENtastic).
 
 ## Appendix C (Step 8): Kodi checklist for the fast lane and the minimum match (nothing below was tested in Kodi)

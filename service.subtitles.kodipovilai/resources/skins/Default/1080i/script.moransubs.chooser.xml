@@ -15,13 +15,19 @@
      match rows, the "איכות ומקור הכתובית" block with the provider's own metadata and the credits read inside the downloaded file
      (p_prov, p_prov_src, p_translator, p_sync, p_uploader, p_date, p_downloads, p_fixed; has_meta shows / hides the block).
      Positive only: a row without evidence has no badge and no "unverified" text.
+     LAYOUT (1920 x 1080, margins 24 / 16): header row 1 = brand | the searching status (window property subs.count,
+     centred) | the position counter; header row 2 = the playing release (subs.head) across the whole left side. Under it,
+     three separate dark cards on the left (the list, the colour legend, the button bar) and one card on the right (the
+     info panel, flush with the bottom of the button bar). The list is 8.5 rows high on purpose: the half row at the
+     bottom is the scroll hint.
      Ids: list 100, manual search 202, back to the automatic list 203 (only while a manual result is shown: window
      property subs.manual), cancel translation 204, subtitle settings 205, cancel the automatic sync 206 (only while
-     the current subtitle was synced automatically: window property subs.sync.mode), close 201. Button row (left to
-     right): 205 204 203 206 | 202 201; every button goes up to the list, left / right walk the row (a hidden 203 / 206
-     is skipped). AUTO-SYNC BADGE (header): "סונכרנה אוטומטית" + the applied shift, read from the Home window
-     properties subs.sync.offset ('+2.5s', '-1.2s', 'מקטעים', 'שינוי קצב') and subs.sync.mode (core/selection.py);
-     the value is its own control so a Latin number never mixes with the Hebrew words (bidi).
+     the current subtitle was synced automatically: window property subs.sync.mode), close 201. Button bar (left to
+     right): 205 204 202 201; 203 and 206 are the two conditional buttons, on the right of the legend card (one row above
+     the bar). Left / right walk the bar, up from 202 / 201 reaches 203 / 206 (a hidden one is skipped), every other
+     button goes up to the list. AUTO-SYNC BADGE (header, over the info panel): "סונכרנה אוטומטית" + the applied shift,
+     read from the Home window properties subs.sync.offset ('+2.5s', '-1.2s', 'מקטעים', 'שינוי קצב') and subs.sync.mode
+     (core/selection.py); the value is its own control so a Latin number never mixes with the Hebrew words (bidi).
      Manual search (ui/chooser.py, ui/manual_prompts.py, fetching/manual.py) asks for a title and a year, or a show, a
      season and an episode, and shows the rows here; "חזרה לרשימה" brings the automatic list back. The window name stays script.moransubs.chooser.xml and the
      property MoranSubsChooserOpen is set by ui/chooser.py (both read by skins). -->
@@ -33,7 +39,7 @@
     </animation>
     <controls>
 
-        <!-- Background: the video's fanart, darkened, with a stronger wash behind the list. -->
+        <!-- Background: the video's fanart, darkened. The cards below carry their own surface. -->
         <control type="image">
             <left>0</left><top>0</top><width>1920</width><height>1080</height>
             <texture fallback="white.png">$INFO[Player.Art(fanart)]</texture>
@@ -45,40 +51,28 @@
             <texture colordiffuse="E6000000">white.png</texture>
         </control>
         <control type="image">
-            <left>0</left><top>0</top><width>1300</width><height>1080</height>
-            <texture colordiffuse="B3000000">white.png</texture>
-        </control>
-        <control type="image">
             <left>0</left><top>0</top><width>1920</width><height>5</height>
             <texture colordiffuse="FF46C46A">white.png</texture>
         </control>
 
-        <!-- Header: brand, title, the playing release, the count and the position in the list -->
+        <!-- Header row 1: brand (left) | the searching status (centred) | the position in the list (right of the list card);
+             over the info panel: the auto-sync badge -->
         <control type="label">
-            <left>60</left><top>30</top><width>260</width><height>50</height>
+            <left>40</left><top>16</top><width>260</width><height>48</height>
             <font>font14</font>
             <label>[B]$INFO[Window.Property(subs.brand)][/B]</label>
             <textcolor>FF8FE0FF</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="label">
-            <left>520</left><top>30</top><width>200</width><height>50</height>
+            <left>340</left><top>16</top><width>740</width><height>48</height>
             <font>font13</font>
-            <label>סונכרנה אוטומטית</label>
-            <textcolor>FF46C46A</textcolor>
-            <align>right</align><aligny>center</aligny>
-            <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
+            <label>$INFO[Window.Property(subs.count)]</label>
+            <textcolor>FF9AA0A6</textcolor>
+            <align>center</align><aligny>center</aligny>
         </control>
         <control type="label">
-            <left>732</left><top>30</top><width>180</width><height>50</height>
-            <font>font13</font>
-            <label>[B]$INFO[Window(Home).Property(subs.sync.offset)][/B]</label>
-            <textcolor>FFF2F5F8</textcolor>
-            <align>left</align><aligny>center</aligny>
-            <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
-        </control>
-        <control type="label">
-            <left>1000</left><top>30</top><width>280</width><height>50</height>
+            <left>1100</left><top>16</top><width>204</width><height>48</height>
             <font>font13</font>
             <label>$INFO[Container(100).CurrentItem] / $INFO[Container(100).NumItems]</label>
             <textcolor>FF9AA0A6</textcolor>
@@ -86,29 +80,48 @@
             <visible>Integer.IsGreater(Container(100).NumItems,0)</visible>
         </control>
         <control type="label">
-            <left>60</left><top>84</top><width>860</width><height>34</height>
+            <left>1352</left><top>16</top><width>200</width><height>48</height>
+            <font>font13</font>
+            <label>סונכרנה אוטומטית</label>
+            <textcolor>FF46C46A</textcolor>
+            <align>right</align><aligny>center</aligny>
+            <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
+        </control>
+        <control type="label">
+            <left>1564</left><top>16</top><width>200</width><height>48</height>
+            <font>font13</font>
+            <label>[B]$INFO[Window(Home).Property(subs.sync.offset)][/B]</label>
+            <textcolor>FFF2F5F8</textcolor>
+            <align>left</align><aligny>center</aligny>
+            <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
+        </control>
+
+        <!-- Header row 2: the playing release, from the left margin to the info panel (LTR, scrolls when longer) -->
+        <control type="label">
+            <left>40</left><top>66</top><width>1288</width><height>34</height>
             <font>font13</font>
             <label>$INFO[Window.Property(subs.head)]</label>
             <textcolor>FFB8D6E8</textcolor>
-            <aligny>center</aligny><scroll>true</scroll>
-        </control>
-        <control type="label">
-            <left>930</left><top>84</top><width>350</width><height>34</height>
-            <font>font13</font>
-            <label>$INFO[Window.Property(subs.count)]</label>
-            <textcolor>FF9AA0A6</textcolor>
-            <align>right</align><aligny>center</aligny>
+            <align>left</align><aligny>center</aligny><scroll>true</scroll>
         </control>
 
-        <!-- Results list -->
+        <!-- CARD 1: the results list (its own surface and frame) -->
+        <control type="image">
+            <left>24</left><top>110</top><width>1296</width><height>796</height>
+            <texture colordiffuse="FF2B3238">white.png</texture>
+        </control>
+        <control type="image">
+            <left>25</left><top>111</top><width>1294</width><height>794</height>
+            <texture colordiffuse="FF0B0F13">white.png</texture>
+        </control>
         <control type="list" id="100">
-            <left>40</left><top>134</top><width>1240</width><height>780</height>
+            <left>32</left><top>118</top><width>1280</width><height>780</height>
             <onleft>100</onleft><onright>202</onright>
-            <onup>100</onup><ondown>202</ondown>
+            <onup>100</onup><ondown>205</ondown>
             <scrolltime tween="cubic">300</scrolltime>
-            <itemlayout width="1240" height="92">
+            <itemlayout width="1280" height="92">
                 <control type="image">
-                    <left>0</left><top>0</top><width>1240</width><height>1</height>
+                    <left>0</left><top>0</top><width>1280</width><height>1</height>
                     <texture colordiffuse="1AFFFFFF">white.png</texture>
                 </control>
                 <control type="image">
@@ -134,7 +147,7 @@
                     <align>center</align><aligny>center</aligny>
                 </control>
                 <control type="label">
-                    <left>232</left><top>8</top><width>980</width><height>42</height>
+                    <left>232</left><top>8</top><width>1020</width><height>42</height>
                     <font>font13</font>
                     <label>$INFO[ListItem.Property(release)]</label>
                     <align>left</align><aligny>center</aligny>
@@ -179,13 +192,13 @@
                     <align>center</align><aligny>center</aligny>
                 </control>
             </itemlayout>
-            <focusedlayout width="1240" height="92">
+            <focusedlayout width="1280" height="92">
                 <control type="image">
-                    <left>0</left><top>0</top><width>1240</width><height>1</height>
+                    <left>0</left><top>0</top><width>1280</width><height>1</height>
                     <texture colordiffuse="1AFFFFFF">white.png</texture>
                 </control>
                 <control type="image">
-                    <left>0</left><top>1</top><width>1240</width><height>90</height>
+                    <left>0</left><top>1</top><width>1280</width><height>90</height>
                     <texture colordiffuse="2EFFFFFF">white.png</texture>
                 </control>
                 <control type="image">
@@ -216,7 +229,7 @@
                     <align>center</align><aligny>center</aligny>
                 </control>
                 <control type="label">
-                    <left>232</left><top>8</top><width>980</width><height>42</height>
+                    <left>232</left><top>8</top><width>1020</width><height>42</height>
                     <font>font13</font>
                     <label>$INFO[ListItem.Property(release)]</label>
                     <align>left</align><aligny>center</aligny>
@@ -264,63 +277,147 @@
             </focusedlayout>
         </control>
 
-        <!-- Legend of the match colours -->
+        <!-- CARD 2: legend of the match colours (and, on its right, the two conditional buttons 203 / 206) -->
         <control type="image">
-            <left>60</left><top>938</top><width>14</width><height>14</height>
+            <left>24</left><top>914</top><width>1296</width><height>52</height>
+            <texture colordiffuse="FF2B3238">white.png</texture>
+        </control>
+        <control type="image">
+            <left>25</left><top>915</top><width>1294</width><height>50</height>
+            <texture colordiffuse="FF12171C">white.png</texture>
+        </control>
+        <control type="image">
+            <left>40</left><top>933</top><width>14</width><height>14</height>
             <texture colordiffuse="FFFFD700">white.png</texture>
         </control>
         <control type="label">
-            <left>84</left><top>930</top><width>220</width><height>30</height>
+            <left>60</left><top>925</top><width>150</width><height>30</height>
             <font>font12</font>
             <label>התאמה גבוהה</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="image">
-            <left>320</left><top>938</top><width>14</width><height>14</height>
+            <left>218</left><top>933</top><width>14</width><height>14</height>
             <texture colordiffuse="FF7BE38C">white.png</texture>
         </control>
         <control type="label">
-            <left>344</left><top>930</top><width>220</width><height>30</height>
+            <left>238</left><top>925</top><width>170</width><height>30</height>
             <font>font12</font>
             <label>התאמה בינונית</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="image">
-            <left>580</left><top>938</top><width>14</width><height>14</height>
+            <left>416</left><top>933</top><width>14</width><height>14</height>
             <texture colordiffuse="FFF0A93A">white.png</texture>
         </control>
         <control type="label">
-            <left>604</left><top>930</top><width>300</width><height>30</height>
+            <left>436</left><top>925</top><width>210</width><height>30</height>
             <font>font12</font>
             <label>שפה זרה (תתורגם)</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="image">
-            <left>920</left><top>938</top><width>14</width><height>14</height>
+            <left>654</left><top>933</top><width>14</width><height>14</height>
             <texture colordiffuse="FFFF00FE">white.png</texture>
         </control>
         <control type="label">
-            <left>944</left><top>930</top><width>260</width><height>30</height>
+            <left>674</left><top>925</top><width>190</width><height>30</height>
             <font>font12</font>
             <label>הכתובית הנוכחית</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
+        <control type="button" id="203">
+            <left>880</left><top>920</top><width>200</width><height>40</height>
+            <texturefocus colordiffuse="FF8FE0FF">white.png</texturefocus>
+            <texturenofocus colordiffuse="338FE0FF">white.png</texturenofocus>
+            <label>[B]חזרה לרשימה[/B]</label>
+            <font>font12</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
+            <onleft>202</onleft><onright>206</onright><onup>100</onup><ondown>202</ondown>
 
-        <!-- Info panel: the FOCUSED row -->
+            <visible>!String.IsEmpty(Window.Property(subs.manual))</visible>
+        </control>
+        <control type="button" id="206">
+            <left>1088</left><top>920</top><width>224</width><height>40</height>
+            <texturefocus colordiffuse="FFD0594F">white.png</texturefocus>
+            <texturenofocus colordiffuse="33D0594F">white.png</texturenofocus>
+            <label>[B]בטל סנכרון אוטומטי[/B]</label>
+            <font>font12</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor>
+            <onleft>203</onleft><onright>201</onright><onup>100</onup><ondown>201</ondown>
+            <onclick>SetFocus(100)</onclick>
+            <onclick>RunScript(service.subtitles.kodipovilai,action=unsync)</onclick>
+
+            <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
+        </control>
+
+        <!-- CARD 3: the button bar (its own surface): 205 204 202 201 -->
         <control type="image">
-            <left>1320</left><top>134</top><width>560</width><height>828</height>
-            <texture colordiffuse="14FFFFFF">white.png</texture>
+            <left>24</left><top>974</top><width>1296</width><height>76</height>
+            <texture colordiffuse="FF2B3238">white.png</texture>
         </control>
         <control type="image">
-            <left>1320</left><top>134</top><width>560</width><height>3</height>
+            <left>25</left><top>975</top><width>1294</width><height>74</height>
+            <texture colordiffuse="FF0B0F13">white.png</texture>
+        </control>
+        <control type="button" id="205">
+            <left>32</left><top>982</top><width>311</width><height>60</height>
+            <texturefocus colordiffuse="FF8FB4E0">white.png</texturefocus>
+            <texturenofocus colordiffuse="338FB4E0">white.png</texturenofocus>
+            <label>[B]הגדרות כתוביות[/B]</label>
+            <font>font13</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
+            <onleft>201</onleft><onright>204</onright><onup>100</onup><ondown>205</ondown>
+            <onclick>Addon.OpenSettings(service.subtitles.kodipovilai)</onclick>
+        </control>
+        <control type="button" id="204">
+            <left>355</left><top>982</top><width>311</width><height>60</height>
+            <texturefocus colordiffuse="FFF0A93A">white.png</texturefocus>
+            <texturenofocus colordiffuse="33F0A93A">white.png</texturenofocus>
+            <label>[B]ביטול תרגום[/B]</label>
+            <font>font13</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
+            <onleft>205</onleft><onright>202</onright><onup>100</onup><ondown>204</ondown>
+            <onclick>RunScript(service.subtitles.kodipovilai,action=cancel_translation)</onclick>
+        </control>
+        <control type="button" id="202">
+            <left>678</left><top>982</top><width>311</width><height>60</height>
+            <texturefocus colordiffuse="FF46C46A">white.png</texturefocus>
+            <texturenofocus colordiffuse="3346C46A">white.png</texturenofocus>
+            <label>[B]חיפוש כתוביות ידני[/B]</label>
+            <font>font13</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
+            <onleft>204</onleft><onright>201</onright><onup>203</onup><ondown>202</ondown>
+        </control>
+        <control type="button" id="201">
+            <left>1001</left><top>982</top><width>311</width><height>60</height>
+            <texturefocus colordiffuse="FFD0594F">white.png</texturefocus>
+            <texturenofocus colordiffuse="33D0594F">white.png</texturenofocus>
+            <label>[B]סגור[/B]</label>
+            <font>font13</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor>
+            <onleft>202</onleft><onright>205</onright><onup>206</onup><ondown>201</ondown>
+        </control>
+
+        <!-- CARD 4: the info panel of the FOCUSED row, from the top of the list card to the bottom of the button bar -->
+        <control type="image">
+            <left>1336</left><top>110</top><width>560</width><height>940</height>
+            <texture colordiffuse="FF2B3238">white.png</texture>
+        </control>
+        <control type="image">
+            <left>1337</left><top>111</top><width>558</width><height>938</height>
+            <texture colordiffuse="FF101418">white.png</texture>
+        </control>
+        <control type="image">
+            <left>1337</left><top>111</top><width>558</width><height>3</height>
             <texture colordiffuse="FF46C46A">white.png</texture>
         </control>
         <control type="group">
-            <left>1320</left><top>134</top>
+            <left>1336</left><top>110</top>
             <visible>!String.IsEmpty(Container(100).ListItem.Property(has_panel))</visible>
 
             <!-- match number, its tier word, and the one-line reason -->
@@ -349,25 +446,26 @@
 
             <!-- RIGHT PANEL, below the match number: ONE vertical list of fixed-height rows. A row whose property is empty is
                  hidden and the rows below move up (the quality block is hidden as a whole for a row without metadata).
-                 Order: release name -> quality and provenance -> how it matches your file -> subtitle details. The worst
-                 case (every row shown) is 696 of the 714 pixels of this list. -->
+                 Order: release name -> quality and provenance -> match details (how it matches your file) -> subtitle details.
+                 The worst case (every row shown) is 794 of the 820 pixels of this list. -->
             <control type="grouplist">
-                <left>0</left><top>114</top><width>560</width><height>714</height>
+                <left>0</left><top>114</top><width>560</width><height>820</height>
                 <orientation>vertical</orientation><itemgap>0</itemgap>
-            <!-- the full release filename: 2 lines (the wrapped text is built in ui/chooser_rows.py) -->
+            <!-- the full release filename: up to 4 lines (the wrapped text is built in ui/chooser_rows.py) -->
             <control type="group">
                 <width>560</width><height>28</height>
                 <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]שם השחרור[/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             <control type="group">
-                <width>560</width><height>72</height>
-                <control type="textbox"><left>24</left><top>0</top><width>512</width><height>72</height><font>font13</font><label>$INFO[Container(100).ListItem.Property(p_release)]</label><textcolor>FFF2F5F8</textcolor><align>left</align></control>
-            </control>
-            <control type="group">
-                <width>560</width><height>6</height>
-
+                <width>560</width><height>100</height>
+                <control type="textbox"><left>24</left><top>0</top><width>512</width><height>100</height><font>font13</font><label>$INFO[Container(100).ListItem.Property(p_release)]</label><textcolor>FFF2F5F8</textcolor><align>left</align></control>
             </control>
             <!-- SUBTITLE QUALITY AND PROVENANCE (Provenance P3 / P4): the provider's own metadata, and the credits read inside the downloaded file -->
+            <control type="group">
+                <width>560</width><height>14</height>
+                <visible>!String.IsEmpty(Container(100).ListItem.Property(has_meta))</visible>
+                <control type="image"><left>24</left><top>7</top><width>512</width><height>1</height><texture colordiffuse="26FFFFFF">white.png</texture></control>
+            </control>
             <control type="group">
                 <width>560</width><height>28</height>
                 <visible>!String.IsEmpty(Container(100).ListItem.Property(has_meta))</visible>
@@ -377,14 +475,19 @@
                 <width>560</width><height>30</height>
                 <visible>!String.IsEmpty(Container(100).ListItem.Property(p_prov))</visible>
                 <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>אימות מקור</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
-                <control type="label"><left>186</left><top>0</top><width>190</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_prov)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
-                <control type="group"><left>0</left><top>0</top><visible>!String.IsEmpty(Container(100).ListItem.Property(p_prov_src))</visible><control type="label"><left>386</left><top>0</top><width>44</width><height>30</height><font>font12</font><label>לפי</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control><control type="label"><left>436</left><top>0</top><width>104</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_prov_src)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_prov)]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
+            </control>
+            <control type="group">
+                <width>560</width><height>30</height>
+                <visible>!String.IsEmpty(Container(100).ListItem.Property(p_prov_src))</visible>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>לפי</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_prov_src)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>30</height>
                 <visible>!String.IsEmpty(Container(100).ListItem.Property(p_translator))</visible>
                 <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>מתרגם</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
-                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_translator)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny><scroll>true</scroll></control>
+                <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_translator)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>30</height>
@@ -410,10 +513,14 @@
                 <control type="label"><left>16</left><top>0</top><width>156</width><height>30</height><font>font12</font><label>תיקון</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_fixed)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
+            <!-- MATCH DETAILS: the playing file against the focused subtitle -->
             <control type="group">
-                <width>560</width><height>10</height>
-                <visible>!String.IsEmpty(Container(100).ListItem.Property(has_meta))</visible>
-                <control type="image"><left>24</left><top>5</top><width>512</width><height>1</height><texture colordiffuse="26FFFFFF">white.png</texture></control>
+                <width>560</width><height>14</height>
+                <control type="image"><left>24</left><top>7</top><width>512</width><height>1</height><texture colordiffuse="26FFFFFF">white.png</texture></control>
+            </control>
+            <control type="group">
+                <width>560</width><height>28</height>
+                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]פרטי התאמה[/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>30</height>
@@ -486,69 +593,6 @@
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>30</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_access)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             </control>
-        </control>
-
-        <!-- Buttons: 205 204 203 206 | 202 201 (203 only while a manual result is shown, 206 only while the current
-             subtitle was synced automatically) -->
-        <control type="button" id="205">
-            <left>40</left><top>976</top><width>300</width><height>60</height>
-            <texturefocus colordiffuse="FF8FB4E0">white.png</texturefocus>
-            <texturenofocus colordiffuse="338FB4E0">white.png</texturenofocus>
-            <label>[B]הגדרות כתוביות[/B]</label>
-            <font>font13</font><align>center</align><aligny>center</aligny>
-            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>201</onleft><onright>204</onright><onup>100</onup><ondown>205</ondown>
-            <onclick>Addon.OpenSettings(service.subtitles.kodipovilai)</onclick>
-        </control>
-        <control type="button" id="204">
-            <left>352</left><top>976</top><width>300</width><height>60</height>
-            <texturefocus colordiffuse="FFF0A93A">white.png</texturefocus>
-            <texturenofocus colordiffuse="33F0A93A">white.png</texturenofocus>
-            <label>[B]ביטול תרגום[/B]</label>
-            <font>font13</font><align>center</align><aligny>center</aligny>
-            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>205</onleft><onright>203</onright><onup>100</onup><ondown>204</ondown>
-            <onclick>RunScript(service.subtitles.kodipovilai,action=cancel_translation)</onclick>
-        </control>
-        <control type="button" id="203">
-            <left>664</left><top>976</top><width>300</width><height>60</height>
-            <texturefocus colordiffuse="FF8FE0FF">white.png</texturefocus>
-            <texturenofocus colordiffuse="338FE0FF">white.png</texturenofocus>
-            <label>[B]חזרה לרשימה[/B]</label>
-            <font>font13</font><align>center</align><aligny>center</aligny>
-            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>204</onleft><onright>206</onright><onup>100</onup><ondown>203</ondown>
-            <visible>!String.IsEmpty(Window.Property(subs.manual))</visible>
-        </control>
-        <control type="button" id="206">
-            <left>976</left><top>976</top><width>330</width><height>60</height>
-            <texturefocus colordiffuse="FFD0594F">white.png</texturefocus>
-            <texturenofocus colordiffuse="33D0594F">white.png</texturenofocus>
-            <label>[B]בטל סנכרון אוטומטי[/B]</label>
-            <font>font13</font><align>center</align><aligny>center</aligny>
-            <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor>
-            <onleft>203</onleft><onright>202</onright><onup>100</onup><ondown>206</ondown>
-            <onclick>SetFocus(100)</onclick>
-            <onclick>RunScript(service.subtitles.kodipovilai,action=unsync)</onclick>
-            <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
-        </control>
-        <control type="button" id="202">
-            <left>1320</left><top>976</top><width>274</width><height>60</height>
-            <texturefocus colordiffuse="FF46C46A">white.png</texturefocus>
-            <texturenofocus colordiffuse="3346C46A">white.png</texturenofocus>
-            <label>[B]חיפוש כתוביות ידני[/B]</label>
-            <font>font13</font><align>center</align><aligny>center</aligny>
-            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>206</onleft><onright>201</onright><onup>100</onup><ondown>202</ondown>
-        </control>
-        <control type="button" id="201">
-            <left>1606</left><top>976</top><width>274</width><height>60</height>
-            <texturefocus colordiffuse="FFD0594F">white.png</texturefocus>
-            <texturenofocus colordiffuse="33D0594F">white.png</texturenofocus>
-            <label>[B]סגור[/B]</label>
-            <font>font13</font><align>center</align><aligny>center</aligny>
-            <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor>
-            <onleft>202</onleft><onright>205</onright><onup>100</onup><ondown>201</ondown>
         </control>
     </controls>
 </window>

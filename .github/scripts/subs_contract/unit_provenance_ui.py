@@ -66,7 +66,7 @@ check('the provenance property names', rows.PROV_KEYS == ('p_prov', 'p_prov_src'
 # ---- 1. the properties of a Hebrew provider row -------------------------------------------------------------------------------
 p = props(cand(KT))
 check('studio row: the badge, its provider, the translator, sync names only, uploader, ISO date, downloads with a thousands separator',
-      '[B][COLOR FFBFE9CF]תרגום אולפנים[/COLOR][/B]' == p['p_prov'] and p['p_prov_src'] == 'Ktuvit' and p['p_translator'] == 'אולפנים'
+      '[B][COLOR FF8FE0FF]תרגום אולפנים[/COLOR][/B]' == p['p_prov'] and p['p_prov_src'] == 'Ktuvit' and p['p_translator'] == 'אולפנים'
       and p['p_sync'] == 'avi054' and p['p_uploader'] == 'yoav_1610' and p['p_date'] == '2025-05-11' and p['p_downloads'] == '1,920'
       and p['p_fixed'] == '' and p['has_meta'] == '1')
 check('the fixed icon becomes the Hebrew word, nothing else changes',
@@ -101,6 +101,9 @@ check('the badge is a chip in b1 when nothing precedes it; the other chips follo
       'תרגום אולפנים' in r['b1'] and r['b2'] != r['b1'])
 cur = rows.build(cand(KT, current=True), PLAYING, prov=ALLOW)['props']
 check('chip priority: current first, then the badge', 'נוכחית' in cur['b1'] and 'תרגום אולפנים' in cur['b2'])
+check('provenance blue: the chip and the panel value use the provider-name blue (CYAN), not a match green or a conflict red',
+      rows.PROV_BLUE == rows.CYAN and rows.PROV_BLUE not in (rows.MATCH, rows.GREEN, rows.RED)
+      and '[COLOR %s]תרגום אולפנים[/COLOR]' % rows.CYAN in r['b1'] and '[COLOR %s]תרגום אולפנים' % rows.CYAN in r['p_prov'])
 check('every one of the four badges shows as its own chip',
       all(lab in rows.build(cand(m), PLAYING, prov=ALLOW)['props']['b1'] for lab, m in (
           ('תרגום אולפנים', {'credits': 'תרגום: אולפנים'}), ('צוות תרגום מוביל', {'credits': 'תרגום: Qsubs'}),
@@ -128,8 +131,8 @@ check('the Hebrew captions of the quality block are static XML text (one directi
       all(('<label>%s</label>' % cap) in xml_text for cap in ('[B]איכות ומקור הכתובית[/B]', 'אימות מקור', 'לפי', 'מתרגם', 'סנכרון / תיקון',
                                                               'הועלה ע"י', 'תאריך', 'הורדות', 'תיקון')))
 order = [xml_text.index(s) for s in ('[B]שם השחרור[/B]', 'Property(p_release)', '[B]איכות ומקור הכתובית[/B]', 'Property(p_prov)', 'Property(p_fixed)',
-                                     'Property(f_episode)', 'Property(f_timing)', '[B]פרטי הכתובית[/B]', 'Property(p_access)')]
-check('panel order: release name -> quality and provenance -> the match rows -> subtitle details', order == sorted(order))
+                                     '[B]פרטי התאמה[/B]', 'Property(f_episode)', 'Property(f_timing)', '[B]פרטי הכתובית[/B]', 'Property(p_access)')]
+check('panel order: release name -> quality and provenance -> "פרטי התאמה" and the match rows -> subtitle details', order == sorted(order))
 check('the removed panel labels are gone ("התאמה לקובץ שלך", its sub-label) and the match rows stay',
       'התאמה לקובץ שלך' not in xml_text and 'ערכים: הקובץ שלך מול הכתובית' not in xml_text
       and all(('<label>%s</label>' % cap) in xml_text for cap in ('פרק', 'מהדורה', 'קצב פריימים', 'סוג מקור', 'קבוצת שחרור', 'שירות סטרימינג', 'תזמון')))
@@ -147,18 +150,99 @@ top, avail = int(gls[-1].find('top').text), int(gls[-1].find('height').text)
 check('right panel: ONE vertical grouplist whose rows are fixed-height groups of the panel width',
       len(gls) == 1 and gls[0].find('orientation').text == 'vertical' and all(k.get('type') == 'group' and k.find('width').text == '560' for k in kids)
       and len(kids) >= 20)
-panel_group = [e for e in XROOT.iter('control') if e.get('type') == 'group' and e.find('left') is not None and e.find('left').text == '1320'][0]
-panel_h = int(re.search(r'<left>1320</left><top>134</top><width>560</width><height>(\d+)</height>', xml_text).group(1))
-check('right panel: the worst case (every row shown, %d of %d pixels) fits inside the panel, which ends at y=962' % (sum(heights), avail),
-      sum(heights) <= avail and top + avail <= panel_h
-      and int(panel_group.find('top').text) + top + sum(heights) <= 962)
+panel_group = [e for e in XROOT.iter('control') if e.get('type') == 'group' and e.find('left') is not None and e.find('left').text == '1336'][0]
+panel_top, panel_h = int(panel_group.find('top').text), 940
+check('right panel: the worst case (every row shown, %d of %d pixels) fits inside the panel, which ends at the bottom of the button bar (y=1050)' % (sum(heights), avail),
+      sum(heights) <= avail and top + avail <= panel_h and panel_top + top + sum(heights) <= 1050)
 check('the existing controls are untouched (ids 100 201-206, the match number block, the legend)',
       all('id="%d"' % i in xml_text for i in (100, 201, 202, 203, 204, 205, 206)) and 'Property(p_why)' in xml_text and 'Property(tier)' in xml_text
       and 'התאמה גבוהה' in xml_text)
-long_name = 'The.Last.of.Us.S02E05.Feel.Her.Love.2160p.UHD.BluRay.HDR10.10bit.AC-3.TrueHD7.1.Atmos.HEVC-d3g.heb'
+long_name = ('The.Last.of.Us.S02E05.Feel.Her.Love.2160p.UHD.BluRay.HDR10.10bit.AC-3.TrueHD7.1.Atmos.HEVC-d3g.heb.'
+             'The.Last.of.Us.S02E05.Feel.Her.Love.2160p.UHD.BluRay.HDR10.10bit.AC-3.TrueHD7.1.Atmos.HEVC-d3g.heb')
 p_rel = props(cand({}, release=long_name))['p_release']
-check('the release name takes 2 lines at most and ends in "..." when it is longer', p_rel.count('[CR]') <= 1 and p_rel.endswith('...')
-      and rows.RELEASE_LINES == 2 and props(cand({}))['p_release'].count('[CR]') <= 1)
+check('the release name takes 4 lines at most and ends in "..." when it is longer', p_rel.count('[CR]') == 3 and p_rel.endswith('...')
+      and rows.RELEASE_LINES == 4 and props(cand({}))['p_release'].count('[CR]') <= 3)
+check('a 3-line release name is shown whole (no "..."), the box holds 4 lines',
+      '...' not in props(cand({}, release='The.Last.of.Us.S02E05.Feel.Her.Love.2160p.UHD.BluRay.HDR10.10bit.AC-3.TrueHD7.1.Atmos.HEVC-d3g.heb'))['p_release'])
+
+# ---- 4b. the layout refinements (0.3.110): header, margins, separate cards, bottom bar, right panel ---------------------------------
+def ctl(cid):
+    return [e for e in XROOT.iter('control') if e.get('id') == str(cid)][0]
+
+
+def geo(e):
+    return tuple(int(e.find(k).text) for k in ('left', 'top', 'width', 'height'))
+
+
+def labelled(text):
+    return [e for e in XROOT.iter('control') if e.get('type') == 'label' and e.find('label') is not None and text in (e.find('label').text or '')][0]
+
+
+brand, status, counter, head = labelled('subs.brand'), labelled('subs.count'), labelled('Container(100).CurrentItem'), labelled('subs.head')
+bx, by, bw, bh = geo(brand)
+sx_, sy_, sw_, sh_ = geo(status)
+cx_, cy_, cw_, ch_ = geo(counter)
+check('header row 1: the searching status sits on the top row, centred between the brand (left) and the counter (right)',
+      sy_ == by == cy_ and bx + bw <= sx_ and sx_ + sw_ <= cx_ and status.find('align').text == 'center'
+      and abs((sx_ + sw_ / 2.0) - ((bx + bw + cx_) / 2.0)) <= 60)
+hx, hy, hw, hh = geo(head)
+check('header row 2: the playing release runs from the left margin to the info panel, LTR, scrolling, on its own row (nothing else on it)',
+      hy > by + bh - 1 and hx <= 40 and hx + hw >= 1320 and head.find('align').text == 'left' and head.find('scroll').text == 'true'
+      and not [e for e in XROOT.find('controls').findall('control') if e.get('type') == 'label' and e is not head and geo(e)[1] < hy + hh and geo(e)[1] + geo(e)[3] > hy
+               and geo(e)[0] < hx + hw and geo(e)[0] + geo(e)[2] > hx])
+TOP = [e for e in XROOT.find('controls').findall('control') if all(e.find(k) is not None for k in ('left', 'top', 'width', 'height')) and geo(e)[2] < 1900]
+check('smaller outer margins: content from x=24 to x=1896 and from y<=16 to y>=1040 (it was 40 / 1880 / 30 / 1036)',
+      min(geo(e)[0] for e in TOP) <= 24 and max(geo(e)[0] + geo(e)[2] for e in TOP) >= 1896
+      and by <= 16 and max(geo(ctl(i))[1] + geo(ctl(i))[3] for i in (201, 202, 204, 205)) >= 1040)
+cards = [geo(e) for e in XROOT.iter('control') if e.get('type') == 'image' and e.find('texture') is not None and e.find('texture').get('colordiffuse', '').startswith('FF')
+         and geo(e)[2] >= 500 and geo(e)[3] >= 50 and geo(e)[2] < 1900]
+framed = [c for c in cards if (c[0] - 1, c[1] - 1, c[2] + 2, c[3] + 2) in [x for x in cards]]
+check('four framed cards (list, legend, button bar, info panel): each a frame rectangle with its fill 1 px inside',
+      len(framed) == 4 and sorted((c[0], c[1]) for c in [(f[0] - 1, f[1] - 1) for f in framed]) == [(24, 110), (24, 914), (24, 974), (1336, 110)])
+lc, lg, bar, pn = [(c[0] - 1, c[1] - 1, c[2] + 2, c[3] + 2) for c in sorted(framed, key=lambda c: (c[0], c[1]))]
+check('the list card, the legend card and the button bar are separate surfaces (a gap between each), the list card holds the whole list',
+      lc[1] + lc[3] < lg[1] and lg[1] + lg[3] < bar[1]
+      and lc[0] <= geo(lst)[0] and lc[1] <= geo(lst)[1] and geo(lst)[0] + geo(lst)[2] <= lc[0] + lc[2] and geo(lst)[1] + geo(lst)[3] <= lc[1] + lc[3])
+check('the partial 9th row stays: the list is not a whole number of 92 px rows',
+      geo(lst)[3] % 92 != 0 and 8 < geo(lst)[3] / 92.0 < 9)
+check('the info panel is flush with the top of the list card and the bottom of the button bar, with a gap to the left cards',
+      pn[1] == lc[1] and pn[1] + pn[3] == bar[1] + bar[3] and pn[0] >= lc[0] + lc[2] + 8)
+b4 = [geo(ctl(i)) for i in (205, 204, 202, 201)]
+check('bottom bar: 205 204 202 201 are one uniform row of 4 (same top, height and width, left to right) inside the bar',
+      len({(b[1], b[3], b[2]) for b in b4}) == 1 and [b[0] for b in b4] == sorted(b[0] for b in b4)
+      and b4[0][0] >= bar[0] and b4[-1][0] + b4[-1][2] <= bar[0] + bar[2] and bar[1] <= b4[0][1] and b4[0][1] + b4[0][3] <= bar[1] + bar[3]
+      and b4[-1][0] + b4[-1][2] <= pn[0])
+check('manual search and close are no longer under the info panel', all(geo(ctl(i))[0] + geo(ctl(i))[2] <= pn[0] for i in (202, 201)))
+
+
+def nav(cid, d):
+    e = ctl(cid).find('on' + d)
+    return int(e.text) if e is not None else None
+
+
+check('D-pad: the bar walks 205 > 204 > 202 > 201 (and back), the list goes down to 205, every bar button goes up to the list or its conditional neighbour',
+      [nav(i, 'right') for i in (205, 204, 202)] == [204, 202, 201] and [nav(i, 'left') for i in (204, 202, 201)] == [205, 204, 202]
+      and nav(100, 'down') == 205 and nav(205, 'up') == 100 and nav(204, 'up') == 100 and nav(202, 'up') == 203 and nav(201, 'up') == 206
+      and nav(203, 'up') == 100 and nav(206, 'up') == 100 and nav(203, 'down') == 202 and nav(206, 'down') == 201
+      and nav(201, 'right') == 205 and nav(205, 'left') == 201)
+check('the conditional buttons 203 / 206 keep their visibility conditions and sit in the legend card, above the bar',
+      'subs.manual' in ctl(203).find('visible').text and 'subs.sync.mode' in ctl(206).find('visible').text
+      and all(lg[1] <= geo(ctl(i))[1] and geo(ctl(i))[1] + geo(ctl(i))[3] <= lg[1] + lg[3] and geo(ctl(i))[0] + geo(ctl(i))[2] <= lg[0] + lg[2] for i in (203, 206)))
+dividers = [k for k in kids if k.find('control') is not None and k.find('control').get('type') == 'image']
+captions = [k.find('control/label').text for k in kids if k.find('control') is not None and k.find('control').get('type') == 'label'
+            and k.find('control/label').text.startswith('[B]')]
+seq = [('div' if k in dividers else (k.find('control/label').text if k.find('control') is not None and k.find('control').get('type') == 'label' and k.find('control/label').text.startswith('[B]') else '.')) for k in kids]
+seq = [s for s in seq if s != '.']
+check('right panel: a divider before the quality block, one before "פרטי התאמה", one before "פרטי הכתובית", each above its header',
+      seq == ['[B]שם השחרור[/B]', 'div', '[B]איכות ומקור הכתובית[/B]', 'div', '[B]פרטי התאמה[/B]', 'div', '[B]פרטי הכתובית[/B]'])
+check('the quality block\'s divider hides with the block (a row without metadata): has_meta on the first divider, the other dividers always show',
+      'has_meta' in dividers[0].find('visible').text and all(d.find('visible') is None for d in dividers[1:]))
+rel_box = [k for k in kids if k.find('control') is not None and k.find('control').get('type') == 'textbox'][0]
+check('the release box is tall enough for its 4 lines (>= 4 x 24 px)', int(rel_box.find('height').text) >= 4 * 24 and rel_box.find('control/height').text == rel_box.find('height').text)
+prov_src = [e for e in XROOT.iter('control') if e.get('type') == 'label' and e.find('label') is not None and 'Property(p_prov_src)' in e.find('label').text][0]
+translator = [e for e in XROOT.iter('control') if e.get('type') == 'label' and e.find('label') is not None and 'Property(p_translator)' in e.find('label').text][0]
+check('"לפי <provider>" has the full value width of the panel (354 px, a row of its own) so "OpenSubtitles" is not cut; a long translator is cut cleanly with "...", not scrolled mid-glyph',
+      geo(prov_src)[2] >= 354 and translator.find('scroll') is None and geo(translator)[2] >= 354)
 
 # ---- 5. the setting ----------------------------------------------------------------------------------------------------------------------
 sx = ET.fromstring(read('settings.xml').encode('utf-8'))

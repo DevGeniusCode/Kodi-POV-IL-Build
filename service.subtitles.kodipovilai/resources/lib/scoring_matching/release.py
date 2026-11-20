@@ -332,6 +332,13 @@ def is_group_token(cand):
                 and 2 <= len(cand) <= 20 and _GROUP_RE.fullmatch(cand))
 
 
+def service_token(tok):
+    """The canonical streaming service ONE token names ('amazon' -> 'amzn', 'NF' -> 'nf'), '' when it names none.
+    Only the table: where a service may stand in a name (among the technical tags) is the caller's rule, as in
+    _parse. Read-only; it never feeds a score."""
+    return _SERVICE_TOKENS.get(tok.lower(), '') if isinstance(tok, str) else ''
+
+
 def _parse(name):
     toks = _toks(name)
     tokset = set(toks)

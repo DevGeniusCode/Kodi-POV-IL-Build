@@ -88,6 +88,7 @@ WHITE = 'FFF2F5F8'
 DIM = 'FF9AA0A6'
 RED = 'FFE5645A'
 CYAN = 'FF8FE0FF'
+PROV_BLUE = CYAN       # a provenance badge (chip and panel value): the blue of the provider names, never green / red
 MATCH = 'FF35E06A'     # a word the subtitle's release shares with the playing release (resolution, source, codec ...)
 
 
@@ -310,19 +311,47 @@ def _fact(key, a, b, state):
 # value, so 'WEB-DL' is never green against 'WEBRip' and 'WEB' is never painted inside 'WEB-DL'; a word: the same word).
 # `want` words (the manual query) match a whole token too (every part of a compound one). Pure string work; the
 # highlight never changes a number.
+#
+# RED (conflict) tokens: a WHOLE token of the subtitle's release that says the subtitle was made for ANOTHER timeline than
+# the playing file (conflict_mask): a pre-retail capture against a retail file (CAM / TS / SCREENER ... vs WEB-DL / WEBRip /
+# BluRay / DVDRip, both ways), bonus content the playing file is not (Trailer, Making.Of, Sample ...), another cut or edition
+# (Extended, Director's.Cut, Unrated ...; an untagged file counts as the theatrical cut), a broadcast capture against a WEB /
+# BluRay file (HDTV / PDTV / SDTV / PAL / NTSC, both ways; PAL against NTSC), another frame rate (25fps vs 23.976fps; PAL is
+# 25), another streaming service (NF vs AMZN ...) and another episode (S01E02 vs S01E01; S01E01E02 vs S01E01). A token is red
+# only when the playing release says something ELSE on the same point; a point the playing release does not mention is
+# never a conflict (bonus content and a special cut excepted: their absence is the statement). WEB against BluRay is NOT
+# red (the match % already says "source mismatch"). Display only, like the green: no number moves.
 _SEP = r'[ ._-]?'
 _WORD_RE = re.compile(r'[A-Za-z0-9]+')
 _TOKEN_PATTERNS = (
     ('res', re.compile(r'(?<![a-z0-9])(?:4320p|2160p|1440p|1080[pi]|720p|576p|480p|4k|uhd)(?![a-z0-9])', re.I)),
-    ('src', re.compile(r'(?<![a-z0-9])(?:web' + _SEP + r'dl|web' + _SEP + r'rip|webdl|webrip|web|blu' + _SEP + r'ray|bdrip|brrip|'
-                       r'remux|hdtv|pdtv|dvd' + _SEP + r'rip|dvdr|hdrip)(?![a-z0-9])', re.I)),
+    ('src', re.compile(r'(?<![a-z0-9])(?:hdcam|camrip|cam|hdts|telesync|ts|telecine|tc|dvd' + _SEP + r'scr(?:eener)?|screener|scr|r5|'
+                       r'workprint|web' + _SEP + r'dl|web' + _SEP + r'rip|webdl|webrip|web|blu' + _SEP + r'ray|bdrip|brrip|'
+                       r'remux|hdtv|pdtv|sdtv|dvd' + _SEP + r'rip|dvdr|hdrip)(?![a-z0-9])', re.I)),
     ('hdr', re.compile(r'(?<![a-z0-9])(?:hdr10\+|hdr10plus|hdr10|hdr|dolby' + _SEP + r'vision|dovi|dv|hlg|sdr)(?![a-z0-9+])', re.I)),
     ('codec', re.compile(r'(?<![a-z0-9])(?:x265|h' + _SEP + r'265|hevc|x264|h' + _SEP + r'264|avc|av1|xvid|vp9)(?![a-z0-9])', re.I)),
     ('audio', re.compile(r'(?<![a-z0-9])(?:truehd|atmos|dts' + _SEP + r'hd(?:' + _SEP + r'ma)?|dts' + _SEP + r'x|dts|ddp|dd\+|dd|eac3|ac3|aac|flac|opus)'
                          r'(?:' + _SEP + r'\d(?:[ .]\d)?)?(?![a-z0-9])', re.I)),
+    # SxxEyy, a multi-episode file (S01E01E02, S01E01-E02, S01E01-02) is ONE token
+    ('episode', re.compile(r'(?<![a-z0-9])s\d{1,2}e\d{1,3}(?:-?e\d{1,3})*(?:-\d{1,3})?(?![a-z0-9])', re.I)),
+    ('fps', re.compile(r'(?<![0-9])(?<![0-9][.,])(?:23[.,]976|23[.,]98|24|25|29[.,]97|30|50|59[.,]94|60)' + _SEP + r'fps(?![a-z0-9])', re.I)),
+    ('edition', re.compile(r'(?<![a-z0-9])(?:extended(?:' + _SEP + r'(?:cut|edition|version))?|director(?:[\'’]?s)(?:' + _SEP
+                           + r'(?:cut|edition))?|director' + _SEP + r'cut|dircut|dc|unrated|uncut|theatrical(?:' + _SEP
+                           + r'(?:cut|edition|version))?|imax(?:' + _SEP + r'edition)?|remastered|special' + _SEP + r'edition|'
+                           r'criterion(?:' + _SEP + r'(?:collection|edition))?)(?![a-z0-9])', re.I)),
+    ('bonus', re.compile(r'(?<![a-z0-9])(?:trailers?|teasers?|promos?|making' + _SEP + r'of|behind' + _SEP + r'the' + _SEP + r'scenes|'
+                         r'featurettes?|extras|bonus|deleted' + _SEP + r'scenes|recaps?|sample)(?![a-z0-9])', re.I)),
+    ('tvstd', re.compile(r'(?<![a-z0-9])(?:pal|ntsc)(?![a-z0-9])', re.I)),
 )
 _GROUP_TAIL = re.compile(r'(?:-|\[)([A-Za-z0-9]{2,15})\]?\s*$')
 _EXT_TAIL = re.compile(r'\.(?:srt|sub|ass|ssa|vtt|mkv|mp4|avi|m4v|ts)$', re.I)
+_YEAR_RE = re.compile(r'(?<![A-Za-z0-9])(?:19|20)\d{2}(?![A-Za-z0-9])')
+# Short words that are also title words ("Cam.2018", "DC.League.of.Super-Pets", "TS"): a tag only AFTER a technical anchor
+# (the year, SxxEyy, a resolution, a source, codec, audio or HDR tag, a frame rate). An edition or bonus word is never the
+# first word of a name ("Extras.S01E01" is the show "Extras"); a title word on both sides is the same word anyway.
+_AMBIGUOUS = frozenset({'cam', 'ts', 'tc', 'scr', 'r5', 'dc', 'pal', 'ntsc'})
+_NOT_FIRST = frozenset({'edition', 'bonus'})
+_ANCHOR_CATS = frozenset({'res', 'src', 'hdr', 'codec', 'audio', 'episode', 'fps'})
 
 
 def _token_canon(cat, text):
@@ -334,44 +363,105 @@ def _token_canon(cat, text):
             return 'bluray'
         if key in ('dvdrip', 'dvdr'):
             return 'dvd'
-        return key
+        return 'dvdscr' if key == 'dvdscreener' else key
     if cat == 'hdr':
         return 'dv' if key in ('dv', 'dovi', 'dolbyvision') else ('hdr10+' if key in ('hdr10+', 'hdr10plus') else key)
     if cat == 'codec':
         return {'x265': 'hevc', 'h265': 'hevc', 'x264': 'avc', 'h264': 'avc'}.get(key, key)
     if cat == 'audio':
         return key.replace('dd+', 'ddp')
+    if cat == 'episode':
+        nums = [int(n) for n in re.findall(r'\d+', text)]
+        return 's{0}e{1}'.format(nums[0], '-'.join(str(e) for e in sorted(set(nums[1:]))))
+    if cat == 'fps':
+        value = key[:-3]
+        return {'23976': '23.976', '2398': '23.976', '2997': '29.97', '5994': '59.94'}.get(value, value)
+    if cat == 'edition':
+        for head, canon in (('extended', 'extended'), ('director', 'directors'), ('dircut', 'directors'), ('dc', 'directors'),
+                            ('theatrical', 'theatrical'), ('imax', 'imax'), ('special', 'special'), ('criterion', 'criterion')):
+            if key.startswith(head):
+                return canon
+        return key
+    if cat == 'bonus':
+        for head, canon in (('trailer', 'trailer'), ('teaser', 'teaser'), ('promo', 'promo'), ('making', 'makingof'),
+                            ('behind', 'behindthescenes'), ('featurette', 'featurette'), ('deleted', 'deletedscenes'),
+                            ('recap', 'recap')):
+            if key.startswith(head):
+                return canon
+        return key
     return key
 
 
 def release_spans(name):
     """[(start, end, category, canonical value)] of the whole tokens of `name`, non-overlapping: the tech tags, the
-    release group ('group') and every other word of two or more characters ('word'). The extension is not a token."""
+    episode, frame rate, edition, bonus and TV-standard tags, the streaming service ('service'), the release group
+    ('group') and every other word of two or more characters ('word'). The extension is not a token."""
     name = name or ''
+    m = _EXT_TAIL.search(name)
+    body = name[:m.start()] if m else name
     spans = []
     taken = []
+    deferred = []
 
     def free(a, b):
         return all(b <= x or a >= y for x, y in taken)
 
+    def take(a, b, cat, val):
+        taken.append((a, b))
+        spans.append((a, b, cat, val))
+
     for cat, rx in _TOKEN_PATTERNS:
-        for m in rx.finditer(name):
-            if free(m.start(), m.end()):
-                taken.append((m.start(), m.end()))
-                spans.append((m.start(), m.end(), cat, _token_canon(cat, m.group(0))))
-    body = name
-    m = _EXT_TAIL.search(body)
-    if m:
-        body = body[:m.start()]
+        for m in rx.finditer(body):
+            a, b = m.start(), m.end()
+            key = re.sub(r'[^a-z0-9]', '', m.group(0).lower())
+            if cat in _NOT_FIRST and a == 0:
+                continue
+            if key in _AMBIGUOUS:
+                deferred.append((a, b, cat, m.group(0)))
+            elif free(a, b):
+                take(a, b, cat, _token_canon(cat, m.group(0)))
+    anchors = [a for a, _b, c, _v in spans if c in _ANCHOR_CATS] + [y.start() for y in _YEAR_RE.finditer(body) if y.start() > 0]
+    anchor = min(anchors) if anchors else None
+    for a, b, cat, text in deferred:
+        if anchor is not None and a > anchor and free(a, b):
+            take(a, b, cat, _token_canon(cat, text))
     g = _GROUP_TAIL.search(body)
     if (g and free(g.start(1), g.end(1))
             and scoring_matching_release.is_group_token(g.group(1).lower())):
-        taken.append((g.start(1), g.end(1)))
-        spans.append((g.start(1), g.end(1), 'group', g.group(1).lower()))
+        take(g.start(1), g.end(1), 'group', g.group(1).lower())
+    # a streaming service sits among the technical tags: after the first resolution / source tag, or right before a
+    # source tag ("AMZN.WEB-DL"); the same rule as scoring_matching.release (so "Mad.Max" is a title)
+    tech = [a for a, _b, c, _v in spans if c in ('res', 'src')]
+    first_tech = min(tech) if tech else None
+    src_starts = {a for a, _b, c, _v in spans if c == 'src'}
     for w in _WORD_RE.finditer(body):
         if len(w.group(0)) >= 2 and free(w.start(), w.end()):
-            spans.append((w.start(), w.end(), 'word', w.group(0).lower()))
+            service = scoring_matching_release.service_token(w.group(0))
+            if service and ((first_tech is not None and w.start() > first_tech)
+                            or w.end() in src_starts or w.end() + 1 in src_starts):
+                take(w.start(), w.end(), 'service', service)
+            else:
+                spans.append((w.start(), w.end(), 'word', w.group(0).lower()))
     return sorted(spans)
+
+
+def _shared_spans(release, playing, want):
+    p_tags, p_words = set(), set()
+    for _a, _b, c, v in (release_spans(playing) if playing else ()):
+        if c in ('word', 'group'):
+            p_words.add(v)
+        else:
+            p_tags.add((c, v))
+    want = {w for w in (want or ()) if w}
+    out = []
+    for a, b, cat, val in release_spans(release):
+        hit = (val in p_words) if cat in ('word', 'group') else ((cat, val) in p_tags)
+        if not hit and want:
+            parts = [p.lower() for p in _WORD_RE.findall(release[a:b])]
+            hit = bool(parts) and (''.join(parts) in want or all(p in want for p in parts))
+        if hit:
+            out.append((a, b))
+    return out
 
 
 def shared_mask(release, playing, want=None):
@@ -381,40 +471,118 @@ def shared_mask(release, playing, want=None):
     release = release or ''
     mask = [False] * len(release)
     words = []
-    p_tags, p_words = set(), set()
-    for _a, _b, c, v in (release_spans(playing) if playing else ()):
-        if c in ('word', 'group'):
-            p_words.add(v)
-        else:
-            p_tags.add((c, v))
-    want = {w for w in (want or ()) if w}
-    for a, b, cat, val in release_spans(release):
-        hit = (val in p_words) if cat in ('word', 'group') else ((cat, val) in p_tags)
-        if not hit and want:
-            parts = [p.lower() for p in _WORD_RE.findall(release[a:b])]
-            hit = bool(parts) and (''.join(parts) in want or all(p in want for p in parts))
-        if hit:
-            for i in range(a, b):
-                mask[i] = True
-            words.append(release[a:b])
+    for a, b in _shared_spans(release, playing, want):
+        for i in range(a, b):
+            mask[i] = True
+        words.append(release[a:b])
     return mask, words
 
 
+# the conflict facets of one token: (facet, class). Two tokens conflict when they carry the same facet with another class.
+_PRE_RETAIL = frozenset({'cam', 'hdcam', 'camrip', 'ts', 'hdts', 'telesync', 'tc', 'telecine', 'scr', 'screener', 'dvdscr',
+                         'r5', 'workprint'})
+_RETAIL = frozenset({'webdl', 'webrip', 'web', 'bluray', 'remux', 'dvd'})
+_BROADCAST = frozenset({'hdtv', 'pdtv', 'sdtv'})
+_WEB_DISC = frozenset({'webdl', 'webrip', 'web', 'bluray', 'remux'})
+
+
+def _facets_of(cat, val):
+    out = []
+    if cat == 'src':
+        if val in _PRE_RETAIL:
+            out.append(('tier', 'pre'))
+        elif val in _RETAIL:
+            out.append(('tier', 'retail'))
+        if val in _BROADCAST:
+            out.append(('broadcast', 'tv'))
+        elif val in _WEB_DISC:
+            out.append(('broadcast', 'web_disc'))
+    elif cat == 'tvstd':
+        out.extend((('broadcast', 'tv'), ('tvstd', val)))
+        if val == 'pal':
+            out.append(('fps', '25'))   # PAL is 25 fps (scoring_matching.release reads it the same way)
+    elif cat in ('fps', 'service', 'episode', 'edition', 'bonus'):
+        out.append((cat, val))
+    return out
+
+
+def _clashes(facet, cls, playing):
+    """True when a subtitle token of (facet, cls) contradicts the playing release's facets {facet: {class}}."""
+    have = playing.get(facet) or set()
+    if cls in have:
+        return False
+    if facet == 'bonus':
+        return True    # bonus content the playing file is not
+    if facet == 'edition':
+        return bool(have) or cls != 'theatrical'    # an untagged file is the theatrical cut
+    return bool(have)
+
+
+def _conflict_spans(release, playing):
+    if not (release and playing):
+        return []
+    facets = {}
+    for _a, _b, c, v in release_spans(playing):
+        for facet, cls in _facets_of(c, v):
+            facets.setdefault(facet, set()).add(cls)
+    return [(a, b) for a, b, cat, val in release_spans(release)
+            if any(_clashes(facet, cls, facets) for facet, cls in _facets_of(cat, val))]
+
+
+def conflict_mask(release, playing):
+    """(mask, words): `mask` has one bool per character of `release`, True inside a WHOLE token that contradicts the playing
+    release (another source tier, bonus content, another cut / edition, a broadcast capture, another frame rate,
+    streaming service or episode: the header of this section); `words` lists those tokens as written in `release`."""
+    release = release or ''
+    mask = [False] * len(release)
+    words = []
+    for a, b in _conflict_spans(release, playing):
+        for i in range(a, b):
+            mask[i] = True
+        words.append(release[a:b])
+    return mask, words
+
+
+def release_mask(release, playing, want=None):
+    """(mask, shared, conflicts): one colour per character of `release` (RED inside a conflict token, MATCH inside a
+    shared one, None elsewhere) and the two word lists. A conflict wins over a manual-query word: it is a fact about
+    the playing file."""
+    release = release or ''
+    mask = [None] * len(release)
+    shared, conflicts = [], []
+    red = _conflict_spans(release, playing)
+    for a, b in red:
+        for i in range(a, b):
+            mask[i] = RED
+        conflicts.append(release[a:b])
+    for a, b in _shared_spans(release, playing, want):
+        if (a, b) not in red:
+            for i in range(a, b):
+                mask[i] = MATCH
+            shared.append(release[a:b])
+    return mask, shared, conflicts
+
+
+def _mask_color(flag):
+    return flag if isinstance(flag, str) else (MATCH if flag else None)
+
+
 def paint(text, mask, base=None, start=0):
-    """`text` (a slice of the release that starts at `start`) as BBCode: shared words in MATCH green, the rest in `base`
+    """`text` (a slice of the release that starts at `start`) as BBCode. `mask` has one entry per character of the
+    release: True = MATCH green (shared_mask), a colour string = that colour (release_mask: RED / MATCH), falsy = `base`
     (plain when None). Segments are closed and reopened, never nested."""
     out, i, n = [], 0, len(text)
 
-    def flag_at(k):
-        return bool(mask[start + k]) if start + k < len(mask) else False
+    def color_at(k):
+        return _mask_color(mask[start + k]) if start + k < len(mask) else None
 
     while i < n:
-        flag = flag_at(i)
+        color = color_at(i)
         j = i
-        while j < n and flag_at(j) == flag:
+        while j < n and color_at(j) == color:
             j += 1
         piece = text[i:j]
-        color = MATCH if flag else base
+        color = color or base
         out.append(_c(color, piece) if color else piece)
         i = j
     return ''.join(out)
@@ -443,9 +611,9 @@ def wrap_lines(release, width=28, max_lines=5):
     return lines
 
 
-# the info panel's release-name box holds 2 lines (script.moransubs.chooser.xml); a longer name ends in "..."
+# the info panel's release-name box holds 4 lines (script.moransubs.chooser.xml); a longer name ends in "..."
 RELEASE_WIDTH = 32
-RELEASE_LINES = 2
+RELEASE_LINES = 4
 
 
 def wrap_release(release, width=28, max_lines=5, mask=None):
@@ -555,7 +723,7 @@ def _prov_props(c, typ, is_he, is_mt, source_text, prov):
     badge = v['label']
     if badge:
         top = next((r for r in v['reasons'] if r['badge'] == v['badge']), None)
-        props['p_prov'] = '[B]{0}[/B]'.format(_c(PALE, badge))
+        props['p_prov'] = '[B]{0}[/B]'.format(_c(PROV_BLUE, badge))
         props['p_prov_src'] = FILE_SOURCE_TEXT if (top and top['source'] == 'file') else strip_bbcode(source_text)
     props['p_translator'] = strip_bbcode(v['translator'])
     props['p_sync'] = ', '.join(names)[:_MAX_SYNC_TEXT]
@@ -564,7 +732,7 @@ def _prov_props(c, typ, is_he, is_mt, source_text, prov):
     props['p_downloads'] = '{0:,}'.format(v['downloads']) if isinstance(v['downloads'], int) else ''
     props['p_fixed'] = FIXED_TEXT if v['fixed'] else ''
     props['has_meta'] = '1' if any(props[k] for k in PROV_KEYS[:-1]) else ''
-    return props, (_c(PALE, badge) if badge else '')
+    return props, (_c(PROV_BLUE, badge) if badge else '')
 
 
 def build(c, playing, want=None, ai=None, prov=None):
@@ -650,8 +818,10 @@ def _build(c, playing, want=None, ai=None, prov=None):
     title = _row_title(typ, payload, embedded)
     if title:
         primary = title   # those stages label the row in English ("AI Hebrew (translate ...)") or by a bare "[מובנה] EN"
-    mask, shared = shared_mask(release, playing, want) if (release and primary == release and (playing or want)) else ([], [])
-    shown = '[B]{0}[/B]'.format(paint(primary, mask, WHITE)) if shared else '[B]{0}[/B]'.format(_c(WHITE, primary))
+    mask, shared, conflicts = (release_mask(release, playing, want) if (release and primary == release and (playing or want))
+                               else ([], [], []))
+    painted = bool(shared or conflicts)
+    shown = '[B]{0}[/B]'.format(paint(primary, mask, WHITE)) if painted else '[B]{0}[/B]'.format(_c(WHITE, primary))
     props = {
         'release': shown,
         'src': _c(CYAN, source_text) if source_text else '',
@@ -662,7 +832,7 @@ def _build(c, playing, want=None, ai=None, prov=None):
         'has_panel': '1',
         # ---- info panel ----
         'p_release': wrap_release(release, width=RELEASE_WIDTH, max_lines=RELEASE_LINES,
-                                  mask=(mask if shared else None)) if release else _c(DIM, 'ללא שם שחרור'),
+                                  mask=(mask if painted else None)) if release else _c(DIM, 'ללא שם שחרור'),
         'p_why': _c(WHITE, _why(explained, pct) if explained else (
             'כתובית מובנית בקובץ הווידאו: התזמון זהה לווידאו' if embedded else
             'אין שם שחרור להשוואה')),
