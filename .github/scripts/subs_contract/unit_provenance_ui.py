@@ -122,11 +122,12 @@ xml_text = read('skins', 'Default', '1080i', 'script.moransubs.chooser.xml')
 XROOT = ET.fromstring(xml_text.encode('utf-8'))
 xml_props = set(re.findall(r'ListItem\.Property\((\w+)\)', xml_text))
 check('the panel reads exactly the provenance properties (every key of the rows, none unknown)',
-      set(rows.PROV_KEYS) <= xml_props and {k for k in xml_props if k.startswith('p_') and k not in (
+      set(rows.PROV_KEYS) - {'has_meta'} <= xml_props and {k for k in xml_props if k.startswith('p_') and k not in (
           'p_why', 'p_release', 'p_provider', 'p_kind', 'p_lang', 'p_access')} == set(rows.PROV_KEYS) - {'has_meta'})
-check('the quality block shows only when the focused row has metadata and each row only when its value is set',
-      'Container(100).ListItem.Property(has_meta)' in xml_text and all(
-          '!String.IsEmpty(Container(100).ListItem.Property(%s))' % k in xml_text for k in rows.PROV_KEYS))
+check('the quality block and its rows never collapse (fixed panel): no row is conditional on its value, an empty value shows a dash',
+      'Property(has_meta)' not in xml_text and all(
+          '!String.IsEmpty(Container(100).ListItem.Property(%s))' % k not in xml_text
+          and 'String.IsEmpty(Container(100).ListItem.Property(%s))' % k in xml_text for k in rows.PROV_KEYS if k != 'has_meta'))
 check('the Hebrew captions of the quality block are static XML text (one direction per control)',
       all(('<label>%s</label>' % cap) in xml_text for cap in ('[B]איכות ומקור הכתובית[/B]', 'אימות מקור', 'לפי', 'מתרגם', 'סנכרון / תיקון',
                                                               'הועלה ע"י', 'תאריך', 'הורדות', 'תיקון')))
@@ -152,17 +153,17 @@ check('right panel: ONE vertical grouplist whose rows are fixed-height groups of
       and len(kids) >= 20)
 panel_group = [e for e in XROOT.iter('control') if e.get('type') == 'group' and e.find('left') is not None and e.find('left').text == '1336'][0]
 panel_top, panel_h = int(panel_group.find('top').text), 940
-check('right panel: the worst case (every row shown, %d of %d pixels) fits inside the panel, which ends at the bottom of the button bar (y=1050)' % (sum(heights), avail),
-      sum(heights) <= avail and top + avail <= panel_h and panel_top + top + sum(heights) <= 1050)
+check('right panel: the rows are all always shown and add up to exactly the list (%d of %d pixels), which ends at the bottom of the panel (y=1050), so nothing moves between rows' % (sum(heights), avail),
+      sum(heights) == avail and top + avail <= panel_h and panel_top + top + avail <= 1050 and all(k.find('visible') is None for k in kids))
 check('the existing controls are untouched (ids 100 201-206, the match number block, the legend)',
       all('id="%d"' % i in xml_text for i in (100, 201, 202, 203, 204, 205, 206)) and 'Property(p_why)' in xml_text and 'Property(tier)' in xml_text
       and 'התאמה גבוהה' in xml_text)
 long_name = ('The.Last.of.Us.S02E05.Feel.Her.Love.2160p.UHD.BluRay.HDR10.10bit.AC-3.TrueHD7.1.Atmos.HEVC-d3g.heb.'
              'The.Last.of.Us.S02E05.Feel.Her.Love.2160p.UHD.BluRay.HDR10.10bit.AC-3.TrueHD7.1.Atmos.HEVC-d3g.heb')
 p_rel = props(cand({}, release=long_name))['p_release']
-check('the release name takes 4 lines at most and ends in "..." when it is longer', p_rel.count('[CR]') == 3 and p_rel.endswith('...')
-      and rows.RELEASE_LINES == 4 and props(cand({}))['p_release'].count('[CR]') <= 3)
-check('a 3-line release name is shown whole (no "..."), the box holds 4 lines',
+check('the release name takes 5 lines at most and ends in "..." when it is longer', p_rel.count('[CR]') == 4 and p_rel.endswith('...')
+      and rows.RELEASE_LINES == 5 and props(cand({}))['p_release'].count('[CR]') <= 4)
+check('a 3-line release name is shown whole (no "..."), the box holds 5 lines',
       '...' not in props(cand({}, release='The.Last.of.Us.S02E05.Feel.Her.Love.2160p.UHD.BluRay.HDR10.10bit.AC-3.TrueHD7.1.Atmos.HEVC-d3g.heb'))['p_release'])
 
 # ---- 4b. the layout refinements (0.3.110): header, margins, separate cards, bottom bar, right panel ---------------------------------
@@ -197,10 +198,12 @@ check('smaller outer margins: content from x=24 to x=1896 and from y<=16 to y>=1
 cards = [geo(e) for e in XROOT.iter('control') if e.get('type') == 'image' and e.find('texture') is not None and e.find('texture').get('colordiffuse', '').startswith('FF')
          and geo(e)[2] >= 500 and geo(e)[3] >= 50 and geo(e)[2] < 1900]
 framed = [c for c in cards if (c[0] - 1, c[1] - 1, c[2] + 2, c[3] + 2) in [x for x in cards]]
-check('four framed cards (list, legend, button bar, info panel): each a frame rectangle with its fill 1 px inside',
-      len(framed) == 4 and sorted((c[0], c[1]) for c in [(f[0] - 1, f[1] - 1) for f in framed]) == [(24, 110), (24, 914), (24, 974), (1336, 110)])
-lc, lg, bar, pn = [(c[0] - 1, c[1] - 1, c[2] + 2, c[3] + 2) for c in sorted(framed, key=lambda c: (c[0], c[1]))]
-check('the list card, the legend card and the button bar are separate surfaces (a gap between each), the list card holds the whole list',
+check('three framed cards (list, legend, info panel): each a frame rectangle with its fill 1 px inside; the button bar has NO card around it',
+      len(framed) == 3 and sorted((c[0], c[1]) for c in [(f[0] - 1, f[1] - 1) for f in framed]) == [(24, 110), (24, 914), (1336, 110)]
+      and not [c for c in cards if c[1] >= 960 and c[0] < 1330])
+lc, lg, pn = [(c[0] - 1, c[1] - 1, c[2] + 2, c[3] + 2) for c in sorted(framed, key=lambda c: (c[0], c[1]))]
+bar = (24, 974, 1296, 76)   # the zone of the button bar (it used to be a card): the buttons sit inside it, straight on the background
+check('the list card, the legend card and the button bar zone are separate (a gap between each), the list card holds the whole list',
       lc[1] + lc[3] < lg[1] and lg[1] + lg[3] < bar[1]
       and lc[0] <= geo(lst)[0] and lc[1] <= geo(lst)[1] and geo(lst)[0] + geo(lst)[2] <= lc[0] + lc[2] and geo(lst)[1] + geo(lst)[3] <= lc[1] + lc[3])
 check('the partial 9th row stays: the list is not a whole number of 92 px rows',
@@ -235,10 +238,10 @@ seq = [('div' if k in dividers else (k.find('control/label').text if k.find('con
 seq = [s for s in seq if s != '.']
 check('right panel: a divider before the quality block, one before "פרטי התאמה", one before "פרטי הכתובית", each above its header',
       seq == ['[B]שם השחרור[/B]', 'div', '[B]איכות ומקור הכתובית[/B]', 'div', '[B]פרטי התאמה[/B]', 'div', '[B]פרטי הכתובית[/B]'])
-check('the quality block\'s divider hides with the block (a row without metadata): has_meta on the first divider, the other dividers always show',
-      'has_meta' in dividers[0].find('visible').text and all(d.find('visible') is None for d in dividers[1:]))
+check('every divider is always shown (the fixed panel: the quality block divider no longer hides with a row without metadata)',
+      all(d.find('visible') is None for d in dividers))
 rel_box = [k for k in kids if k.find('control') is not None and k.find('control').get('type') == 'textbox'][0]
-check('the release box is tall enough for its 4 lines (>= 4 x 24 px)', int(rel_box.find('height').text) >= 4 * 24 and rel_box.find('control/height').text == rel_box.find('height').text)
+check('the release box is tall enough for its 5 lines with room above the divider (>= 5 x 28 + 12 px)', int(rel_box.find('height').text) >= 5 * 28 + 12 and rel_box.find('control/height').text == rel_box.find('height').text)
 prov_src = [e for e in XROOT.iter('control') if e.get('type') == 'label' and e.find('label') is not None and 'Property(p_prov_src)' in e.find('label').text][0]
 translator = [e for e in XROOT.iter('control') if e.get('type') == 'label' and e.find('label') is not None and 'Property(p_translator)' in e.find('label').text][0]
 check('"לפי <provider>" has the full value width of the panel (354 px, a row of its own) so "OpenSubtitles" is not cut; a long translator is cut cleanly with "...", not scrolled mid-glyph',

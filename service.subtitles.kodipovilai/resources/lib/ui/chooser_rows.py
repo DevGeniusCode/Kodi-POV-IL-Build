@@ -97,6 +97,25 @@ def _c(color, text):
     return '[COLOR {0}]{1}[/COLOR]'.format(color, text)
 
 
+# the provider / source pill of a row (second line of the list, the same dark pill as the chips): one legible colour per source
+PROVIDER_COLORS = {
+    'מאגר קהילתי': 'FFFFC247',       # warm gold / amber
+    'Wizdom': 'FF00E5FF',            # bright cyan
+    'OpenSubtitles': 'FF7CF2B5',     # mint green
+    'Ktuvit': 'FFC4A8FF',            # soft lavender / violet
+    'Subscene': 'FFFF9E8A',          # soft coral / peach
+    'כתובית מובנית': 'FF6FC3FF',     # sky blue
+    'כתובית מקומית': 'FFB0BEC5',     # silver blue
+    'קובץ מקומי': 'FFB0BEC5',
+    'קובץ לצד הווידאו': 'FFB0BEC5',
+}
+PROVIDER_DEFAULT = 'FFE6EBF0'        # any other provider (YIFY, SubSource, BSPlayer ...)
+
+
+def provider_color(source_text):
+    return PROVIDER_COLORS.get(source_text, PROVIDER_DEFAULT)
+
+
 # Kodi formatting tags that a stage label or a provider's file name may carry by accident ("[B]..." without its
 # "[/B]"): shown as text they are noise, and an unpaired one would colour or embolden the rest of the window.
 _BBCODE_RE = re.compile(r'\[/?(?:B|I|UPPERCASE|LOWERCASE|CAPITALIZE|LIGHT|CR)\]|\[/?COLOR(?:\s[^\]]*)?\]', re.I)
@@ -175,7 +194,7 @@ def _kind(payload, label_head, is_mt):
     if typ == 'embedded_ai':
         return 'כתובית מובנית', 'כתובית מובנית' + (' ב{0}'.format(lang) if lang else ''), True, True
     if typ == 'embedded_sync':
-        return 'כתובית מובנית', 'עברית מסונכרנת לכתובית המובנית', False, True
+        return 'כתובית חיצונית', 'כתובית עברית חיצונית מסונכרנת לכתובית המובנית', False, True
     if typ == 'ai':
         return 'קובץ מקומי', 'כתובית מקומית' + (' ב{0}'.format(lang) if lang else ''), True, False
     return label_head, '', False, False
@@ -193,7 +212,14 @@ def _row_title(typ, payload, embedded):
         return 'תרגום לעברית מכתובית מובנית' + paren
     if typ == 'ai':
         return 'תרגום AI לעברית מקובץ כתוביות מקומי'   # the stage labels it in English
+    if typ == 'embedded_sync':
+        return EMBEDDED_SYNC_TITLE
     return ''
+
+
+# the row that re-times an external Hebrew subtitle onto the embedded Hebrew track (fetching/search/engine.py): it needs a
+# native embedded Hebrew track to exist, but it is a DIFFERENT file (the external subtitle's text), so it is named by what it is
+EMBEDDED_SYNC_TITLE = 'עברית מקובץ חיצוני, מסונכרנת לתזמון המובנה'
 
 
 _TIER_HE = {
@@ -209,7 +235,7 @@ def _tier_word(pct, explained):
     if pct is None:
         return ''
     if pct > 100:
-        return 'מסונכרנת למובנה'
+        return 'מובנית'   # short: the 124 px column under the number clipped 'מסונכרנת למובנה' to '...נת למובנה'
     if explained and explained.get('pct') == pct:
         return _TIER_HE.get(explained.get('tier'), '')
     # the row's number came from another reading of the playing name: say it by the number
@@ -670,9 +696,9 @@ def wrap_lines(release, width=28, max_lines=5):
     return lines
 
 
-# the info panel's release-name box holds 4 lines (script.moransubs.chooser.xml); a longer name ends in "..."
+# the info panel's release-name box holds 5 lines (script.moransubs.chooser.xml); a longer name ends in "..."
 RELEASE_WIDTH = 32
-RELEASE_LINES = 4
+RELEASE_LINES = 5
 
 
 def wrap_release(release, width=28, max_lines=5, mask=None):
@@ -893,7 +919,7 @@ def _build(c, playing, want=None, ai=None, prov=None, video_ep=''):
     shown = '[B]{0}[/B]'.format(paint(primary, mask, WHITE)) if painted else '[B]{0}[/B]'.format(_c(WHITE, primary))
     props = {
         'release': shown,
-        'src': _c(CYAN, source_text) if source_text else '',
+        'src': _c(provider_color(source_text), source_text) if source_text else '',
         'pct': '[B]{0}[/B]'.format(_c(color, '{0}%'.format(pct))) if pct is not None else '',
         'tier': _c(color, tier) if tier else '',
         'b1': chips[0], 'b2': chips[1], 'b3': chips[2],
@@ -901,7 +927,7 @@ def _build(c, playing, want=None, ai=None, prov=None, video_ep=''):
         'has_panel': '1',
         # ---- info panel ----
         'p_release': wrap_release(release, width=RELEASE_WIDTH, max_lines=RELEASE_LINES,
-                                  mask=(mask if painted else None)) if release else _c(DIM, 'ללא שם שחרור'),
+                                  mask=(mask if painted else None)) if release else _c(DIM, no_release_text(typ, embedded)),
         'p_why': _c(WHITE, _why(explained, pct) if explained else (
             'כתובית מובנית בקובץ הווידאו: התזמון זהה לווידאו' if embedded else
             'אין שם שחרור להשוואה')),
@@ -911,6 +937,10 @@ def _build(c, playing, want=None, ai=None, prov=None, video_ep=''):
         'p_access': access_text,
     }
     props.update(prov_props)
+    if typ == 'pool' and source_text and not any(prov_props[k] for k in PROV_KEYS[:-1]):
+        # a community-pool copy carries no uploader / date of its own: its source IS the metadata
+        props['p_prov_src'] = source_text
+        props['has_meta'] = '1'
     facts = {f[0]: f for f in (explained['facts'] if explained else [])}
     for key in _FACT_LABELS:
         f = facts.get(key)
@@ -922,6 +952,17 @@ def _build(c, playing, want=None, ai=None, prov=None, video_ep=''):
     props['fs_timing'] = _c(col, word)
 
     return {'label': primary, 'flag': flag_path('he' if is_he else lang), 'props': props}
+
+
+def no_release_text(typ, embedded):
+    """What the "שם השחרור" box says for a row that has no release name: what the subtitle IS."""
+    if typ == 'embedded_sync':
+        return EMBEDDED_SYNC_TITLE
+    if embedded and typ in ('engine', 'embedded_ai'):
+        return 'כתובית מובנית בקובץ'
+    if typ in ('passthrough', 'ai'):
+        return 'קובץ כתוביות מקומי'
+    return 'ללא שם שחרור'
 
 
 def placeholder(text):
