@@ -647,6 +647,50 @@ def _is_ai_row(c):
         return False
 
 
+_EMBEDDED_MISS_WHY = {
+    'no_text': 'הכתובית המובנית בקובץ היא תמונה (PGS / VobSub) ולא טקסט',
+    'no_index': 'אי אפשר לקרוא את הכתובית המובנית מהזרם',
+    'not_mkv': 'הקובץ אינו Matroska: הכתוביות המובנות בו לא נקראות',
+}
+
+
+def _ai_context(info):
+    """What the rows need to say which of them CANNOT be AI-translated (chooser_rows.no_ai_reason): a usable translator
+    (translation_mode and, for Gemini, a key), the embedded-track policy, and whether this file's embedded track was
+    already tried and could not be read (image-based PGS / VobSub, no index, not Matroska). Never raises; on any trouble
+    it claims nothing (returns None)."""
+    try:
+        from resources.lib.core import settings
+        ctx = {'ok': True, 'why': '', 'emb_ok': True, 'emb_why': '', 'embedded_miss': False, 'embedded_miss_why': ''}
+        mode = (settings.get_setting('translation_mode', 'ai') or 'ai').strip()
+        if mode == 'none':
+            ctx.update(ok=False, why='תרגום AI כבוי בהגדרות')
+        elif mode == 'ai' and not (settings.get_setting('api_key', '') or '').strip():
+            ctx.update(ok=False, why='לא הוגדר מפתח Gemini')
+        from resources.lib.ai_translation.policy import embedded_translation_policy
+        from resources.lib.fetching.embedded import extraction
+        policy = embedded_translation_policy()
+        if not policy.get('enabled'):
+            ctx.update(emb_ok=False, emb_why='תרגום מסלולים מובנים כבוי בהגדרות')
+        elif policy.get('mode') == 'local_only':
+            url = extraction.playing_video_url(info or {})
+            if not url or url.lower().startswith(('http://', 'https://')):
+                ctx.update(emb_ok=False, emb_why='מצב "מקומי בלבד": הקובץ מנוגן כזרם')
+        playing = ''
+        try:
+            playing = xbmc.Player().getPlayingFile() or ''
+        except Exception:
+            playing = ''
+        miss = extraction.embedded_miss_for(playing)
+        if miss is not None:
+            ctx.update(embedded_miss=True, embedded_miss_why=_EMBEDDED_MISS_WHY.get(
+                miss, 'אי אפשר היה לקרוא את הכתובית המובנית'))
+        return ctx
+    except Exception as e:
+        _log('ai context unavailable: {0}'.format(e), level='DEBUG')
+        return None
+
+
 def _chooser_items(info, quick=False):
     """The chooser's rows: list_candidates, the timing rank when it has a
     human Hebrew row to work on, and only rows that can be picked."""
@@ -801,6 +845,7 @@ def _show():
             manual_gen = 0
             manual_busy = False
             base = None
+            want = []       # the release words of the manual query: highlighted like the playing release's words
 
             def onInit(self):
                 try:
@@ -808,6 +853,7 @@ def _show():
                     self.setProperty('subs.head', video_context.release_name(self.info, 'chooser') or '')
                     # the release the rows are compared with (the one the list was scored against)
                     self.playing = video_context.release_name(self.info, 'picker') or ''
+                    self.ai_ctx = _ai_context(self.info)
                     try:
                         xbmcgui.Window(10000).setProperty(
                             'MoranSubsChooserOpen', '1')
@@ -849,7 +895,8 @@ def _show():
                         row = chooser_rows.placeholder(c['filename'])
                     else:
                         row = chooser_rows.build(
-                            c, getattr(self, 'playing', ''))
+                            c, getattr(self, 'playing', ''), want=getattr(self, 'want', None),
+                            ai=getattr(self, 'ai_ctx', None))
                     li = xbmcgui.ListItem(row['label'])
                     if row['flag']:
                         li.setArt({'thumb': row['flag']})
@@ -896,8 +943,9 @@ def _show():
                     _log('chooser refresh failed: {0}'.format(e), level='WARNING')
 
             def _start_manual(self):
-                """Button 202: ask for a title (and a year, or a season and episode), search by hand and show the
-                rows in this window. The playing video's `info` (self.info) stays the one a pick is delivered with."""
+                """Button 202 (VLSub style): ask for ONE free-text query (pre-filled with the playing release), search by
+                it and show the rows in this window. The playing video's `info` (self.info) stays the one a pick is
+                delivered with."""
                 if self.manual_busy:
                     return
                 from resources.lib.fetching import manual
@@ -905,8 +953,7 @@ def _show():
                 query = manual_prompts.ask(self.info)
                 if not query:
                     return
-                search_info = manual.build_info(self.info, query['title'], query['year'],
-                                                query['season'], query['episode'])
+                search_info = manual.build_info(self.info, query)
                 with self.lock:
                     self.manual_gen += 1
                     gen = self.manual_gen
@@ -922,16 +969,21 @@ def _show():
                 of a search that was replaced meanwhile (another manual search, or "חזרה לרשימה") is dropped."""
                 from resources.lib.fetching import manual
                 items = []
+                want = []
                 try:
                     try:
                         search_info, found = manual.resolve_ids(search_info)
                         if not found:
-                            kodi.notify('לא נמצא כותר ב-TMDB, מחפש לפי השם', time_ms=3000)
+                            kodi.notify('לא נמצא כותר ב-TMDB, מחפש לפי המחרוזת', time_ms=3000)
                     except Exception as e:
                         _log('manual search: id lookup failed: {0}'.format(e), level='WARNING')
                     items = _chooser_items(search_info)
-                    _log('chooser: manual search {0!r} -> {1} candidate(s)'.format(
-                        manual.head(search_info), len(items)))
+                    items, full = manual.rank_by_tokens(items, search_info.get('_query_tokens'))
+                    want = list(search_info.get('_query_tokens') or [])
+                    if search_info.get('_query_tokens') and items and not full:
+                        kodi.notify('אין כתובית שמכילה את כל המילים; מוצגות הקרובות ביותר', time_ms=3500)
+                    _log('chooser: manual search {0!r} -> {1} candidate(s), {2} with every release word'.format(
+                        manual.head(search_info), len(items), full))
                 except Exception as e:
                     _log('chooser: manual search failed: {0}'.format(e), level='WARNING')
                 try:
@@ -945,6 +997,7 @@ def _show():
                             self.base = {'items': self.items, 'pending': self.pending,
                                          'head': self.getProperty('subs.head')}
                         self.manual = True
+                        self.want = want
                         self.pending = False
                         self.setProperty('subs.manual', '1')
                         self.setProperty('subs.head', manual.head(search_info))
@@ -968,6 +1021,7 @@ def _show():
                     if not self.manual or not base:
                         return
                     self.manual = False
+                    self.want = []
                     self.pending = bool(base.get('pending'))
                     self.clearProperty('subs.manual')
                     self.setProperty('subs.head', base.get('head') or '')

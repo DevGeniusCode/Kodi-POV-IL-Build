@@ -213,6 +213,116 @@ def release_name(info, policy):
     return ''
 
 
+# ---- a video with no library metadata (the add-on installed alone, a plain file on stock Estuary) ------------------------
+# Kodi gives a plain file no IMDb / TMDB id and, as its title, the file name. The title, year, season and episode are then
+# read out of the release name, and the ids come from what a search found earlier (see ids_cache_*; the TMDB lookup itself
+# is fetching/standalone_ids.py, it needs the network and never runs here).
+_RELEASE_TECH_RE = re.compile(
+    r'(?i)(?<![a-z0-9])(?:2160p|1080[pi]|720p|576p|480p|4k|uhd|web[ ._-]?dl|web[ ._-]?rip|webrip|webdl|blu[ ._-]?ray|bdrip|'
+    r'brrip|remux|hdtv|dvdrip|hdrip|x26[45]|h[ .]?26[45]|hevc|avc|av1|xvid|hdr10?\+?|hdr|dovi|atmos|truehd|dts|ddp?[0-9]|'
+    r'aac[0-9]?|ac3|eac3|proper|repack|extended|unrated)(?![a-z0-9])')
+_FILE_YEAR_RE = re.compile(r'(?<![0-9])((?:19|20)\d{2})(?![0-9])')
+
+
+def parse_release(name):
+    """{'title', 'year', 'season', 'episode', 'is_episode'} read out of a release / file name ("Show.Name.S02E05.1080p..."
+    or "Film.Name.2019.1080p...") -- the strings are '' when the name does not carry them; None when no title comes out."""
+    base = os.path.basename((name or '').strip().rstrip('/'))
+    if not base or looks_like_token(base):
+        return None
+    if re.search(r'\.[A-Za-z0-9]{2,4}$', base):
+        base = base.rsplit('.', 1)[0]
+    text = re.sub(r'\s+', ' ', re.sub(r'[._]+', ' ', base)).strip()
+    cut = len(text)
+    season = episode = year = ''
+    m = _EXPLICIT_EPISODE_RE.search(text) or _CROSS_EPISODE_RE.search(text)
+    if m:
+        season, episode = str(int(m.group(1))), str(int(m.group(2)))
+        cut = min(cut, m.start())
+    tech = _RELEASE_TECH_RE.search(text)
+    if tech:
+        cut = min(cut, tech.start())
+    for ym in _FILE_YEAR_RE.finditer(text):
+        if ym.start() > 0:
+            year = ym.group(1)
+            cut = min(cut, ym.start())
+            break
+    title = text[:cut].strip(' -([')
+    if not title:
+        return None
+    return {'title': title, 'year': year, 'season': season, 'episode': episode, 'is_episode': bool(season and episode)}
+
+
+IDS_PROP = 'moransubs.ids_cache'
+_IDS_KEEP = 40
+
+
+def _ids_key(title, is_episode):
+    return ('tv|' if is_episode else 'movie|') + re.sub(r'[^0-9a-z\u0590-\u05ff]+', '', (title or '').lower())
+
+
+def ids_cache_get(info):
+    """{'imdb_id', 'year'} a search found for this title earlier in the session, or None. No network."""
+    try:
+        import json
+        title = (info.get('tvshow') if info.get('is_episode') else info.get('title')) or ''
+        raw = xbmcgui.Window(10000).getProperty(IDS_PROP) if KODI_AVAILABLE else ''
+        data = json.loads(raw) if raw else {}
+        return data.get(_ids_key(title, bool(info.get('is_episode'))))
+    except Exception:
+        return None
+
+
+def ids_cache_put(info, imdb_id, year=''):
+    try:
+        import json
+        title = (info.get('tvshow') if info.get('is_episode') else info.get('title')) or ''
+        if not KODI_AVAILABLE or not title or not imdb_id:
+            return
+        win = xbmcgui.Window(10000)
+        raw = win.getProperty(IDS_PROP)
+        data = json.loads(raw) if raw else {}
+        data[_ids_key(title, bool(info.get('is_episode')))] = {'imdb_id': imdb_id, 'year': year or ''}
+        while len(data) > _IDS_KEEP:
+            data.pop(next(iter(data)))
+        win.setProperty(IDS_PROP, json.dumps(data, ensure_ascii=False))
+    except Exception:
+        pass
+
+
+def _enrich_without_metadata(info):
+    """Fill title / year / season / episode out of the release name when Kodi gave no ids and its title is the file name
+    (or nothing), and the IMDb id from the session's earlier lookup. Touches nothing when Kodi has ids."""
+    if (info.get('imdb_id') or '').strip() or (info.get('tmdb_id') or '').strip() or info.get('dbid'):
+        return
+    title = (info.get('title') or '').strip()
+    fileish = (not title or (' ' not in title and (title.count('.') + title.count('_')) >= 2)
+               or bool(_RELEASE_TECH_RE.search(title)))
+    parsed = None
+    for name in (info.get('picked_release'), info.get('li_filename'), info.get('filepath'), title):
+        parsed = parse_release(name)
+        if parsed and (parsed['year'] or parsed['is_episode'] or _RELEASE_TECH_RE.search(name or '')):
+            break
+        parsed = None
+    if not parsed:
+        return
+    if fileish:
+        if parsed['is_episode']:
+            info['tvshow'] = info.get('tvshow') or parsed['title']
+            info['title'] = parsed['title']
+        else:
+            info['title'] = parsed['title']
+    for key in ('year', 'season', 'episode'):
+        if not (info.get(key) or '').strip() and parsed[key]:
+            info[key] = parsed[key]
+    info['is_episode'] = bool(info.get('tvshow') and info.get('episode'))
+    hit = ids_cache_get(info)
+    if hit:
+        info['imdb_id'] = hit.get('imdb_id') or ''
+        if not (info.get('year') or '').strip() and hit.get('year'):
+            info['year'] = hit['year']
+
+
 def current_video_info():
     """Best-effort snapshot of what Kodi is currently playing.
     Returns a dict with imdb_id, tmdb_id, title, year, season,
@@ -275,4 +385,8 @@ def current_video_info():
         picked = ''
     info['picked_release'] = picked
     info['is_episode'] = bool(info['tvshow'] and info['episode'])
+    try:
+        _enrich_without_metadata(info)
+    except Exception:
+        pass
     return info

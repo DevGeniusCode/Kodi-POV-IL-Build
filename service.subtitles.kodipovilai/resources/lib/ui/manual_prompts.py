@@ -1,9 +1,8 @@
 # MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
 # SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
-# The questions of the chooser's manual search ("חיפוש כתוביות ידני"): as few as possible, each one pre-filled with what is
-# playing, so accepting the value is one OK press. A movie asks 2 (title, year), an episode 3 (show, season, episode); the
-# playing item decides which. An emptied box (Escape on Kodi's keyboard returns '') cancels the whole flow, so a year, a
-# season or an episode that is wanted "none" is typed as 0 (a movie's year only).
+# The question of the chooser's manual search ("חיפוש כתוביות ידני"), VLSub style: ONE free-text prompt, pre-filled with the
+# playing release name, so the viewer edits it (drops a word, adds a release group such as FLUX, types another title) or
+# accepts it with one OK press. An emptied box (Escape on Kodi's keyboard returns '') cancels the flow.
 
 from resources.lib.fetching import manual
 
@@ -13,7 +12,8 @@ except Exception:
     xbmcgui = None
 
 _ALPHANUM = getattr(xbmcgui, 'INPUT_ALPHANUM', 0)
-_NUMERIC = getattr(xbmcgui, 'INPUT_NUMERIC', 1)
+
+PROMPT_TITLE = 'חיפוש מחרוזת כתובית'
 
 
 def _toast(text):
@@ -24,45 +24,26 @@ def _toast(text):
         pass
 
 
-def ask(playing, dialog=None):
-    """Ask the viewer for the manual search. Returns {'title', 'year', 'season', 'episode'} (strings; season / episode are ''
-    for a movie), or None when the viewer cancelled or typed something unusable (a toast says what)."""
+def _playing_release(playing):
+    try:
+        from resources.lib.core import video_context
+        return video_context.release_name(playing, 'chooser') or ''
+    except Exception:
+        return ''
+
+
+def ask(playing, dialog=None, release=None):
+    """Ask the viewer for the query. Returns the cleaned query text, or None when the viewer cancelled (a toast says so
+    when the text was unusable). `release` overrides the release name used for the pre-fill (tests)."""
     if dialog is None:
         dialog = xbmcgui.Dialog()
-    default = manual.defaults(playing)
-    episode = default['episode_mode']
-
-    title = manual.clean_title(dialog.input(
-        'חיפוש ידני: שם הסדרה' if episode else 'חיפוש ידני: שם הסרט',
-        defaultt=default['title'], type=_ALPHANUM))
-    if not title:
+    if release is None:
+        release = _playing_release(playing)
+    text = dialog.input(PROMPT_TITLE, defaultt=manual.default_query(playing, release), type=_ALPHANUM)
+    query = manual.clean_query(text)
+    if not query:
         return None
-
-    if episode:
-        season = dialog.input('עונה', defaultt=default['season'], type=_NUMERIC)
-        if not (season or '').strip():
-            return None
-        season_n = manual.parse_number(season, 0, manual.SEASON_MAX)
-        if season_n is None:
-            _toast('מספר עונה לא תקין')
-            return None
-        episode_text = dialog.input('פרק', defaultt=default['episode'], type=_NUMERIC)
-        if not (episode_text or '').strip():
-            return None
-        episode_n = manual.parse_number(episode_text, 1, manual.EPISODE_MAX)
-        if episode_n is None:
-            _toast('מספר פרק לא תקין')
-            return None
-        return {'title': title, 'year': '', 'season': str(season_n), 'episode': str(episode_n)}
-
-    year = dialog.input('שנת יציאה (0 = ללא שנה)', defaultt=default['year'], type=_NUMERIC)
-    if not (year or '').strip():
+    if len(manual.normalize(query)) < 2:
+        _toast('המחרוזת קצרה מדי')
         return None
-    if year.strip() == '0':
-        year_n = 0
-    else:
-        year_n = manual.parse_number(year, manual.YEAR_MIN, manual.YEAR_MAX)
-        if year_n is None:
-            _toast('שנה לא תקינה')
-            return None
-    return {'title': title, 'year': str(year_n) if year_n else '', 'season': '', 'episode': ''}
+    return query

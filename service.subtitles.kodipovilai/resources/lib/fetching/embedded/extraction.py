@@ -30,6 +30,33 @@ def note_embedded_miss(reason):
     _EMBEDDED_MISS.clear()
     _EMBEDDED_MISS.update({'reason': reason or '', 'at': time.time(),
                            'file': playing})
+    # The chooser runs in another process (RunScript): a window property carries the miss to it, so its rows can say
+    # the embedded track cannot be AI-translated (ui/chooser._ai_context). One entry: the last file that failed.
+    try:
+        import json as _json
+        import xbmcgui as _xg
+        _xg.Window(10000).setProperty(MISS_PROP, _json.dumps(
+            {'reason': reason or '', 'file': playing}, ensure_ascii=False))
+    except Exception:
+        pass
+
+
+MISS_PROP = 'moransubs.embedded_miss'
+
+
+def embedded_miss_for(playing_file):
+    """The reason ('no_text', 'no_index', 'not_mkv' or '') of the last embedded pick that produced nothing for
+    `playing_file`, from any process; None when this file has no recorded miss."""
+    try:
+        import json as _json
+        import xbmcgui as _xg
+        raw = _xg.Window(10000).getProperty(MISS_PROP)
+        miss = _json.loads(raw) if raw else None
+    except Exception:
+        miss = None
+    if not isinstance(miss, dict) or not playing_file or miss.get('file') != playing_file:
+        return None
+    return miss.get('reason') or ''
 
 
 def embedded_miss_since(t0, playing_file=''):

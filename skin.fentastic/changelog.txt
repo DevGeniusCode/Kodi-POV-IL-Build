@@ -1,3 +1,10 @@
+1.0.39
+- Includes_VideoOsd1.xml: the unescaped "&" of the RunPlugIn / onclick lines is written as "&amp;" (the file now parses as XML; Kodi reads the same text).
+
+1.0.38
+- The progress bar is at the bottom and is interactive in every player layout. Advanced player: the bar (buffer fill + position) is a real seek slider (Player.Seekbar, action seek): clickable and touchable, and focusable with the remote (Up from a button that has no popup of its own, Left / Right seek, Down or Back return to the buttons). Netflix player: the same slider (id 402) above the buttons, Up from either button row, and a clearer buffer fill (a faint track plus a brighter buffered part). Pretty player: the buffer fill was added to its bar. Simple player already had both.
+- The top seek overlay (Custom_1128_Seek) is switched off. Seeking with the OSD closed shows a thin bottom bar (buffer fill, position and the seek time) from DialogSeekBar instead.
+
 1.0.37
 - The seek overlay (Custom_1128_Seek) hides while the add-on's subtitle chooser is open (window property MoranSubsChooserOpen), like the pause panel already did.
 - Dead DarkSubs-era choice removed: the "הצג חלון כתובית דארקסאבס" row of the OSD settings menu and its variable, the radio "בחירת כתוביות פותח את החלון של קודי" (ChooseSubtitlesButtonOpensKodiWindow, with its string 700057) in the skin settings, and the unused include left_netflix_menu. The player's subtitle button (three OSD layouts) is one RunScript(service.subtitles.kodipovilai,action=choose_subs).

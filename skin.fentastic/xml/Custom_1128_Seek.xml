@@ -2,8 +2,10 @@
 <window type="dialog" id="1128">
 	<zorder>4</zorder>
 	<include>modalDialogInOutVerticalVisible</include>
-	<visible>Player.Seeking | Player.Forwarding | Player.Rewinding | Player.Caching | Player.HasPerformedSeek(3) | [Window.IsActive(videoosd) + Player.Paused]</visible>
-	<visible>![Window.IsActive(subtitlesearch) | Window.IsActive(1133) | Window.IsActive(1132)] + String.IsEmpty(Window(home).Property(MoranSubsChooserOpen))</visible>
+	<!-- Switched off (20 Nov 2026): the progress bar lives at the bottom now (the OSD's own interactive bar, and the thin
+	     bar DialogSeekBar shows while seeking with the OSD closed). Was:
+	     Player.Seeking | Player.Forwarding | Player.Rewinding | Player.Caching | Player.HasPerformedSeek(3) | [Window.IsActive(videoosd) + Player.Paused] -->
+	<visible>false</visible>
 	<controls>
 	
 	<include>SeekBarEnabled</include>

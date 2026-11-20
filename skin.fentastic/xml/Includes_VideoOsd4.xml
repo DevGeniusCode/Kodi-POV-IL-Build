@@ -570,6 +570,13 @@
 		<control type="progress">
 			<top>50</top>
 			<height>15</height>
+			<texturebg colordiffuse="30FFFFFF" border="3">progress/texturebg_white.png</texturebg>
+			<midtexture colordiffuse="70FFFFFF" border="3">progress/texturebg_white.png</midtexture>
+			<info>Player.ProgressCache</info>
+		</control>
+		<control type="progress">
+			<top>50</top>
+			<height>15</height>
 			<midtexture colordiffuse="$INFO[Skin.String(osdprettychangecolor)]" border="3">progress/texturebg_white.png</midtexture>
 			<info>Player.Progress</info>
 		</control>

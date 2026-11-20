@@ -101,9 +101,13 @@ def get_subs(video_data, all_lang_override=False):
     episode = video_data.get('episode', '')
     imdb_id = video_data.get('imdb', '')
     
+    search_text = imdb_id
     if not imdb_id or not imdb_id.startswith('tt'):
-        log.warning(f'DEBUG | [SubSource] |  IMDb ID missing. exiting...')
-        return []
+        # a manual search that TMDB did not resolve to an IMDb id: SubSource's search takes the title text too
+        search_text = (video_data.get('OriginalTitle') or '').strip() if video_data.get('query') else ''
+        if not search_text:
+            log.warning(f'DEBUG | [SubSource] |  IMDb ID missing. exiting...')
+            return []
     
     
     selected_lang = []
@@ -125,7 +129,7 @@ def get_subs(video_data, all_lang_override=False):
         selected_lang = [all_lang_codes[code] for code in selected_lang if code in all_lang_codes]
         
     data = {
-        'query': imdb_id
+        'query': search_text
     }
 
     try:

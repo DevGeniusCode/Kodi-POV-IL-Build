@@ -87,6 +87,7 @@ WHITE = 'FFF2F5F8'
 DIM = 'FF9AA0A6'
 RED = 'FFE5645A'
 CYAN = 'FF8FE0FF'
+MATCH = 'FF35E06A'     # a word the subtitle's release shares with the playing release (resolution, source, codec ...)
 
 
 def _c(color, text):
@@ -272,14 +273,118 @@ def _fact(key, a, b, state):
     return '—', 'לא צוין', DIM
 
 
+# ---- the words a release shares with the playing release -------------------------------------------------------------------
+# Resolution, source, video codec, audio, HDR and release group, found by pattern in both names; a subtitle's word is
+# painted green when the playing release carries the same (category, value). `want` words (the manual query) match any
+# alphanumeric run equal to them. Pure string work; the highlight never changes a number.
+_SEP = r'[ ._-]?'
+_TOKEN_PATTERNS = (
+    ('res', re.compile(r'(?<![a-z0-9])(?:4320p|2160p|1440p|1080[pi]|720p|576p|480p|4k|uhd)(?![a-z0-9])', re.I)),
+    ('src', re.compile(r'(?<![a-z0-9])(?:web' + _SEP + r'dl|web' + _SEP + r'rip|webdl|webrip|web|blu' + _SEP + r'ray|bdrip|brrip|'
+                       r'remux|hdtv|pdtv|dvd' + _SEP + r'rip|dvdr|hdrip)(?![a-z0-9])', re.I)),
+    ('hdr', re.compile(r'(?<![a-z0-9])(?:hdr10\+|hdr10plus|hdr10|hdr|dolby' + _SEP + r'vision|dovi|dv|hlg|sdr)(?![a-z0-9+])', re.I)),
+    ('codec', re.compile(r'(?<![a-z0-9])(?:x265|h' + _SEP + r'265|hevc|x264|h' + _SEP + r'264|avc|av1|xvid|vp9)(?![a-z0-9])', re.I)),
+    ('audio', re.compile(r'(?<![a-z0-9])(?:truehd|atmos|dts' + _SEP + r'hd(?:' + _SEP + r'ma)?|dts' + _SEP + r'x|dts|ddp|dd\+|dd|eac3|ac3|aac|flac|opus)'
+                         r'(?:' + _SEP + r'\d(?:[ .]\d)?)?(?![a-z0-9])', re.I)),
+)
+_GROUP_TAIL = re.compile(r'(?:-|\[)([A-Za-z0-9]{2,15})\]?\s*$')
+_EXT_TAIL = re.compile(r'\.(?:srt|sub|ass|ssa|vtt|mkv|mp4|avi|m4v|ts)$', re.I)
+
+
+def _token_canon(cat, text):
+    key = re.sub(r'[^a-z0-9+]', '', text.lower())
+    if cat == 'res':
+        return '2160p' if key in ('4k', 'uhd') else ('1080p' if key == '1080i' else key)
+    if cat == 'src':
+        if key.startswith('web'):
+            return 'web'
+        if key in ('bluray', 'bdrip', 'brrip'):
+            return 'bluray'
+        if key in ('dvdrip', 'dvdr'):
+            return 'dvd'
+        return key
+    if cat == 'hdr':
+        return 'dv' if key in ('dv', 'dovi', 'dolbyvision') else ('hdr10+' if key in ('hdr10+', 'hdr10plus') else key)
+    if cat == 'codec':
+        return {'x265': 'hevc', 'h265': 'hevc', 'x264': 'avc', 'h264': 'avc'}.get(key, key)
+    if cat == 'audio':
+        return key.replace('dd+', 'ddp')
+    return key
+
+
+def release_spans(name):
+    """[(start, end, category, canonical value)] of the tech words and the release group of `name`, non-overlapping."""
+    name = name or ''
+    spans = []
+    taken = []
+
+    def free(a, b):
+        return all(b <= x or a >= y for x, y in taken)
+
+    for cat, rx in _TOKEN_PATTERNS:
+        for m in rx.finditer(name):
+            if free(m.start(), m.end()):
+                taken.append((m.start(), m.end()))
+                spans.append((m.start(), m.end(), cat, _token_canon(cat, m.group(0))))
+    body = name
+    m = _EXT_TAIL.search(body)
+    if m:
+        body = body[:m.start()]
+    g = _GROUP_TAIL.search(body)
+    if g and free(g.start(1), g.end(1)):
+        spans.append((g.start(1), g.end(1), 'group', g.group(1).lower()))
+    return sorted(spans)
+
+
+def shared_mask(release, playing, want=None):
+    """(mask, words): `mask` has one bool per character of `release`, True inside a word that the playing release shares
+    (same category and value) or that is one of the `want` words; `words` lists those words as written in `release`."""
+    release = release or ''
+    mask = [False] * len(release)
+    words = []
+    playing_set = {(c, v) for _a, _b, c, v in release_spans(playing)} if playing else set()
+    for a, b, cat, val in release_spans(release):
+        if (cat, val) in playing_set:
+            for i in range(a, b):
+                mask[i] = True
+            words.append(release[a:b])
+    want = {w for w in (want or ()) if w}
+    if want:
+        for m in re.finditer(r'[A-Za-z0-9]+', release):
+            if re.sub(r'[^a-z0-9]', '', m.group(0).lower()) in want:
+                if not all(mask[m.start():m.end()]):
+                    words.append(m.group(0))
+                for i in range(m.start(), m.end()):
+                    mask[i] = True
+    return mask, words
+
+
+def paint(text, mask, base=None, start=0):
+    """`text` (a slice of the release that starts at `start`) as BBCode: shared words in MATCH green, the rest in `base`
+    (plain when None). Segments are closed and reopened, never nested."""
+    out, i, n = [], 0, len(text)
+
+    def flag_at(k):
+        return bool(mask[start + k]) if start + k < len(mask) else False
+
+    while i < n:
+        flag = flag_at(i)
+        j = i
+        while j < n and flag_at(j) == flag:
+            j += 1
+        piece = text[i:j]
+        color = MATCH if flag else base
+        out.append(_c(color, piece) if color else piece)
+        i = j
+    return ''.join(out)
+
+
 # ---- wrapping of a long release name (Kodi's textbox wraps at spaces only) -----------------------------------------------
-def wrap_release(release, width=28, max_lines=5):
-    """The release name broken at its own separators into lines of at most
-    `width` characters, joined with Kodi's [CR]. Never cuts the text short
-    unless it needs more than `max_lines` lines."""
+def wrap_lines(release, width=28, max_lines=5):
+    """The release name broken at its own separators into lines of at most `width` characters (see wrap_release)."""
     release = (release or '').strip()
     if not release:
-        return ''
+        return []
     lines, cur = [], ''
     for part in re.findall(r'[^.\-_ ]+[.\-_ ]?|[.\-_ ]', release):
         if cur and len(cur) + len(part) > width:
@@ -294,7 +399,25 @@ def wrap_release(release, width=28, max_lines=5):
     if len(lines) > max_lines:
         lines = lines[:max_lines]
         lines[-1] = lines[-1][:max(1, width - 3)] + '...'
-    return '[CR]'.join(lines)
+    return lines
+
+
+def wrap_release(release, width=28, max_lines=5, mask=None):
+    """The release name broken at its own separators into lines of at most
+    `width` characters, joined with Kodi's [CR]. Never cuts the text short
+    unless it needs more than `max_lines` lines. With a `mask` (shared_mask of the
+    same, already stripped, release) the shared words are painted green."""
+    lines = wrap_lines(release, width, max_lines)
+    if not mask:
+        return '[CR]'.join(lines)
+    out, pos = [], 0
+    total = len((release or '').strip())
+    for line in lines:
+        cut = line.endswith('...') and pos + len(line) - 3 < total
+        body = line[:-3] if cut else line
+        out.append(paint(body, mask, None, pos) + ('...' if cut else ''))
+        pos += len(body)
+    return '[CR]'.join(out)
 
 
 def _access(c, rel):
@@ -325,20 +448,52 @@ def _timing(c, typ, embedded):
 
 
 # ---- the row ---------------------------------------------------------------------------------------------------------------
-def build(c, playing):
+def no_ai_reason(typ, is_ai, is_he, embedded, ai):
+    """'' when the row can be (or needs no) AI translation, else the Hebrew reason it cannot. `ai` is the chooser's
+    context (ui/chooser._ai_context): {'ok': a translator is usable, 'why': what is missing, 'emb_ok': an embedded track
+    may be translated, 'emb_why', 'embedded_miss': this file's embedded track was tried and could not be read}. Without
+    a context nothing is claimed. A Hebrew row needs no translation, so it never carries the badge."""
+    if not ai:
+        return ''
+    if typ == 'pool':
+        return ''   # an already translated copy of the community pool: delivering it calls no translator
+    if typ == 'embedded_ai':
+        if ai.get('embedded_miss'):
+            return ai.get('embedded_miss_why') or 'הכתובית המובנית בקובץ אינה טקסט'
+        if not ai.get('ok'):
+            return ai.get('why') or ''
+        return ''
+    if is_ai:
+        return '' if ai.get('ok') else (ai.get('why') or '')
+    if is_he:
+        return ''
+    # a raw foreign row (a provider's, a local file's or an embedded track): it is offered as it is because no AI row
+    # stands for it
+    if not ai.get('ok'):
+        return ai.get('why') or ''
+    if embedded:
+        if not ai.get('emb_ok'):
+            return ai.get('emb_why') or 'תרגום מסלולים מובנים כבוי'
+        if ai.get('embedded_miss'):
+            return ai.get('embedded_miss_why') or 'הכתובית המובנית בקובץ אינה טקסט'
+    return ''
+
+
+def build(c, playing, want=None, ai=None):
     """One candidate -> {'label', 'flag', 'props'}: the ListItem label, the flag
     image and every property the window XML binds (strings only, colours baked
     as BBCode like the rest of the window). `playing` is the playing release
-    name ('' when unknown). Never raises."""
+    name ('' when unknown); `want` the release words of a manual query; `ai` the
+    AI-availability context (no_ai_reason). Never raises."""
     try:
-        return _build(c, playing)
+        return _build(c, playing, want, ai)
     except Exception:
         name = (c.get('filename') or '').strip() if isinstance(c, dict) else ''
         return {'label': name, 'flag': '',
                 'props': {'release': _c(WHITE, name), 'has_panel': ''}}
 
 
-def _build(c, playing):
+def _build(c, playing, want=None, ai=None):
     name = (c.get('filename') or '').strip()
     lang = (c.get('language') or '').strip()
     payload = decode_link_safe(c.get('link') or '') or {}
@@ -380,9 +535,11 @@ def _build(c, playing):
         chips.append(_c(GREEN, sync_label))
     elif typ == 'embedded_sync' or (typ == 'engine' and embedded and is_he):
         chips.append(_c(GREEN, 'מסונכרנת למובנה' if typ == 'embedded_sync' else 'מובנה'))
-    if is_ai:
-        chips.append(_c(CYAN, 'תרגום AI'))
-    elif is_mt:
+    # AI translation is the normal case and carries no badge; only a row that CANNOT be AI-translated says so
+    no_ai = no_ai_reason(typ, is_ai, is_he, embedded, ai)
+    if no_ai:
+        chips.append(_c(RED, 'ללא תרגום AI'))
+    if is_mt:
         chips.append(_c(AMBER, 'תרגום מכונה'))
     elif embedded and typ == 'engine' and not is_he:
         chips.append(_c(DIM, 'מובנה'))
@@ -400,8 +557,10 @@ def _build(c, playing):
     primary = release or (head_clean if len(head_clean) > 3 else '') or kind_text or name
     if typ in ('ai', 'embedded_ai') and kind_text:
         primary = kind_text   # those stages label the row in English ("AI Hebrew (translate ...)")
+    mask, shared = shared_mask(release, playing, want) if (release and primary == release and (playing or want)) else ([], [])
+    shown = '[B]{0}[/B]'.format(paint(primary, mask, WHITE)) if shared else '[B]{0}[/B]'.format(_c(WHITE, primary))
     props = {
-        'release': '[B]{0}[/B]'.format(_c(WHITE, primary)),
+        'release': shown,
         'src': _c(CYAN, source_text) if source_text else '',
         'pct': '[B]{0}[/B]'.format(_c(color, '{0}%'.format(pct))) if pct is not None else '',
         'tier': _c(color, tier) if tier else '',
@@ -409,11 +568,11 @@ def _build(c, playing):
         'cur': '1' if current else '',
         'has_panel': '1',
         # ---- info panel ----
-        'p_release': wrap_release(release) if release else _c(DIM, 'ללא שם שחרור'),
+        'p_release': wrap_release(release, mask=(mask if shared else None)) if release else _c(DIM, 'ללא שם שחרור'),
         'p_why': _c(WHITE, _why(explained, pct) if explained else (
             'מסלול מובנה בקובץ הווידאו: התזמון זהה לווידאו' if embedded else
             'אין שם שחרור להשוואה')),
-        'p_kind': kind_text,
+        'p_kind': kind_text + (' · לא ניתנת לתרגום AI: ' + no_ai if no_ai else ''),
         'p_provider': source_text if source_text else '—',
         'p_lang': lang_he or (lang.upper() if lang else '—'),
         'p_access': access_text,

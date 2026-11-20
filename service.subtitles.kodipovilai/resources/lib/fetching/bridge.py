@@ -397,6 +397,12 @@ def _search_inner(info, modal_progress=True, all_lang_override=False,
     engine = provider_adapter.load_engine()
     general = provider_adapter.load_general()
 
+    # a video Kodi gave no ids for (the add-on installed alone): its IMDb id, once, through TMDB
+    try:
+        from resources.lib.fetching import standalone_ids
+        info = standalone_ids.resolve(info)
+    except Exception:
+        pass
     video_data = build_video_data(info)
     kodi.log('subs_engine_bridge: searching engine for '
                    + repr({k: video_data[k] for k in
@@ -849,7 +855,10 @@ def download_inner(payload, for_delivery=True):
             cached_subs_prune(cache_dir)
             keybase = cached_subs_keybase(cache_dir, source, language,
                                            filename)
-            hit = cached_subs_lookup(keybase)
+            # a season pack's files are cached per episode (fetching/season_pack.py): the playing episode's own entry
+            # comes first; the untagged stem is every other download's
+            pack_tag = _playing_pack_tag()
+            hit = (cached_subs_lookup(keybase + '.' + pack_tag) if pack_tag else None) or cached_subs_lookup(keybase)
             if hit:
                 kodi.log('subs_engine_bridge: cached file hit ({0})'
                                .format(os.path.basename(hit)), level='INFO')
@@ -879,6 +888,9 @@ def download_inner(payload, for_delivery=True):
             keybase = None
 
     sub_file = module.download(download_data, sub_folder)
+    pack = _handle_season_pack(sub_file, sub_folder, language, keybase)
+    if pack:
+        sub_file = pack['file']
     if not sub_file or not os.path.isfile(sub_file):
         kodi.log('subs_engine_bridge: download returned no file '
                        '(source={0}, got={1})'.format(source, sub_file),
@@ -908,10 +920,14 @@ def download_inner(payload, for_delivery=True):
     # Store the validated PRISTINE provider file before any playback rendering.
     # This preserves one stable source hash for pool de-dup and sharing.
     source_file = sub_file
-    if keybase:
+    if keybase and not pack:
         cached = cached_subs_store(keybase, sub_file)
         if cached:
             source_file = cached
+    elif pack and keybase:
+        # a pack's file is stored per episode only (see _handle_season_pack): never under the untagged stem, which
+        # would serve this episode's file for every episode of the pack
+        source_file = cached_subs_lookup(keybase + '.' + pack['tag']) or sub_file
     mark_logical_source(source_file)
 
     # The old vendored fixer is intentionally gone. One canonical MoranSubs
@@ -926,6 +942,42 @@ def download_inner(payload, for_delivery=True):
         # leading ellipses in clean files.
         return render_hebrew_rtl_copy(source_file, legacy_engine='auto')
     return source_file
+
+
+def _playing_info():
+    try:
+        return video_context.current_video_info() or {}
+    except Exception:
+        return {}
+
+
+def _playing_pack_tag():
+    """'S01E02' of the playing episode, '' for a movie or when nothing is known."""
+    try:
+        from resources.lib.fetching import season_pack
+        return season_pack.playing_tag(_playing_info())
+    except Exception:
+        return ''
+
+
+def _handle_season_pack(sub_file, sub_folder, language, keybase):
+    """A download that unpacked a whole season (fetching/season_pack.py): the file of the playing episode is delivered and
+    cached per episode, and the next episode's file is kept for it. None for every other download."""
+    try:
+        from resources.lib.fetching import season_pack
+        info = _playing_info()
+
+        def _store(path, tag):
+            if keybase:
+                cached_subs_store(keybase + '.' + tag, path)
+
+        # a file of the pack must be UTF-8 before it is cached or remembered (the provider normalised only its own pick)
+        for _ep, path in season_pack.scan_folder(sub_folder, season_pack.playing_release(info)).items():
+            ensure_utf8(path)
+        return season_pack.handle_download(sub_file, sub_folder, info, language, cache_store=_store)
+    except Exception as e:
+        kodi.log('subs_engine_bridge: season pack step skipped: {0}'.format(e), level='DEBUG')
+        return None
 
 
 # ---- video_data construction ---------------------------------------
@@ -979,5 +1031,10 @@ def build_video_data(info):
         'mpaa': '',
         'is_local_media_playing': 'false',
         'state': '',
+        # a manual (VLSub-style) search, fetching/manual.py: the typed text for the providers that take text, and what
+        # the engine needs to leave out what belongs to the PLAYING file only (BSPlayer's file hash)
+        'query': (info.get('_query') or '').strip(),
+        'manual': bool(info.get('_manual')),
+        'keyword_only': bool(info.get('_query_keyword_only')),
     }
     return vd

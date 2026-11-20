@@ -414,7 +414,10 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False, on_p
         thread.append(Thread(subscene.get_subs,video_data, all_lang_override))
         all_sources.append(('subscene',subscene))
     
-    if not timing_only and Addon.getSetting('bsplayer')=='true' and search_language_hebrew_bool and _provider_on('bsplayer', _skipped):
+    # BSPlayer answers for the hash of the PLAYING file: not for a manual search of another title (typed words on the
+    # playing video, keyword_only, still use it)
+    _bsplayer_fits = not (video_data.get('manual') and not video_data.get('keyword_only'))
+    if not timing_only and _bsplayer_fits and Addon.getSetting('bsplayer')=='true' and search_language_hebrew_bool and _provider_on('bsplayer', _skipped):
         thread.append(Thread(bsplayer.get_subs,video_data))
         all_sources.append(('bsplayer',bsplayer))
         

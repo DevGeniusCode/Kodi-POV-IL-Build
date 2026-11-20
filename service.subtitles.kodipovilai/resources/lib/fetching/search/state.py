@@ -106,6 +106,17 @@ def local_files(S):
 
     S.results = []
 
+    # A Hebrew subtitle of THIS episode that came out of a season pack the viewer used for the previous episode
+    # (fetching/season_pack.py): offered at once, before any provider answers; not for a manual search.
+    if not manual and 'he' not in S.alongside:
+        try:
+            from resources.lib.fetching import season_pack
+            kept = season_pack.lookup_for(S.info)
+            if kept:
+                S.alongside['he'] = kept['path']
+        except Exception:
+            pass
+
     # 1. Hebrew passthrough -- if there's already a Hebrew SRT we
     #    can hand to Kodi, no need to translate anything.
     S.have_hebrew = False

@@ -404,6 +404,14 @@ if '--static' not in sys.argv:
         rdiff = sorted(k for k in set(rgot) | set(rexp) if rgot.get(k) != rexp.get(k))
         check('golden resolve: %d scenarios identical (return value, files written, log lines, toasts, HTTP requests of the '
               'Gemini / Google transport, progressive callbacks, collaborator calls)' % len(rexp), not rdiff, rdiff[:6])
+    # the behaviour checks of the VLSub manual query, the green release words, the negative AI badge,
+    # the season-pack cache (HI / release preference included) and the standalone (no library metadata) path (20 Nov 2026): pure Python, own stubs
+    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_session.py')],
+                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
+    check('unit_session: manual query, green words, AI badge, season pack, standalone (%d checks)'
+          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
+          bad[:3] or (p.stderr or '')[-300:])
 
 print('\n%d checks passed, %d failed' % (len(PASSES), len(FAILS)))
 sys.exit(1 if FAILS else 0)

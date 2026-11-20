@@ -204,7 +204,7 @@ def execute_request(request, session=None):
     
     
 def __match_title(media_type, title, response, year=None):
-    if media_type == 'movie' and year: title = f'{title} ({year})'
+    if media_type == 'movie' and year and str(year).isdigit(): title = f'{title} ({year})'
     href_regex = r'<a href="(.*?)">' + re.escape(title) + r'</a>'
     return re.search(href_regex, response.text, re.IGNORECASE)
 
@@ -214,9 +214,10 @@ def __find_title_result(media_type, title, year, response):
     
     if media_type == 'movie':
         # Try match with the previous year
-        previous_year = int(year) - 1
+        # (a blank year, a manual search without one, is matched by the title alone)
+        previous_year = int(year) - 1 if str(year).isdigit() else 0
         # Try match with the next year
-        next_year = int(year) + 1
+        next_year = int(year) + 1 if str(year).isdigit() else 0
         result = __match_title(media_type, title, response, year) or __match_title(media_type, title, response, year) or __match_title(media_type, title, response, year) or None
     else:
         result = __match_title(media_type, title, response) or None
@@ -243,7 +244,7 @@ def build_search_requests(imdb_id, media_type, title, year, season):
 
     request = {
         'method': 'GET',
-        'url': f"{SUBSCENE_SEARCH_URL}{imdb_id}",
+        'url': f"{SUBSCENE_SEARCH_URL}{imdb_id or title}",   # no IMDb id (a manual search that TMDB did not resolve): the title text
         'next': lambda response: __find_title_result(media_type, title, year, response),
     }
 

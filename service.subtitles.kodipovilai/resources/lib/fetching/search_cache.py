@@ -18,6 +18,11 @@ _CACHE_TTL = 24 * 3600  # seconds (matches DarkSubs's 24h search-result cache)
 
 def _cache_key(info):
     mid = (info.get('imdb_id') or info.get('tmdb_id') or '').strip()
+    query = (info.get('_query') or '').strip().lower()
+    if query:
+        # a manual search (fetching/manual.py): the same title with another typed text is another list, and never the
+        # automatic list of the playing video
+        mid = '{0}_q{1}'.format(mid or 'text', hashlib.sha1(query.encode('utf-8', 'replace')).hexdigest()[:12])
     if not mid:
         return None
     # Include a signature of the ENABLED sources so toggling a source (e.g.

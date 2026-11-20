@@ -215,6 +215,19 @@ def get_Ktuvit_Page_ID(ktuvit_search_page_results, imdb_id, title):
                 Ktuvit_Page_ID = result['ID']
                 break
 
+    # A manual search that TMDB did not resolve (no IMDb id to compare): the first result whose English or Hebrew name is
+    # exactly the typed title (letters and digits only).
+    if Ktuvit_Page_ID == '' and not imdb_id.startswith("tt") and title:
+        regex_helper = re.compile(r'\W+', re.UNICODE)
+        wanted = regex_helper.sub('', title).lower()
+        for result in ktuvit_search_page_results or []:
+            names = [regex_helper.sub('', str(result.get('EngName') or '')).lower(),
+                     regex_helper.sub('', str(result.get('HebName') or '')).lower()]
+            if wanted and wanted in names:
+                log.warning(f"DEBUG | [KTUVIT] | TITLE MATCH (no imdb id) | title: {title}")
+                Ktuvit_Page_ID = result['ID']
+                break
+
     # if Ktuvit_Page_ID still empty (wrong imdb on ktuvit page) - search for match by title eng/heb names
     # if Ktuvit_Page_ID == '':
         # regex_helper = re.compile('\W+', re.UNICODE)

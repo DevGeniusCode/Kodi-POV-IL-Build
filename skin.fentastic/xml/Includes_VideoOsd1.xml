@@ -37,7 +37,8 @@
 		<orientation>horizontal</orientation>
 		<height>60</height>
 		<bottom>0</bottom>
-		<onup>SetFocus($INFO[Container(201).ListItem.Property(onup)])</onup>
+		<onup condition="!String.IsEmpty(Container(201).ListItem.Property(onup))">SetFocus($INFO[Container(201).ListItem.Property(onup)])</onup>
+		<onup condition="String.IsEmpty(Container(201).ListItem.Property(onup)) + Player.SeekEnabled">401</onup>
 		<itemlayout width="60" height="50">
 		<control type="group">
 		<width>50</width>
@@ -635,7 +636,7 @@
 			<!-- ======== WIZARD IL BAKED: change-source button pauses playback ======== -->
 			<onclick condition="Player.Playing">PlayerControl(Play)</onclick>
 			<!-- ======== END WIZARD IL BAKED ======== -->
-			<onclick>RunPlugIn($VAR[OsdReplaceSourceStartPoint]&mediatype=movie&tmdb_id=$VAR[_Fix_TMDB_ID]$VAR[AutoPlaySetToFalse])</onclick>
+			<onclick>RunPlugIn($VAR[OsdReplaceSourceStartPoint]&amp;mediatype=movie&amp;tmdb_id=$VAR[_Fix_TMDB_ID]$VAR[AutoPlaySetToFalse])</onclick>
 			<visible>VideoPlayer.Content(movies)</visible>
 		</item>
 		<item>
@@ -643,7 +644,7 @@
 			<!-- ======== WIZARD IL BAKED: change-source button pauses playback ======== -->
 			<onclick condition="Player.Playing">PlayerControl(Play)</onclick>
 			<!-- ======== END WIZARD IL BAKED ======== -->
-			<onclick>RunPlugIn($VAR[OsdReplaceSourceStartPoint]&mediatype=movie&tmdb_id=$VAR[_Fix_TMDB_ID]$VAR[AutoPlaySetToTrue])</onclick>
+			<onclick>RunPlugIn($VAR[OsdReplaceSourceStartPoint]&amp;mediatype=movie&amp;tmdb_id=$VAR[_Fix_TMDB_ID]$VAR[AutoPlaySetToTrue])</onclick>
 			<visible>VideoPlayer.Content(movies)</visible>
 		</item>
 		<item>
@@ -651,7 +652,7 @@
 			<!-- ======== WIZARD IL BAKED: change-source button pauses playback ======== -->
 			<onclick condition="Player.Playing">PlayerControl(Play)</onclick>
 			<!-- ======== END WIZARD IL BAKED ======== -->
-			<onclick>RunPlugin($VAR[OsdReplaceSourceStartPoint]&mediatype=episode&tmdb_id=$VAR[_Fix_TMDB_ID]&season=$INFO[VideoPlayer.Season]&episode=$INFO[VideoPlayer.Episode]&query=$INFO[VideoPlayer.Title]$VAR[AutoPlaySetToFalse])</onclick>
+			<onclick>RunPlugin($VAR[OsdReplaceSourceStartPoint]&amp;mediatype=episode&amp;tmdb_id=$VAR[_Fix_TMDB_ID]&amp;season=$INFO[VideoPlayer.Season]&amp;episode=$INFO[VideoPlayer.Episode]&amp;query=$INFO[VideoPlayer.Title]$VAR[AutoPlaySetToFalse])</onclick>
 			<visible>VideoPlayer.Content(episodes)</visible>
 		</item>
 		<item>
@@ -659,7 +660,7 @@
 			<!-- ======== WIZARD IL BAKED: change-source button pauses playback ======== -->
 			<onclick condition="Player.Playing">PlayerControl(Play)</onclick>
 			<!-- ======== END WIZARD IL BAKED ======== -->
-			<onclick>RunPlugin($VAR[OsdReplaceSourceStartPoint]&mediatype=episode&tmdb_id=$VAR[_Fix_TMDB_ID]&season=$INFO[VideoPlayer.Season]&episode=$INFO[VideoPlayer.Episode]&query=$INFO[VideoPlayer.Title]$VAR[AutoPlaySetToTrue])</onclick>
+			<onclick>RunPlugin($VAR[OsdReplaceSourceStartPoint]&amp;mediatype=episode&amp;tmdb_id=$VAR[_Fix_TMDB_ID]&amp;season=$INFO[VideoPlayer.Season]&amp;episode=$INFO[VideoPlayer.Episode]&amp;query=$INFO[VideoPlayer.Title]$VAR[AutoPlaySetToTrue])</onclick>
 			<visible>VideoPlayer.Content(episodes)</visible>
 		</item>
 		</content>
@@ -860,10 +861,20 @@
 			<texturebg border="3" colordiffuse="60FFFFFF">colors/white50.png</texturebg>
 			<midtexture colordiffuse="accent_color">colors/white.png</midtexture>
 		</control>
+		<!-- the bar: clickable / touchable (mouse, touch) and focusable (remote: Up from the buttons, Left / Right seek, Down or Back return) -->
 		<control type="slider" id="401">
+			<left>0</left>
+			<width>100%</width>
+			<top>-12</top>
+			<height>34</height>
 			<texturesliderbar colordiffuse="00FFFFFF">osd/progress/nub_bar.png</texturesliderbar>
 			<textureslidernib colordiffuse="accent_color">osd/progress/nub_bar.png</textureslidernib>
-			<textureslidernibfocus colordiffuse="accent_color">colors/white.png</textureslidernibfocus>
+			<textureslidernibfocus colordiffuse="white">osd/progress/nub_bar.png</textureslidernibfocus>
+			<info>Player.Seekbar</info>
+			<action>seek</action>
+			<onup>false</onup>
+			<ondown>201</ondown>
+			<onback>201</onback>
 			<visible>Player.SeekEnabled</visible>
 		</control>
 		<control type="ranges">

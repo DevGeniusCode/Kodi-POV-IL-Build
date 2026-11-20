@@ -79,7 +79,62 @@ MAX_UNPACKED_BYTES = 200 * 1024 * 1024
 MAX_ENTRIES = 500
 
 
+def _is_rar(path):
+    try:
+        with open(path, 'rb') as f:
+            return f.read(6)[:4] == b'Rar!'
+    except Exception:
+        return False
+
+
+def _extract_rar(archive_file, MySubFolder):
+    """Unpack a RAR archive through Kodi's own rar:// virtual file system (the vfs.rar add-on, bundled with Kodi on most
+    platforms) -- Python has no RAR reader. Copies every entry (the folders inside too) into MySubFolder. True when at
+    least one subtitle-shaped file came out; False when Kodi cannot read it (the caller then treats the file as a plain
+    download, as it always did)."""
+    try:
+        import urllib.parse
+        root = 'rar://' + urllib.parse.quote_plus(archive_file) + '/'
+        count = [0]
+        wrote = [0]
+
+        def walk(url, rel):
+            dirs, files = xbmcvfs.listdir(url)
+            for fn in files:
+                count[0] += 1
+                if count[0] > MAX_ENTRIES:
+                    return
+                dest = os.path.join(MySubFolder, *([p for p in rel.split('/') if p] + [fn]))
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                if xbmcvfs.copy(url + fn, dest):
+                    wrote[0] += os.path.getsize(dest) if os.path.isfile(dest) else 0
+                    if wrote[0] > MAX_UNPACKED_BYTES:
+                        return
+            for d in dirs:
+                walk(url + d + '/', rel + '/' + d)
+
+        walk(root, '')
+        return any(os.path.splitext(f)[1].lower() in exts
+                   for _r, _d, fs in os.walk(MySubFolder) for f in fs)
+    except Exception as e:
+        log.warning('Error Extract (rar): ' + str(e))
+        return False
+
+
 def extract(archive_file,MySubFolder):
+    if _is_rar(archive_file) and _extract_rar(archive_file, MySubFolder):
+        try:
+            os.remove(archive_file)
+        except OSError:
+            pass
+        # the same choice as for a zip: a file of THIS archive (the pack logic of the bridge then picks the episode)
+        for root, _dirs, files in os.walk(MySubFolder):
+            for base in sorted(files):
+                if os.path.splitext(base)[1].lower() in exts:
+                    cand = os.path.join(root, base)
+                    convert_to_utf(cand)
+                    return cand
+        return '0'
     try:
         with zipfile.ZipFile(archive_file, 'r') as zip_ref:
             names = zip_ref.namelist()

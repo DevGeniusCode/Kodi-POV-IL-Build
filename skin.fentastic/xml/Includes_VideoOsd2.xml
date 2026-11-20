@@ -229,9 +229,9 @@
 		<height>20</height>
 		<width>width75percent</width>
 		<centerleft>50%</centerleft>
-		<texturebg>-</texturebg>
+		<texturebg colordiffuse="30FFFFFF" border="8">kodirdil/overlays/progress-mid.png</texturebg>
 		<bottom>-5</bottom>
-		<midtexture colordiffuse="gray" border="8">kodirdil/overlays/progress-mid.png</midtexture>
+		<midtexture colordiffuse="90FFFFFF" border="8">kodirdil/overlays/progress-mid.png</midtexture>
 		<info>Player.ProgressCache</info>
 	</control>
 	<control type="progress">
@@ -243,6 +243,22 @@
 		<midtexture colordiffuse="white" border="8">kodirdil/overlays/progress-mid.png</midtexture>
 		<info>Player.Progress</info>
 	</control>
+	<!-- the bar: clickable / touchable and focusable (Up from the buttons, Left / Right seek, Down or Back return) -->
+	<control type="slider" id="402">
+		<height>40</height>
+		<width>width75percent</width>
+		<centerleft>50%</centerleft>
+		<bottom>-15</bottom>
+		<texturesliderbar colordiffuse="00FFFFFF">osd/progress/nub_bar.png</texturesliderbar>
+		<textureslidernib colordiffuse="white">osd/progress/nub_bar.png</textureslidernib>
+		<textureslidernibfocus colordiffuse="white">osd/progress/nub_bar.png</textureslidernibfocus>
+		<info>Player.Seekbar</info>
+		<action>seek</action>
+		<onup>false</onup>
+		<ondown>201</ondown>
+		<onback>201</onback>
+		<visible>Player.SeekEnabled</visible>
+	</control>
 	<!-- ####### -->
 
 	<!-- ####### -->
@@ -251,7 +267,8 @@
 	<left>10</left>
 	<height>55</height>
 	<bottom>-95</bottom>
-	<onup>false</onup>
+	<onup condition="Player.SeekEnabled">402</onup>
+	<onup condition="!Player.SeekEnabled">false</onup>
 	<ondown>ActivateWindow(1126)</ondown>
 	<onright>202</onright>
 	<itemlayout width="65" height="55">
@@ -528,7 +545,8 @@
 	<left>1530</left>
 	<height>55</height>
 	<bottom>-95</bottom>
-	<onup>false</onup>
+	<onup condition="Player.SeekEnabled">402</onup>
+	<onup condition="!Player.SeekEnabled">false</onup>
 	<ondown>ActivateWindow(1126)</ondown>
 	<onleft>201</onleft>
 	<itemlayout width="65" height="55">

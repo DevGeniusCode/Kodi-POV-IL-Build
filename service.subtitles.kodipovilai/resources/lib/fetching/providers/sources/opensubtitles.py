@@ -77,6 +77,14 @@ def _build_query_variants(video_data, lang_string):
 
     variants = []
 
+    # A manual search (fetching/manual.py): the text the viewer typed goes to OpenSubtitles as it is, first (it takes
+    # free text: a title, a release name, a group)
+    free_text = (video_data.get('query') or '').strip()
+    if free_text:
+        by_text = _base_search_query(lang_string)
+        by_text['query'] = free_text
+        variants.append(('free_text', by_text))
+
     if imdb_id.startswith('tt'):
         imdb_numeric = _clean_imdb_id(imdb_id)
         if media_type == 'tv':
