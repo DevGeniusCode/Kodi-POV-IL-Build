@@ -236,6 +236,26 @@ vc._enrich_without_metadata(ep2)
 check('standalone: an id found once is carried by the next episode of the show (no network)',
       ep2['imdb_id'] == 'tt777' and ep2['year'] == '2015' and ep2['episode'] == '6')
 
+# ---- 2. the service names the threads that outlive it (core/threads.py, 20 Nov 2026) ------------------------------------
+import threading
+
+from resources.lib.core import threads as svc_threads
+
+_lines = []
+svc_threads.kodi.log = lambda msg, level='INFO': _lines.append((level, msg))
+_stop = threading.Event()
+_t = threading.Thread(target=_stop.wait, name='subs-straggler-test', daemon=True)
+_t.start()
+_left = svc_threads.log_survivors(wait=0.2)
+check('threads: a thread that does not end is counted, daemon or not', _left == 1)
+check('threads: it is named, flagged daemon and shown with the frame it waits in',
+      len(_lines) == 1 and _lines[0][0] == 'WARNING' and '"subs-straggler-test" (daemon)' in _lines[0][1]
+      and 'threading.py' in _lines[0][1])
+_stop.set()
+_t.join(2)
+_lines[:] = []
+check('threads: silent when every thread ended', svc_threads.log_survivors(wait=0.2) == 0 and not _lines)
+
 print('')
 print('FAILED: %d' % len(FAILED) if FAILED else 'ALL CHECKS PASSED')
 sys.exit(1 if FAILED else 0)

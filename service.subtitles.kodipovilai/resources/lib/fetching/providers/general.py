@@ -103,7 +103,7 @@ class OverlayText:
 
 class Thread (threading.Thread):
    def __init__(self, target, *args):
-    super().__init__(target=target, args=args)
+    super().__init__(target=target, args=args, daemon=True)   # a provider search never holds the service's stop
    def run(self, *args):
       
       self._target(*self._args)

@@ -1472,21 +1472,32 @@ def sc_bg_translate_embedded(h):
     run_entry(h, _q(action='bg_translate_picker', link_b64=b64(link), source_id_b64='', selection_b64=''))
 
 
-@entry_scenario
-def sc_service_main(h):
-    """entry/service.main(): the start-up steps and migrations in their order, then the abort check"""
+def _service_main_scenario(h, abort_from_start):
     svc = importlib.import_module('resources.lib.entry.service')
     mig = importlib.import_module('resources.lib.entry.migrations')
+    state = {'abort': bool(abort_from_start)}
 
-    def rec(name, ret=None):
+    class Monitor(object):
+        def abortRequested(self):
+            return state['abort']
+
+        def waitForAbort(self, *a):
+            return state['abort']
+    xb = sys.modules['xbmc']
+    saved = xb.Monitor
+    xb.Monitor = Monitor
+
+    def rec(name, ret=None, then_abort=False):
         def f(*a, **k):
             h.call('step:' + name)
+            if then_abort:
+                state['abort'] = True
             return ret
         return f
     for nm in sorted(n for n in dir(mig) if n.startswith('maybe_')):
         fn = getattr(mig, nm)
         if callable(fn):
-            r = rec(nm)
+            r = rec(nm, then_abort=(nm == 'maybe_lower_chunk_lines'))
             patch_everywhere(fn, r)
             setattr(mig, nm, r)
     for nm in sorted(n for n in dir(svc) if n.startswith('_start_') or n in ('_prune_once', '_maybe_prewarm_engine',
@@ -1494,11 +1505,28 @@ def sc_service_main(h):
         r = rec(nm)
         setattr(svc, nm, r)
     svc._check_first_run_marker = rec('_check_first_run_marker', False)
-    svc.main()
-    h.note('results', 'main returned')
-    svc._check_first_run_marker = rec('_check_first_run_marker', True)
-    svc.main()
-    h.note('results', 'main returned (first-run marker)')
+    try:
+        svc.main()
+        h.note('results', 'main returned')
+        svc._check_first_run_marker = rec('_check_first_run_marker', True)
+        svc.main()
+        h.note('results', 'main returned (first-run marker)')
+    finally:
+        xb.Monitor = saved
+
+
+@entry_scenario
+def sc_service_main(h):
+    """entry/service.main(): the start-up steps and migrations in their order, then the abort check (Kodi's abort arrives with the
+    last migration)"""
+    _service_main_scenario(h, False)
+
+
+@entry_scenario
+def sc_service_main_abort(h):
+    """entry/service.main() when Kodi's abort is already there (it is about to replace the add-on): the drainers start, the start-up
+    migrations do not run (20 Nov 2026: a service still migrating settings held Kodi's stop)"""
+    _service_main_scenario(h, True)
 
 
 # ------------------------------------------------------------------------------------------- runner

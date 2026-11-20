@@ -501,6 +501,16 @@ def _start_shared_sdh_refresh(monitor):
 
 
 def main():
+    """The service. However it ends (Kodi's abort, an early return, an error), the threads that are still alive are named in the log
+    (core/threads.py): Kodi waits for all of them and kills the script after 5 s."""
+    try:
+        _run()
+    finally:
+        from resources.lib.core import threads
+        threads.log_survivors()
+
+
+def _run():
     if xbmc is None:
         return
 
@@ -544,7 +554,11 @@ def main():
     # Initial prune.
     _prune_once()
 
+    # An abort (Kodi is about to replace this add-on, or is closing) ends the start-up pass between two steps: a service that is
+    # still migrating settings when Kodi stops it holds the stop for the whole pass.
     for step in BEFORE_PREWARM:
+        if monitor.abortRequested():
+            return
         step()
 
 
@@ -553,6 +567,8 @@ def main():
     _maybe_prewarm_engine()
 
     for step in AFTER_PREWARM:
+        if monitor.abortRequested():
+            return
         step()
 
     if monitor.abortRequested():
