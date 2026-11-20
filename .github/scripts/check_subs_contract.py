@@ -418,6 +418,15 @@ if '--static' not in sys.argv:
           % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
           bad[:3] or (p.stderr or '')[-300:])
 
+    # the chooser window's threading rule (21 Nov 2026, after the Kodi crash of 20 Nov 2026): one owner thread makes every ListItem and
+    # every control call, the background searches only produce plain data; show() + a Monitor loop instead of doModal() (fake Kodi runtime)
+    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_chooser_threads.py')],
+                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
+    check('unit_chooser_threads: ListItems and control calls only on the window thread, Back / Esc / abort end the loop (%d checks)'
+          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
+          bad[:3] or (p.stderr or '')[-300:])
+
     # the provenance plumbing (Provenance P1, 20 Nov 2026): provider row metadata -> engine tuple -> candidate '_meta', on trimmed live captures
     p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_provenance_meta.py')],
                        capture_output=True, text=True, encoding='utf-8', errors='replace')

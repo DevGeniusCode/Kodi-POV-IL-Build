@@ -13,6 +13,7 @@
 # subtitle selector instead of a dead/black-screen button.
 
 import os
+import queue
 
 from resources.lib.core import provenance_allowlist
 from resources.lib.ui import chooser_rows
@@ -799,6 +800,37 @@ def show():
             pass
 
 
+# The chooser window is served by ONE thread: the script's own (the one that ran `RunScript(... action=choose_subs)`).
+# Kodi runs the window's callbacks (onInit / onAction / onClick) on that thread only, through
+# RetardedAsyncCallbackHandler::makePendingCalls(), and a Kodi 21.3 crash (access violation at 0x726574, 20 Nov 2026,
+# kodi_crashlog 203023) was a queued callback dispatched on memory that a `xbmcgui.ListItem` had reused, at the moment a
+# background thread rebuilt list 100 (369 ListItems + reset + addItems). So: every xbmcgui.ListItem, every control call
+# (reset / addItems / selectItem / setFocusId) and every window property is made on the owner thread; the background
+# threads only produce plain Python data and hand it over with `_ChooserXML._post`.
+_OWNER_TICK = 0.05   # seconds: `Monitor.waitForAbort` runs the window's pending callbacks after each slice (<= 100 ms)
+
+
+def _run_owner_loop(win, monitor):
+    """Show `win` and serve it on THIS thread until it is closed or Kodi aborts. It replaces `win.doModal()`, whose
+    wait loop blocks the owner thread inside Kodi, so nothing of ours could run there; `show()` is the same call
+    `doModal()` makes first, and `waitForAbort` runs the same `MakePendingCalls()` between its slices.
+    Closing: `win.close()` (Back / Esc reach it through `onAction`, a pick through `_deliver_pick`) sets `win.closed`, and the
+    loop ends; Kodi's abort ends it too and closes the window (what `doModal()` does when the application quits)."""
+    win.show()
+    try:
+        while not win.closed:
+            if monitor.waitForAbort(_OWNER_TICK):
+                break                      # Kodi is stopping
+            if not win.closed:
+                win.pump()
+    finally:
+        if not win.closed:
+            try:
+                win.close()
+            except Exception as e:
+                _log('chooser: closing at the end failed: {0}'.format(e), level='WARNING')
+
+
 def _show():
     if xbmc is None:
         return False
@@ -882,11 +914,47 @@ def _show():
                 except Exception as e:
                     _log('xml onInit failed: {0}'.format(e), level='WARNING')
 
-            def _fill(self, items=None):
-                with self.lock:
-                    self._redraw(self.items if items is None else items)
+            def _post(self, job):
+                """Any thread: queue `job` to run on the window's owner thread (see pump)."""
+                self.inbox.put(job)
 
-            def _redraw(self, items):
+            def pump(self):
+                """Owner thread only: run what the background threads posted. A job posted for a window that was closed
+                meanwhile is dropped."""
+                while True:
+                    try:
+                        job = self.inbox.get_nowait()
+                    except queue.Empty:
+                        return
+                    if self.closed:
+                        continue
+                    try:
+                        job()
+                    except Exception as e:
+                        _log('chooser job failed: {0}'.format(e), level='WARNING')
+
+            def _rows(self, items, want):
+                """PURE, any thread: the row dicts (chooser_rows) of `items`. No xbmcgui object is made here."""
+                rows = []
+                for c in items:
+                    # One column per field (chooser_rows): the colours are baked
+                    # into the property text (BBCode) because a per-row
+                    # <textcolor>$INFO[...]</textcolor> is unreliable in Kodi.
+                    if c.get('_placeholder'):
+                        rows.append(chooser_rows.placeholder(c['filename']))
+                    else:
+                        rows.append(chooser_rows.build(
+                            c, getattr(self, 'playing', ''), want=want,
+                            ai=getattr(self, 'ai_ctx', None), prov=getattr(self, 'prov_allow', None)))
+                return rows
+
+            def _fill(self, items=None):
+                """Owner thread: show `items` (the window's own list by default)."""
+                items = self.items if items is None else items
+                self._apply(items, self._rows(items, self.want))
+
+            def _apply(self, items, rows):
+                """OWNER THREAD ONLY: the one place that makes xbmcgui.ListItem objects and touches list 100."""
                 lst = self.getControl(100)
                 pos = lst.getSelectedPosition() if lst.size() else -1
                 was = (self.items[pos].get('link')
@@ -894,33 +962,25 @@ def _show():
                 # the position counter of the header ("20 / 369") already says how many rows there are: this label only
                 # tells that more are still coming
                 self.setProperty('subs.count', 'מחפש כתוביות נוספות…' if self.pending else '')
-                rows = []
-                for c in items:
-                    # One column per field (chooser_rows): the colours are baked
-                    # into the property text (BBCode) because a per-row
-                    # <textcolor>$INFO[...]</textcolor> is unreliable in Kodi.
-                    if c.get('_placeholder'):
-                        row = chooser_rows.placeholder(c['filename'])
-                    else:
-                        row = chooser_rows.build(
-                            c, getattr(self, 'playing', ''), want=getattr(self, 'want', None),
-                            ai=getattr(self, 'ai_ctx', None), prov=getattr(self, 'prov_allow', None))
+                listitems = []
+                for row in rows:
                     li = xbmcgui.ListItem(row['label'])
                     if row['flag']:
                         li.setArt({'thumb': row['flag']})
                     for key, value in row['props'].items():
                         li.setProperty(key, value)
-                    rows.append(li)
+                    listitems.append(li)
                 lst.reset()
-                lst.addItems(rows)
+                lst.addItems(listitems)
                 self.items = items
                 keep = next((i for i, c in enumerate(items)
                              if was and c.get('link') == was), 0)
-                if 0 < keep < len(rows):
+                if 0 < keep < len(listitems):
                     lst.selectItem(keep)
 
             def _complete(self):
-                """The full list (provider search + pool), into the open window."""
+                """The full list (provider search + pool). BACKGROUND THREAD: it searches and builds the row dicts, then
+                posts them to the owner thread; it never touches the window."""
                 import time
                 t = time.monotonic()
                 try:
@@ -928,32 +988,47 @@ def _show():
                 except Exception as e:
                     _log('chooser background list failed: {0}'.format(e),
                          level='WARNING')
-                    items = [c for c in (self.base['items'] if self.manual and self.base else self.items)
-                             if not c.get('_placeholder')]
-                _log('chooser: full list {0} candidate(s) after {1:.1f}s more'.format(
-                    len(items), time.monotonic() - t))
+                    items = None          # the owner thread falls back to the rows already on screen
+                if items is not None:
+                    _log('chooser: full list {0} candidate(s) after {1:.1f}s more'.format(
+                        len(items), time.monotonic() - t))
                 if self.closed:
                     return
-                if not items:
-                    items = [{'filename': 'לא נמצאו כתוביות לכותר הזה',
-                              'language': '', 'link': '', '_placeholder': True}]
-                try:
-                    # pending and the rows change together, under the click lock
-                    with self.lock:
+                rows = None
+                if items is not None:
+                    if not items:
+                        items = [{'filename': 'לא נמצאו כתוביות לכותר הזה',
+                                  'language': '', 'link': '', '_placeholder': True}]
+                    try:
+                        rows = self._rows(items, [])     # the automatic list is never a manual one: no release words
+                    except Exception as e:
+                        _log('chooser rows failed: {0}'.format(e), level='WARNING')
+
+                def job():
+                    # owner thread: `pending` and the rows change together
+                    shown = items
+                    if shown is None:
+                        shown = [c for c in (self.base['items'] if self.manual and self.base else self.items)
+                                 if not c.get('_placeholder')]
+                        if not shown:
+                            shown = [{'filename': 'לא נמצאו כתוביות לכותר הזה',
+                                      'language': '', 'link': '', '_placeholder': True}]
+                    try:
                         if self.manual:
                             # a manual search is on screen: the automatic list waits behind "חזרה לרשימה"
-                            self.base = {'items': items, 'pending': False,
+                            self.base = {'items': shown, 'pending': False,
                                          'head': (self.base or {}).get('head', '')}
                         else:
                             self.pending = False
-                            self._redraw(items)
-                except Exception as e:
-                    _log('chooser refresh failed: {0}'.format(e), level='WARNING')
+                            self._apply(shown, rows if rows is not None else self._rows(shown, self.want))
+                    except Exception as e:
+                        _log('chooser refresh failed: {0}'.format(e), level='WARNING')
+                self._post(job)
 
             def _start_manual(self):
                 """Button 202 (VLSub style): ask for ONE free-text query (pre-filled with the playing release), search by
                 it and show the rows in this window. The playing video's `info` (self.info) stays the one a pick is
-                delivered with."""
+                delivered with. Owner thread (onClick)."""
                 if self.manual_busy:
                     return
                 from resources.lib.fetching import manual
@@ -962,19 +1037,19 @@ def _show():
                 if not query:
                     return
                 search_info = manual.build_info(self.info, query)
-                with self.lock:
-                    self.manual_gen += 1
-                    gen = self.manual_gen
-                    self.manual_busy = True
-                    self.setProperty('subs.count', 'מחפש כתוביות…')
+                self.manual_gen += 1
+                gen = self.manual_gen
+                self.manual_busy = True
+                self.setProperty('subs.count', 'מחפש כתוביות…')
                 import threading
                 t = threading.Thread(target=self._run_manual, args=(gen, search_info))
                 t.daemon = True
                 t.start()
 
             def _run_manual(self, gen, search_info):
-                """The manual search, off the window thread: the typed title's IMDb id, then the normal list. A result
-                of a search that was replaced meanwhile (another manual search, or "חזרה לרשימה") is dropped."""
+                """The manual search. BACKGROUND THREAD: the typed title's IMDb id, then the normal list and its row dicts,
+                posted to the owner thread; it never touches the window. A result of a search that was replaced meanwhile
+                (another manual search, or "חזרה לרשימה") is dropped there."""
                 from resources.lib.fetching import manual
                 items = []
                 want = []
@@ -994,13 +1069,23 @@ def _show():
                         manual.head(search_info), len(items), full))
                 except Exception as e:
                     _log('chooser: manual search failed: {0}'.format(e), level='WARNING')
+                rows = None
+                head = ''
                 try:
-                    with self.lock:
-                        if self.closed or self.manual_gen != gen:
+                    if not items:
+                        items = [{'filename': 'לא נמצאו כתוביות לחיפוש הזה', 'language': '',
+                                  'link': '', '_placeholder': True}]
+                    rows = self._rows(items, want)
+                    head = manual.head(search_info)
+                except Exception as e:
+                    _log('chooser manual rows failed: {0}'.format(e), level='WARNING')
+                    rows = None
+
+                def job():
+                    # owner thread
+                    try:
+                        if rows is None or self.closed or self.manual_gen != gen:
                             return
-                        if not items:
-                            items = [{'filename': 'לא נמצאו כתוביות לחיפוש הזה', 'language': '',
-                                      'link': '', '_placeholder': True}]
                         if not self.manual:
                             self.base = {'items': self.items, 'pending': self.pending,
                                          'head': self.getProperty('subs.head')}
@@ -1008,32 +1093,32 @@ def _show():
                         self.want = want
                         self.pending = False
                         self.setProperty('subs.manual', '1')
-                        self.setProperty('subs.head', manual.head(search_info))
-                        self._redraw(items)
-                    try:
-                        self.setFocusId(100)
-                    except Exception:
-                        pass
-                except Exception as e:
-                    _log('chooser manual refresh failed: {0}'.format(e), level='WARNING')
-                finally:
-                    if self.manual_gen == gen:
-                        self.manual_busy = False
+                        self.setProperty('subs.head', head)
+                        self._apply(items, rows)
+                        try:
+                            self.setFocusId(100)
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        _log('chooser manual refresh failed: {0}'.format(e), level='WARNING')
+                    finally:
+                        if self.manual_gen == gen:
+                            self.manual_busy = False
+                self._post(job)
 
             def _back_to_list(self):
-                """Button 203 ("חזרה לרשימה"): leave the manual results, show the automatic list again."""
-                with self.lock:
-                    self.manual_gen += 1      # a manual search still running is dropped
-                    self.manual_busy = False
-                    base, self.base = self.base, None
-                    if not self.manual or not base:
-                        return
-                    self.manual = False
-                    self.want = []
-                    self.pending = bool(base.get('pending'))
-                    self.clearProperty('subs.manual')
-                    self.setProperty('subs.head', base.get('head') or '')
-                    self._redraw(base['items'])
+                """Button 203 ("חזרה לרשימה"): leave the manual results, show the automatic list again. Owner thread."""
+                self.manual_gen += 1      # a manual search still running is dropped
+                self.manual_busy = False
+                base, self.base = self.base, None
+                if not self.manual or not base:
+                    return
+                self.manual = False
+                self.want = []
+                self.pending = bool(base.get('pending'))
+                self.clearProperty('subs.manual')
+                self.setProperty('subs.head', base.get('head') or '')
+                self._fill(base['items'])
                 try:
                     self.setFocusId(100)
                 except Exception:
@@ -1065,15 +1150,10 @@ def _show():
                         self._back_to_list()
                         return
                     if controlId == 100:
-                        if not self.lock.acquire(timeout=2):
-                            return
-                        try:
-                            i = self.getControl(100).getSelectedPosition()
-                            item = (self.items[i] if i is not None
-                                    and 0 <= i < len(self.items) else None)
-                            pending = self.pending
-                        finally:
-                            self.lock.release()
+                        i = self.getControl(100).getSelectedPosition()
+                        item = (self.items[i] if i is not None
+                                and 0 <= i < len(self.items) else None)
+                        pending = self.pending
                         if item is None or item.get('_placeholder'):
                             return
                         if pending and _is_ai_row(item):
@@ -1097,14 +1177,13 @@ def _show():
         addon_path = xbmcaddon.Addon(ADDON_ID).getAddonInfo('path')
         w = _ChooserXML('script.moransubs.chooser.xml', addon_path,
                         'Default', '1080i')
-        import threading
         w.info = info
         w.playing = ''
         w.items = items
         w.pending = pending
         w.started = False
-        w.lock = threading.Lock()
-        w.doModal()
+        w.inbox = queue.Queue()
+        _run_owner_loop(w, xbmc.Monitor())
         del w
         _resume_after_chooser(_paused)
         return True
