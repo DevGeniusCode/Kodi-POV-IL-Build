@@ -58,6 +58,9 @@ RECENT_PROP = 'moransubs.engine_recent'
 # Searches stopped at max_search_time, apart: the picker never reuses them.
 CUT_PROP = 'moransubs.engine_recent_cut'
 _RECENT_KEEP = 3
+# The window property is held under the GUI lock: an all-language search can return hundreds of rows, so an
+# entry keeps only the first (best-ranked) _RECENT_MAX_CANDIDATES. The 24 h disk list is not capped.
+_RECENT_MAX_CANDIDATES = 80
 
 
 def _release_key(info):
@@ -94,7 +97,7 @@ def recent_put(info, out, prop=RECENT_PROP):
         except Exception:
             continue          # a malformed entry is simply dropped
     rows.append({'key': key, 't': now, 'rel': _release_key(info),
-                 'out': out or []})
+                 'out': list(out or [])[:_RECENT_MAX_CANDIDATES]})
     try:
         import xbmcgui
         xbmcgui.Window(10000).setProperty(prop, json.dumps(

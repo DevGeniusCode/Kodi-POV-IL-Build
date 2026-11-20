@@ -8,7 +8,7 @@ from resources.lib.fetching.providers import cache
 from resources.lib.fetching.providers import meta as provider_meta
 from resources.lib.fetching.providers.extract_sub import extract
 import urllib.parse
-from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT, ProviderHttp
+from resources.lib.fetching.providers.general import request_timeout, ProviderHttp
 _http = ProviderHttp()
 #########################################
 
@@ -135,7 +135,7 @@ def login_to_ktuvit():
     data = f'{{"request":{{"Email":"{email}","Password":"{password}"}}}}'
 
     # Send login request and get cookies
-    ktuvit_api_response = _http.post(LOGIN_URL, headers=headers, data=data, timeout=DEFAULT_REQUEST_TIMEOUT).cookies
+    ktuvit_api_response = _http.post(LOGIN_URL, headers=headers, data=data, timeout=request_timeout()).cookies
 
     # Create dictionary of cookies with names as keys and values as values
     ktuvit_login_cookies_dict = {}
@@ -183,7 +183,7 @@ def search_title_in_ktuvit(title, media_type):
     }
 
     try:
-        ktuvit_search_response = _http.post(SEARCH_URL, headers=headers, json=data, timeout=DEFAULT_REQUEST_TIMEOUT).json()
+        ktuvit_search_response = _http.post(SEARCH_URL, headers=headers, json=data, timeout=request_timeout()).json()
         ktuvit_search_page_results = json.loads(ktuvit_search_response['d'])['Films']
         return ktuvit_search_page_results
     except Exception as e:
@@ -288,7 +288,7 @@ def search_subtitles_in_ktuvit(ktuvit_login_cookie, media_type, Ktuvit_Page_ID, 
 
     # Search subtitles in Ktuvit and fetch response
     ktuvit_search_subtitles_request_url = f"{MOVIE_INFO_URL}?ID={Ktuvit_Page_ID}" if media_type == 'movie' else EPISODE_INFO_URL
-    ktuvit_subtitles_search_response = _http.get(ktuvit_search_subtitles_request_url, headers=headers, params=params, cookies=ktuvit_login_cookie, timeout=DEFAULT_REQUEST_TIMEOUT).content
+    ktuvit_subtitles_search_response = _http.get(ktuvit_search_subtitles_request_url, headers=headers, params=params, cookies=ktuvit_login_cookie, timeout=request_timeout()).content
     log.warning(f"DEBUG | [KTUVIT] | ktuvit_search_subtitles_request_url={ktuvit_search_subtitles_request_url} | params={params}")
     
     return ktuvit_subtitles_search_response
@@ -415,7 +415,7 @@ def download(download_data,MySubFolder):
             }
         
         # Send subtitle download request
-        post_response = _http.post(REQUEST_DOWNLOAD_IDENTIFIER_URL, headers=headers, data=data, cookies=ktuvit_login_cookie, timeout=DEFAULT_REQUEST_TIMEOUT).json()
+        post_response = _http.post(REQUEST_DOWNLOAD_IDENTIFIER_URL, headers=headers, data=data, cookies=ktuvit_login_cookie, timeout=request_timeout()).json()
         xbmc.sleep(100)  # matches DarkSubs exactly
         
         # Extract DownloadIdentifier from response
@@ -441,7 +441,7 @@ def download(download_data,MySubFolder):
         # Send file download request
     
         log.warning(f"DEBUG | [KTUVIT] | Number of try: {count} | Sending DownloadFile request...")
-        response = _http.get(DOWNLOAD_SUB_URL, headers=headers, params=params, cookies=ktuvit_login_cookie, timeout=DEFAULT_REQUEST_TIMEOUT)
+        response = _http.get(DOWNLOAD_SUB_URL, headers=headers, params=params, cookies=ktuvit_login_cookie, timeout=request_timeout())
         # Throw an error for bad status codes
         response.raise_for_status()
        

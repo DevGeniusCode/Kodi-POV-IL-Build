@@ -52,8 +52,7 @@ def handle_engine_test(_params):
         lines.append('')
         lines.append('אין מטא-דאטה מהנגן. הרץ בזמן שסרט/פרק מתנגן.')
 
-    # Populate the engine's internal settings before importing it (general.py
-    # reads max_search_time at module load -> would crash on '').
+    # Populate the engine's internal settings before importing it.
     try:
         bridge.ensure_engine_settings()
     except Exception:

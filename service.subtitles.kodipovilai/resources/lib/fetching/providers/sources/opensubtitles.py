@@ -8,7 +8,7 @@ from resources.lib.fetching.providers import log
 import requests,json
 import urllib
 from resources.lib.fetching.providers.extract_sub import extract
-from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT, ProviderHttp
+from resources.lib.fetching.providers.general import request_timeout, ProviderHttp
 _http = ProviderHttp()
 from resources.lib.fetching.providers import cache
 from resources.lib.fetching.providers import meta as provider_meta
@@ -143,7 +143,7 @@ def _search_with_key(headers, querystring):
     response = None
     for attempt_number in range(REQUEST_MAX_RETRIES_NUMBER):
         try:
-            response = _http.get(OPS_API_SEARCH_URL, headers=headers, params=querystring, timeout=DEFAULT_REQUEST_TIMEOUT)
+            response = _http.get(OPS_API_SEARCH_URL, headers=headers, params=querystring, timeout=request_timeout())
             if response.status_code in (406, 503):
                 log.warning(f"DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles key unavailable ({response.status_code}); trying next API key.")
                 return None, 'key_unavailable'
@@ -159,7 +159,7 @@ def _search_with_key(headers, querystring):
             if total_pages > 1:
                 for _page in range(2, total_pages + 1):
                     querystring['page'] = _page
-                    response = _http.get(OPS_API_SEARCH_URL, headers=headers, params=querystring, timeout=DEFAULT_REQUEST_TIMEOUT)
+                    response = _http.get(OPS_API_SEARCH_URL, headers=headers, params=querystring, timeout=request_timeout())
                     if response.status_code in (406, 503):
                         log.warning(f"DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles pagination key unavailable ({response.status_code}).")
                         return search_data, 'partial'
@@ -397,7 +397,7 @@ def download(download_data,MySubFolder):
             try:
                 log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles | Get sub URL download |  Starting retry_number {retry_number}.")
                 log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles payload: {repr(payload)}")
-                response = _http.post(OPS_API_DOWNLOAD_URL, json=payload, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
+                response = _http.post(OPS_API_DOWNLOAD_URL, json=payload, headers=headers, timeout=request_timeout())
                 log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles response.status_code: {repr(response.status_code)}")
                 
                 if response.status_code == 406 and not _is_quota_406(response):
@@ -443,7 +443,7 @@ def download(download_data,MySubFolder):
     for attempt_number in range(1, REQUEST_MAX_RETRIES_NUMBER + 1):
         log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles | Download sub file | Starting attempt_number {attempt_number}.")
         try:
-            sub_download_response = _http.get(subtitle_download_url, timeout=DEFAULT_REQUEST_TIMEOUT)
+            sub_download_response = _http.get(subtitle_download_url, timeout=request_timeout())
             log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles DownloadSubtitles sub_download_response: {sub_download_response.status_code}")
             sub_download_response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
 
@@ -468,7 +468,7 @@ def download(download_data,MySubFolder):
 
 def c_get_os_api_keys_v2():
     try:
-        response = _http.get(OS_API_KEYS_URL, timeout=DEFAULT_REQUEST_TIMEOUT)
+        response = _http.get(OS_API_KEYS_URL, timeout=request_timeout())
         response.raise_for_status()
         return response.json()
     except Exception as e:
@@ -560,7 +560,7 @@ def _is_quota_406(response):
                 # "Api-Key": OS_API_KEY_VALUE
             # }
 
-            # response = _http.post(OPS_API_LOGIN_URL, json=payload, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
+            # response = _http.post(OPS_API_LOGIN_URL, json=payload, headers=headers, timeout=request_timeout())
             # response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
 
             # if response.status_code == 200:

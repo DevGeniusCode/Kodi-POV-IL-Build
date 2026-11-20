@@ -7,7 +7,7 @@ from resources.lib.fetching.providers import log
 import json
 import urllib
 from resources.lib.fetching.providers.extract_sub import extract
-from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT, ProviderHttp
+from resources.lib.fetching.providers.general import request_timeout, ProviderHttp
 _http = ProviderHttp()
 import xbmcvfs
 import re
@@ -130,7 +130,7 @@ def get_subs(video_data, all_lang_override=False):
     
     try:
         # Example: https://yifysubtitles.ch/movie-imdb/tt15239678
-        response = _http.get(f"{YIFY_SEARCH_URL}/{imdb_id}", timeout=DEFAULT_REQUEST_TIMEOUT)
+        response = _http.get(f"{YIFY_SEARCH_URL}/{imdb_id}", timeout=request_timeout())
         response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
         # Get the HTML content
         html_content = response.text
@@ -220,7 +220,7 @@ def download(download_data,MySubFolder):
         'Accept': 'application/zip,application/octet-stream,*/*',
     }
     try:
-        sub_download_response = _http.get(subtitle_download_url, headers=_dl_headers, timeout=DEFAULT_REQUEST_TIMEOUT)
+        sub_download_response = _http.get(subtitle_download_url, headers=_dl_headers, timeout=request_timeout())
         log.warning(f"DEBUG | [YIFY] | DownloadSubtitles sub_download_response: {sub_download_response.status_code}")
         sub_download_response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
 

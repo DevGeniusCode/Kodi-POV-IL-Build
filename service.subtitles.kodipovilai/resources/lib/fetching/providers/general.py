@@ -28,7 +28,15 @@ progress_msg=0
 global break_all
 break_all=False
 with_dp=True
-DEFAULT_REQUEST_TIMEOUT = int(xbmcaddon.Addon().getSetting('max_search_time') or 10)
+
+
+def request_timeout():
+    """max_search_time in seconds, read at each call (a changed setting applies at once, also under reuselanguageinvoker);
+    10 when it is empty or not a number."""
+    try:
+        return int(xbmcaddon.Addon().getSetting('max_search_time') or 10)
+    except (TypeError, ValueError):
+        return 10
 
 
 class _NoStoreCookies(DefaultCookiePolicy):
@@ -381,7 +389,7 @@ def manual_search_for_imdb_id(video_data):
     search_for_tmdb_id_url = f'{TMDB_API_BASE_URL}search/{media_type}'
 
     try:
-        response = _tmdb_http.get(search_for_tmdb_id_url, params=params, timeout=DEFAULT_REQUEST_TIMEOUT)
+        response = _tmdb_http.get(search_for_tmdb_id_url, params=params, timeout=request_timeout())
         log.warning(f"DEBUG | get_video_data | manual_search_for_imdb_id | Full search_for_tmdb_id_url: {response.request.url}")
         data = response.json()
                 
@@ -423,7 +431,7 @@ def manual_search_for_imdb_id(video_data):
                 'language': 'en'
             }
             
-            response = _tmdb_http.get(search_for_imdb_id_url, params=params, timeout=DEFAULT_REQUEST_TIMEOUT)
+            response = _tmdb_http.get(search_for_imdb_id_url, params=params, timeout=request_timeout())
             log.warning(f"DEBUG | get_video_data | manual_search_for_imdb_id | Full search_for_imdb_id_url: {response.request.url}")
             data = response.json()
             

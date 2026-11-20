@@ -109,8 +109,8 @@ _ENGINE_DEFAULTS_VERSION = '5'
 
 
 def ensure_engine_settings():
-    """Populate the engine's internal settings. MUST run before the engine is
-    imported (general.py reads max_search_time at module load). Writes empty
+    """Populate the engine's internal settings. Runs before the engine is
+    imported. Writes empty
     settings always; force-rewrites everything once when the defaults version
     changes (so existing installs pick up new defaults like all_lang)."""
     try:

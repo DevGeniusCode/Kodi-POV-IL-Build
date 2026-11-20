@@ -1,3 +1,6 @@
+0.5.14
+- check.py check_repos: the broken-repositories list imports the gui window module (it was an undefined name, a NameError after a repository scan with failures).
+
 0.5.13
 - Update window: before the mode goes to ON the window writes special://temp/addon_update_window.flag (refreshed every 2 s, removed when the window closes, a leftover removed at start) and waits 1.5 s. The services that poll the GUI (FENtastic Helper 0.6.24, subtitles 0.3.107) make no GUI call while the file is fresh, so when Kodi stops one of them to update it, it leaves at once. Why (Kodi 21.3 log, 20 Nov 2026, 19:10:31): Kodi stopped the FENtastic helper 0.6.22 to update it while its loop was inside a GUI call; it "didn't stop in 5 seconds", its interpreter never ended, the GUI never answered again (a getCondVisibility of the new startup.py never returned, the toast never closed) and the install of the active skin that followed hung in UnloadSkin until Kodi was closed. A file, not a window property: reading a property takes the GUI lock. provisioning/update_mode.py (PARK_FILE_NAME, PARK_SECONDS, beat / end_window / settle_at_start), update_window.py. Not tested in Kodi.
 

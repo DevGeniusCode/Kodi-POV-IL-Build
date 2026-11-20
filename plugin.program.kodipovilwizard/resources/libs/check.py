@@ -285,6 +285,7 @@ def check_sources():
 def check_repos():
     from resources.libs.common import logging
     from resources.libs.common import tools
+    from resources.libs.gui import window
 
     progress_dialog = xbmcgui.DialogProgress()
     

@@ -10,7 +10,7 @@ import ssl,urllib3
 import urllib,xbmcvfs
 import urllib.parse
 from resources.lib.fetching.providers.extract_sub import extract
-from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT
+from resources.lib.fetching.providers.general import request_timeout
 from resources.lib.fetching.providers.general import extract_season_episode_numbers
 # SUBSCENE
 from resources.lib.fetching.providers import num2ordinal
@@ -142,7 +142,7 @@ def __retry(request, response, next, retry=0):
 
 def execute_request(request, session=None):
      
-    request.setdefault('timeout', DEFAULT_REQUEST_TIMEOUT)
+    request.setdefault('timeout', request_timeout())
 
     next = request.pop('next', None)
 
