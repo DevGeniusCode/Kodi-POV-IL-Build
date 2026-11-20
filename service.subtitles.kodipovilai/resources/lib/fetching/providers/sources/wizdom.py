@@ -5,11 +5,12 @@ global_var=[]
 from resources.lib.fetching.providers import log
 from resources.lib.fetching.providers import cache
 from resources.lib.fetching.providers import meta as provider_meta
-import requests,json
+import json
 import xbmcvfs
 import shutil,os
 from resources.lib.fetching.providers.extract_sub import extract
-from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT
+from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT, ProviderHttp
+_http = ProviderHttp()
 import urllib
 import urllib.parse
 import urllib.request
@@ -36,7 +37,7 @@ def _releases_index(imdb_id):
     # 3-60 KB, 257 KB for a show of 1,300 subtitles). It raises on any failure on purpose: cache.get keeps
     # whatever a call returns, an empty dict included, for the whole 24 h, and returns None (keeping nothing)
     # when the call raises.
-    response = requests.get(f"{WIZDOM_API_RELEASES_URL}/{imdb_id}", timeout=DEFAULT_REQUEST_TIMEOUT)
+    response = _http.get(f"{WIZDOM_API_RELEASES_URL}/{imdb_id}", timeout=DEFAULT_REQUEST_TIMEOUT)
     response.raise_for_status()
     return provider_meta.wizdom_index(response.json())
 
@@ -68,7 +69,7 @@ def get_subs(video_data):
     
 
     try:
-        response = requests.get(WIZDOM_API_SEARCH_URL, params=querystring, timeout=DEFAULT_REQUEST_TIMEOUT)
+        response = _http.get(WIZDOM_API_SEARCH_URL, params=querystring, timeout=DEFAULT_REQUEST_TIMEOUT)
         response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
         wizdom_response_json = response.json()
         log.warning(f"DEBUG | [Wizdom] | Wizdom SearchSubtitles | URL: {response.url} | Status Code: {response.status_code} | wizdom_response_json={wizdom_response_json}")

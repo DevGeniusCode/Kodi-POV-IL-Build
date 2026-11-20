@@ -3,11 +3,12 @@ import xbmcaddon,xbmcvfs,os,xbmc
 global global_var,site_id,sub_color#global
 global_var=[]
 from resources.lib.fetching.providers import log
-import requests,json,shutil
+import json,shutil
 from resources.lib.fetching.providers.extract_sub import g_extract
 import urllib.parse
 import struct
-from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT
+from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT, ProviderHttp
+_http = ProviderHttp()
 #########################################
 
 Addon=xbmcaddon.Addon()
@@ -95,7 +96,7 @@ def get_subs(video_data):
     data={'AppID':'BASPlayer v3'}
     
     try:
-        response = requests.post(BSPLAYER_API_LOGIN_URL, headers=headers, data=data, timeout=DEFAULT_REQUEST_TIMEOUT)
+        response = _http.post(BSPLAYER_API_LOGIN_URL, headers=headers, data=data, timeout=DEFAULT_REQUEST_TIMEOUT)
         response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
         bsplayer_login_response_json = response.json()
         log.warning(f"DEBUG | [BSPlayer] | BSPlayer SearchSubtitles | URL: {response.url} | Status Code: {response.status_code} | bsplayer_login_response_json={bsplayer_login_response_json}")
@@ -110,7 +111,7 @@ def get_subs(video_data):
            }
     
     try:
-        response = requests.post(BSPLAYER_API_SEARCH_URL, headers=headers, data=data, timeout=DEFAULT_REQUEST_TIMEOUT)
+        response = _http.post(BSPLAYER_API_SEARCH_URL, headers=headers, data=data, timeout=DEFAULT_REQUEST_TIMEOUT)
         response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
         bsplayer_search_response_json = response.json()
         log.warning(f"DEBUG | [BSPlayer] | BSPlayer SearchSubtitles | URL: {response.url} | Status Code: {response.status_code} | bsplayer_search_response_json={bsplayer_search_response_json}")
@@ -174,7 +175,7 @@ def download(download_data,MySubFolder):
         'Connection': 'close',
     }
     
-    response = requests.get(url, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
+    response = _http.get(url, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
     
 
     archive_file = os.path.join(MyTmp, 'bs_Sub.xx')

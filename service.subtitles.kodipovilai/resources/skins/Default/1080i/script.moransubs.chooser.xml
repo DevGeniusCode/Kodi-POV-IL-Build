@@ -19,15 +19,17 @@
      Positive only: a row without evidence has no badge and no "unverified" text.
      LAYOUT (1920 x 1080, margins 24 / 16): header row 1 = brand | the searching status (window property subs.count,
      centred) | the position counter; header row 2 = the playing release (subs.head) across the whole left side. Under it,
-     two separate dark cards on the left (the list, the colour legend), the button bar straight on the background (no card)
-     and one card on the right (the info panel, flush with the bottom of the button bar). The list is 8.5 rows high on purpose: the half row at the
+     two separate dark cards on the left (the list, the colour legend, which ends left of the rightmost button column), the
+     button bar straight on the background (no card) and one card on the right (the info panel, flush with the bottom of the button bar). The list is 8.5 rows high on purpose: the half row at the
      bottom is the scroll hint.
      Ids: list 100, manual search 202, back to the automatic list 203 (only while a manual result is shown: window
-     property subs.manual), cancel translation 204, subtitle settings 205, cancel the automatic sync 206 (only while
-     the current subtitle was synced automatically: window property subs.sync.mode), close 201. Button bar (left to
-     right): 205 204 202 201; 203 and 206 are the two conditional buttons, on the right of the legend card (one row above
-     the bar). Left / right walk the bar, up from 202 / 201 reaches 203 / 206 (a hidden one is skipped), every other
-     button goes up to the list. AUTO-SYNC BADGE (header, over the info panel): "סונכרנה אוטומטית" + the applied shift,
+     property subs.manual; header row 2, right end), stop the translation process 204 (labelled "עצור תהליך תרגום"),
+     subtitle settings 205, cancel the automatic sync 206, back to the movie 201 (labelled "חזרה לסרט"). Button bar (left
+     to right): 205 201 202 204. 206 is the button above 204 (same left edge and width, right of the legend card). 204 and
+     206 are ALWAYS visible and only ENABLED while there is something to stop / cancel (204: Home property
+     ai_subs.live_translate_active; 206: subs.sync.mode); a disabled one is dimmed and Kodi skips it when the focus walks.
+     Left / right walk the bar, up from 204 reaches 206, up from the list's first row reaches 203 (a disabled or hidden one
+     is skipped), every other button goes up to the list. AUTO-SYNC BADGE (header, over the info panel): "סונכרנה אוטומטית" + the applied shift,
      read from the Home window properties subs.sync.offset ('+2.5s', '-1.2s', 'מקטעים', 'שינוי קצב') and subs.sync.mode
      (core/selection.py); the value is its own control so a Latin number never mixes with the Hebrew words (bidi).
      Manual search (ui/chooser.py, ui/manual_prompts.py, fetching/manual.py) asks for a title and a year, or a show, a
@@ -82,7 +84,7 @@
             <visible>Integer.IsGreater(Container(100).NumItems,0)</visible>
         </control>
         <control type="label">
-            <left>1352</left><top>16</top><width>200</width><height>48</height>
+            <left>1352</left><top>16</top><width>290</width><height>48</height>
             <font>font13</font>
             <label>סונכרנה אוטומטית</label>
             <textcolor>FF46C46A</textcolor>
@@ -90,7 +92,7 @@
             <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
         </control>
         <control type="label">
-            <left>1564</left><top>16</top><width>200</width><height>48</height>
+            <left>1654</left><top>16</top><width>230</width><height>48</height>
             <font>font13</font>
             <label>[B]$INFO[Window(Home).Property(subs.sync.offset)][/B]</label>
             <textcolor>FFF2F5F8</textcolor>
@@ -98,13 +100,24 @@
             <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
         </control>
 
-        <!-- Header row 2: the playing release, from the left margin to the info panel (LTR, scrolls when longer) -->
+        <!-- Header row 2: the playing release, from the left margin to the back button (LTR, scrolls when longer);
+             at its right end, flush with the list card, the conditional "חזרה לרשימה" (203: only while a manual result is shown) -->
         <control type="label">
-            <left>40</left><top>66</top><width>1288</width><height>34</height>
+            <left>40</left><top>66</top><width>1040</width><height>34</height>
             <font>font13</font>
             <label>$INFO[Window.Property(subs.head)]</label>
             <textcolor>FFB8D6E8</textcolor>
             <align>left</align><aligny>center</aligny><scroll>true</scroll>
+        </control>
+        <control type="button" id="203">
+            <left>1096</left><top>64</top><width>224</width><height>40</height>
+            <texturefocus colordiffuse="FF8FE0FF">white.png</texturefocus>
+            <texturenofocus colordiffuse="338FE0FF">white.png</texturenofocus>
+            <label>[B]חזרה לרשימה[/B]</label>
+            <font>font12</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
+            <onleft>203</onleft><onright>203</onright><onup>100</onup><ondown>100</ondown>
+            <visible>!String.IsEmpty(Window.Property(subs.manual))</visible>
         </control>
 
         <!-- CARD 1: the results list (its own surface and frame) -->
@@ -119,7 +132,7 @@
         <control type="list" id="100">
             <left>32</left><top>118</top><width>1280</width><height>780</height>
             <onleft>100</onleft><onright>202</onright>
-            <onup>100</onup><ondown>205</ondown>
+            <onup>203</onup><ondown>205</ondown>
             <scrolltime tween="cubic">300</scrolltime>
             <itemlayout width="1280" height="92">
                 <control type="image">
@@ -289,13 +302,14 @@
             </focusedlayout>
         </control>
 
-        <!-- CARD 2: legend of the match colours (and, on its right, the two conditional buttons 203 / 206) -->
+        <!-- CARD 2: legend of the match colours; it ends 12 px left of the rightmost button column (x = 1001), where the
+             always-visible "בטל סנכרון אוטומטי" (206) sits above "עצור תהליך תרגום" (204), same left edge and width -->
         <control type="image">
-            <left>24</left><top>914</top><width>1296</width><height>52</height>
+            <left>24</left><top>914</top><width>965</width><height>52</height>
             <texture colordiffuse="FF2B3238">white.png</texture>
         </control>
         <control type="image">
-            <left>25</left><top>915</top><width>1294</width><height>50</height>
+            <left>25</left><top>915</top><width>963</width><height>50</height>
             <texture colordiffuse="FF12171C">white.png</texture>
         </control>
         <control type="image">
@@ -342,32 +356,22 @@
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
-        <control type="button" id="203">
-            <left>880</left><top>920</top><width>200</width><height>40</height>
-            <texturefocus colordiffuse="FF8FE0FF">white.png</texturefocus>
-            <texturenofocus colordiffuse="338FE0FF">white.png</texturenofocus>
-            <label>[B]חזרה לרשימה[/B]</label>
-            <font>font12</font><align>center</align><aligny>center</aligny>
-            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>202</onleft><onright>206</onright><onup>100</onup><ondown>202</ondown>
-
-            <visible>!String.IsEmpty(Window.Property(subs.manual))</visible>
-        </control>
         <control type="button" id="206">
-            <left>1088</left><top>920</top><width>224</width><height>40</height>
+            <left>1001</left><top>920</top><width>311</width><height>40</height>
             <texturefocus colordiffuse="FFD0594F">white.png</texturefocus>
             <texturenofocus colordiffuse="33D0594F">white.png</texturenofocus>
             <label>[B]בטל סנכרון אוטומטי[/B]</label>
             <font>font12</font><align>center</align><aligny>center</aligny>
-            <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor>
-            <onleft>203</onleft><onright>201</onright><onup>100</onup><ondown>201</ondown>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor><disabledcolor>FF6B737B</disabledcolor>
+            <onleft>206</onleft><onright>206</onright><onup>100</onup><ondown>204</ondown>
             <onclick>SetFocus(100)</onclick>
             <onclick>RunScript(service.subtitles.kodipovilai,action=unsync)</onclick>
-
-            <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
+            <enable>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</enable>
+            <animation effect="fade" start="100" end="45" time="0" condition="String.IsEmpty(Window(Home).Property(subs.sync.mode))">Conditional</animation>
         </control>
 
-        <!-- THE BUTTON BAR: 205 204 202 201, a row of 4 buttons straight on the window background (no card around it) -->
+        <!-- THE BUTTON BAR: 205 201 202 204 (left to right), a row of 4 buttons straight on the window background (no card around it).
+             204 stays visible and is enabled only while a live translation runs (Home property ai_subs.live_translate_active) -->
         <control type="button" id="205">
             <left>32</left><top>982</top><width>311</width><height>60</height>
             <texturefocus colordiffuse="FF8FB4E0">white.png</texturefocus>
@@ -375,18 +379,17 @@
             <label>[B]הגדרות כתוביות[/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>201</onleft><onright>204</onright><onup>100</onup><ondown>205</ondown>
+            <onleft>204</onleft><onright>201</onright><onup>100</onup><ondown>205</ondown>
             <onclick>Addon.OpenSettings(service.subtitles.kodipovilai)</onclick>
         </control>
-        <control type="button" id="204">
+        <control type="button" id="201">
             <left>355</left><top>982</top><width>311</width><height>60</height>
-            <texturefocus colordiffuse="FFF0A93A">white.png</texturefocus>
-            <texturenofocus colordiffuse="33F0A93A">white.png</texturenofocus>
-            <label>[B]ביטול תרגום[/B]</label>
+            <texturefocus colordiffuse="FFD0594F">white.png</texturefocus>
+            <texturenofocus colordiffuse="33D0594F">white.png</texturenofocus>
+            <label>[B]חזרה לסרט[/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
-            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>205</onleft><onright>202</onright><onup>100</onup><ondown>204</ondown>
-            <onclick>RunScript(service.subtitles.kodipovilai,action=cancel_translation)</onclick>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor>
+            <onleft>205</onleft><onright>202</onright><onup>100</onup><ondown>201</ondown>
         </control>
         <control type="button" id="202">
             <left>678</left><top>982</top><width>311</width><height>60</height>
@@ -395,16 +398,20 @@
             <label>[B]חיפוש כתוביות ידני[/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>204</onleft><onright>201</onright><onup>203</onup><ondown>202</ondown>
+            <onleft>201</onleft><onright>204</onright><onup>100</onup><ondown>202</ondown>
         </control>
-        <control type="button" id="201">
+        <control type="button" id="204">
             <left>1001</left><top>982</top><width>311</width><height>60</height>
-            <texturefocus colordiffuse="FFD0594F">white.png</texturefocus>
-            <texturenofocus colordiffuse="33D0594F">white.png</texturenofocus>
-            <label>[B]סגור[/B]</label>
+            <texturefocus colordiffuse="FFF0A93A">white.png</texturefocus>
+            <texturenofocus colordiffuse="33F0A93A">white.png</texturenofocus>
+            <label>[B]עצור תהליך תרגום[/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
-            <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor>
-            <onleft>202</onleft><onright>205</onright><onup>206</onup><ondown>201</ondown>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor><disabledcolor>FF6B737B</disabledcolor>
+            <onleft>202</onleft><onright>205</onright><onup>206</onup><ondown>204</ondown>
+            <onclick>SetFocus(100)</onclick>
+            <onclick>RunScript(service.subtitles.kodipovilai,action=cancel_translation)</onclick>
+            <enable>!String.IsEmpty(Window(Home).Property(ai_subs.live_translate_active))</enable>
+            <animation effect="fade" start="100" end="45" time="0" condition="String.IsEmpty(Window(Home).Property(ai_subs.live_translate_active))">Conditional</animation>
         </control>
 
         <!-- CARD 4: the info panel of the FOCUSED row, from the top of the list card to the bottom of the button bar -->

@@ -1,6 +1,7 @@
 import os,time
 import xbmc,xbmcaddon,xbmcvfs,xbmcgui
 import threading
+from http.cookiejar import DefaultCookiePolicy
 
 from urllib.parse import unquote
 import unicodedata
@@ -28,6 +29,47 @@ global break_all
 break_all=False
 with_dp=True
 DEFAULT_REQUEST_TIMEOUT = int(xbmcaddon.Addon().getSetting('max_search_time') or 10)
+
+
+class _NoStoreCookies(DefaultCookiePolicy):
+    """A Session keeps connections, never cookies: the providers pass their cookies per call (Ktuvit) and a cookie one call
+    sets must not ride along on the next, exactly as with the one-shot requests.get / post this replaces."""
+    def set_ok(self, cookie, request):
+        return False
+
+
+class ProviderHttp(object):
+    """requests.get / requests.post over ONE requests.Session per provider module, so the calls of one search or download
+    (Ktuvit: login, search, list; download: identifier, file) reuse the TLS connection instead of opening a socket and
+    handshaking each time. Same arguments, same results, same exceptions as the module-level requests functions.
+    A session that has been idle for _IDLE_SECONDS is dropped (not closed: another thread may still be using it) and a
+    fresh one is made, so a connection the server has long closed is never the first one tried."""
+    _IDLE_SECONDS = 30.0
+
+    def __init__(self):
+        self._session = None
+        self._used = 0.0
+        self._lock = threading.Lock()
+
+    def _get_session(self):
+        import requests
+        with self._lock:
+            now = time.monotonic()
+            if self._session is None or now - self._used > self._IDLE_SECONDS:
+                session = requests.Session()
+                session.cookies.set_policy(_NoStoreCookies())
+                self._session = session
+            self._used = now
+            return self._session
+
+    def get(self, url, **kwargs):
+        return self._get_session().get(url, **kwargs)
+
+    def post(self, url, **kwargs):
+        return self._get_session().post(url, **kwargs)
+
+
+_tmdb_http = ProviderHttp()
 
 class OverlayText:
     def __init__(self):
@@ -318,7 +360,6 @@ def manual_search_for_imdb_id(video_data):
     original_title = video_data['OriginalTitle']
     year = video_data['year']
     
-    import requests
     
     log.warning(f"DEBUG | get_video_data | manual_search_for_imdb_id | Searching manually for IMDb ID | media_type={media_type} | original_title={original_title} | year={year}")
     
@@ -340,7 +381,7 @@ def manual_search_for_imdb_id(video_data):
     search_for_tmdb_id_url = f'{TMDB_API_BASE_URL}search/{media_type}'
 
     try:
-        response = requests.get(search_for_tmdb_id_url, params=params, timeout=DEFAULT_REQUEST_TIMEOUT)
+        response = _tmdb_http.get(search_for_tmdb_id_url, params=params, timeout=DEFAULT_REQUEST_TIMEOUT)
         log.warning(f"DEBUG | get_video_data | manual_search_for_imdb_id | Full search_for_tmdb_id_url: {response.request.url}")
         data = response.json()
                 
@@ -382,7 +423,7 @@ def manual_search_for_imdb_id(video_data):
                 'language': 'en'
             }
             
-            response = requests.get(search_for_imdb_id_url, params=params, timeout=DEFAULT_REQUEST_TIMEOUT)
+            response = _tmdb_http.get(search_for_imdb_id_url, params=params, timeout=DEFAULT_REQUEST_TIMEOUT)
             log.warning(f"DEBUG | get_video_data | manual_search_for_imdb_id | Full search_for_imdb_id_url: {response.request.url}")
             data = response.json()
             

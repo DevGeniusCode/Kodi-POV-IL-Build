@@ -4,10 +4,11 @@ import xbmcaddon,os,xbmc
 global global_var,site_id,sub_color#global
 global_var=[]
 from resources.lib.fetching.providers import log
-import requests,json
+import json
 import urllib
 from resources.lib.fetching.providers.extract_sub import extract
-from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT
+from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT, ProviderHttp
+_http = ProviderHttp()
 from resources.lib.fetching.providers.general import extract_season_episode_numbers
 import xbmcvfs
 #########################################
@@ -133,7 +134,7 @@ def get_subs(video_data, all_lang_override=False):
     }
 
     try:
-        response = requests.post(SUBSOURCE_SEARCH_API_URL, json=data, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
+        response = _http.post(SUBSOURCE_SEARCH_API_URL, json=data, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
         response.raise_for_status()
         log.warning(f"DEBUG | [SubSource] | SubSource SearchSubtitles | URL: {response.url} | POST data: {data} | Status Code: {response.status_code}")
         response = response.json()
@@ -150,7 +151,7 @@ def get_subs(video_data, all_lang_override=False):
             if media_type == 'tv':
                  data['season'] = f"season-{season}"
             
-            response = requests.post(SUBSOURCE_LIST_SUBS_API_URL, json=data, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
+            response = _http.post(SUBSOURCE_LIST_SUBS_API_URL, json=data, headers=headers, timeout=DEFAULT_REQUEST_TIMEOUT)
             response.raise_for_status()
             log.warning(f"DEBUG | [SubSource] | SubSource SearchSubtitles | URL: {response.url} | POST data: {data} | Status Code: {response.status_code}")
             response_subtitles_list = response.json()
@@ -267,7 +268,7 @@ def download(download_data,MySubFolder):
     }
     
     try:
-        sub_download_response = requests.post(SUBSOURCE_DOWNLOAD_API_URL, headers=headers, json=data, timeout=DEFAULT_REQUEST_TIMEOUT)
+        sub_download_response = _http.post(SUBSOURCE_DOWNLOAD_API_URL, headers=headers, json=data, timeout=DEFAULT_REQUEST_TIMEOUT)
         log.warning(f"DEBUG | [SubSource] | DownloadSubtitles sub_download_response: {sub_download_response.status_code}")
         sub_download_response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
 

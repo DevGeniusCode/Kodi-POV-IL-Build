@@ -7,7 +7,7 @@
 #   VERIFIED_STUDIO      'תרגום אולפנים'     a studio / official credit form, or the translator field 'אולפנים'
 #   VERIFIED_TEAM        'צוות תרגום מוביל'  a known translation team in the translator role (or a team account as uploader)
 #   VERIFIED_TRANSLATOR  'מתרגם מוכר'        an allowlisted translator, or an explicit translated-by-ear credit
-#   TRUSTED_UPLOADER     'מעלה בולט'         an allowlisted uploader (or one the user added)
+#   TRUSTED_UPLOADER     'מעלה מוביל'         an allowlisted uploader (or one the user added)
 #
 # Rules that are not negotiable here (owner decisions of 20 Nov 2026):
 #   * Hebrew rows only: the caller passes hebrew=True, anything else gets an empty verdict.
@@ -32,7 +32,7 @@ BADGE_LABELS = {
     VERIFIED_STUDIO: 'תרגום אולפנים',
     VERIFIED_TEAM: 'צוות תרגום מוביל',
     VERIFIED_TRANSLATOR: 'מתרגם מוכר',
-    TRUSTED_UPLOADER: 'מעלה בולט',
+    TRUSTED_UPLOADER: 'מעלה מוביל',
 }
 IMPORTER_NAME = 'os-auto'                   # OpenSubtitles' bulk importer of 2008-2019 files: 52 of 85 rows of the 20 Nov probe
 IMPORTER_RANK = 'Application Developers'     # its rank; both are excluded here whatever the allowlist or the user's handles say

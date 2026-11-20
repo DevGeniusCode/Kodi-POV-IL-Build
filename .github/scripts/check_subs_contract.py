@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Contract smoke test of the subtitle add-on `service.subtitles.kodipovilai` (Subtitle Phase 3, step 3g).
+"""Contract smoke test of the subtitle add-on `service.subtitles.kodipovilai` (lightweight, manual-maintenance form).
 
-Stdlib only, no Kodi. Static checks read the source (ast / xml / po); the dynamic part imports every module
-under its own xbmc stubs (one fresh interpreter per module) and runs the golden harness of
-.github/scripts/subs_contract/ against golden_expected.json. Phase 4 changes some of these facts on purpose
-(he_sub_match.py, the three standalone modules): it updates baseline.json in the same change.
+Stdlib only, no Kodi. Static checks read the source (ast / xml / po): provider contract, frozen names, pinned strings,
+no private cross-module names, single route, settings / strings consistency. The dynamic part imports every module under
+its own xbmc stubs (one fresh interpreter per module) and runs subs_contract/unit_chooser_threads.py (the chooser's
+one-owner-thread rule). The golden harness and the other unit files were removed on purpose (a behaviour change no longer
+needs a re-recorded 680 KB fixture); he_sub_match / standalone-module facts live in subs_contract/baseline.json.
 
 usage: python .github/scripts/check_subs_contract.py [--static]      (--static skips the interpreter-based part)
-Exit status 1 when any check fails. The golden expectations were recorded on Windows, so CI runs this on windows-latest.
+Exit status 1 when any check fails.
 """
 import ast
 import hashlib
@@ -359,104 +360,12 @@ if '--static' not in sys.argv:
     badm = [r for r in res if r[1] != 0]
     check('every module under resources/ imports under its own xbmc stubs (%d of %d; the known-failure list is empty)'
           % (len(res) - len(badm), len(res)), not badm, badm[:3])
-    out = os.path.join(tempfile.mkdtemp(prefix='contract_gold_'), 'golden.json')
-    p = subprocess.run([sys.executable, '-I', '-B', os.path.join(FIX, 'golden.py'), ADDON, out], capture_output=True, text=True)
-    if p.returncode != 0 or not os.path.isfile(out):
-        check('golden harness ran', False, (p.stdout + p.stderr)[-400:])
-    else:
-        got = json.load(open(out, encoding='utf-8'))
-        exp = json.load(open(os.path.join(FIX, 'golden_expected.json'), encoding='utf-8'))
-        diff = sorted(k for k in set(got) | set(exp) if got.get(k) != exp.get(k))
-        check('golden harness: %d cases identical (link codec round trips of the 7 link types, SRT passes, release scores, '
-              'the playing-release matrix, sync_align pairs, settings / selection state machine, list_candidates ordering, '
-              'star mapping)' % len(exp), not diff, diff[:6])
-        # the 7 link types round-trip, and every row of the list scenarios carries a pct
-        types = {'passthrough', 'pool', 'engine', 'engine_ai', 'embedded_ai', 'embedded_sync', 'ai'}
-        seen = set()
-        for k, v in got.items():
-            if k.startswith('list.'):
-                for r in json.loads(v)['rows']:
-                    if isinstance(r.get('link'), dict):
-                        seen.add(r['link'].get('type'))
-        check('the 7 link types appear in the list scenarios', types <= seen, sorted(types - seen))
-        check('star mapping scenarios present', len([k for k in got if k.startswith('liststars.')]) >= 29)
-        # Provenance P3: the provider's `_meta` is still on the rows after the real search stages, and a row without it has none
-        _pm = json.loads(got['list.provenance_meta_rows'])['rows']
-        check('provenance: _meta survives list_candidates to the chooser rows (the 2 rows that carry it still do, the others have none)',
-              sum(1 for r in _pm if '_meta' in r) == 2 and all(r['_meta'].get('credits') for r in _pm if '_meta' in r)
-              and not any('_meta' in r for r in _pm if r.get('language') != 'he'))
-    # the embedded-subtitle extractor on synthetic Matroska files (Subtitle Phase 4, step 4e)
-    xout = os.path.join(tempfile.mkdtemp(prefix='contract_ext_'), 'extract.json')
-    p = subprocess.run([sys.executable, '-I', '-B', os.path.join(FIX, 'golden_extract.py'), ADDON, xout],
-                       capture_output=True, text=True)
-    if p.returncode != 0 or not os.path.isfile(xout):
-        check('golden extract harness ran', False, (p.stdout + p.stderr)[-400:])
-    else:
-        xgot = json.load(open(xout, encoding='utf-8'))
-        xexp = json.load(open(os.path.join(FIX, 'golden_extract_expected.json'), encoding='utf-8'))
-        xdiff = sorted(k for k in set(xgot) | set(xexp) if xgot.get(k) != xexp.get(k))
-        check('golden extract: %d cases identical (track probe, text extraction of SRT / ASS tracks, cue profile / times, '
-              'cut signature, language keys)' % len(xexp), not xdiff, xdiff[:6])
-    # resolve(): recorded Gemini / Google conversations for every link type and failure mode (Subtitle Phase 4, step 4b)
-    rout = os.path.join(tempfile.mkdtemp(prefix='contract_res_'), 'resolve.json')
-    p = subprocess.run([sys.executable, '-I', '-B', os.path.join(FIX, 'golden_resolve.py'), ADDON, rout],
-                       capture_output=True, text=True)
-    if p.returncode != 0 or not os.path.isfile(rout):
-        check('golden resolve harness ran', False, (p.stdout + p.stderr)[-400:])
-    else:
-        rgot = json.load(open(rout, encoding='utf-8'))
-        rexp = json.load(open(os.path.join(FIX, 'golden_resolve_expected.json'), encoding='utf-8'))
-        rdiff = sorted(k for k in set(rgot) | set(rexp) if rgot.get(k) != rexp.get(k))
-        check('golden resolve: %d scenarios identical (return value, files written, log lines, toasts, HTTP requests of the '
-              'Gemini / Google transport, progressive callbacks, collaborator calls)' % len(rexp), not rdiff, rdiff[:6])
-    # the behaviour checks of the VLSub manual query, the green release words, the negative AI badge,
-    # the season-pack cache (HI / release preference included) and the standalone (no library metadata) path (20 Nov 2026): pure Python, own stubs
-    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_session.py')],
-                       capture_output=True, text=True, encoding='utf-8', errors='replace')
-    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
-    check('unit_session: manual query, green words, AI badge, season pack, standalone (%d checks)'
-          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
-          bad[:3] or (p.stderr or '')[-300:])
-
     # the chooser window's threading rule (21 Nov 2026, after the Kodi crash of 20 Nov 2026): one owner thread makes every ListItem and
     # every control call, the background searches only produce plain data; show() + a Monitor loop instead of doModal() (fake Kodi runtime)
     p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_chooser_threads.py')],
                        capture_output=True, text=True, encoding='utf-8', errors='replace')
     bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
     check('unit_chooser_threads: ListItems and control calls only on the window thread, Back / Esc / abort end the loop (%d checks)'
-          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
-          bad[:3] or (p.stderr or '')[-300:])
-
-    # the provenance plumbing (Provenance P1, 20 Nov 2026): provider row metadata -> engine tuple -> candidate '_meta', on trimmed live captures
-    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_provenance_meta.py')],
-                       capture_output=True, text=True, encoding='utf-8', errors='replace')
-    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
-    check('unit_provenance_meta: Ktuvit / Wizdom / OpenSubtitles row metadata, the 11-field engine tuple, the candidate _meta (%d checks)'
-          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
-          bad[:3] or (p.stderr or '')[-300:])
-
-    # the provenance classifier (Provenance P2, 20 Nov 2026): credit grammar, the four positive badges, the draft allowlist, the Telegram corpus lines
-    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_provenance.py')],
-                       capture_output=True, text=True, encoding='utf-8', errors='replace')
-    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
-    check('unit_provenance: credit grammar (both text orders), the four positive badges, sync credits never a badge, the allowlist, '
-          'the fixture rows and 250 Telegram credit lines (%d checks)'
-          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
-          bad[:3] or (p.stderr or '')[-300:])
-    # the provenance UI (Provenance P3, 20 Nov 2026): the badge chip, the metadata properties, the XML strip, the setting and its strings, the loader
-    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_provenance_ui.py')],
-                       capture_output=True, text=True, encoding='utf-8', errors='replace')
-    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
-    check('unit_provenance_ui: badge chip and its priority, metadata properties, positive only, the right-panel quality block, the custom_trusted_uploaders setting '
-          'and strings, the allowlist loader, a real row end to end (%d checks)'
-          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
-          bad[:3] or (p.stderr or '')[-300:])
-    # the download-time provenance sidecar (Provenance P4, 20 Nov 2026): file helpers, the key, store / prune / attach, the hooks of download_inner
-    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_provenance_sidecar.py')],
-                       capture_output=True, text=True, encoding='utf-8', errors='replace')
-    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
-    check('unit_provenance_sidecar: the yod spellings, the file helpers, the key, store / prune / attach, and the hooks of download_inner '
-          '(fresh download, cache hit, season pack) (%d checks)'
           % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
           bad[:3] or (p.stderr or '')[-300:])
 

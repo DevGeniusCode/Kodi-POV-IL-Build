@@ -680,4 +680,4 @@ msgstr "מעלים ומתרגמים מהימנים נוספים"
 
 msgctxt "#32657"
 msgid "Extra names of Hebrew-subtitle uploaders or translators to highlight with a \"known uploader\" / \"known translator\" badge in the subtitle chooser, separated by commas (for example: First Name, another_handle). They are added to the built-in list. A badge only highlights a row: it never hides, reorders or blocks anything."
-msgstr "שמות נוספים של מעלים או מתרגמים של כתוביות בעברית, מופרדים בפסיקים (לדוגמה: שם ראשון, another_handle), שיסומנו בתגית \"מעלה בולט\" או \"מתרגם מוכר\" בחלון בחירת הכתוביות. הם מתווספים לרשימה המובנית. התגית רק מדגישה שורה: היא אף פעם לא מסתירה, משנה סדר או חוסמת כלום."
+msgstr "שמות נוספים של מעלים או מתרגמים של כתוביות בעברית, מופרדים בפסיקים (לדוגמה: שם ראשון, another_handle), שיסומנו בתגית \"מעלה מוביל\" או \"מתרגם מוכר\" בחלון בחירת הכתוביות. הם מתווספים לרשימה המובנית. התגית רק מדגישה שורה: היא אף פעם לא מסתירה, משנה סדר או חוסמת כלום."

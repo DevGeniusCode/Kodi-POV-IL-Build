@@ -19,7 +19,7 @@
 '''
 
 from resources.lib.fetching.providers import log
-import xbmc,re,hashlib,time,os
+import xbmc,re,hashlib,time,os,ast
 
 try:
     from sqlite3 import dbapi2 as database
@@ -37,6 +37,15 @@ if KODI_VERSION<=18:
 else:
     import xbmcvfs
     xbmc_tranlate_path=xbmcvfs.translatePath
+def _loads(stored):
+    """A stored value (the repr() this module writes) read back WITHOUT eval(): ast.literal_eval takes everything these caches
+    hold (dict / list / str / number / None) and nothing that could run code. A damaged or foreign entry raises, which the
+    callers treat as a cache miss (the refetch rewrites the row)."""
+    if isinstance(stored, bytes):
+        stored = stored.decode('utf-8', 'replace')
+    return ast.literal_eval(stored)
+
+
 def set_PRAGMAS( dbcon):
         dbcur = dbcon.cursor()
         dbcur.execute('''PRAGMA synchronous = OFF''')
@@ -104,13 +113,19 @@ def get(function, timeout, *args, **table):
             dbcur.execute("SELECT * FROM %s WHERE func = '%s' AND args = '%s'" % (table, f, a))
             match = dbcur.fetchone()
             if match!=None:
-                response = eval(match[2].encode('utf-8'))
+                try:
+                    response = _loads(match[2])
+                    _readable = True
+                except Exception:
+                    response = None     # an entry that cannot be read is a miss: the refetch below replaces it
+                    _readable = False
 
-                t1 = int(match[3])
-                t2 = int(time.time())
-                update = (abs(t2 - t1) / 3600) >= int(timeout)
-                if update == False:
-                    return response
+                if _readable:
+                    t1 = int(match[3])
+                    t2 = int(time.time())
+                    update = (abs(t2 - t1) / 3600) >= int(timeout)
+                    if update == False:
+                        return response
     
     except Exception as e:
         exc_type, exc_obj, tb = sys.exc_info()
@@ -169,7 +184,7 @@ def get(function, timeout, *args, **table):
         pass
 
     try:
-        return eval(r.encode('utf-8'))
+        return _loads(r)
     except Exception as e:
         exc_type, exc_obj, tb = sys.exc_info()
         fail = tb.tb_frame

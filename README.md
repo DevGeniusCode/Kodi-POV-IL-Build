@@ -769,7 +769,7 @@ source‑hook patches live in the Wizard's patch registry ([§6](#6-runtime-cros
   is gone (see [§10](#10-removed--legacy-components)). Comments that mention
   "DarkSubs" describe the UX being replicated, not a live dependency.
 - **Provenance badges:** a Hebrew provider row can carry one of four positive badges (`תרגום אולפנים`, `צוות תרגום מוביל`, `מתרגם מוכר`,
-  `מעלה בולט`) with an `איכות ומקור הכתובית` block in the chooser's right-hand panel; evidence is the provider's metadata, the credits read
+  `מעלה מוביל`) with an `איכות ומקור הכתובית` block in the chooser's right-hand panel; evidence is the provider's metadata, the credits read
   inside a downloaded file (a profile-folder sidecar, never during a search) and the viewer's own handles (`custom_trusted_uploaders`). Positive
   only, display only. The full description is in `service.subtitles.kodipovilai/README.md` section 5.7.
 

@@ -440,68 +440,59 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False, on_p
         raise ProviderSearchBusy('provider down: ' + ', '.join(_skipped))
 
     for td in thread:
-      xbmc.sleep(100)
+      # No pause between the starts (it was a 100 ms sleep per provider, inherited from the vendored DarkSubs engine: up to
+      # 0.6 s before the last provider even began; nothing here depends on the start order).
       td.start()
-      
 
     tt={}
     for i in range (0,40): 
       tt[i]="red"
     start_time = time.time()
-    num_live=0
-    break_all=False
     ExcludeTime = int(Addon.getSetting('max_search_time') or 10)
     # A timing-only pass can legitimately have no eligible global provider
     # enabled. Keep that a clean empty result instead of referencing the loop's
     # accumulator before it has ever been assigned.
     f_result=[]
     _notified=set()   # providers on_provider_done has already been told about
+    _last_sig=None    # what f_result and the status text were last built from
 
     while 1:
         elapsed_time = time.time() - start_time
-        still_alive=0
-        for threads in thread:
-              
-              if break_all:
-                 
-                 break
-                                
-              num_live=0
-              string_dp=''
 
-              still_alive=0
-              for yy in range(0,len(thread)):
-                if not thread[yy].is_alive():
-                  num_live=num_live+1
-                  tt[yy]="lightgreen"
-                  if on_provider_done is not None and yy not in _notified:
+        # ONE linear pass over the workers per tick.
+        still_alive=0
+        for yy, worker in enumerate(thread):
+            if worker.is_alive():
+                still_alive=1
+                tt[yy]="red"
+            else:
+                tt[yy]="lightgreen"
+                if on_provider_done is not None and yy not in _notified:
                     _notified.add(yy)
                     try:
-                      on_provider_done(all_sources[yy][0], list(all_sources[yy][1].global_var))
+                        on_provider_done(all_sources[yy][0], list(all_sources[yy][1].global_var))
                     except Exception:
-                      pass
-                else:
-                  still_alive=1
-                  tt[yy]="red"
-              
-             
-              
-              zz=0
-              f_result=[]
-              for scraper,items in all_sources:
-                 f_result=f_result+items.global_var
-                 string_dp=string_dp+(' %s:[COLOR %s]%s[/COLOR] '%(format_website_source_name(scraper),tt[zz],len( items.global_var)))
-                 zz=zz+1
-              if not timing_only and (Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying()):
+                        pass
+
+        # The rows and the status text are rebuilt only when something changed: a worker ended, a provider published rows, or
+        # a second passed (the text shows the elapsed time). The Kodi calls of the message condition run on those moments only.
+        _sig = (int(elapsed_time),) + tuple((tt[i], len(src.global_var)) for i, (_name, src) in enumerate(all_sources))
+        if _sig != _last_sig:
+            _last_sig = _sig
+            f_result=[]
+            string_dp=''
+            for zz, (scraper, items) in enumerate(all_sources):
+                f_result=f_result+items.global_var
+                string_dp=string_dp+(' %s:[COLOR %s]%s[/COLOR] '%(format_website_source_name(scraper),tt[zz],len( items.global_var)))
+            if not timing_only and (Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying()):
                 # If searching subtitles from context menu - will show the message.
                 general.show_msg=' אנא המתן '+ time.strftime("%H:%M:%S", time.gmtime(elapsed_time))+'\n'+ string_dp
-              
+
         if still_alive==0:
             _note_provider_outcomes([], [name for name, _src in all_sources])
             break
-        
+
         if  elapsed_time>ExcludeTime: 
-            break_all=True
             last_search_cut_short = True
             try:
                 if timing_only:
@@ -523,7 +514,7 @@ def c_get_subtitles(video_data, all_lang_override=False, timing_only=False, on_p
                     [name for (name, src), td in zip(all_sources, thread)
                      if not td.is_alive() and src.global_var])
             break
-        xbmc.sleep(10)
+        xbmc.sleep(60)
         
     #################################################### Retry all languages START ####################################################
     # If:
