@@ -1,3 +1,6 @@
+1.0.40
+- The shift the subtitle add-on applied automatically is shown on the subtitle sync / delay control of the player (window properties subs.sync.offset / subs.sync.mode of service.subtitles.kodipovilai 0.3.105; marker AUTO_SYNC_BADGE_v1): Includes_VideoOsd1.xml above the hover caption while the sync item is hovered, Includes_VideoOsd2.xml under the sync icon, Includes_VideoOsd3.xml above the button row, Includes_VideoOsd4.xml on a second line of the delay button. The value is always its own label (or its own line), never mixed into a Hebrew sentence. Nothing is shown while no automatic sync is active; focus navigation is unchanged. DialogSubtitles.xml is not changed (it is only the fallback now; the chooser has the cancel button).
+
 1.0.39
 - Includes_VideoOsd1.xml: the unescaped "&" of the RunPlugIn / onclick lines is written as "&amp;" (the file now parses as XML; Kodi reads the same text).
 

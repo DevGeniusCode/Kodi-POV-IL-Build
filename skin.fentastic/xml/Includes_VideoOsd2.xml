@@ -336,6 +336,19 @@
 		<texture>$INFO[ListItem.Property(subsoff)]</texture>
 		<visible>VideoPlayer.HasSubtitles + !VideoPlayer.SubtitlesEnabled</visible>
 	</control>	
+	<control type="label">
+		<!-- AUTO_SYNC_BADGE_v1: Window(10000) subs.sync.offset (service.subtitles.kodipovilai) under the sync icon -->
+		<left>-5</left>
+		<top>38</top>
+		<width>65</width>
+		<height>18</height>
+		<font>font10</font>
+		<align>center</align>
+		<aligny>center</aligny>
+		<textcolor>orange</textcolor>
+		<label>$INFO[Window(10000).Property(subs.sync.offset)]</label>
+		<visible>!String.IsEmpty(ListItem.Property(subssyncresize)) + !String.IsEmpty(Window(10000).Property(subs.sync.mode))</visible>
+	</control>
 	</control>
 	</itemlayout>
 	<focusedlayout width="65" height="55">
@@ -444,6 +457,19 @@
 		<texture colordiffuse="98000000">$INFO[ListItem.Property(subsoff)]</texture>
 		<visible>VideoPlayer.HasSubtitles + !VideoPlayer.SubtitlesEnabled</visible>
 		<visible>Control.HasFocus(201)</visible>
+	</control>
+	<control type="label">
+		<!-- AUTO_SYNC_BADGE_v1: Window(10000) subs.sync.offset (service.subtitles.kodipovilai) under the sync icon -->
+		<left>-5</left>
+		<top>38</top>
+		<width>65</width>
+		<height>18</height>
+		<font>font10</font>
+		<align>center</align>
+		<aligny>center</aligny>
+		<textcolor>orange</textcolor>
+		<label>$INFO[Window(10000).Property(subs.sync.offset)]</label>
+		<visible>!String.IsEmpty(ListItem.Property(subssyncresize)) + !String.IsEmpty(Window(10000).Property(subs.sync.mode))</visible>
 	</control>
 	</control>
 	</focusedlayout>

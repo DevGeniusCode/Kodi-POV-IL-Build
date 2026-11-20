@@ -25,6 +25,27 @@
 			<label>$INFO[ListItem.Label]</label>
 			<visible>![Player.Rewinding | Player.Forwarding]</visible>
 		</control>	
+		<!-- AUTO_SYNC_BADGE_v1: the shift the add-on applied automatically (Window(10000) subs.sync.offset / subs.sync.mode,
+		     published by service.subtitles.kodipovilai); two controls so the Latin value never mixes with the Hebrew words -->
+		<control type="label">
+			<align>right</align>
+			<right>250</right>
+			<width>240</width>
+			<height>40</height>
+			<bottom>62</bottom>
+			<label>סונכרנה אוטומטית</label>
+			<textcolor>button_focus</textcolor>
+			<visible>![Player.Rewinding | Player.Forwarding] + !String.IsEmpty(ListItem.Property(subfixresizing)) + !String.IsEmpty(Window(10000).Property(subs.sync.mode))</visible>
+		</control>
+		<control type="label">
+			<align>right</align>
+			<right>40</right>
+			<width>200</width>
+			<height>40</height>
+			<bottom>62</bottom>
+			<label>[B]$INFO[Window(10000).Property(subs.sync.offset)][/B]</label>
+			<visible>![Player.Rewinding | Player.Forwarding] + !String.IsEmpty(ListItem.Property(subfixresizing)) + !String.IsEmpty(Window(10000).Property(subs.sync.mode))</visible>
+		</control>
 		<control type="label">
 			<align>right</align>
 			<height>50</height>

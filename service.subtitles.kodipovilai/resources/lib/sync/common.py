@@ -30,3 +30,52 @@ yield_state = {'checked': 0.0, 'seen_playing': False, 'gone': None, 'waited': 0.
 INFO_KEYS = ('imdb_id', 'tmdb_id', 'dbid', 'season', 'episode', 'title', 'tvshow',
               'tvshowtitle', 'year', 'filepath', 'picked_release', 'tagline',
               'label', 'media_type', 'is_episode')
+
+
+# ---- the applied-fix description: ONE place for the toast text and the on-screen badge ---------------------------
+SYNC_NOTICE = 'הכתובית סונכרנה אוטומטית'
+MODE_OFFSET = 'offset'
+MODE_SCALE = 'scale'
+MODE_PIECEWISE = 'piecewise'
+
+
+def describe_fix(verdict, offset_hint=None):
+    """What an applied FIXABLE verdict did to the subtitle, in Kodi's own convention: ``+`` = the subtitle
+    appears LATER (the sign of Kodi's subtitle-delay slider; the verdict's offset_ms moves the other way).
+    Returns {'mode': offset | scale | piecewise,
+             'label': '+2.5s' / '-1.2s' (Latin, one text direction: it goes in its own skin control) or the
+                      Hebrew word 'שינוי קצב' / 'מקטעים', or '' for a zero shift,
+             'text':  the same for a Hebrew sentence ('+2.5 שנ׳': the unit keeps the toast in one RTL run)}.
+    Pure: no Kodi, no I/O."""
+    verdict = verdict or {}
+    try:
+        off = float(offset_hint if offset_hint is not None else verdict.get('offset_ms') or 0.0)
+        scale = float(verdict.get('scale') or 1.0)
+    except (TypeError, ValueError):
+        off, scale = 0.0, 1.0
+    if verdict.get('mode', 'global') != 'global':
+        return {'mode': MODE_PIECEWISE, 'label': 'מקטעים', 'text': 'מקטעים'}
+    if scale != 1.0:
+        return {'mode': MODE_SCALE, 'label': 'שינוי קצב', 'text': 'שינוי קצב'}
+    if not off:
+        return {'mode': MODE_OFFSET, 'label': '', 'text': ''}
+    seconds = -off / 1000.0
+    return {'mode': MODE_OFFSET, 'label': '{0:+.1f}s'.format(seconds), 'text': '{0:+.1f} שנ׳'.format(seconds)}
+
+
+def sync_notice(verdict, offset_hint=None):
+    """The toast / overlay sentence of an applied fix (every builder uses this one)."""
+    text = describe_fix(verdict, offset_hint)['text']
+    return SYNC_NOTICE + (' ({0})'.format(text) if text else '')
+
+
+def fix_badge(verdict, original, keys, offset_hint=None):
+    """The record published with a confirmed fix: the badge (offset label + mode) and what "בטל סנכרון אוטומטי"
+    needs: the unshifted file and the verdict-cache keys (sub_hash|cut_signature) to veto."""
+    described = describe_fix(verdict, offset_hint)
+    unique = []
+    for key in keys or ():
+        if key and key not in unique:
+            unique.append(str(key))
+    return {'offset': described['label'], 'mode': described['mode'],
+            'original': str(original or ''), 'keys': unique}

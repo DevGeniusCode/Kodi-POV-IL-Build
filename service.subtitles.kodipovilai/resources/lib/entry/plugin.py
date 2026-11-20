@@ -14,7 +14,7 @@ except ImportError:
     xbmc = xbmcgui = xbmcplugin = xbmcvfs = None
 from resources.lib.ai_translation.background import handle_bg_translate_picker, handle_translate_file
 from resources.lib.delivery.kodi_player import handle_download
-from resources.lib.entry.actions import handle_cancel_translation, handle_choose_subs, handle_he_avail
+from resources.lib.entry.actions import handle_cancel_translation, handle_choose_subs, handle_he_avail, handle_unsync
 from resources.lib.ui.dialogs import safe_log
 from resources.lib.ui.listing import handle_manualsearch, handle_search
 from resources.lib.ui.settings_actions.cache import handle_clear_cache, handle_pool_share_cache, handle_pool_share_cache_run, handle_purge_temp
@@ -45,6 +45,7 @@ PARAMS_ACTIONS = {
     'engine_test': handle_engine_test,
     'choose_subs': handle_choose_subs,
     'cancel_translation': handle_cancel_translation,
+    'unsync': handle_unsync,
 }
 
 

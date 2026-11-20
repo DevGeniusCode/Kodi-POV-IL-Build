@@ -189,6 +189,29 @@
 				<!-- KODI-RD-IL ADDITION -->
 				<include>syncfakebutton</include>
 				<!-- ##################### -->
+
+				<!-- AUTO_SYNC_BADGE_v1: the shift the subtitle add-on applied automatically (Window(10000) subs.sync.offset / subs.sync.mode) -->
+				<control type="label">
+					<left>30</left>
+					<top>52</top>
+					<width>230</width>
+					<height>36</height>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>סונכרנה אוטומטית</label>
+					<textcolor>button_focus</textcolor>
+					<visible>!String.IsEmpty(Window(10000).Property(subs.sync.mode)) + !VideoPlayer.Content(LiveTV)</visible>
+				</control>
+				<control type="label">
+					<left>272</left>
+					<top>52</top>
+					<width>200</width>
+					<height>36</height>
+					<align>left</align>
+					<aligny>center</aligny>
+					<label>[B]$INFO[Window(10000).Property(subs.sync.offset)][/B]</label>
+					<visible>!String.IsEmpty(Window(10000).Property(subs.sync.mode)) + !VideoPlayer.Content(LiveTV)</visible>
+				</control>
 				
 				<control type="grouplist" id="201">
 					<left>20</left>

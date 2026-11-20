@@ -33,6 +33,13 @@ _CURRENT_SUB_STATUS_PROP = 'moransubs.current_subsync_status'
 _CURRENT_SUB_TOKEN_PROP = 'moransubs.current_sub_token'
 _CURRENT_SUB_FIX_READY_PROP = 'moransubs.current_subsync_fix_ready'
 _CURRENT_SUB_DELIVERY_PROP = 'moransubs.current_subsync_delivery'
+# The applied auto-sync, for the chooser and the skins (Window(Home).Property): ``subs.sync.offset`` is the
+# Kodi-equivalent delay ('+2.5s', '-1.2s') or the Hebrew word 'מקטעים' (piecewise) / 'שינוי קצב' (scaled);
+# ``subs.sync.mode`` is offset | scale | piecewise. Both are empty unless the CURRENT selection is "fixed".
+SYNC_OFFSET_PROP = 'subs.sync.offset'
+SYNC_MODE_PROP = 'subs.sync.mode'
+# Token-scoped: where the unshifted file is and which verdict keys "בטל סנכרון אוטומטי" vetoes.
+_CURRENT_SUB_UNDO_PROP = 'moransubs.current_subsync_undo'
 
 # Short, skin-safe labels. The value is shown only for the subtitle that is
 # actually selected, after the exact playing stream has been matched. It is a
@@ -210,6 +217,40 @@ def _new_subtitle_selection_token(link):
                 'utf-8', 'replace')).hexdigest()[:24]
 
 
+def _clear_sync_badge(win, token=''):
+    """Drop the published auto-sync badge (mode first: the skins key their visibility on it)."""
+    win.clearProperty(SYNC_MODE_PROP)
+    win.clearProperty(SYNC_OFFSET_PROP)
+    if token:
+        win.clearProperty(_CURRENT_SUB_UNDO_PROP + '.' + token)
+
+
+def _publish_sync_badge(win, token, badge):
+    win.setProperty(SYNC_OFFSET_PROP, str(badge.get('offset') or ''))
+    win.setProperty(SYNC_MODE_PROP, str(badge.get('mode') or 'offset'))
+    win.setProperty(_CURRENT_SUB_UNDO_PROP + '.' + token, json.dumps({
+        'v': 1, 'original': str(badge.get('original') or ''),
+        'keys': [str(k) for k in (badge.get('keys') or []) if k],
+    }, ensure_ascii=False, separators=(',', ':')))
+
+
+def get_sync_undo(selection=None):
+    """What "בטל סנכרון אוטומטי" needs ({'original', 'keys'}), only for the exact live selection; else {}."""
+    try:
+        expected = _selection_values(selection)
+        if (not all(expected.values()) or not subtitle_selection_matches(
+                expected['token'], expected['link_hash'], expected['stream_hash'])):
+            return {}
+        win = home_window()
+        raw = (win.getProperty(_CURRENT_SUB_UNDO_PROP + '.' + expected['token']) if win else '')
+        record = json.loads(raw) if raw else {}
+        if record.get('v') != 1 or not record.get('original'):
+            return {}
+        return record
+    except Exception:
+        return {}
+
+
 def clear_subtitle_sync_status():
     """Clear the tiny current-selection status record (no disk/network I/O)."""
     try:
@@ -220,6 +261,7 @@ def clear_subtitle_sync_status():
                 win.clearProperty(_CURRENT_SUB_STATUS_PROP + '.' + token)
                 win.clearProperty(_CURRENT_SUB_FIX_READY_PROP + '.' + token)
                 win.clearProperty(_CURRENT_SUB_DELIVERY_PROP + '.' + token)
+            _clear_sync_badge(win, token)
             # Remove a record left by the pre-token implementation too.
             win.clearProperty(_CURRENT_SUB_STATUS_PROP)
             win.clearProperty(_CURRENT_SUB_DELIVERY_PROP)
@@ -359,13 +401,16 @@ def subtitle_selection_matches(selection_token='', link_hash='',
 
 def set_subtitle_sync_status(state, source='', link=None, stream_url=None,
                              selection_token='', link_hash='',
-                             stream_hash=''):
+                             stream_hash='', badge=None):
     """Publish timing state for the exact current subtitle and video.
 
     The record contains only hashes plus a short state/source. It lives in a
     Kodi Window property, so this adds no Cloudflare request, write, user-cache
     file or persistent storage. A stale background job cannot attach its result
     to another pick because both the candidate and stream must match.
+
+    ``badge`` (sync.common.fix_badge) accompanies a "fixed" state: it publishes the
+    ``subs.sync.*`` window properties and the undo record. Any other state retires them.
     """
     if not KODI_AVAILABLE or state not in _SUBTITLE_SYNC_LABELS:
         return False
@@ -411,6 +456,14 @@ def set_subtitle_sync_status(state, source='', link=None, stream_url=None,
             if win.getProperty(prop) == raw:
                 win.clearProperty(prop)
             return False
+        if state != 'fixed':
+            _clear_sync_badge(win, current_token)
+        elif badge:
+            _publish_sync_badge(win, current_token, badge)
+            if not subtitle_selection_matches(
+                    current_token, current_link_hash, current_stream_hash):
+                _clear_sync_badge(win, current_token)
+                return False
         return True
     except Exception:
         return False
@@ -626,8 +679,9 @@ def abandon_subtitle_selection(selection=None):
         return False
 
 
-def stage_subtitle_sync_fix(path, selection=None, source='local', notice=''):
-    """Remember a corrected copy until its caller proves Kodi received it."""
+def stage_subtitle_sync_fix(path, selection=None, source='local', notice='', badge=None):
+    """Remember a corrected copy until its caller proves Kodi received it. ``badge`` (sync.common.fix_badge)
+    is published with the FIXED status once Kodi has it."""
     try:
         expected = _selection_values(selection)
         if (not path or not all(expected.values())
@@ -643,6 +697,12 @@ def stage_subtitle_sync_fix(path, selection=None, source='local', notice=''):
             'notice': (notice or '')[:96],
             'ts': int(time.time()),
         }
+        if badge:
+            payload['badge'] = {
+                'offset': str(badge.get('offset') or ''), 'mode': str(badge.get('mode') or ''),
+                'original': str(badge.get('original') or ''),
+                'keys': [str(k) for k in (badge.get('keys') or []) if k],
+            }
         win = home_window()
         if win is None:
             return False
@@ -859,7 +919,8 @@ def confirm_subtitle_sync_fix(path, selection=None):
             'fixed', source=record.get('source') or 'local',
             selection_token=expected['token'],
             link_hash=expected['link_hash'],
-            stream_hash=expected['stream_hash'])
+            stream_hash=expected['stream_hash'],
+            badge=record.get('badge') or None)
         if published:
             if win.getProperty(prop) == raw:
                 win.clearProperty(prop)

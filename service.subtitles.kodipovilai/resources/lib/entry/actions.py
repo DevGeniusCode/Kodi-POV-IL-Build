@@ -1,6 +1,6 @@
 # MoranSubs by MoranTheKing - https://github.com/MoranTheKing/Kodi-POV-IL
 # SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
-# Small RunScript actions: the Hebrew-availability warm (he_avail) and the chooser opener.
+# Small RunScript actions: the Hebrew-availability warm (he_avail), the chooser opener, cancel_translation and unsync.
 
 try:
     import xbmc
@@ -80,6 +80,18 @@ def handle_choose_subs(params):
             xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
         except Exception:
             pass
+
+
+def handle_unsync(params):
+    """The "בטל סנכרון אוטומטי" button (RunScript action=unsync; the chooser's button 206, skins may call it too).
+
+    Puts the original, unshifted copy of the current subtitle back and keeps the automatic sync away from this
+    subtitle and cut (sync/unsync.cancel_auto_sync); a toast answers the press. Local only: nothing is shared."""
+    try:
+        from resources.lib.sync import unsync
+        unsync.cancel_auto_sync()
+    except Exception as e:
+        safe_log('unsync crashed: {0}'.format(e), level='WARNING')
 
 
 # Link kinds whose resolve() translates: a selection of one of these means a translation is (or was just) running.

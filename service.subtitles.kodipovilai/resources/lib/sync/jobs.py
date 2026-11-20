@@ -21,14 +21,14 @@ try:
 except Exception:
     common = retime = verify = None
 from resources.lib.sync.candidates import is_human_hebrew_candidate, ready_candidate_text
-from resources.lib.sync.common import INFO_KEYS, STATUS_ALTERNATE_APPLIED, STATUS_NO_ORACLE, yield_state
+from resources.lib.sync.common import INFO_KEYS, STATUS_ALTERNATE_APPLIED, STATUS_NO_ORACLE, fix_badge, sync_notice, yield_state
 from resources.lib.sync.deep import ViewerLeft, DEEP_THREAD, deep_verify, remember_rejected_timing, timing_attempt_key
 from resources.lib.sync.delivery_record import clear_delivery, record_delivery
 from resources.lib.core.link_codec import decode_link_safe
 from resources.lib.sync.probes.bundle import bundle_envelope, cached_reference_bundle, envelope_diag, envelope_hypothesis_search, probe_reference_bundle, verify_file_bundle
 from resources.lib.sync.probes.cache import learn_cut_signature
 from resources.lib.sync.probes.remote import current_stream_transport
-from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, load_verdicts, store_verdict
+from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, is_vetoed, load_verdicts, store_verdict
 from resources.lib.core.srt.cues import STATUS_UNKNOWN
 
 
@@ -415,6 +415,11 @@ def apply_verified_human_fallback(job, cache_only=False, reference=None):
                           common.STATUS_FIXABLE):
             remember_rejected_timing(job, text, cut_signature, verdict)
             continue
+        if (status == common.STATUS_FIXABLE
+                and is_vetoed(cache_key(text, playing, cut_signature))):
+            log('autosub tournament: %r is FIXABLE but the viewer cancelled '
+                 'its automatic sync for this cut -- skipped' % rel)
+            continue
         if status == common.STATUS_FIXABLE:
             # A map this subtitle cannot take is no fix: try the next row, as
             # the primary's deep check does (it turns such a verdict UNKNOWN).
@@ -487,8 +492,11 @@ def apply_verified_human_fallback(job, cache_only=False, reference=None):
                 cancel_pending()
                 if not core_selection.stage_subtitle_sync_fix(
                         delivery_path, selection=fallback_selection,
-                        source='tournament', notice=(
-                            'הכתובית סונכרנה אוטומטית')):
+                        source='tournament', notice=sync_notice(verdict),
+                        badge=fix_badge(verdict, path, [
+                            cache_key(text, playing, cut_signature),
+                            cache_key(delivery_text, playing, cut_signature),
+                        ])):
                     raise RuntimeError('verified correction could not be staged')
             else:
                 if not core_selection.stage_subtitle_delivery(
@@ -539,30 +547,13 @@ def _announce(verdict, fresh, offset_hint=None, selection=None):
             return
         if (verdict.get('status') == common.STATUS_FIXABLE
                 and verdict.get('applied')):
-            off = float(offset_hint if offset_hint is not None
-                        else verdict.get('offset_ms') or 0.0)
-            scale = float(verdict.get('scale') or 1.0)
-            if verdict.get('mode', 'global') == 'global' and scale == 1.0 and off:
-                msg = 'הכתובית סונכרנה אוטומטית ({0:+.1f} שנ׳)'.format(
-                    -off / 1000.0)
-            else:
-                msg = 'הכתובית סונכרנה אוטומטית'
-            kodi.notify(msg, time_ms=5000)
+            kodi.notify(sync_notice(verdict, offset_hint), time_ms=5000)
     except Exception:
         pass
 
 
 def fix_notice(verdict, offset_hint=None):
-    try:
-        off = float(offset_hint if offset_hint is not None
-                    else verdict.get('offset_ms') or 0.0)
-        scale = float(verdict.get('scale') or 1.0)
-        if verdict.get('mode', 'global') == 'global' and scale == 1.0 and off:
-            return 'הכתובית סונכרנה אוטומטית ({0:+.1f} שנ׳)'.format(
-                -off / 1000.0)
-    except Exception:
-        pass
-    return 'הכתובית סונכרנה אוטומטית'
+    return sync_notice(verdict, offset_hint)
 
 
 def job_matches_current(job):
@@ -801,8 +792,10 @@ def _run_file_only_job(job, info, playing, path, job_selection):
                                  selection=job_selection)
             else:
                 clear_delivery(selection=job_selection)
-            if publish_selection_status('fixed', 'local',
-                                         selection=job_selection):
+            if publish_selection_status(
+                    'fixed', 'local', selection=job_selection,
+                    badge=fix_badge(verdict, path, [
+                        job.get('key'), exact_key, verdict.get('cache_key')])):
                 _announce(dict(verdict, applied=True), fresh=True,
                           selection=job_selection)
             return
@@ -959,7 +952,9 @@ def run_deep_job(job):
         # that couldn't be verified changes nothing on screen -> stay silent.
         if swapped:
             if publish_selection_status(
-                    'fixed', 'local', selection=job_selection):
+                    'fixed', 'local', selection=job_selection,
+                    badge=fix_badge(verdict, path, [
+                        key, verdict.get('cache_key')])):
                 if selection_matches(job_selection):
                     _announce(dict(verdict, applied=True), fresh=True,
                               selection=job_selection)
@@ -1079,9 +1074,5 @@ def status_line(verdict):
         return ''
     st = verdict.get('status')
     if st == common.STATUS_FIXABLE and verdict.get('applied'):
-        off = float(verdict.get('offset_ms') or 0.0)
-        scale = float(verdict.get('scale') or 1.0)
-        if verdict.get('mode', 'global') == 'global' and scale == 1.0 and off:
-            return 'הכתובית סונכרנה אוטומטית ({0:+.1f} שנ׳)'.format(-off / 1000.0)
-        return 'הכתובית סונכרנה אוטומטית'
+        return sync_notice(verdict)
     return ''

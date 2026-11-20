@@ -20,6 +20,9 @@ except Exception:
 _VERDICT_FILE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
                  'subsync_verdicts.json')
 _MAX_VERDICTS = 400
+# The viewer pressed "בטל סנכרון אוטומטי" for this (subtitle, cut): the automatic fix is never applied again.
+# Local only: it is never reported to the community pool. It outlives VERDICT_VERSION bumps (see is_vetoed).
+STATUS_USER_VETO = 'USER_VETO'
 # Bump to invalidate ALL previously stored verdicts after an engine change.
 # v6: offset refinement (median of deltas) supersedes the coarse 500ms bin
 # -- fixes stored at bin precision (field: +1500ms should have been ~+1000)
@@ -165,13 +168,37 @@ def load_verdicts():
         return {}
 
 
-def store_verdict(key, verdict):
+def is_vetoed(key, verdicts=None):
+    """True when the viewer cancelled the automatic sync of this exact (subtitle, cut) key. The stamp
+    version is ignored on purpose: an engine bump recomputes verdicts, never a viewer's decision."""
+    try:
+        entry = (load_verdicts() if verdicts is None else verdicts).get(key)
+        return bool(entry and entry.get('status') == STATUS_USER_VETO)
+    except Exception:
+        return False
+
+
+def store_veto(key):
+    """Record the viewer's "no automatic sync for this one" under its sub_hash|cut_signature key."""
+    if not key:
+        return False
+    store_verdict(key, {'status': STATUS_USER_VETO, 'scale': 1.0, 'offset_ms': 0.0, 'mode': 'global',
+                        'diag': 'the viewer cancelled the automatic sync'}, override_veto=True)
+    return is_vetoed(key)
+
+
+def store_verdict(key, verdict, override_veto=False):
     from resources.lib.sync.service import log
     path = _verdict_path()
     if not path:
         return
     try:
         data = load_verdicts()
+        # A late background verdict must never undo the viewer's veto; only an explicit viewer action
+        # (a veto, a manual delay confirmed as a human verdict) replaces it.
+        if (not override_veto and (data.get(key) or {}).get('status') == STATUS_USER_VETO
+                and verdict.get('status') != STATUS_USER_VETO):
+            return
         # Piecewise verdicts carry their validation certificate.  Dropping it
         # made apply_verdict correctly refuse a cached map on the next play.
         # Verdict dictionaries contain only small JSON-safe scalar/list data;
@@ -187,9 +214,12 @@ def store_verdict(key, verdict):
                       'diag': verdict.get('diag', '')})
         data[key] = entry
         if len(data) > _MAX_VERDICTS:
-            data = dict(sorted(data.items(),
-                               key=lambda kv: kv[1].get('ts', 0),
-                               reverse=True)[:_MAX_VERDICTS])
+            # Vetoes are tiny and are the viewer's own decisions: they are kept before anything else.
+            vetoes = {k: v for k, v in data.items() if v.get('status') == STATUS_USER_VETO}
+            rest = sorted(((k, v) for k, v in data.items() if k not in vetoes),
+                          key=lambda kv: kv[1].get('ts', 0), reverse=True)
+            data = dict(rest[:max(0, _MAX_VERDICTS - len(vetoes))])
+            data.update(vetoes)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
@@ -337,7 +367,8 @@ def store_human_verdict(report):
             'mode': 'global',
             'diag': 'human-confirmed exact media cut',
         }
-        store_verdict(key, verdict)
+        # A manual delay the viewer confirmed after cancelling the automatic sync is a newer decision.
+        store_verdict(key, verdict, override_veto=True)
         return True
     except Exception:
         return False

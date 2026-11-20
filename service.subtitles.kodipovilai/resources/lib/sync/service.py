@@ -16,12 +16,13 @@ try:
     from resources.lib.sync.align import common, retime
 except Exception:
     common = retime = None
+from resources.lib.sync.common import fix_badge
 from resources.lib.sync.delivery_record import clear_delivery, record_delivery
 from resources.lib.sync.jobs import clear_job_pending, enqueue_deep, fix_notice, mark_pending, selection_matches, write_fixed
 from resources.lib.sync.probes.bundle import cached_reference_bundle
 from resources.lib.sync.probes.cache import known_cut_signature
 from resources.lib.sync.probes.remote import playing_url, remote_playing_url
-from resources.lib.sync.verdicts import VERDICT_VERSION, cache_key, community_verdict, load_verdicts, store_verdict
+from resources.lib.sync.verdicts import STATUS_USER_VETO, VERDICT_VERSION, cache_key, community_verdict, is_vetoed, load_verdicts, store_verdict
 from resources.lib.core.srt.cues import STATUS_UNKNOWN
 
 
@@ -37,8 +38,9 @@ def selection_snapshot():
         return {}
 
 
-def publish_selection_status(state, source='local', selection=None):
-    """Update the current pick's tiny UI record; never performs network I/O."""
+def publish_selection_status(state, source='local', selection=None, badge=None):
+    """Update the current pick's tiny UI record; never performs network I/O. ``badge`` (common.fix_badge)
+    accompanies a 'fixed' state."""
     try:
         if kodi is not None:
             expected = selection or {}
@@ -49,7 +51,8 @@ def publish_selection_status(state, source='local', selection=None):
                 state, source=source,
                 selection_token=expected.get('token') or '',
                 link_hash=expected.get('link_hash') or '',
-                stream_hash=expected.get('stream_hash') or ''))
+                stream_hash=expected.get('stream_hash') or '',
+                badge=badge))
     except Exception:
         return False
     return False
@@ -160,6 +163,18 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
         cut_signature = known_cut_signature(info, playing)
         key = cache_key(text, playing, cut_signature)
 
+        # The viewer pressed "בטל סנכרון אוטומטי" for this exact (subtitle, cut): deliver it as it is and
+        # never verify, fix or report it again (a local decision, nothing goes to the community pool).
+        if is_vetoed(key):
+            log('delivery kept as delivered: the viewer cancelled the '
+                 'automatic sync of this subtitle for this cut')
+            record_delivery(info, playing, key, 1.0, 0.0,
+                             cut_signature=cut_signature,
+                             selection=selection)
+            core_selection.stage_subtitle_delivery(
+                path, selection=selection, status='', source='user')
+            return path, {'status': STATUS_USER_VETO, 'vetoed': True}
+
         # Trusted tier -> synced by release identity; nothing to do (still
         # recorded so a manual-delay fix on it feeds the community registry).
         rel = (delivered_release or '').strip()
@@ -221,7 +236,8 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                         # before the delay watcher can learn or share it.
                         clear_delivery(selection=selection)
                     core_selection.stage_subtitle_sync_fix(
-                        out, selection=selection, source='cache')
+                        out, selection=selection, source='cache',
+                        badge=fix_badge(cached, path, [key]))
                     return out, {'status': status, 'applied': True,
                                  'offset_ms': cached.get('offset_ms', 0.0),
                                  'scale': cached.get('scale', 1.0),
@@ -295,7 +311,8 @@ def process(info, path, delivered_release, selection=None, fallback_link='',
                         clear_delivery(selection=selection)
                     core_selection.stage_subtitle_sync_fix(
                         out, selection=selection, source='community',
-                        notice=fix_notice(verdict))
+                        notice=fix_notice(verdict),
+                        badge=fix_badge(verdict, path, [key]))
                     return out, verdict
             elif status == common.STATUS_CONFIRMED:
                 store_verdict(key, cv)

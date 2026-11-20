@@ -256,6 +256,210 @@ _t.join(2)
 _lines[:] = []
 check('threads: silent when every thread ended', svc_threads.log_survivors(wait=0.2) == 0 and not _lines)
 
+# ---- 5. B1: the applied auto-sync is published as window properties (subs.sync.offset / subs.sync.mode) ------------------
+import json
+
+from resources.lib.core import selection as core_selection
+from resources.lib.sync import common as sync_common
+from resources.lib.sync import jobs as sync_jobs
+from resources.lib.sync import verdicts as sync_verdicts
+
+core_selection.notify = lambda *a, **k: None          # the staged toast is not what is tested here
+
+
+def fixable(offset_ms=-2500.0, scale=1.0, mode='global'):
+    return {'status': 'FIXABLE', 'offset_ms': offset_ms, 'scale': scale, 'mode': mode, 'applied': True}
+
+
+d = sync_common.describe_fix(fixable(-2500.0))
+check('badge: a subtitle moved EARLIER by the fix reads as Kodi\'s +delay (+2.5s), mode offset',
+      d == {'mode': 'offset', 'label': '+2.5s', 'text': '+2.5 שנ׳'})
+check('badge: a subtitle moved LATER reads as a minus (-1.2s)', sync_common.describe_fix(fixable(1200.0))['label'] == '-1.2s')
+check('badge: a scaled fix says שינוי קצב, a piecewise one says מקטעים',
+      sync_common.describe_fix(fixable(0.0, scale=1.001))['label'] == 'שינוי קצב'
+      and sync_common.describe_fix(fixable(0.0, mode='piecewise'))['label'] == 'מקטעים'
+      and sync_common.describe_fix(fixable(0.0, scale=1.001))['mode'] == 'scale'
+      and sync_common.describe_fix(fixable(0.0, mode='piecewise'))['mode'] == 'piecewise')
+check('badge: a zero shift has no label', sync_common.describe_fix(fixable(0.0))['label'] == '')
+check('badge: the offset hint (a refined offset) wins over the verdict',
+      sync_common.describe_fix(fixable(-2500.0), offset_hint=-1000.0)['label'] == '+1.0s')
+
+# every toast builder says the same words
+_toasts = []
+sync_jobs.kodi.notify = lambda msg, **k: _toasts.append(msg)
+for v in (fixable(-2500.0), fixable(1200.0), fixable(0.0, scale=1.001), fixable(0.0, mode='piecewise'), fixable(0.0)):
+    want = sync_common.sync_notice(v)
+    _toasts[:] = []
+    sync_jobs._announce(v, fresh=True)
+    check('toast: _announce / fix_notice / status_line agree (%s)' % want,
+          sync_jobs.fix_notice(v) == want and sync_jobs.status_line(v) == want and _toasts == [want])
+check('toast: the sentence keeps the old text for a plain shift',
+      sync_common.sync_notice(fixable(-2500.0)) == 'הכתובית סונכרנה אוטומטית (+2.5 שנ׳)'
+      and sync_common.sync_notice(fixable(0.0)) == 'הכתובית סונכרנה אוטומטית')
+
+TMP5 = tempfile.mkdtemp()
+ORIG = os.path.join(TMP5, 'orig.he.srt')
+FIXED = os.path.join(TMP5, 'orig.abc.synced.he.srt')
+ORIG_TEXT = '1\n00:00:01,000 --> 00:00:02,000\nשלום\n'
+open(ORIG, 'w', encoding='utf-8').write(ORIG_TEXT)
+open(FIXED, 'w', encoding='utf-8').write(ORIG_TEXT.replace('00:00:01,000', '00:00:03,500'))
+SIG = 'cut1:' + 'a' * 32
+KEY = sync_verdicts.cache_key(ORIG_TEXT, 'Show.S01E01.1080p', SIG)
+sync_verdicts._verdict_path = lambda: os.path.join(TMP5, 'subsync_verdicts.json')
+
+
+class FakePlayer(object):
+    set_calls = []
+
+    def isPlayingVideo(self):
+        return True
+
+    def isPlaying(self):
+        return True
+
+    def getPlayingFile(self):
+        return 'x.mkv'
+
+    def getAvailableSubtitleStreams(self):
+        return ['he']
+
+    def setSubtitles(self, path):
+        FakePlayer.set_calls.append(path)
+
+    def showSubtitles(self, on):
+        pass
+
+    def setSubtitleStream(self, i):
+        pass
+
+
+sys.modules['xbmc'].Player = FakePlayer
+sys.modules['xbmc'].getInfoLabel = lambda s: ''
+
+
+def select(link):
+    core_selection.set_current_subtitle(link, renew=True)
+    return core_selection.current_subtitle_selection()
+
+
+def publish_fix(sel, verdict, path=FIXED, original=ORIG, keys=(KEY,)):
+    """stage + confirm = what service.process / the tournament / background do for a fix Kodi has registered"""
+    badge = sync_common.fix_badge(verdict, original, list(keys))
+    ok = core_selection.stage_subtitle_sync_fix(path, selection=sel, source='cache', badge=badge)
+    return ok and core_selection.confirm_subtitle_sync_fix(path, selection=sel)
+
+
+def props():
+    return WIN.getProperty('subs.sync.offset'), WIN.getProperty('subs.sync.mode')
+
+
+sel = select('LINK-A')
+check('props: nothing is published before a fix', props() == ('', ''))
+check('props: a confirmed fix publishes the offset and the mode', publish_fix(sel, fixable(-2500.0)) and props() == ('+2.5s', 'offset'))
+check('props: the undo record holds the original file and the verdict key',
+      core_selection.get_sync_undo(sel) == {'v': 1, 'original': ORIG, 'keys': [KEY]})
+check('props: the status is "fixed"', core_selection.get_subtitle_sync_status().get('state') == 'fixed')
+core_selection.set_subtitle_sync_status('confirmed', source='local')
+check('props: a later non-fixed status clears them', props() == ('', '') and core_selection.get_sync_undo(sel) == {})
+publish_fix(sel, fixable(0.0, mode='piecewise'))
+check('props: a piecewise fix publishes מקטעים / piecewise', props() == ('מקטעים', 'piecewise'))
+core_selection.clear_subtitle_sync_status()
+check('props: clear_subtitle_sync_status clears them', props() == ('', '') and core_selection.get_sync_undo(sel) == {})
+publish_fix(sel, fixable(0.0, scale=1.001))
+check('props: a scaled fix publishes שינוי קצב / scale', props() == ('שינוי קצב', 'scale'))
+sel2 = select('LINK-B')
+check('props: picking another subtitle clears them (and the old selection cannot undo)',
+      props() == ('', '') and core_selection.get_sync_undo(sel) == {})
+publish_fix(sel2, fixable(-2500.0))
+check('props: re-selecting the SAME subtitle keeps them', (core_selection.set_current_subtitle('LINK-B') or True) and props() == ('+2.5s', 'offset'))
+check('props: a stale selection cannot publish a badge over the current one',
+      core_selection.stage_subtitle_sync_fix(FIXED, selection=sel, source='cache') is False and props() == ('+2.5s', 'offset'))
+
+# ---- 6. B2: "בטל סנכרון אוטומטי" (sync/unsync.py, action=unsync) ---------------------------------------------------------
+from resources.lib.sync import delivery_record, unsync
+from resources.lib.sync import service as sync_service
+
+# nothing may reach the community pool: spy on the writer and check the module's own source
+_pool_calls = []
+try:
+    from resources.lib.ai_translation.reuse import pool_contribute
+    pool_contribute.report_sync = lambda *a, **k: _pool_calls.append(('report_sync', a))
+except Exception:
+    pass
+_said = []
+unsync._say = lambda msg: _said.append(msg)
+
+sel = select('LINK-U')
+INFO = {'imdb_id': 'tt1', 'title': 'Show', 'season': '1', 'episode': '1'}
+delivery_record.record_delivery(INFO, 'Show.S01E01.1080p', KEY, 1.0, -2500.0, cut_signature=SIG, selection=sel)
+publish_fix(sel, fixable(-2500.0))
+check('unsync: the fix is live before the cancel', props() == ('+2.5s', 'offset')
+      and json.loads(WIN.getProperty('subsync.delivered.' + sel['token']))['offset'] == -2500.0)
+FakePlayer.set_calls[:] = []
+check('unsync: the cancel succeeds', unsync.cancel_auto_sync(announce=True) is True)
+check('unsync: the ORIGINAL file went back through setSubtitles (the slot replacement)', FakePlayer.set_calls == [ORIG])
+check('unsync: the subs.sync.* properties and the FIXED status are gone',
+      props() == ('', '') and core_selection.get_subtitle_sync_status() == {} and core_selection.get_sync_undo(sel) == {})
+_rec = json.loads(WIN.getProperty('subsync.delivered.' + sel['token']))
+check('unsync: the delivery record is reset to scale 1.0 / offset 0 (same key, same cut)',
+      _rec['scale'] == 1.0 and _rec['offset'] == 0.0 and _rec['key'] == KEY and _rec['cut_signature'] == SIG)
+check('unsync: a local veto is stored under the sub_hash|cut_signature key',
+      sync_verdicts.is_vetoed(KEY) and KEY.endswith('|' + SIG)
+      and sync_verdicts.load_verdicts()[KEY]['status'] == sync_verdicts.STATUS_USER_VETO)
+check('unsync: the viewer is told (a toast)', _said == [unsync.MSG_DONE])
+_src = open(unsync.__file__, encoding='utf-8').read()
+check('unsync: nothing went to the community pool (spy) and the module imports no pool / report code (source)',
+      not _pool_calls and not any(n in _src for n in ('pool_contribute', 'pool_client', 'report_sync', 'sync_registry')))
+
+# the veto holds: a replay of the same cut is delivered as it is, nothing is queued, a late background verdict is ignored
+_queued = []
+sync_service.enqueue_deep = lambda *a, **k: _queued.append(a) or True
+sync_service.known_cut_signature = lambda info, playing: SIG
+sync_service.playing_release = lambda info: 'Show.S01E01.1080p'
+sel3 = select('LINK-U')                       # a fresh selection of the same row (a replay)
+out, verdict = sync_service.process(INFO, ORIG, '', selection=sel3)
+check('veto: a replay delivers the original and reports the veto, no fix, no deep job',
+      out == ORIG and verdict.get('status') == sync_verdicts.STATUS_USER_VETO and not _queued)
+sync_verdicts.store_verdict(KEY, {'status': 'FIXABLE', 'scale': 1.0, 'offset_ms': -2500.0, 'mode': 'global'})
+check('veto: a late background FIXABLE verdict does not undo it', sync_verdicts.is_vetoed(KEY))
+sync_verdicts.VERDICT_VERSION += 1
+check('veto: an engine version bump does not forget it', sync_verdicts.is_vetoed(KEY))
+sync_verdicts.VERDICT_VERSION -= 1
+_filler = {'k%d' % i: {'status': 'CONFIRMED', 'ts': 1e9 + i, 'v': sync_verdicts.VERDICT_VERSION} for i in range(450)}
+_data = sync_verdicts.load_verdicts()
+_data.update(_filler)
+json.dump(_data, open(sync_verdicts._verdict_path(), 'w'))
+sync_verdicts.store_verdict('one-more', {'status': 'CONFIRMED'})
+check('veto: the cache trim keeps vetoes before anything else', sync_verdicts.is_vetoed(KEY)
+      and len(sync_verdicts.load_verdicts()) <= 401)
+check('veto: only the viewer\'s own confirmed manual delay replaces it',
+      sync_verdicts.store_human_verdict({'mode': 'global', 'cache_key': KEY, 'cut_signature': SIG, 'status': 'FIXABLE',
+                                         'scale': 1.0, 'offset_ms': -500.0}) and not sync_verdicts.is_vetoed(KEY))
+
+# the cancel refuses when it cannot be exact
+sel4 = select('LINK-V')
+_said[:] = []
+check('unsync: with no automatic sync on screen it says so and changes nothing',
+      unsync.cancel_auto_sync() is False and _said == [unsync.MSG_NONE])
+publish_fix(sel4, fixable(-2500.0))
+open(ORIG, 'w', encoding='utf-8').write(ORIG_TEXT + '\n2\n00:00:05,000 --> 00:00:06,000\nאחר\n')   # a later download reused the name
+FakePlayer.set_calls[:] = []
+_said[:] = []
+check('unsync: when the original was replaced by another download it refuses (no veto, nothing delivered, badge stays)',
+      unsync.cancel_auto_sync() is False and _said == [unsync.MSG_FAILED] and not FakePlayer.set_calls
+      and props() == ('+2.5s', 'offset') and not sync_verdicts.is_vetoed(KEY))
+
+# wiring: the RunScript action and the chooser button
+_plugin = open(os.path.join(ADDON, 'resources', 'lib', 'entry', 'plugin.py'), encoding='utf-8').read()
+check("wiring: action=unsync is routed to entry.actions.handle_unsync", "'unsync': handle_unsync" in _plugin
+      and 'handle_unsync' in open(os.path.join(ADDON, 'resources', 'lib', 'entry', 'actions.py'), encoding='utf-8').read())
+import xml.dom.minidom
+_dom = xml.dom.minidom.parse(os.path.join(ADDON, 'resources', 'skins', 'Default', '1080i', 'script.moransubs.chooser.xml'))
+_btn = [c for c in _dom.getElementsByTagName('control') if c.getAttribute('id') == '206']
+_xml206 = _btn[0].toxml() if _btn else ''
+check('wiring: chooser button 206 runs action=unsync and shows only while subs.sync.mode is set',
+      len(_btn) == 1 and 'action=unsync' in _xml206 and 'Window(Home).Property(subs.sync.mode)' in _xml206)
+
 print('')
 print('FAILED: %d' % len(FAILED) if FAILED else 'ALL CHECKS PASSED')
 sys.exit(1 if FAILED else 0)

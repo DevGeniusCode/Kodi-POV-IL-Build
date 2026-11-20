@@ -12,8 +12,12 @@
      accessibility of the subtitle. Rows and properties are built in ui/chooser_rows.py; the colours are baked
      into the property text (BBCode), a per-row <textcolor>$INFO[...]</textcolor> is unreliable in Kodi.
      Ids: list 100, manual search 202, back to the automatic list 203 (only while a manual result is shown: window
-     property subs.manual), cancel translation 204, subtitle settings 205, close 201. Button row (left to right):
-     205 204 203 | 202 201; every button goes up to the list, left / right walk the row (a hidden 203 is skipped).
+     property subs.manual), cancel translation 204, subtitle settings 205, cancel the automatic sync 206 (only while
+     the current subtitle was synced automatically: window property subs.sync.mode), close 201. Button row (left to
+     right): 205 204 203 206 | 202 201; every button goes up to the list, left / right walk the row (a hidden 203 / 206
+     is skipped). AUTO-SYNC BADGE (header): "סונכרנה אוטומטית" + the applied shift, read from the Home window
+     properties subs.sync.offset ('+2.5s', '-1.2s', 'מקטעים', 'שינוי קצב') and subs.sync.mode (core/selection.py);
+     the value is its own control so a Latin number never mixes with the Hebrew words (bidi).
      Manual search (ui/chooser.py, ui/manual_prompts.py, fetching/manual.py) asks for a title and a year, or a show, a
      season and an episode, and shows the rows here; "חזרה לרשימה" brings the automatic list back. The window name stays script.moransubs.chooser.xml and the
      property MoranSubsChooserOpen is set by ui/chooser.py (both read by skins). -->
@@ -59,6 +63,22 @@
             <label>[B]בחירת כתוביות[/B]</label>
             <textcolor>FFF2F5F8</textcolor>
             <aligny>center</aligny>
+        </control>
+        <control type="label">
+            <left>520</left><top>30</top><width>200</width><height>50</height>
+            <font>font13</font>
+            <label>סונכרנה אוטומטית</label>
+            <textcolor>FF46C46A</textcolor>
+            <align>right</align><aligny>center</aligny>
+            <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
+        </control>
+        <control type="label">
+            <left>732</left><top>30</top><width>180</width><height>50</height>
+            <font>font13</font>
+            <label>[B]$INFO[Window(Home).Property(subs.sync.offset)][/B]</label>
+            <textcolor>FFF2F5F8</textcolor>
+            <align>left</align><aligny>center</aligny>
+            <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
         </control>
         <control type="label">
             <left>1000</left><top>30</top><width>280</width><height>50</height>
@@ -551,7 +571,8 @@
             </control>
         </control>
 
-        <!-- Buttons: 205 204 203 | 202 201 (203 only while a manual result is shown) -->
+        <!-- Buttons: 205 204 203 206 | 202 201 (203 only while a manual result is shown, 206 only while the current
+             subtitle was synced automatically) -->
         <control type="button" id="205">
             <left>40</left><top>976</top><width>300</width><height>60</height>
             <texturefocus colordiffuse="FF8FB4E0">white.png</texturefocus>
@@ -579,8 +600,20 @@
             <label>[B]חזרה לרשימה[/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>204</onleft><onright>202</onright><onup>100</onup><ondown>203</ondown>
+            <onleft>204</onleft><onright>206</onright><onup>100</onup><ondown>203</ondown>
             <visible>!String.IsEmpty(Window.Property(subs.manual))</visible>
+        </control>
+        <control type="button" id="206">
+            <left>976</left><top>976</top><width>330</width><height>60</height>
+            <texturefocus colordiffuse="FFD0594F">white.png</texturefocus>
+            <texturenofocus colordiffuse="33D0594F">white.png</texturenofocus>
+            <label>[B]בטל סנכרון אוטומטי[/B]</label>
+            <font>font13</font><align>center</align><aligny>center</aligny>
+            <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor>
+            <onleft>203</onleft><onright>202</onright><onup>100</onup><ondown>206</ondown>
+            <onclick>SetFocus(100)</onclick>
+            <onclick>RunScript(service.subtitles.kodipovilai,action=unsync)</onclick>
+            <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
         </control>
         <control type="button" id="202">
             <left>1320</left><top>976</top><width>274</width><height>60</height>
@@ -589,7 +622,7 @@
             <label>[B]חיפוש כתוביות ידני[/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
-            <onleft>203</onleft><onright>201</onright><onup>100</onup><ondown>202</ondown>
+            <onleft>206</onleft><onright>201</onright><onup>100</onup><ondown>202</ondown>
         </control>
         <control type="button" id="201">
             <left>1606</left><top>976</top><width>274</width><height>60</height>

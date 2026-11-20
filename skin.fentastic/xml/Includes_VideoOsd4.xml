@@ -96,7 +96,8 @@
 	<include>__ChooseSourceOsd__</include>
 </control>
 <control type="button" id="29998">
-	<label>השהה כתובית</label>
+	<!-- AUTO_SYNC_BADGE_v1: the second line is the shift the add-on applied automatically (its own line: one text direction) -->
+	<label>השהה כתובית$INFO[Window(10000).Property(subs.sync.offset),[CR],]</label>
 	<height>170</height>
 	<width>335</width>
 	<font>font36_title</font>
