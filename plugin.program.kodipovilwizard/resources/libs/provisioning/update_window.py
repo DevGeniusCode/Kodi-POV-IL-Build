@@ -11,8 +11,9 @@ window instead, from the host-repair runner (host_repairs/flow/runner.py, its id
      update check) and a resumed run skip the gate.
   2. OPEN: when the ACTIVE skin has a newer version on offer, a Hebrew toast says the screen will go dark for a few seconds (Kodi
      unloads the active skin before it unpacks the new one, and nothing can be drawn until it is loaded again) and the window waits
-     SKIN_NOTICE_SECONDS. Then the mode goes to ON (update_mode), the flag is raised, UpdateAddonRepos is posted. Kodi installs what
-     the repositories offer, itself, exactly as before.
+     SKIN_NOTICE_SECONDS. Then the flag and the park file are raised (update_mode.beat), the window waits PARK_SECONDS so the services
+     that poll the GUI are out of every GUI call before Kodi may stop them, the mode goes to ON (update_mode) and UpdateAddonRepos is
+     posted. Kodi installs what the repositories offer, itself, exactly as before.
   3. SETTLE: file-based, no GUI: wait until the installs started and nothing was written to addons/packages or addons/temp for
      15 s (addon_state.updates_in_flight), or, when none started, until the check is done plus a short margin.
   4. CLOSE, always (try / finally): the mode goes back (NOTIFY, or the owner's NEVER), the flag is cleared.
@@ -231,9 +232,11 @@ class UpdateWindow(object):
         previous = update_mode.get_mode()
         restore = previous if previous in (update_mode.NOTIFY, update_mode.NEVER) else update_mode.NOTIFY
         outcome = 'not opened'
-        update_mode.beat()
+        update_mode.beat()      # also writes the park file: the GUI-polling services stop calling the GUI
         try:
-            if update_mode.set_mode(update_mode.ON):
+            if monitor.waitForAbort(update_mode.PARK_SECONDS):
+                outcome = 'abort'
+            elif update_mode.set_mode(update_mode.ON):
                 outcome = self._settle(monitor)
         finally:
             update_mode.set_mode(restore)

@@ -11,8 +11,16 @@ settle_at_start(): startup.py runs it before anything else.
 
 The window flag is a Home-window property carrying a monotonic stamp that update_window refreshes every few seconds while the mode is
 ON. It lives as long as Kodi: a new Wizard instance started by a Kodi update inside the window sees it and leaves the mode alone.
+
+The PARK FILE (special://temp/addon_update_window.flag) says the same to the services that poll the GUI (script.fentastic.helper,
+service.subtitles.kodipovilai): it is written by beat() and removed by end_window(), and while it is fresh those services make no GUI
+call. Kodi stops a service it updates, and a stop that finds one INSIDE a GUI call wedged the GUI for good (20 Nov 2026 log, 19:10:31:
+the FENtastic helper "didn't stop in 5 seconds", the screen froze and the active skin's install hung on UnloadSkin). A file, not a
+property: reading a property takes the GUI lock. The services ignore a file not refreshed for 90 s (a Kodi killed inside a window);
+settle_at_start() removes a leftover. The file name is shared with those add-ons: keep it byte-identical.
 """
 import json
+import os
 import time
 
 import xbmc
@@ -24,6 +32,8 @@ NEVER = 2
 SETTING = 'general.addonupdates'
 WINDOW_PROPERTY = 'povil.update_window'
 WINDOW_STALE_SECONDS = 90.0     # a flag not refreshed for this long belongs to a runner that died
+PARK_FILE_NAME = 'addon_update_window.flag'     # special://temp/<name>, read by the GUI-polling services (see above)
+PARK_SECONDS = 1.5              # after the park file appears, before the mode goes to ON: the services finish their current GUI call
 
 
 def _log(msg, level=None):
@@ -65,8 +75,32 @@ def _home():
     return xbmcgui.Window(10000)
 
 
+def _park_file():
+    import xbmcvfs
+    return os.path.join(xbmcvfs.translatePath('special://temp/'), PARK_FILE_NAME)
+
+
+def _touch_park_file():
+    try:
+        with open(_park_file(), 'w') as handle:
+            handle.write(str(time.time()))
+    except Exception as err:
+        _log('park file not written: {0}'.format(err), xbmc.LOGWARNING)
+
+
+def _remove_park_file():
+    try:
+        os.remove(_park_file())
+    except FileNotFoundError:
+        pass
+    except Exception as err:
+        _log('park file not removed: {0}'.format(err), xbmc.LOGWARNING)
+
+
 def beat():
-    """Say "a window is open" (and keep saying it: call every few seconds while the mode is ON)."""
+    """Say "a window is open" (and keep saying it: call every few seconds while the mode is ON). The park file first: it needs no
+    GUI lock, so it stays fresh even if the property write below has to wait."""
+    _touch_park_file()
     try:
         _home().setProperty(WINDOW_PROPERTY, str(time.monotonic()))
     except Exception:
@@ -74,6 +108,7 @@ def beat():
 
 
 def end_window():
+    _remove_park_file()
     try:
         _home().clearProperty(WINDOW_PROPERTY)
     except Exception:
@@ -97,6 +132,7 @@ def settle_at_start():
         if window_open():
             _log('an update window is open: the mode stays')
             return
+        _remove_park_file()     # a leftover of a Kodi that was killed inside a window
         if get_mode() == ON:
             _log('found "install updates automatically" at start: back to NOTIFY (a window did not close)', xbmc.LOGWARNING)
             set_mode(NOTIFY)
