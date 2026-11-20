@@ -1,8 +1,27 @@
 import xbmc, xbmcgui
 from threading import Thread
+from xbmcvfs import translatePath
 import json
+import os
+import time
 
 logger = xbmc.log
+
+# Kodi POV IL update window (Wizard, provisioning/update_mode.py): this file exists, and is refreshed every few seconds, while
+# Kodi installs add-on updates. Kodi may stop this service at any moment then (to replace it, or the skin), and a stop that
+# finds the loop INSIDE a GUI call can wedge Kodi's GUI for good (20 Nov 2026 log: "didn't stop in 5 seconds", then a frozen
+# screen). So while it exists the loop makes no GUI call at all, only waitForAbort. A plain file, not a window property:
+# reading a property takes the GUI lock. A file not refreshed for UPDATE_FLAG_STALE seconds is a leftover and is ignored.
+UPDATE_FLAG = os.path.join(translatePath("special://temp/"), "addon_update_window.flag")
+UPDATE_FLAG_STALE = 90.0
+
+
+def updates_installing():
+    try:
+        age = time.time() - os.path.getmtime(UPDATE_FLAG)
+    except OSError:
+        return False
+    return -5.0 <= age < UPDATE_FLAG_STALE
 empty_ratings = {
     "metascore": "",
     "tomatoMeter": "",
@@ -38,6 +57,9 @@ class RatingsService(xbmc.Monitor):
 
     def listitem_monitor(self):
         while not self.abortRequested():
+            if updates_installing():
+                self.waitForAbort(1)
+                continue
             if (
                 self.window(self.get_window_id()).getProperty("pause_services")
                 == "true"
@@ -106,16 +128,18 @@ class RatingsService(xbmc.Monitor):
                 self.last_set_imdb_id = imdb_id
                 self.waitForAbort(0.2)
                 continue
-            Thread(target=self.set_ratings, args=(api_key, imdb_id)).start()
+            Thread(target=self.set_ratings, args=(api_key, imdb_id), daemon=True).start()
             self.waitForAbort(0.2)
 
     def set_ratings(self, api_key, imdb_id):
-        set_property = self.window(self.get_window_id()).setProperty
+        window_id = self.get_window_id()
         if self.mdblist_api is None:
             from modules.MDbList import MDbListAPI
             self.mdblist_api = MDbListAPI
         result = self.mdblist_api().fetch_info({"imdb_id": imdb_id}, api_key)
-        if result:
+        # The fetch can take seconds: no GUI call when Kodi has asked this service to stop or is installing updates meanwhile.
+        if result and not self.abortRequested() and not updates_installing():
+            set_property = self.window(window_id).setProperty
             set_property(f"fentastic.cachedRatings.{imdb_id}", json.dumps(result))
             for k, v in result.items():
                 set_property("fentastic.%s" % k, v)

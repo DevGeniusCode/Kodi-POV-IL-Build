@@ -69,7 +69,10 @@ def sort_subtitles(f_result,video_data,silent=False):
             json_value['sync'],
             json_value['hearing_imp'],
             json_value['filename'],
-            json_value['site_id']
+            json_value['site_id'],
+            # 10: the provider's optional provenance metadata (providers/meta.py), {} when it has none. Only
+            # bridge._engine_rows reads the tuple, by index.
+            json_value.get('meta') or {}
         ))
       
       

@@ -1,0 +1,407 @@
+{
+ "total_count": 7,
+ "total_pages": 1,
+ "data": [
+  {
+   "id": "10680703",
+   "type": "subtitle",
+   "attributes": {
+    "subtitle_id": "10680703",
+    "language": "he",
+    "download_count": 524,
+    "new_download_count": 597,
+    "hearing_impaired": false,
+    "hd": true,
+    "fps": 0.0,
+    "votes": 0,
+    "ratings": 0.0,
+    "from_trusted": false,
+    "foreign_parts_only": false,
+    "upload_date": "2025-10-09T03:25:08Z",
+    "ai_translated": false,
+    "nb_cd": 1,
+    "slug": "13314120-the-shawshank-redemption-1994-2160p-4k-bluray-x265-10bit-hdr-aac5-1-yts-mx",
+    "machine_translated": false,
+    "release": "* תרגום אולפנים * The.Shawshank.Redemption.1994.2160p.4K.BluRay.x265.10bit.HDR.AAC5.1-[YTS.MX]",
+    "comments": "",
+    "legacy_subtitle_id": 13314120,
+    "legacy_uploader_id": 2616559,
+    "uploader": {
+     "uploader_id": 69505,
+     "name": "varod",
+     "rank": "Administrator"
+    },
+    "feature_details": {
+     "feature_id": 646373,
+     "feature_type": "Movie",
+     "year": 1994,
+     "title": "The Shawshank Redemption",
+     "movie_name": "1994 - חומות של תקווה",
+     "imdb_id": 111161,
+     "tmdb_id": 278
+    },
+    "url": "https://www.opensubtitles.com/he/subtitles/13314120-the-shawshank-redemption-1994-2160p-4k-bluray-x265-10bit-hdr-aac5-1-yts-mx",
+    "related_links": [
+     {
+      "label": "All subtitles for the shawshank redemption",
+      "url": "https://www.opensubtitles.com/he/movies/13314120-the-shawshank-redemption-1994-2160p-4k-bluray-x265-10bit-hdr-aac5-1-yts-mx",
+      "img_url": "https://s4.opensubtitles.com/features/3/7/3/646373.jpg"
+     }
+    ],
+    "files": [
+     {
+      "file_id": 11584843,
+      "cd_number": 1,
+      "file_name": "The.Shawshank.Redemption.1994.2160p.4K.BluRay.x265.10bit.HDR.AAC5.1-[YTS.MX]"
+     }
+    ]
+   }
+  },
+  {
+   "id": "4396790",
+   "type": "subtitle",
+   "attributes": {
+    "subtitle_id": "4396790",
+    "language": "he",
+    "download_count": 1965,
+    "new_download_count": 16,
+    "hearing_impaired": false,
+    "hd": false,
+    "fps": 23.976,
+    "votes": 0,
+    "ratings": 0.0,
+    "from_trusted": false,
+    "foreign_parts_only": false,
+    "upload_date": "2017-01-06T20:07:25Z",
+    "ai_translated": false,
+    "nb_cd": 1,
+    "slug": "6844841-the-shawshank-redemption-dvdrip-divx-wch",
+    "machine_translated": false,
+    "release": "the.shawshank.redemption.dvdrip.divx-wch",
+    "comments": "",
+    "legacy_subtitle_id": 6844841,
+    "legacy_uploader_id": 0,
+    "uploader": {
+     "uploader_id": 3282,
+     "name": "os-auto",
+     "rank": "Application Developers"
+    },
+    "feature_details": {
+     "feature_id": 646373,
+     "feature_type": "Movie",
+     "year": 1994,
+     "title": "The Shawshank Redemption",
+     "movie_name": "1994 - The Shawshank Redemption",
+     "imdb_id": 111161,
+     "tmdb_id": 278
+    },
+    "url": "https://www.opensubtitles.com/he/subtitles/6844841-the-shawshank-redemption-dvdrip-divx-wch",
+    "related_links": [
+     {
+      "label": "All subtitles for the shawshank redemption",
+      "url": "https://www.opensubtitles.com/he/movies/6844841-the-shawshank-redemption-dvdrip-divx-wch",
+      "img_url": "https://s2.opensubtitles.com/features/3/7/3/646373.jpg"
+     }
+    ],
+    "files": [
+     {
+      "file_id": 4500871,
+      "cd_number": 1,
+      "file_name": "the.shawshank.redemption.cd1.dvdrip.divx-wch"
+     }
+    ]
+   }
+  },
+  {
+   "id": "6131574",
+   "type": "subtitle",
+   "attributes": {
+    "subtitle_id": "6131574",
+    "language": "he",
+    "download_count": 3247,
+    "new_download_count": 228,
+    "hearing_impaired": false,
+    "hd": true,
+    "fps": 23.976,
+    "votes": 0,
+    "ratings": 0.0,
+    "from_trusted": true,
+    "foreign_parts_only": false,
+    "upload_date": "2021-10-31T15:51:07Z",
+    "ai_translated": false,
+    "nb_cd": 1,
+    "slug": "the-shawshank-redemption-1994-1080p-bluray-h264-aac-rarbg-he",
+    "machine_translated": false,
+    "release": "* תרגום אולפנים * The.Shawshank.Redemption.1994.1080p.BluRay.H264.AAC-RARBG",
+    "comments": "~ חומות של תקווה ~\r\nתרגום אולפנים (אולפני אלרום)",
+    "legacy_subtitle_id": 8860740,
+    "legacy_uploader_id": 6693991,
+    "uploader": {
+     "uploader_id": 118037,
+     "name": "Just_Good",
+     "rank": "Trusted member"
+    },
+    "feature_details": {
+     "feature_id": 646373,
+     "feature_type": "Movie",
+     "year": 1994,
+     "title": "The Shawshank Redemption",
+     "movie_name": "1994 - The Shawshank Redemption",
+     "imdb_id": 111161,
+     "tmdb_id": 278
+    },
+    "url": "https://www.opensubtitles.com/he/subtitles/the-shawshank-redemption-1994-1080p-bluray-h264-aac-rarbg-he",
+    "related_links": [
+     {
+      "label": "All subtitles for the shawshank redemption",
+      "url": "https://www.opensubtitles.com/he/movies/the-shawshank-redemption-1994-1080p-bluray-h264-aac-rarbg-he",
+      "img_url": "https://s8.opensubtitles.com/features/3/7/3/646373.jpg"
+     }
+    ],
+    "files": [
+     {
+      "file_id": 7071443,
+      "cd_number": 1,
+      "file_name": "The.Shawshank.Redemption.1994.1080p.BluRay.H264.AAC-RARBG"
+     }
+    ]
+   }
+  },
+  {
+   "id": "5474685",
+   "type": "subtitle",
+   "attributes": {
+    "subtitle_id": "5474685",
+    "language": "he",
+    "download_count": 3287,
+    "new_download_count": 25,
+    "hearing_impaired": false,
+    "hd": true,
+    "fps": 23.976,
+    "votes": 0,
+    "ratings": 0.0,
+    "from_trusted": true,
+    "foreign_parts_only": false,
+    "upload_date": "2019-12-27T09:56:28Z",
+    "ai_translated": false,
+    "nb_cd": 1,
+    "slug": "8034336-gemini-man-2019-1080p-web-dl-h264-ac3-evo",
+    "machine_translated": false,
+    "release": "Gemini.Man.2019.1080p.WEB-DL.H264.AC3-EVO",
+    "comments": "- תרגום כתוביות: יסמין דור\r\nרשמי",
+    "legacy_subtitle_id": 8034336,
+    "legacy_uploader_id": 5634869,
+    "uploader": {
+     "uploader_id": 117966,
+     "name": "explosiveskull",
+     "rank": "Administrator"
+    },
+    "feature_details": {
+     "feature_id": 706281,
+     "feature_type": "Movie",
+     "year": 2019,
+     "title": "Gemini Man",
+     "movie_name": "2019 - Gemini Man",
+     "imdb_id": 1025100,
+     "tmdb_id": 453405
+    },
+    "url": "https://www.opensubtitles.com/he/subtitles/8034336-gemini-man-2019-1080p-web-dl-h264-ac3-evo",
+    "related_links": [
+     {
+      "label": "All subtitles for gemini man",
+      "url": "https://www.opensubtitles.com/he/movies/8034336-gemini-man-2019-1080p-web-dl-h264-ac3-evo",
+      "img_url": "https://s9.opensubtitles.com/features/1/8/2/706281.jpg"
+     }
+    ],
+    "files": [
+     {
+      "file_id": 6514702,
+      "cd_number": 1,
+      "file_name": "Gemini.Man.2019.1080p.WEB-DL.H264.AC3-EVO-Hebrew"
+     }
+    ]
+   }
+  },
+  {
+   "id": "10506923",
+   "type": "subtitle",
+   "attributes": {
+    "subtitle_id": "10506923",
+    "language": "he",
+    "download_count": 2311,
+    "new_download_count": 239,
+    "hearing_impaired": false,
+    "hd": true,
+    "fps": 23.976,
+    "votes": 0,
+    "ratings": 0.0,
+    "from_trusted": true,
+    "foreign_parts_only": false,
+    "upload_date": "2025-06-28T11:10:47Z",
+    "ai_translated": false,
+    "nb_cd": 1,
+    "slug": "13166350-squid-game-2021-s03e01-german-ml-eac3-2160p-dv-hdr-nf-web-h265-zerotwo",
+    "machine_translated": false,
+    "release": "Squid.Game.2021.S03E01.German.ML.EAC3.2160p.DV.HDR.NF.WEB.H265-ZeroTwo",
+    "comments": "",
+    "legacy_subtitle_id": 13166350,
+    "legacy_uploader_id": 8995206,
+    "uploader": {
+     "uploader_id": null,
+     "name": "Anonymous",
+     "rank": "anonymous"
+    },
+    "feature_details": {
+     "feature_id": 2355778,
+     "feature_type": "Episode",
+     "year": 2025,
+     "title": "Keys and Knives",
+     "movie_name": "Squid Game - S03E01  Keys and Knives",
+     "imdb_id": 33056155,
+     "tmdb_id": 5884550,
+     "season_number": 3,
+     "episode_number": 1,
+     "parent_imdb_id": 10919420,
+     "parent_title": "Squid Game",
+     "parent_tmdb_id": 93405,
+     "parent_feature_id": 1299348
+    },
+    "url": "https://www.opensubtitles.com/he/subtitles/13166350-squid-game-2021-s03e01-german-ml-eac3-2160p-dv-hdr-nf-web-h265-zerotwo",
+    "related_links": [
+     {
+      "label": "All subtitles for Tv Show Squid Game",
+      "url": "https://www.opensubtitles.com/he/features/redirect/1299348",
+      "img_url": "https://s6.opensubtitles.com/features/8/4/3/1299348.jpg"
+     },
+     {
+      "label": "All subtitles for Episode keys and knives",
+      "url": "https://www.opensubtitles.com/he/features/redirect/2355778",
+      "img_url": "https://s2.opensubtitles.com/features/8/7/7/2355778.jpg"
+     }
+    ],
+    "files": [
+     {
+      "file_id": 11410299,
+      "cd_number": 1,
+      "file_name": "Squid.Game.2021.S03E01.German.ML.EAC3.2160p.DV.HDR.NF.WEB.H265-ZeroTwo.he"
+     }
+    ]
+   }
+  },
+  {
+   "id": "11709049",
+   "type": "subtitle",
+   "attributes": {
+    "subtitle_id": "11709049",
+    "language": "he",
+    "download_count": 96,
+    "new_download_count": 48,
+    "hearing_impaired": false,
+    "hd": true,
+    "fps": 0.0,
+    "votes": 0,
+    "ratings": 0.0,
+    "from_trusted": false,
+    "foreign_parts_only": false,
+    "upload_date": "2026-06-11T16:24:11Z",
+    "ai_translated": false,
+    "nb_cd": 1,
+    "slug": "the-last-of-us-s02e05-feel-her-love-2160p-uhd-bluray-hdr10-10bit-ac-3-truehd7-1-atmos-hevc-d3g-he",
+    "machine_translated": false,
+    "release": "The Last of Us S02E05 Feel Her Love 2160p UHD BluRay HDR10 10bit AC-3 TrueHD7 1 Atmos HEVC-d3g.he",
+    "comments": "The Last of Us S02E05 Feel Her Love 2160p UHD BluRay HDR10 10bit AC-3 TrueHD7 1 Atmos HEVC-d3g.he",
+    "legacy_subtitle_id": 13832179,
+    "legacy_uploader_id": 8529607,
+    "uploader": {
+     "uploader_id": 1320930,
+     "name": "almog11",
+     "rank": "Gold Member"
+    },
+    "feature_details": {
+     "feature_id": 2540779,
+     "feature_type": "Episode",
+     "year": 2025,
+     "title": "Feel Her Love",
+     "movie_name": "The Last of Us - S02E05  Feel Her Love",
+     "imdb_id": 32550885,
+     "tmdb_id": 5994271,
+     "season_number": 2,
+     "episode_number": 5,
+     "parent_imdb_id": 3581920,
+     "parent_title": "The Last of Us",
+     "parent_tmdb_id": 100088,
+     "parent_feature_id": 1432841
+    },
+    "url": "https://www.opensubtitles.com/he/subtitles/the-last-of-us-s02e05-feel-her-love-2160p-uhd-bluray-hdr10-10bit-ac-3-truehd7-1-atmos-hevc-d3g-he",
+    "related_links": [
+     {
+      "label": "All subtitles for Tv Show The Last of Us",
+      "url": "https://www.opensubtitles.com/he/features/redirect/1432841",
+      "img_url": "https://s8.opensubtitles.com/features/1/4/8/1432841.jpg"
+     },
+     {
+      "label": "All subtitles for Episode feel her love",
+      "url": "https://www.opensubtitles.com/he/features/redirect/2540779",
+      "img_url": "https://s7.opensubtitles.com/features/9/7/7/2540779.jpg"
+     }
+    ],
+    "files": [
+     {
+      "file_id": 12618480,
+      "cd_number": 1,
+      "file_name": "The Last of Us S02E05 Feel Her Love 2160p UHD BluRay HDR10 10bit AC-3 TrueHD7 1 Atmos HEVC-d3g.he"
+     }
+    ]
+   }
+  },
+  {
+   "id": "7587047",
+   "type": "subtitle",
+   "attributes": {
+    "subtitle_id": "7587047",
+    "language": "he",
+    "download_count": 2768,
+    "new_download_count": 663,
+    "hearing_impaired": false,
+    "hd": true,
+    "fps": 23.976,
+    "votes": 0,
+    "ratings": 0.0,
+    "from_trusted": false,
+    "foreign_parts_only": false,
+    "upload_date": "2024-01-22T13:49:50Z",
+    "ai_translated": false,
+    "nb_cd": 1,
+    "slug": "oppenheimer-2023-imax-1080p-bluray-x265-hevc-10bit-eac3-5-1-english-rex-pxl",
+    "machine_translated": false,
+    "release": "Oppenheimer (2023) IMAX (1080p BluRay x265 HEVC 10bit EAC3 5.1 English - REX) [PxL]",
+    "comments": "Resynched By IHCGamerTube",
+    "legacy_subtitle_id": 9869240,
+    "legacy_uploader_id": 5246767,
+    "uploader": {
+     "uploader_id": 79224,
+     "name": "qtamir1",
+     "rank": "Platinum Member"
+    },
+    "feature_details": {
+     "feature_id": 1492864,
+     "feature_type": "Movie",
+     "year": 2023,
+     "title": "Oppenheimer",
+     "movie_name": "2023 - אופנהיימר",
+     "imdb_id": 15398776,
+     "tmdb_id": 872585
+    },
+    "url": null,
+    "related_links": null,
+    "files": [
+     {
+      "file_id": 8513849,
+      "cd_number": 1,
+      "file_name": "Oppenheimer (2023) IMAX (1080p BluRay x265 HEVC 10bit EAC3 5"
+     }
+    ]
+   }
+  }
+ ]
+}

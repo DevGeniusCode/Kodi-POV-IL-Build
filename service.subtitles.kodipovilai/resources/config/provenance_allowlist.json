@@ -1,0 +1,271 @@
+{
+ "_comment": [
+  "DRAFT for owner review (Provenance P2). Built-in allowlist of the Hebrew subtitle provenance badges; the user adds more handles in the setting custom_trusted_uploaders.",
+  "Entries are a name or {name, aliases, status, evidence}. Names are matched WHOLE and case-insensitively, ignoring spaces, dots, underscores and hyphens (yoav_1610 = Yoav1610). A name shorter than 3 letters / digits is never loaded.",
+  "status \"proposed\" = a suggestion that is NOT loaded until you delete that field. evidence is a note for the reviewer and is ignored at runtime.",
+  "studios -> VERIFIED_STUDIO; teams -> VERIFIED_TEAM (translator role, or a team account as uploader); translators -> VERIFIED_TRANSLATOR (translator role only); uploaders -> TRUSTED_UPLOADER (uploader field only); syncers -> shown in the panel as known sync / fetch names, never a badge; never -> never counted as anything."
+ ],
+ "version": 1,
+ "studios": [
+  {
+   "name": "אולפנים",
+   "evidence": "the translator-field word of Ktuvit and Wizdom (live probe 20 Nov 2026: 27 of 71 Ktuvit rows); an uploader-typed claim, not proof"
+  },
+  {
+   "name": "אולפני אלרום",
+   "evidence": "Telegram corpus 2019-20: 70 files"
+  },
+  {
+   "name": "טרנס טייטלס",
+   "aliases": [
+    "טרנס טייטלס בע\"מ"
+   ],
+   "evidence": "Telegram corpus 2019-20: 59 files"
+  },
+  {
+   "name": "אולפני נ.ל.ס",
+   "evidence": "Telegram corpus 2019-20: 21 files"
+  },
+  {
+   "name": "SDI Media Group",
+   "evidence": "Telegram corpus 2019-20: 9 files"
+  },
+  {
+   "name": "ויז'נטקסט",
+   "evidence": "Telegram corpus 2019-20: 4 files, \"הפקת כתוביות: ויז'נטקסט\""
+  }
+ ],
+ "teams": [
+  {
+   "name": "Qsubs",
+   "aliases": [
+    "Qsubs.net"
+   ],
+   "evidence": "Telegram corpus 2019-20: 398 files, always \"... מצוות Qsubs\""
+  },
+  {
+   "name": "UniHebSubs",
+   "evidence": "Telegram corpus 2019-20: 71 files; also an uploader account on Ktuvit (live probe 20 Nov 2026: 2 rows)"
+  },
+  {
+   "name": "Torec",
+   "evidence": "Telegram corpus 2019-20: 118 files mention it"
+  },
+  {
+   "name": "DownRev.subs",
+   "evidence": "Telegram corpus 2019-20: 17 lines of the top 250"
+  },
+  {
+   "name": "Extreme",
+   "aliases": [
+    "אקסטרים"
+   ],
+   "evidence": "Telegram corpus 2019-20: 12 lines of the top 250"
+  },
+  {
+   "name": "HDSubs",
+   "aliases": [
+    "TheInitiative"
+   ],
+   "evidence": "Telegram corpus 2019-20: \"... HDSubs מצוות\"; live probe 20 Nov 2026: Ktuvit \"TheInitiative (HDSubs)\" on 16 Game of Thrones rows"
+  },
+  {
+   "name": "PetaBit",
+   "status": "proposed",
+   "evidence": "Telegram corpus 2019-20: 50 lines of the top 250, mixed: translator 9, team 27, sync 14; counts only in a translation line"
+  }
+ ],
+ "translators": [
+  {
+   "name": "SnoWhite",
+   "evidence": "Telegram corpus 2019-20: 186 files"
+  },
+  {
+   "name": "Afenla",
+   "evidence": "Telegram corpus 2019-20: 135 files"
+  },
+  {
+   "name": "Tornado",
+   "evidence": "Telegram corpus 2019-20: 64 files"
+  },
+  {
+   "name": "hamima",
+   "evidence": "Telegram corpus 2019-20: 64 files"
+  },
+  {
+   "name": "DrSub",
+   "evidence": "Telegram corpus 2019-20: 43 files"
+  },
+  {
+   "name": "TOXIN",
+   "evidence": "Telegram corpus 2019-20: 38 files"
+  },
+  {
+   "name": "dvodvo123",
+   "evidence": "Telegram corpus 2019-20: 40 files (a Qsubs member)"
+  },
+  {
+   "name": "yuvalh",
+   "evidence": "Telegram corpus 2019-20: 32 files"
+  },
+  {
+   "name": "epitaph",
+   "evidence": "Telegram corpus 2019-20: 51 files together with glbegin"
+  },
+  {
+   "name": "glbegin",
+   "evidence": "Telegram corpus 2019-20: 51 files together with epitaph"
+  },
+  {
+   "name": "Ofer Mev",
+   "evidence": "Telegram corpus 2019-20: 43 lines of the top 250"
+  },
+  {
+   "name": "ddror",
+   "evidence": "Telegram corpus 2019-20: 17 lines of the top 250"
+  },
+  {
+   "name": "UserXP",
+   "evidence": "Telegram corpus 2019-20: 13 lines of the top 250"
+  },
+  {
+   "name": "qwer90",
+   "evidence": "named in the Telegram report"
+  },
+  {
+   "name": "Nunia",
+   "evidence": "named in the Telegram report"
+  },
+  {
+   "name": "roni_eliav",
+   "evidence": "named in the Telegram report"
+  },
+  {
+   "name": "TZaHeR",
+   "evidence": "named in the Telegram report"
+  },
+  {
+   "name": "Mad_Clown",
+   "evidence": "Telegram corpus 2019-20: 8 lines of the top 250"
+  },
+  {
+   "name": "יואב שילוח",
+   "evidence": "Telegram corpus 2019-20: 16 files, \":תרגום יואב שילוח\" (full credit form: a bare \"Yoav\" is ambiguous); your decision of 20 Nov 2026"
+  },
+  {
+   "name": "הפלאש",
+   "status": "proposed",
+   "evidence": "Telegram corpus 2019-20: a nickname, 23 lines of the top 250"
+  },
+  {
+   "name": "פיפו",
+   "status": "proposed",
+   "evidence": "Telegram corpus 2019-20: a nickname, 20 lines of the top 250"
+  }
+ ],
+ "uploaders": [
+  {
+   "name": "NightRider",
+   "aliases": [
+    "Nightrider"
+   ],
+   "evidence": "live probe 20 Nov 2026: Wizdom uploader of 42 of 80 rows from 2025 on; your decision of 20 Nov 2026"
+  },
+  {
+   "name": "dixie",
+   "evidence": "live probe 20 Nov 2026: Wizdom, 16 of 80 rows from 2025 on; your decision"
+  },
+  {
+   "name": "minime",
+   "evidence": "live probe 20 Nov 2026: Wizdom, 8 of 80 rows from 2025 on; your decision"
+  },
+  {
+   "name": "The Duke",
+   "evidence": "live probe 20 Nov 2026: Wizdom, 4 of 80 rows from 2025 on; your decision"
+  },
+  {
+   "name": "Yoav1610",
+   "evidence": "live probe 20 Nov 2026: Wizdom 9 of 80 rows from 2025 on, Ktuvit \"yoav_1610\" 5 rows; your decision"
+  },
+  {
+   "name": "הנהלה",
+   "evidence": "Ktuvit staff account (live probe 20 Nov 2026: 5 rows); your decision"
+  },
+  {
+   "name": "איש צוות",
+   "evidence": "Ktuvit staff account (live probe 20 Nov 2026: 4 rows); your decision"
+  },
+  {
+   "name": "מערכת",
+   "evidence": "Ktuvit staff account (live probe 20 Nov 2026: 1 row); your decision"
+  },
+  {
+   "name": "avi054",
+   "status": "proposed",
+   "evidence": "live probe 20 Nov 2026: Ktuvit uploader of 6 of 71 rows (Sinners, The Last of Us, Oppenheimer)"
+  },
+  {
+   "name": "varod",
+   "status": "proposed",
+   "evidence": "live probe 20 Nov 2026: OpenSubtitles account that mirrors Ktuvit studio translations, 11 of the 33 non-importer rows"
+  },
+  {
+   "name": "Just_Good",
+   "status": "proposed",
+   "evidence": "live probe 20 Nov 2026: OpenSubtitles \"Trusted member\", credits in the comments of 3 rows"
+  }
+ ],
+ "syncers": [
+  {
+   "name": "קופיקו הבלש",
+   "evidence": "Telegram corpus 2019-20: 199 files, fetch / sync only"
+  },
+  {
+   "name": "גדעון",
+   "evidence": "Telegram corpus 2019-20: 174 files, fetch / sync only"
+  },
+  {
+   "name": "יוני",
+   "evidence": "Telegram corpus 2019-20: 167 files, fetch / sync only"
+  },
+  {
+   "name": "אריאל אפרתי",
+   "evidence": "Telegram corpus 2019-20: 164 files (proofreading and fixes); Ktuvit \"תיקון\" credit on The Irishman"
+  },
+  {
+   "name": "blkbrd",
+   "evidence": "Telegram corpus 2019-20: 34 lines of the top 250"
+  },
+  {
+   "name": "Outwit",
+   "evidence": "Telegram corpus 2019-20: sync only in the top 250"
+  },
+  {
+   "name": "TheRipMan",
+   "evidence": "Telegram corpus 2019-20: sync only in the top 250"
+  },
+  {
+   "name": "Gooloo3",
+   "evidence": "Telegram corpus 2019-20: 29 files, \"סונכרן לגרסה זו\" (sync only)"
+  },
+  {
+   "name": "OfficialSubsIL",
+   "evidence": "live probe 20 Nov 2026: Ktuvit \"הביא ותיקן\" on 2025 Netflix rows"
+  },
+  {
+   "name": "F-U-Z",
+   "evidence": "live probe 20 Nov 2026: Wizdom \"הביא\" on Severance rows"
+  },
+  {
+   "name": "Yoav1610",
+   "evidence": "live probe 20 Nov 2026: \"הביא, תיקן וסנכרן\" on 2025-26 rows"
+  }
+ ],
+ "never": [
+  "אלמוני",
+  "אנונימי",
+  "Anonymous",
+  "unknown",
+  "os-auto"
+ ]
+}

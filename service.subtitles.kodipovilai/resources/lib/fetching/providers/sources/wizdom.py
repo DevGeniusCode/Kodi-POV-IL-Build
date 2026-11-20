@@ -3,6 +3,8 @@ import xbmcaddon
 global global_var,site_id,sub_color#global
 global_var=[]
 from resources.lib.fetching.providers import log
+from resources.lib.fetching.providers import cache
+from resources.lib.fetching.providers import meta as provider_meta
 import requests,json
 import xbmcvfs
 import shutil,os
@@ -26,7 +28,18 @@ sub_color='yellow'
 WIZDOM_API_BASE_URL = "https://wizdom.xyz/api"
 WIZDOM_API_SEARCH_URL = f"{WIZDOM_API_BASE_URL}/search?action=by_id"
 WIZDOM_API_DOWNLOAD_URL = f"{WIZDOM_API_BASE_URL}/files/sub"
+WIZDOM_API_RELEASES_URL = f"{WIZDOM_API_BASE_URL}/releases"
 #########################################
+
+def _releases_index(imdb_id):
+    # {subtitle id: meta} of EVERY subtitle of the title (one call per title, not per episode; the answer is
+    # 3-60 KB, 257 KB for a show of 1,300 subtitles). It raises on any failure on purpose: cache.get keeps
+    # whatever a call returns, an empty dict included, for the whole 24 h, and returns None (keeping nothing)
+    # when the call raises.
+    response = requests.get(f"{WIZDOM_API_RELEASES_URL}/{imdb_id}", timeout=DEFAULT_REQUEST_TIMEOUT)
+    response.raise_for_status()
+    return provider_meta.wizdom_index(response.json())
+
 
 def get_subs(video_data):
 
@@ -66,6 +79,14 @@ def get_subs(video_data):
     wizdom_subtitles_list = []
     
     if wizdom_response_json:
+
+        # Provenance metadata (credits, uploader, upload date), joined on the subtitle id. Fail open: a title
+        # without it, or a failed call, only means rows without meta.
+        try:
+            releases_index = cache.get(_releases_index, 24, imdb_id, table='subs') or {}
+        except Exception as e:
+            log.warning(f'DEBUG | [Wizdom] | releases index not available | Exception: {repr(e)}')
+            releases_index = {}
     
         for wizdom_subtitle in wizdom_response_json:
             
@@ -88,6 +109,10 @@ def get_subs(video_data):
                         'sub_color':sub_color,
                         'filename':wizdom_subtitle["versioname"],
                         'sync': 'false'}
+
+            row_meta = provider_meta.wizdom_row(releases_index, wizdom_subtitle["id"])
+            if row_meta:
+                json_data['meta'] = row_meta
                         
             wizdom_subtitles_list.append(json_data)
 

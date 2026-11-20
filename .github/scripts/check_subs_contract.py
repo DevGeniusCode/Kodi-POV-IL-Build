@@ -413,5 +413,22 @@ if '--static' not in sys.argv:
           % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
           bad[:3] or (p.stderr or '')[-300:])
 
+    # the provenance plumbing (Provenance P1, 20 Nov 2026): provider row metadata -> engine tuple -> candidate '_meta', on trimmed live captures
+    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_provenance_meta.py')],
+                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
+    check('unit_provenance_meta: Ktuvit / Wizdom / OpenSubtitles row metadata, the 11-field engine tuple, the candidate _meta (%d checks)'
+          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
+          bad[:3] or (p.stderr or '')[-300:])
+
+    # the provenance classifier (Provenance P2, 20 Nov 2026): credit grammar, the four positive badges, the draft allowlist, the Telegram corpus lines
+    p = subprocess.run([sys.executable, '-I', '-B', '-W', 'ignore', os.path.join(FIX, 'unit_provenance.py')],
+                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+    bad = [l for l in p.stdout.splitlines() if l.startswith('FAIL')]
+    check('unit_provenance: credit grammar (both text orders), the four positive badges, sync credits never a badge, the allowlist, '
+          'the fixture rows and 250 Telegram credit lines (%d checks)'
+          % sum(1 for l in p.stdout.splitlines() if l.startswith(('ok ', 'FAIL'))), p.returncode == 0 and not bad,
+          bad[:3] or (p.stderr or '')[-300:])
+
 print('\n%d checks passed, %d failed' % (len(PASSES), len(FAILS)))
 sys.exit(1 if FAILS else 0)

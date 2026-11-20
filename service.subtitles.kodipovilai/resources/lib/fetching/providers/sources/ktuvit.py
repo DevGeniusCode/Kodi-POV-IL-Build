@@ -5,6 +5,7 @@ global_var=[]
 from resources.lib.fetching.providers import log
 import requests,json,re,shutil
 from resources.lib.fetching.providers import cache
+from resources.lib.fetching.providers import meta as provider_meta
 from resources.lib.fetching.providers.extract_sub import extract
 import urllib.parse
 from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT
@@ -347,7 +348,11 @@ def extract_subtitles_list_and_build_subtitles_list(ktuvit_subtitles_search_resp
                          'sub_color':sub_color,
                          'filename':extracted_subtitle_name,
                          'sync': 'false'}
-  
+
+        # Provenance metadata of the row (credits, uploader, date, downloads, fixed icon): recorded, never used here.
+        row_meta = provider_meta.ktuvit_row(table_row)
+        if row_meta:
+            json_data['meta'] = row_meta
 
         ktuvit_subtitles_list.append(json_data)
         

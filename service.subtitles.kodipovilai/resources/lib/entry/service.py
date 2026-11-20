@@ -41,6 +41,9 @@ def _background_settle_seconds():
 def _background_ui_busy():
     """Best-effort gate for CPU/disk work that has no user waiting on it."""
     try:
+        from resources.lib.core import kodi
+        if kodi.updates_installing():
+            return True     # busy, and asked without a GUI call: Kodi may stop this service any moment
         return bool(xbmc.getCondVisibility('Player.HasMedia')
                     or xbmc.getCondVisibility('Container.IsUpdating')
                     or xbmc.getCondVisibility('System.HasVisibleModalDialog')
@@ -393,6 +396,11 @@ def _start_subsync_delay_watch(monitor):
             active, watched, last_delay = None, 0, 0.0
             reported = set()
             while not monitor.abortRequested():
+                if kodi.updates_installing():
+                    # Kodi may stop this service any moment: no player / JSON-RPC call until the update window closes.
+                    if monitor.waitForAbort(1.0):
+                        break
+                    continue
                 try:
                     playing = False
                     try:

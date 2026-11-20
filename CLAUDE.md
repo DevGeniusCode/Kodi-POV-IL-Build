@@ -374,6 +374,10 @@ Domain folders inside `plugin.program.kodipovilwizard/resources/libs/` (the full
 - **ADD-ON UPDATES ONLY IN THE UPDATE WINDOW (20 Nov 2026):** `general.addonupdates` stays NOTIFY (`1`); only `provisioning/update_window.py` may set it to ON, and always
   inside a `try / finally` that puts it back. No code may post a blocking builtin (`executebuiltin(..., True)`) for `UpdateAddonRepos`, wait on Kodi's installs from a
   service, or ask the GUI thread from a poll loop without being able to leave. A long-lived thread of a build script ends within about a second of Kodi's abort request.
+  **Park file (Wizard 0.5.13, 20 Nov 2026):** while a window is open `update_mode.beat()` keeps `special://temp/addon_update_window.flag` fresh (removed by `end_window()`,
+  a leftover by `settle_at_start()`; the window waits `PARK_SECONDS` = 1.5 s before ON). A service of ours that polls the GUI makes NO GUI / player / JSON-RPC call while
+  the file is younger than 90 s (`script.fentastic.helper` `service.updates_installing`, subtitles `core/kodi.updates_installing`): a stop that finds a service inside a
+  GUI call wedged Kodi for good (log of 20 Nov 2026, 19:10:31, FENtastic helper 0.6.22). The file name is a shared string; a new GUI-polling service checks it too.
 - **NO SHIMS (clean-install build):** move the code, update every import / caller to the new path, delete the old one.
 - **NO EMPTY `__init__.py` IN SUBFOLDERS:** folders under `resources/libs/` are Python 3 namespace packages
   (`xbmc.python` 3.0.0). Keep only `resources/__init__.py`, `resources/libs/__init__.py` and the pre-existing ones in

@@ -10,6 +10,7 @@ import urllib
 from resources.lib.fetching.providers.extract_sub import extract
 from resources.lib.fetching.providers.general import DEFAULT_REQUEST_TIMEOUT
 from resources.lib.fetching.providers import cache
+from resources.lib.fetching.providers import meta as provider_meta
 import xbmcvfs
 #########################################
 
@@ -291,6 +292,10 @@ def get_subs(video_data, all_lang_override=False):
                 # Go to the next search_item
                 continue
 
+            # The release name as the API sent it: the word below is removed from the VISIBLE name, and the
+            # provenance metadata keeps the original (meta.opensubtitles_row records it when it carries 'אולפנים').
+            release_raw = SubFileName
+
             # Define characters that might break the filename (It caused writing problem to MyTmp dir)
             characters_to_remove = '\\/:*?"<>|\''
             # Remove characters that might cause issues in the filename
@@ -324,6 +329,11 @@ def get_subs(video_data, all_lang_override=False):
                     'sub_color':sub_color,
                     'filename':SubFileName,
                     'sync': "false"}
+
+            # Provenance metadata (uploader, upload date, downloads, comments); 'from_trusted' is not recorded.
+            row_meta = provider_meta.opensubtitles_row(attributes, release_raw)
+            if row_meta:
+                json_data['meta'] = row_meta
 
             
                

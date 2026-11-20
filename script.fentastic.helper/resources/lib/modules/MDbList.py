@@ -101,7 +101,7 @@ class MDbListAPI:
 
     def get_result(self, imdb_id, api_key):
         url = api_url % (api_key, imdb_id)
-        response = requests.get(url)
+        response = requests.get(url, timeout=(3.05, 4.0))   # bounded: Kodi waits for this thread when it stops the service
         if response.status_code != 200:
             return {}
         json_data = response.json()

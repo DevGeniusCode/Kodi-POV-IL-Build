@@ -228,3 +228,25 @@ def home_window():
         return xbmcgui.Window(10000) if KODI_AVAILABLE else None
     except Exception:
         return None
+
+
+# A build's add-on update window: this file exists, refreshed every few seconds, while Kodi installs add-on updates. Kodi may
+# stop this service at any moment then, and a stop that finds a thread INSIDE a GUI call can wedge Kodi's GUI for good (the
+# 20 Nov 2026 log: "didn't stop in 5 seconds", then a frozen screen). The service's polling threads make no GUI call while it
+# exists. A plain file on purpose: reading a window property takes the GUI lock. Not refreshed for UPDATE_FLAG_STALE s = a leftover.
+UPDATE_FLAG_NAME = 'addon_update_window.flag'
+UPDATE_FLAG_STALE = 90.0
+_update_flag_path = []
+
+
+def updates_installing():
+    """True while Kodi installs add-on updates inside a build's update window. No Kodi lock is taken. Never raises."""
+    try:
+        if not _update_flag_path:
+            if not KODI_AVAILABLE:
+                return False
+            _update_flag_path.append(os.path.join(xbmcvfs.translatePath('special://temp/'), UPDATE_FLAG_NAME))
+        age = time.time() - os.path.getmtime(_update_flag_path[0])
+    except Exception:
+        return False
+    return -5.0 <= age < UPDATE_FLAG_STALE

@@ -504,7 +504,7 @@ def _engine_rows(sorted_subs, playing, log=True):
     for t in sorted_subs:
         # tuple layout (sort_subtitles.append_subtitles):
         #  0 label  1 colored_label2  2 icon  3 thumb  4 url
-        #  5 percent 6 sync  7 hearing_imp  8 filename  9 site_id
+        #  5 percent 6 sync  7 hearing_imp  8 filename  9 site_id  10 meta (optional: absent in a 10-tuple)
         try:
             url = t[4]
             percent = t[5]
@@ -513,6 +513,7 @@ def _engine_rows(sorted_subs, playing, log=True):
             thumb_code = (t[3] or '').strip().lower()  # provider ISO 639-1
         except Exception:
             continue
+        row_meta = t[10] if len(t) > 10 and isinstance(t[10], dict) else None
 
         parsed = _parse_download_url(url)
         if not parsed:
@@ -567,7 +568,7 @@ def _engine_rows(sorted_subs, playing, log=True):
         if parsed['filename']:
             label = '{0}  —  {1}'.format(label, parsed['filename'])
 
-        out.append({
+        row = {
             'filename': label,
             'language': code or 'und',
             'link': _encode_engine_link(parsed, hi),
@@ -581,7 +582,12 @@ def _engine_rows(sorted_subs, playing, log=True):
             # rejects these outright -- an MT sub in ANY language is a poisoned
             # gender oracle (MT defaults to masculine).
             '_is_mt': is_mt,
-        })
+        }
+        # The provider's provenance metadata rides along (plain JSON, so the 24 h search cache keeps it); a row
+        # without any has no key at all, like a row cached before the metadata existed.
+        if row_meta:
+            row['_meta'] = row_meta
+        out.append(row)
         sims.append(release_similarity(playing, parsed['filename']))
 
     out = _break_ties(out, sims)

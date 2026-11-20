@@ -1,0 +1,51 @@
+{
+ "imdb": "tt26443597",
+ "type": "movie",
+ "year": 2025,
+ "subs": [
+  {
+   "id": 348419,
+   "version": "Zootopia.2.2025.BluRay.1080p.DDP.5.1.x264-hallowed",
+   "date": "3/22/2026",
+   "credits": "תרגום: אולפנים | הביא, תיקן וסנכרן: Yoav1610",
+   "uploader": "NightRider",
+   "resolution": "1080p",
+   "video_codec": "H.264",
+   "audio_codec": "Dolby Digital Plus",
+   "release_group": "hallowed"
+  },
+  {
+   "id": 348420,
+   "version": "Zootopia.2.(2025).(1080p.BluRay.x265.10bit.EAC3.7.1.Celdra)",
+   "date": "3/22/2026",
+   "credits": "תרגום: אולפנים | הביא, תיקן וסנכרן: Yoav1610",
+   "uploader": "NightRider",
+   "resolution": "1080p",
+   "video_codec": "H.265",
+   "audio_codec": "Dolby Digital Plus",
+   "release_group": "Celdra"
+  },
+  {
+   "id": 347167,
+   "version": "Zootopia.2.2025.1080p.AMZN.WEB-DL.DDP5.1.1.Atmos.H.264-BYNDR",
+   "date": "1/28/2026",
+   "credits": "תרגום: אולפנים | הביא, תיקן וסנכרן: Yoav1610",
+   "uploader": "NightRider",
+   "resolution": "1080p",
+   "video_codec": "H.264",
+   "audio_codec": "Dolby Digital Plus",
+   "release_group": "BYNDR"
+  },
+  {
+   "id": 347168,
+   "version": "Zootopia.2.2025.2160p.iT.WEB-DL.DDP5.1.1.Atmos.DV.HDR.H.265-BYNDR",
+   "date": "1/28/2026",
+   "credits": "תרגום: אולפנים | הביא, תיקן וסנכרן: Yoav1610",
+   "uploader": "NightRider",
+   "resolution": "2160p",
+   "video_codec": "H.265",
+   "audio_codec": "Dolby Digital Plus",
+   "release_group": "BYNDR"
+  }
+ ]
+}
