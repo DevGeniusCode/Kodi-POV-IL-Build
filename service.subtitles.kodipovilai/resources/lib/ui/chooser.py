@@ -671,7 +671,7 @@ def _ai_context(info):
         from resources.lib.fetching.embedded import extraction
         policy = embedded_translation_policy()
         if not policy.get('enabled'):
-            ctx.update(emb_ok=False, emb_why='תרגום מסלולים מובנים כבוי בהגדרות')
+            ctx.update(emb_ok=False, emb_why='תרגום כתוביות מובנות כבוי בהגדרות')
         elif policy.get('mode') == 'local_only':
             url = extraction.playing_video_url(info or {})
             if not url or url.lower().startswith(('http://', 'https://')):

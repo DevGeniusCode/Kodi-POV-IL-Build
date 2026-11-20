@@ -85,6 +85,7 @@ _NOT_GROUP = set(
     'sdr', 'atmos', 'ddp', 'dd', 'dts', 'ac3', 'eac3', 'aac', 'truehd',
     'multi', 'dual', 'audio', 'heb', 'hebrew', 'eng', 'english', 'subbed',
     'hebsub', 'hebsubs', '10bit', '8bit', 'hc', 'internal', 'complete',
+    'lossless', 'clean',
 }
 
 
@@ -320,6 +321,17 @@ def _episode_of(toks):
     return ''
 
 
+_SIZE_TOKEN_RE = re.compile(r'\d+(?:kb|mb|gb|tb)')
+
+
+def is_group_token(cand):
+    """True when the lower-case token `cand` can be a release group: a short alphanumeric word that is not a
+    technical tag, a language / audio descriptor (DUAL, LOSSLESS, CLEAN ...), a number or a file size (550MB, 4GB)."""
+    return bool(cand and cand not in _NOT_GROUP and cand not in _HYPHEN_TECH
+                and not cand.isdigit() and not _SIZE_TOKEN_RE.fullmatch(cand)
+                and 2 <= len(cand) <= 20 and _GROUP_RE.fullmatch(cand))
+
+
 def _parse(name):
     toks = _toks(name)
     tokset = set(toks)
@@ -404,9 +416,7 @@ def _parse(name):
                 or any(t in cls_tokens for _c, cls_tokens in SOURCE_SETS)]
         if tech and tech[-1] < len(toks) - 1:
             cand = toks[-1]
-    if (cand and cand not in _NOT_GROUP and cand not in _HYPHEN_TECH
-            and not cand.isdigit()
-            and 2 <= len(cand) <= 20 and _GROUP_RE.fullmatch(cand)):
+    if is_group_token(cand):
         out['group'] = cand
     return out
 

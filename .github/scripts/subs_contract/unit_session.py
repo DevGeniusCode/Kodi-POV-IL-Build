@@ -100,8 +100,9 @@ from resources.lib.ui import chooser_rows as rows_mod
 pl = 'The.Odyssey.2026.1080p.WEB-DL.DDP5.1.x265-FLUX'
 cand = 'The Odyssey 2026 2160p WEBRip DD+5.1 HEVC HDR-FLUX.srt'
 mask, words = rows_mod.shared_mask(cand, pl)
-check('rows: shared source / audio / codec / group words are found, resolution differs is not green',
-      words == ['WEBRip', 'DD+5.1', 'HEVC', 'FLUX'])
+check('rows: whole shared tokens are found (title words, year, audio, codec, group); a different resolution and a '
+      'different source tag (WEBRip vs WEB-DL) are not green',
+      words == ['The', 'Odyssey', '2026', 'DD+5.1', 'HEVC', 'FLUX'])
 painted = rows_mod.paint(cand, mask, 'FFFFFFFF')
 check('rows: green words are painted with MATCH, others with the base colour',
       '[COLOR %s]FLUX[/COLOR]' % rows_mod.MATCH in painted and '2160p' in painted
@@ -109,6 +110,35 @@ check('rows: green words are painted with MATCH, others with the base colour',
 check('rows: wrapped release keeps the paint', 'COLOR %s' % rows_mod.MATCH in rows_mod.wrap_release(cand, 28, 5, mask)
       and rows_mod.wrap_release(cand, 28, 5, mask).count('[CR]') >= 1)
 check('rows: a manual query word is green too', rows_mod.shared_mask('Foo.Flux.720p', pl, ['flux'])[1] == ['Flux'])
+
+# whole tokens only: no prefix of a mismatched tag is painted
+_pl_rip = 'The.Odyssey.2026.1080p.WEBRip.DDP5.1.x265-FLUX'
+_dl = 'The.Odyssey.2026.1080p.WEB-DL.DDP5.1.x265-FLUX.srt'
+_m_dl, _w_dl = rows_mod.shared_mask(_dl, _pl_rip)
+check('rows: WEB-DL against a WEBRip file is painted by NONE of its characters (no green "WEB" with a white "-DL")',
+      'WEB-DL' not in _w_dl and not any(_m_dl[_dl.index('WEB-DL'):_dl.index('WEB-DL') + 6])
+      and _w_dl == ['The', 'Odyssey', '2026', '1080p', 'DDP5.1', 'x265', 'FLUX'])
+check('rows: the same tag in two spellings is one token (WEB-DL / WEB.DL, H.264 / x264)',
+      rows_mod.shared_mask('Foo.Bar.WEB.DL.x264', 'Foo.Bar.WEB-DL.H.264')[1] == ['Foo', 'Bar', 'WEB.DL', 'x264'])
+check('rows: a query word that is only PART of a compound tag does not paint it, all its parts do',
+      rows_mod.shared_mask('Foo.WEB-DL', '', ['web'])[1] == []
+      and rows_mod.shared_mask('Foo.WEB-DL', '', ['web', 'dl'])[1] == ['WEB-DL'])
+_wr = rows_mod.wrap_release(_dl[:-4], 14, 5, _m_dl)
+check('rows: every wrapped line of the info panel closes its own colour tags (no tag is cut across [CR])',
+      '[CR]' in _wr and all(_ln.count('[COLOR ') == _ln.count('[/COLOR]') and _ln.count('[COLOR ') >= 1
+                            for _ln in _wr.split('[CR]')))
+check('rows: stray Kodi formatting tags are stripped from a display title',
+      rows_mod.strip_bbcode('[B]X.720p[/B]') == 'X.720p' and rows_mod.strip_bbcode('A[/B] [COLOR red]b[/COLOR]') == 'A b'
+      and rows_mod.strip_bbcode('[YTS.MX] Movie') == '[YTS.MX] Movie')
+from resources.lib.scoring_matching import release as _rel
+check('release group: a file size and a generic descriptor are never the group',
+      all(_rel.parse('Movie.2020.1080p.BluRay.x264-' + t)['group'] == '' for t in ('550MB', '4GB', 'LOSSLESS', 'CLEAN', 'DUAL'))
+      and _rel.parse('Movie.2020.1080p.BluRay.x264.1.4GB')['group'] == ''
+      and _rel.parse('Movie.2020.1080p.BluRay.x264-FLUX')['group'] == 'flux'
+      and not _rel.is_group_token('550mb') and _rel.is_group_token('ntb'))
+check('rows: a group-less size / descriptor tail is no green "group"',
+      rows_mod.shared_mask('Movie.1080p-550MB', 'Movie.1080p-550MB')[1] == ['Movie', '1080p', '550MB']
+      and not any(s[2] == 'group' for s in rows_mod.release_spans('Movie.1080p-LOSSLESS')))
 
 from resources.lib.core.link_codec import encode_link
 
@@ -146,6 +176,38 @@ check('badge: a pooled translation needs no translator', NEG not in chips(pool_a
 check('badge: an embedded track already known to be a picture is marked', NEG in chips(emb_ai, ai_miss)
       and 'PGS' in rows_mod.build(emb_ai, pl, ai=ai_miss)['props']['p_kind'])
 check('badge: no context claims nothing', NEG not in chips(engine_en, None))
+
+# ---- 2b. wording of embedded subtitles and of the "type" field ------------------------------------------------------------------
+emb_he = _row({'type': 'engine', 'embedded': True, 'stream_index': 3, 'lang': 'he'}, 'תרגום מובנה בעברית · 101%', lang='he', pct=101)
+emb_en = _row({'type': 'engine', 'embedded': True, 'stream_index': 4, 'lang': 'en'}, '[מובנה] EN', lang='en', pct=0)
+pool_emb = _row({'type': 'pool', 'pool_kind': 'ai_emb', 'hash': 'h', 'release': 'X.720p', 'source_lang': 'en'},
+                'תרגום מובנה AI (אנגלית) · מאגר קהילתי · 100%  —  X.720p', lang='he', pct=100)
+_all_text = ''
+for _c in (engine_ai, engine_en, engine_he, emb_ai, pool_ai, emb_he, emb_en, pool_emb):
+    _r = rows_mod.build(_c, pl, ai=ai_on)
+    _all_text += _r['label'] + ' ' + ' '.join(str(v) for v in _r['props'].values()) + ' '
+check('wording: "מסלול" (track) is not shown by any row or panel field', 'מסלול' not in _all_text)
+_pe = rows_mod.build(emb_en, pl, ai=ai_on)
+_ph = rows_mod.build(emb_he, pl, ai=ai_on)
+_pa = rows_mod.build(emb_ai, pl, ai=ai_on)
+check('wording: the original embedded subtitle is "כתובית מובנית בקובץ (<lang>)", source "כתובית מובנית", type "כתובית מובנית ב<lang>"',
+      _pe['label'] == 'כתובית מובנית בקובץ (אנגלית)' and 'כתובית מובנית' in _pe['props']['src']
+      and _pe['props']['p_kind'] == 'כתובית מובנית באנגלית' and _ph['label'] == 'כתובית מובנית בקובץ (עברית)')
+check('wording: the AI row of an embedded subtitle is "תרגום לעברית מכתובית מובנית (<lang>)"',
+      _pa['label'] == 'תרגום לעברית מכתובית מובנית (אנגלית)' and _pa['props']['p_kind'] == 'כתובית מובנית באנגלית')
+check('wording: no redundant "מובנה" chip on an embedded row (the title and the source already say it)',
+      all('מובנה' not in _r['props'][k] for _r in (_pe, _ph, _pa) for k in ('b1', 'b2', 'b3')))
+check('wording: the "type" field of an untranslated foreign row is its source and language, never "תרגום AI ..."',
+      rows_mod.build(engine_ai, pl, ai=ai_on)['props']['p_kind'] == 'כתובית באנגלית'
+      and rows_mod.build(engine_en, pl, ai=ai_on)['props']['p_kind'] == 'כתובית אנושית (ספק חיצוני)'
+      and 'תרגום AI' not in rows_mod.build(emb_ai, pl, ai=ai_on)['props']['p_kind'])
+check('wording: "תרגום AI (מאגר קהילתי)" stays for rows fetched already translated from the community pool',
+      rows_mod.build(pool_ai, pl, ai=ai_on)['props']['p_kind'] == 'תרגום AI (מאגר קהילתי)'
+      and rows_mod.build(pool_emb, pl, ai=ai_on)['props']['p_kind'] == 'תרגום AI מכתובית מובנית באנגלית (מאגר קהילתי)')
+_stray = rows_mod.build(_row({'type': 'engine_ai', 'source': 'yify', 'src_lang': 'en'}, '[B]תרגום AI · 80%  —  X.720p.WEB-DL[/B]'), pl)
+check('wording: a stray [B] / [/B] of a stage label never reaches the window',
+      '[/B]' not in _stray['props']['p_release'] and _stray['props']['release'].count('[B]') == 1
+      and _stray['props']['release'].count('[/B]') == 1)
 
 # ---- 3. season pack ------------------------------------------------------------------------------------------------------------
 from resources.lib.fetching import season_pack

@@ -94,6 +94,16 @@ def _c(color, text):
     return '[COLOR {0}]{1}[/COLOR]'.format(color, text)
 
 
+# Kodi formatting tags that a stage label or a provider's file name may carry by accident ("[B]..." without its
+# "[/B]"): shown as text they are noise, and an unpaired one would colour or embolden the rest of the window.
+_BBCODE_RE = re.compile(r'\[/?(?:B|I|UPPERCASE|LOWERCASE|CAPITALIZE|LIGHT|CR)\]|\[/?COLOR(?:\s[^\]]*)?\]', re.I)
+
+
+def strip_bbcode(text):
+    """`text` without Kodi's formatting tags ([B], [/B], [I], [COLOR x], [/COLOR], [CR] ...)."""
+    return _BBCODE_RE.sub('', text or '').strip()
+
+
 # ---- the label of a row ---------------------------------------------------------------------------------------------
 _PCT_RE = re.compile(r'(\d{1,3})%')
 _TAG_RE = re.compile(r'^(?:\[[^\]]*\]\s*)+')
@@ -126,12 +136,18 @@ def _split_label(name):
 
 
 # ---- kind of a row (Hebrew), by link type ----------------------------------------------------------------------------
+def _payload_lang(payload):
+    """The Hebrew name of the language a link's subtitle is written in ('' when unknown)."""
+    return LANG_HE.get(norm_lang(payload.get('src_lang') or payload.get('source_lang')
+                                 or payload.get('lang')), '')
+
+
 def _kind(payload, label_head, is_mt):
     """(source text, kind sentence, is_ai, is_embedded). Source text is the short
-    line under the release name; the kind sentence goes to the info panel."""
+    line under the release name; the kind sentence goes to the info panel (the field "סוג"): what the
+    subtitle IS (its source and language), never what picking it will do."""
     typ = payload.get('type') or ''
-    lang = LANG_HE.get(norm_lang(payload.get('src_lang') or payload.get('source_lang')
-                                 or payload.get('lang')), '')
+    lang = _payload_lang(payload)
     if typ == 'passthrough':
         return 'קובץ לצד הווידאו', 'קובץ כתוביות שנמצא לצד הווידאו', False, False
     if typ == 'pool':
@@ -139,12 +155,12 @@ def _kind(payload, label_head, is_mt):
         if kind == 'ktuvit':
             return 'מאגר קהילתי', 'כתובית אנושית (מאגר קהילתי)', False, False
         if kind == 'ai_emb':
-            return 'מאגר קהילתי', 'תרגום AI ממסלול מובנה' + (
+            return 'מאגר קהילתי', 'תרגום AI מכתובית מובנית' + (
                 ' ב{0}'.format(lang) if lang else '') + ' (מאגר קהילתי)', True, True
         return 'מאגר קהילתי', 'תרגום AI (מאגר קהילתי)', True, False
     if typ == 'engine':
         if payload.get('embedded'):
-            return 'מסלול מובנה', 'מסלול כתוביות בתוך קובץ הווידאו', False, True
+            return 'כתובית מובנית', 'כתובית מובנית' + (' ב{0}'.format(lang) if lang else ''), False, True
         provider = _PROVIDER.get(str(payload.get('source') or '').lower(),
                                  str(payload.get('source') or '').strip() or '?')
         return provider, ('תרגום מכונה (ספק חיצוני)' if is_mt
@@ -152,16 +168,29 @@ def _kind(payload, label_head, is_mt):
     if typ == 'engine_ai':
         provider = _PROVIDER.get(str(payload.get('source') or '').lower(),
                                  str(payload.get('source') or '').strip() or '?')
-        return provider, 'תרגום AI לעברית מכתובית' + (
-            ' ב{0}'.format(lang) if lang else ''), True, False
+        return provider, 'כתובית ב{0}'.format(lang) if lang else 'כתובית בשפה זרה', True, False
     if typ == 'embedded_ai':
-        return 'מסלול מובנה', 'תרגום AI לעברית ממסלול מובנה' + (
-            ' ({0})'.format(lang) if lang else ''), True, True
+        return 'כתובית מובנית', 'כתובית מובנית' + (' ב{0}'.format(lang) if lang else ''), True, True
     if typ == 'embedded_sync':
-        return 'מסלול מובנה', 'עברית מסונכרנת למסלול המובנה', False, True
+        return 'כתובית מובנית', 'עברית מסונכרנת לכתובית המובנית', False, True
     if typ == 'ai':
-        return 'קובץ מקומי', 'תרגום AI לעברית מקובץ כתוביות מקומי', True, False
+        return 'קובץ מקומי', 'כתובית מקומית' + (' ב{0}'.format(lang) if lang else ''), True, False
     return label_head, '', False, False
+
+
+def _row_title(typ, payload, embedded):
+    """The title of a row that has no release name of its own, '' when the row keeps the label its stage wrote. An
+    embedded track and an AI row made of one are named by what they are, once: the source line and the badges do
+    not repeat it."""
+    lang = _payload_lang(payload)
+    paren = ' ({0})'.format(lang) if lang else ''
+    if typ == 'engine' and embedded:
+        return 'כתובית מובנית בקובץ' + paren
+    if typ == 'embedded_ai':
+        return 'תרגום לעברית מכתובית מובנית' + paren
+    if typ == 'ai':
+        return 'תרגום AI לעברית מקובץ כתוביות מקומי'   # the stage labels it in English
+    return ''
 
 
 _TIER_HE = {
@@ -274,10 +303,14 @@ def _fact(key, a, b, state):
 
 
 # ---- the words a release shares with the playing release -------------------------------------------------------------------
-# Resolution, source, video codec, audio, HDR and release group, found by pattern in both names; a subtitle's word is
-# painted green when the playing release carries the same (category, value). `want` words (the manual query) match any
-# alphanumeric run equal to them. Pure string work; the highlight never changes a number.
+# A name is cut into WHOLE tokens: the technical tags (resolution, source, video codec, audio, HDR; a compound tag such as
+# 'WEB-DL' or 'DD+5.1' is ONE token), the release group, and every other alphanumeric word (title words, the year ...).
+# A subtitle's token is painted green when the playing release carries the same whole token (a tag: same category and
+# value, so 'WEB-DL' is never green against 'WEBRip' and 'WEB' is never painted inside 'WEB-DL'; a word: the same word).
+# `want` words (the manual query) match a whole token too (every part of a compound one). Pure string work; the
+# highlight never changes a number.
 _SEP = r'[ ._-]?'
+_WORD_RE = re.compile(r'[A-Za-z0-9]+')
 _TOKEN_PATTERNS = (
     ('res', re.compile(r'(?<![a-z0-9])(?:4320p|2160p|1440p|1080[pi]|720p|576p|480p|4k|uhd)(?![a-z0-9])', re.I)),
     ('src', re.compile(r'(?<![a-z0-9])(?:web' + _SEP + r'dl|web' + _SEP + r'rip|webdl|webrip|web|blu' + _SEP + r'ray|bdrip|brrip|'
@@ -296,8 +329,6 @@ def _token_canon(cat, text):
     if cat == 'res':
         return '2160p' if key in ('4k', 'uhd') else ('1080p' if key == '1080i' else key)
     if cat == 'src':
-        if key.startswith('web'):
-            return 'web'
         if key in ('bluray', 'bdrip', 'brrip'):
             return 'bluray'
         if key in ('dvdrip', 'dvdr'):
@@ -313,7 +344,8 @@ def _token_canon(cat, text):
 
 
 def release_spans(name):
-    """[(start, end, category, canonical value)] of the tech words and the release group of `name`, non-overlapping."""
+    """[(start, end, category, canonical value)] of the whole tokens of `name`, non-overlapping: the tech tags, the
+    release group ('group') and every other word of two or more characters ('word'). The extension is not a token."""
     name = name or ''
     spans = []
     taken = []
@@ -331,31 +363,39 @@ def release_spans(name):
     if m:
         body = body[:m.start()]
     g = _GROUP_TAIL.search(body)
-    if g and free(g.start(1), g.end(1)):
+    if (g and free(g.start(1), g.end(1))
+            and scoring_matching_release.is_group_token(g.group(1).lower())):
+        taken.append((g.start(1), g.end(1)))
         spans.append((g.start(1), g.end(1), 'group', g.group(1).lower()))
+    for w in _WORD_RE.finditer(body):
+        if len(w.group(0)) >= 2 and free(w.start(), w.end()):
+            spans.append((w.start(), w.end(), 'word', w.group(0).lower()))
     return sorted(spans)
 
 
 def shared_mask(release, playing, want=None):
-    """(mask, words): `mask` has one bool per character of `release`, True inside a word that the playing release shares
-    (same category and value) or that is one of the `want` words; `words` lists those words as written in `release`."""
+    """(mask, words): `mask` has one bool per character of `release`, True inside a WHOLE token that the playing release
+    shares (a tag: same category and value; a title word, the year or the group: the same word) or that is made of
+    `want` words; `words` lists those tokens as written in `release`."""
     release = release or ''
     mask = [False] * len(release)
     words = []
-    playing_set = {(c, v) for _a, _b, c, v in release_spans(playing)} if playing else set()
+    p_tags, p_words = set(), set()
+    for _a, _b, c, v in (release_spans(playing) if playing else ()):
+        if c in ('word', 'group'):
+            p_words.add(v)
+        else:
+            p_tags.add((c, v))
+    want = {w for w in (want or ()) if w}
     for a, b, cat, val in release_spans(release):
-        if (cat, val) in playing_set:
+        hit = (val in p_words) if cat in ('word', 'group') else ((cat, val) in p_tags)
+        if not hit and want:
+            parts = [p.lower() for p in _WORD_RE.findall(release[a:b])]
+            hit = bool(parts) and (''.join(parts) in want or all(p in want for p in parts))
+        if hit:
             for i in range(a, b):
                 mask[i] = True
             words.append(release[a:b])
-    want = {w for w in (want or ()) if w}
-    if want:
-        for m in re.finditer(r'[A-Za-z0-9]+', release):
-            if re.sub(r'[^a-z0-9]', '', m.group(0).lower()) in want:
-                if not all(mask[m.start():m.end()]):
-                    words.append(m.group(0))
-                for i in range(m.start(), m.end()):
-                    mask[i] = True
     return mask, words
 
 
@@ -473,7 +513,7 @@ def no_ai_reason(typ, is_ai, is_he, embedded, ai):
         return ai.get('why') or ''
     if embedded:
         if not ai.get('emb_ok'):
-            return ai.get('emb_why') or 'תרגום מסלולים מובנים כבוי'
+            return ai.get('emb_why') or 'תרגום כתוביות מובנות כבוי'
         if ai.get('embedded_miss'):
             return ai.get('embedded_miss_why') or 'הכתובית המובנית בקובץ אינה טקסט'
     return ''
@@ -494,7 +534,7 @@ def build(c, playing, want=None, ai=None):
 
 
 def _build(c, playing, want=None, ai=None):
-    name = (c.get('filename') or '').strip()
+    name = strip_bbcode(c.get('filename'))
     lang = (c.get('language') or '').strip()
     payload = decode_link_safe(c.get('link') or '') or {}
     if not isinstance(payload, dict):
@@ -507,6 +547,7 @@ def _build(c, playing, want=None, ai=None):
     # The release name: the link's own (never shortened), else the label's tail.
     release = (payload.get('filename') or payload.get('release') or '').strip() \
         if typ != 'passthrough' else (payload.get('release') or '').strip()
+    release = strip_bbcode(release)
     if not release or release == lang:
         release = label_rel
     pct = c.get('pct') if isinstance(c.get('pct'), int) else label_pct
@@ -533,16 +574,14 @@ def _build(c, playing, want=None, ai=None):
     sync_label = (c.get('_subsync_label') or '').strip()
     if sync_label:
         chips.append(_c(GREEN, sync_label))
-    elif typ == 'embedded_sync' or (typ == 'engine' and embedded and is_he):
-        chips.append(_c(GREEN, 'מסונכרנת למובנה' if typ == 'embedded_sync' else 'מובנה'))
+    elif typ == 'embedded_sync':
+        chips.append(_c(GREEN, 'מסונכרנת למובנה'))
     # AI translation is the normal case and carries no badge; only a row that CANNOT be AI-translated says so
     no_ai = no_ai_reason(typ, is_ai, is_he, embedded, ai)
     if no_ai:
         chips.append(_c(RED, 'ללא תרגום AI'))
     if is_mt:
         chips.append(_c(AMBER, 'תרגום מכונה'))
-    elif embedded and typ == 'engine' and not is_he:
-        chips.append(_c(DIM, 'מובנה'))
     if foreign and lang_he:
         chips.append(_c(AMBER, 'מקור: ' + lang_he))
     access_short, access_text = _access(c, release)
@@ -555,8 +594,9 @@ def _build(c, playing, want=None, ai=None):
     # A row with no release name keeps the label its stage wrote ("תרגום מובנה → עברית (AI) · אנגלית").
     head_clean = _TAG_RE.sub('', _PCT_RE.sub('', head)).strip(' ·')
     primary = release or (head_clean if len(head_clean) > 3 else '') or kind_text or name
-    if typ in ('ai', 'embedded_ai') and kind_text:
-        primary = kind_text   # those stages label the row in English ("AI Hebrew (translate ...)")
+    title = _row_title(typ, payload, embedded)
+    if title:
+        primary = title   # those stages label the row in English ("AI Hebrew (translate ...)") or by a bare "[מובנה] EN"
     mask, shared = shared_mask(release, playing, want) if (release and primary == release and (playing or want)) else ([], [])
     shown = '[B]{0}[/B]'.format(paint(primary, mask, WHITE)) if shared else '[B]{0}[/B]'.format(_c(WHITE, primary))
     props = {
@@ -570,7 +610,7 @@ def _build(c, playing, want=None, ai=None):
         # ---- info panel ----
         'p_release': wrap_release(release, mask=(mask if shared else None)) if release else _c(DIM, 'ללא שם שחרור'),
         'p_why': _c(WHITE, _why(explained, pct) if explained else (
-            'מסלול מובנה בקובץ הווידאו: התזמון זהה לווידאו' if embedded else
+            'כתובית מובנית בקובץ הווידאו: התזמון זהה לווידאו' if embedded else
             'אין שם שחרור להשוואה')),
         'p_kind': kind_text + (' · לא ניתנת לתרגום AI: ' + no_ai if no_ai else ''),
         'p_provider': source_text if source_text else '—',
