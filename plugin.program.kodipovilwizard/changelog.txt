@@ -1,3 +1,6 @@
+0.5.12
+- Update window: when the ACTIVE skin has a newer version on offer, a toast ("הסקין מתעדכן, המסך יוחשך למספר שניות...") is shown and the window waits 5 s before Kodi may install updates. Kodi unloads the active skin before it unpacks the new one and nothing can be drawn until it is loaded again (about 6 s on a PC), so the notice has to come first. The offered version is read from our repository index on the site (fresher than Kodi's copy) and from Kodi's Addons database; when neither answers, or no update of the active skin is pending, nothing changes. An automatic window whose GUI turned busy during the notice (playback started, a dialog opened) tries again later. New: provisioning/addon_state.version_key / offered_version, update_window.pending_skin_update. Not tested in Kodi.
+
 0.5.10
 - The start-up repair pass no longer sets the skins' "choose subtitles" settings (_point_subtitle_button in host_repairs/flow/skin_steps, its call and the use_builtin_engine read in flow/runner are gone): every skin's subtitle button now opens the subtitle add-on's own chooser, so there is nothing left to point. The Wizard reads no setting of the subtitle add-on any more (host_repairs/kodi_utils.subs_get_* has no caller).
 

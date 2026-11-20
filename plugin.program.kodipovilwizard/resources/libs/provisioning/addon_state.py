@@ -216,6 +216,29 @@ def repo_check_stamp():
         return None
 
 
+def version_key(text):
+    """Sort key of a version string: its numbers ('1.0.41' -> (1, 0, 41)); a letter suffix ('1.2.1a') is ignored. The repository's
+    versions are numeric and only go up (Kodi never downgrades), so this is enough to say "newer"."""
+    return tuple(int(n) for n in re.findall(r'\d+', text or ''))
+
+
+def offered_version(addon_id):
+    """The newest version of an add-on that Kodi's repositories offered at their last check (the Addons database, table `addons`: one
+    row per add-on a repository lists), None when unknown or the database cannot be read right now. Read only, never raises."""
+    try:
+        from sqlite3 import dbapi2 as database
+        path = os.path.join(CONFIG.DATABASE, db.latest_db('Addons'))
+        connection = database.connect('file:{0}?mode=ro'.format(path.replace('\\', '/')), uri=True, timeout=1.0)
+        try:
+            rows = connection.execute('SELECT version FROM addons WHERE addonID = ?', (addon_id,)).fetchall()
+        finally:
+            connection.close()
+        versions = [row[0] for row in rows if row and row[0]]
+        return max(versions, key=version_key) if versions else None
+    except Exception:
+        return None
+
+
 def check_repositories(monitor=None, timeout=30.0):
     """Post UpdateAddonRepos (a builtin posted without `wait`: the calling thread is never held by the GUI thread) and wait until
     Kodi has written a new check time for a repository. True when it did. When the database cannot be read the wait is a fixed

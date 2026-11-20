@@ -9,8 +9,10 @@ window instead, from the host-repair runner (host_repairs/flow/runner.py, its id
   1. GATE: automatic runs only when Home is the active window, nothing plays and no modal dialog is open (one GUI question, asked
      on the window's own worker thread, so a GUI that does not answer can only hold that thread). A manual request (Maintenance ->
      update check) and a resumed run skip the gate.
-  2. OPEN: the mode goes to ON (update_mode), the flag is raised, UpdateAddonRepos is posted. Kodi installs what the repositories
-     offer, itself, exactly as before.
+  2. OPEN: when the ACTIVE skin has a newer version on offer, a Hebrew toast says the screen will go dark for a few seconds (Kodi
+     unloads the active skin before it unpacks the new one, and nothing can be drawn until it is loaded again) and the window waits
+     SKIN_NOTICE_SECONDS. Then the mode goes to ON (update_mode), the flag is raised, UpdateAddonRepos is posted. Kodi installs what
+     the repositories offer, itself, exactly as before.
   3. SETTLE: file-based, no GUI: wait until the installs started and nothing was written to addons/packages or addons/temp for
      15 s (addon_state.updates_in_flight), or, when none started, until the check is done plus a short margin.
   4. CLOSE, always (try / finally): the mode goes back (NOTIFY, or the owner's NEVER), the flag is cleared.
@@ -21,6 +23,7 @@ window instead, from the host-repair runner (host_repairs/flow/runner.py, its id
 Windows open: at the first idle moment 60 s after the runner starts, then every INTERVAL_SECONDS, and on a manual request. The
 Maintenance "check for updates" entry (provisioner.run_update_check(background=False)) only requests one.
 """
+import re
 import threading
 import time
 
@@ -46,6 +49,11 @@ RETRY_SECONDS = 120.0               # an automatic window that found the GUI bus
 GRACE_SECONDS = 45.0                # nothing started this long after the check was asked for: nothing to install
 CHECK_MARGIN_SECONDS = 12.0         # the check finished and nothing started this long after: nothing to install
 POLL_SECONDS = 2.0
+SKIN_NOTICE_SECONDS = 5.0           # the "the skin is updating" toast is on screen this long before the mode goes to ON
+SKIN_NOTICE_TEXT = 'הסקין מתעדכן, המסך יוחשך למספר שניות...'
+SITE_INDEX_PATH = '/repo/addons.xml'    # our repository index on the site (repository.povil's <info>)
+SITE_INDEX_TIMEOUT = 6.0
+SITE_INDEX_LIMIT = 2 * 1024 * 1024
 HARD_LIMIT_SECONDS = 20 * 60.0
 
 IDLE_CONDITION = 'Window.IsActive(home) + !Player.HasMedia + !System.HasActiveModalDialog'
@@ -80,6 +88,42 @@ def request_manual():
         return 'running'
     _home().setProperty(PROP_REQUEST, '1')
     return 'queued'
+
+
+def _site_version(addon_id):
+    """The version of an add-on in OUR repository index on the site (the same file Kodi reads), None when it cannot be read. Never raises.
+    Fresher than Kodi's own copy (Kodi checks every few hours), so a release published since the last check is seen too."""
+    try:
+        from urllib.request import Request, ProxyHandler, build_opener
+        request = Request(CONFIG.REPO_BASE_URL + SITE_INDEX_PATH, headers={'User-Agent': getattr(CONFIG, 'USER_AGENT', 'Kodi POV IL')})
+        with build_opener(ProxyHandler({})).open(request, timeout=SITE_INDEX_TIMEOUT) as response:
+            text = response.read(SITE_INDEX_LIMIT).decode('utf-8', 'replace')
+        for tag in re.finditer(r'<addon\s[^>]*>', text):
+            attrs = dict(re.findall(r'([\w:.-]+)="([^"]*)"', tag.group(0)))
+            if attrs.get('id') == addon_id:
+                return attrs.get('version') or None
+    except Exception as err:
+        _log('site index not read: {0}'.format(err))
+    return None
+
+
+def pending_skin_update():
+    """(skin id, installed version, offered version) when the ACTIVE skin has a newer version on offer, else None. Never raises.
+    No GUI call: the active skin is the setting, the versions come from a file, a small HTTP read and a read-only database query."""
+    try:
+        skin = xbmc.getSkinDir()
+        installed = addon_state.local_version(skin) if skin else None
+        if not installed:
+            return None
+        offered = [v for v in (_site_version(skin), addon_state.offered_version(skin)) if v]
+        if not offered:
+            return None
+        newest = max(offered, key=addon_state.version_key)
+        if addon_state.version_key(newest) > addon_state.version_key(installed):
+            return skin, installed, newest
+    except Exception as err:
+        _log('skin update probe failed: {0}'.format(err), xbmc.LOGWARNING)
+    return None
 
 
 class UpdateWindow(object):
@@ -178,6 +222,9 @@ class UpdateWindow(object):
                 self._retry_at = time.monotonic() + RETRY_SECONDS
                 _log('the GUI is busy (not Home / playing / a dialog): trying again in {0} s'.format(int(RETRY_SECONDS)))
                 return
+        outcome = self._announce_skin_update(reason, monitor)
+        if outcome != 'go':
+            return
         _log('opening ({0})'.format(reason))
         before = addon_state.versions_snapshot()
         own_before = addon_state.local_version(CONFIG.ADDON_ID)
@@ -208,6 +255,24 @@ class UpdateWindow(object):
             return
         self._apply_config()
         self._finish(reason, changed)
+
+    def _announce_skin_update(self, reason, monitor):
+        """Before the mode goes to ON: when the active skin is about to be replaced, say so (a toast, then SKIN_NOTICE_SECONDS to read it).
+        Kodi unloads the active skin before it unpacks the new one, so the screen is empty until the skin loads again; no Wizard window
+        can be drawn meanwhile, the notice can only come first. 'go', 'abort', or 'busy' (an automatic window whose GUI got busy while
+        the toast was up: it tries again later)."""
+        pending = pending_skin_update()
+        if pending is None:
+            return 'go'
+        _log('the active skin {0} will update {1} -> {2}: announcing'.format(*pending))
+        logging.log_notify(CONFIG.ADDONTITLE, SKIN_NOTICE_TEXT, times=int(SKIN_NOTICE_SECONDS * 1000))
+        if monitor.waitForAbort(SKIN_NOTICE_SECONDS):
+            return 'abort'
+        if reason == 'timer' and not self._idle():
+            self._retry_at = time.monotonic() + RETRY_SECONDS
+            _log('the GUI got busy during the notice: trying again in {0} s'.format(int(RETRY_SECONDS)))
+            return 'busy'
+        return 'go'
 
     def _settle(self, monitor):
         """Wait, file-based, until Kodi's installs are done. 'settled' / 'nothing' / 'timeout' / 'abort'."""
