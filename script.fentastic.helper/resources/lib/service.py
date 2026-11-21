@@ -46,46 +46,31 @@ class RatingsService(xbmc.Monitor):
         self.get_infolabel = xbmc.getInfoLabel
         self.get_visibility = xbmc.getCondVisibility
         # The loop below runs every 0.2-0.45 s while the viewer scrolls Home / Videos and every Kodi GUI call takes the GUI lock, so what
-        # rarely changes is asked for once in a while, not every cycle: the Window objects (one per window id), the skin folder and
-        # the skin string holding the MDbList key. Settings changes drop all three at once (onSettingsChanged).
-        self._windows = {}
-        self._windows_at = 0.0
+        # rarely changes is asked for once in a while, not every cycle: the skin folder and the skin string holding the MDbList key
+        # (plain strings). Settings changes drop both at once (onSettingsChanged).
+        # NEVER keep an xbmcgui.Window (or Control) object between cycles: it wraps a raw pointer, and a skin reload (every FENtastic
+        # search does one) deletes the custom windows. A call on the stale object does NOT raise, it crashes Kodi (use after free in
+        # CGUIWindow::GetProperty, 21 Nov 2026). Create the Window fresh, right where it is used.
         self._skin = None
         self._skin_at = 0.0
         self._key = None
         self._key_at = 0.0
 
-    WINDOW_TTL = 10.0   # seconds a cached Window object is reused (a skin reload re-creates windows: never keep one long)
     SKIN_TTL = 3.0      # seconds the skin folder is trusted
     KEY_TTL = 10.0      # seconds the skin string with the API key is trusted
     IDLE_WAIT = 0.45    # seconds between two cycles while the focused IMDb id has not changed
 
     def _drop_caches(self):
-        self._windows = {}
-        self._windows_at = 0.0
         self._skin = None
         self._key = None
 
     def onSettingsChanged(self):
         self._drop_caches()
 
-    def _window_for(self, window_id):
-        now = time.monotonic()
-        if now - self._windows_at > self.WINDOW_TTL:
-            self._windows = {}
-            self._windows_at = now
-        win = self._windows.get(window_id)
-        if win is None:
-            win = self._windows[window_id] = self.window(window_id)
-        return win
-
     def _skin_dir(self):
         now = time.monotonic()
         if self._skin is None or now - self._skin_at > self.SKIN_TTL:
-            skin = xbmc.getSkinDir()
-            if skin != self._skin:
-                self._windows = {}      # another skin: its windows are other objects
-            self._skin = skin
+            self._skin = xbmc.getSkinDir()
             self._skin_at = now
         return self._skin
 
@@ -106,8 +91,8 @@ class RatingsService(xbmc.Monitor):
                 logger("###FENtastic: Device is Awake, RESUMING Ratings Service", 1)
 
     def listitem_monitor(self):
-        # A cached Window object can go stale (a skin reload re-creates windows): such a call raises, and the loop must not die
-        # with it. Drop the caches and start the cycles again.
+        # An error in a cycle must not end the service: drop the caches and start the cycles again. (A stale xbmcgui.Window does not
+        # raise, it crashes Kodi: no Window object is kept between cycles, see __init__.)
         while not self.abortRequested():
             try:
                 self._cycles()
@@ -124,7 +109,7 @@ class RatingsService(xbmc.Monitor):
                 self.waitForAbort(1)
                 continue
             window_id = self.get_window_id()
-            win = self._window_for(window_id)
+            win = self.window(window_id)    # fresh every cycle, never cached (a stale one crashes Kodi)
             if win.getProperty("pause_services") == "true":
                 self.waitForAbort(2)
                 continue
