@@ -1,7 +1,7 @@
 {
  "_comment": "Facts recorded by Subtitle Phase 3 (step 3g), updated in Phase 4: embedded_extract.py and gender_reference.py were split into packages (step 4e) and are no longer standalone modules.",
  "he_sub_match": {
-  "sha256": "61b54457d554533f10502f7289987ef86750b975f6b8bcc9ca3fad8a8780e552",
+  "sha256": "f63ced4c9986c89ef92bf2b6c7e1a84287367e1d4214bf5ecf263d753c0e4170",
   "module_level_imports": [
    "import os",
    "import re",

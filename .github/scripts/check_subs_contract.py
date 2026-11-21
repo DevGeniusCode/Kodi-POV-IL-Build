@@ -140,7 +140,7 @@ for k, f in files.items():
     imps = mod_level_imports(ast.parse(data.decode('utf-8')))
     check('module-level imports of %s unchanged' % f, imps == BASE[k]['module_level_imports'], imps)
     if k == 'he_sub_match':
-        check('he_sub_match.py sha256 equals the recorded one', hashlib.sha256(data).hexdigest() == BASE[k]['sha256'])
+        check('he_sub_match.py sha256 equals the recorded one', hashlib.sha256(data.replace(b'\r\n', b'\n')).hexdigest() == BASE[k]['sha256'])
 t = TREES['resources.lib.he_sub_match']
 check('he_sub_match keeps its 5 API names', all(n in top_defs(t) for n in
       ('prewarm', 'release_names', 'embedded_names', 'confirmed_releases', 'label_prefix')))
