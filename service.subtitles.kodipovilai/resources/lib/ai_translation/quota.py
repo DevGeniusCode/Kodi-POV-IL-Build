@@ -90,7 +90,7 @@ def _pacific_offset(utc):
 def today_utc(now=None):
     """The quota day: today's date in Pacific time, when Google resets
     the free daily limit. (The name predates the switch from UTC.)"""
-    utc = now or datetime.datetime.utcnow()
+    utc = now or datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     return (utc + _pacific_offset(utc)).strftime('%Y-%m-%d')
 
 

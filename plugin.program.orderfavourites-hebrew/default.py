@@ -162,7 +162,7 @@ def favouritesDataGen():
     namePattern = re.compile('name="([^"]+)')
     thumbPattern = re.compile('thumb="([^"]+)')
 
-    for entryMatch in re.finditer('(<favourite\s[^<]+</favourite>)', contents):
+    for entryMatch in re.finditer(r'(<favourite\s[^<]+</favourite>)', contents):
         entry = entryMatch.group(1)
 
         match = namePattern.search(entry)
@@ -274,13 +274,13 @@ else:
 
     dialogItem = xbmcgui.ListItem('[COLOR lavender][B]סידור מועדפים[/B][/COLOR]')
     dialogItem.setArt({'thumb': 'DefaultAddonContextItem.png'})
-    dialogItem.setInfo('video', {'plot': 'פותח דיאלוג עבור שינוי סדר המועדפים.'})
+    dialogItem.getVideoInfoTag().setPlot('פותח דיאלוג עבור שינוי סדר המועדפים.')
     saveExitItem = xbmcgui.ListItem('[COLOR lavender][B]שמור וצא[/B][/COLOR]')
     saveExitItem.setArt({'thumb': 'DefaultAddonsUpdates.png'})
-    saveExitItem.setInfo('video', {'plot': 'שומר את השינויים שבוצעו, ומרענן את קודי ללא צורך בהפעלה מחדש.'})
+    saveExitItem.getVideoInfoTag().setPlot('שומר את השינויים שבוצעו, ומרענן את קודי ללא צורך בהפעלה מחדש.')
     exitItem = xbmcgui.ListItem('[COLOR lavender][B]צא ללא שמירת שינויים[/B][/COLOR]')
     exitItem.setArt({'thumb': 'DefaultFolderBack.png'})
-    exitItem.setInfo('video', {'plot': 'יציאה ללא שמירת השינויים.'})
+    exitItem.getVideoInfoTag().setPlot('יציאה ללא שמירת השינויים.')
     xbmcplugin.addDirectoryItems(
         PLUGIN_ID,
         (

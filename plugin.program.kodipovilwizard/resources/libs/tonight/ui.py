@@ -144,7 +144,11 @@ def _item(xbmcgui,item,reason=''):
     identity+=' · '+('סרט' if item['kind']=='movie' else 'סדרה')
     li=xbmcgui.ListItem(label=item['title']+identity+duration,label2=reason)
     li.setArt(item.get('art',{}))
-    li.setInfo('video',dict(title=item['title'],plot=item['plot'],year=item['year'],mediatype=item['kind']))
+    tag=li.getVideoInfoTag()
+    tag.setTitle(item['title'])
+    tag.setPlot(item['plot'])
+    tag.setYear(item['year'])
+    tag.setMediaType(item['kind'])
     return li
 
 

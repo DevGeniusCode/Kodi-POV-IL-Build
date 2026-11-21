@@ -19,7 +19,7 @@
 '''
 
 from resources.lib.fetching.providers import log
-import xbmc,re,hashlib,time,os,ast
+import xbmc,xbmcvfs,re,hashlib,time,os,ast
 
 try:
     from sqlite3 import dbapi2 as database
@@ -32,11 +32,7 @@ except:
     pass
 
 KODI_VERSION = int((xbmc.getInfoLabel("System.BuildVersion") or '21').split('.', 1)[0] or 21)
-if KODI_VERSION<=18:
-    xbmc_tranlate_path=xbmc.translatePath
-else:
-    import xbmcvfs
-    xbmc_tranlate_path=xbmcvfs.translatePath
+xbmc_tranlate_path=xbmcvfs.translatePath
 def _loads(stored):
     """A stored value (the repr() this module writes) read back WITHOUT eval(): ast.literal_eval takes everything these caches
     hold (dict / list / str / number / None) and nothing that could run code. A damaged or foreign entry raises, which the

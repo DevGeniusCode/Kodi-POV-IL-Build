@@ -92,7 +92,9 @@ def _add_menu_item(display, params, menu, description, overwrite, fanart, icon, 
     if fanart:
         art['fanart'] = fanart
     liz.setArt(art)
-    liz.setInfo(type="Video", infoLabels={"Title": display, "Plot": description})
+    tag = liz.getVideoInfoTag()
+    tag.setTitle(display)
+    tag.setPlot(description or '')
     liz.setProperty("Fanart_Image", fanart)
 
     # build context menu

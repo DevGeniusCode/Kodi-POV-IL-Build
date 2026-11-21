@@ -1,3 +1,6 @@
+0.3.113
+- Kodi 22 (Piers) preparation, behaviour unchanged on Kodi 21: fetching/providers/cache.py no longer reads the removed xbmc.translatePath (xbmcvfs.translatePath only); ai_translation/quota.py takes the quota day from datetime.now(timezone.utc) (naive UTC, as before) instead of the deprecated utcnow().
+
 0.3.112
 - max_search_time is read at each request (fetching/providers/general.request_timeout() replaces the import-time DEFAULT_REQUEST_TIMEOUT), so a changed setting applies at once under reuselanguageinvoker; the fallback is still 10 s.
 - The 2-minute recent-search window property (fetching/search_cache.recent_put) keeps at most the first 80 candidates of an entry; the 24 h disk list is unchanged.
@@ -50,6 +53,3 @@
 
 0.3.97
 - The sync check no longer leaves a banner over the picture. While the subtitle on screen is being timed (17-25 s measured) the top overlay is closed; the check is announced with two small corner toasts instead: one when it starts ("בודק איכות סנכרון...", 2.5 s) and one with the result (3 s), both without sound. A result of "synced automatically" keeps SubSync's own toast (it carries the offset). The "subtitle loaded" line of a subtitle that needs no check now stays 2 s, not 5. The toasts follow the subtitle-notifications switch. core.kodi.notify takes an optional sound argument (default unchanged).
-
-0.3.96
-- With "Google Translate" chosen as the translation, nothing is asked of Gemini any more (a viewer: "with Google Translate chosen it still tries to translate with AI and runs into 'busy'; it has to be Google only"). The translation itself already went to Google in that mode; a translation taken from the cache or the shared pool was still handed to the Gemini proofread when a key was connected. Now the proofread is not due unless AI is the chosen mode (translate._gp_models_left), and the one function every text request to Gemini goes through refuses in the other modes (gemini.generate, ai_mode_on) -- so nothing can ask by another way. The same holds for "no translation". Tests: tests/test_google_mode_no_ai.py.

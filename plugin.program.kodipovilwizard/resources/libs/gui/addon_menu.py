@@ -19,6 +19,7 @@
 
 import xbmc
 import xbmcgui
+import xbmcvfs
 
 import os
 
@@ -368,7 +369,7 @@ class AddonMenu:
                       +'\n'+''
                       +'\n'+'[COLOR {0}]Please Wait[/COLOR]'.format(CONFIG.COLOR2))
         urlsplits = url.split('/')
-        lib = xbmc.makeLegalFilename(os.path.join(CONFIG.PACKAGES, urlsplits[-1]))
+        lib = xbmcvfs.makeLegalFilename(os.path.join(CONFIG.PACKAGES, urlsplits[-1]))
         try:
             os.remove(lib)
         except:
@@ -415,7 +416,7 @@ class AddonMenu:
                       +'\n'+'[COLOR {0}]Please Wait[/COLOR]'.format(CONFIG.COLOR2))
 
         urlsplits = url.split('/')
-        lib = xbmc.makeLegalFilename(os.path.join(CONFIG.PACKAGES, urlsplits[-1]))
+        lib = xbmcvfs.makeLegalFilename(os.path.join(CONFIG.PACKAGES, urlsplits[-1]))
         try:
             os.remove(lib)
         except:

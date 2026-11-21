@@ -1,3 +1,6 @@
+0.5.15
+- Kodi 22 (Piers) preparation, behaviour unchanged on Kodi 21: gui/addon_menu.py uses xbmcvfs.makeLegalFilename; common/directory.py and tonight/ui.py fill list items through getVideoInfoTag() (setTitle / setPlot / setYear / setMediaType) instead of the deprecated ListItem.setInfo().
+
 0.5.14
 - check.py check_repos: the broken-repositories list imports the gui window module (it was an undefined name, a NameError after a repository scan with failures).
 
