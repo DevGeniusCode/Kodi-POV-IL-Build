@@ -9,7 +9,8 @@
 # similarity:
 #   - exact release           -> 100  (same file everywhere; synced)
 #   - same group + source     -> ~90+ (de-facto synced in practice)
-#   - same source class only  -> mid  (often synced, not guaranteed)
+#   - same source class only  -> mid  (often synced, not guaranteed); the exact source tag (BluRay = BluRay) and the
+#     same named edition (Extended = Extended) lift it, a re-encode against a disc (BRRip vs BluRay / REMUX) lowers it
 #   - cross source class      -> CAPPED LOW (WEB vs BluRay drifts by minutes;
 #     the old scorer happily gave these 60-75% on token overlap alone)
 #   - different edition/PROPER-> capped (different cut / re-release)
@@ -49,26 +50,29 @@ _EXT_RE = re.compile(
 _RES_MAP = {
     '4k': '2160p', 'uhd': '2160p', '2160': '2160p',
     '1080': '1080p', '720': '720p', '480': '480p', '576': '576p',
+    'fullhd': '1080p', 'fhd': '1080p',
 }
-_RES_RE = re.compile(r'\b(2160p|1080p|720p|576p|480p|4k|uhd)\b', re.I)
+# 'FullHD' / 'Full-HD' / 'Full.HD' / 'FHD' are 1080p ('HD1080' is NOT here: it is a release group)
+_RES_RE = re.compile(r'\b(2160p|1080p|720p|576p|480p|4k|uhd|full[ ._-]?hd|fhd)\b', re.I)
 
 # Source classes. Order matters only for readability; detection is by token.
 _SOURCE_CLASSES = (
     ('bluray', ('bluray', 'blueray', 'bdrip', 'brrip', 'brip', 'bdremux', 'blurayremux',
-                'bd25', 'bd50', 'bd66', 'bd100', 'remux')),
+                'bd25', 'bd50', 'bd66', 'bd100', 'remux', 'hddvd', 'hddvdrip')),
     # 'webmux' / 'webmuxed': a WEB source remuxed into MKV ("WEBMux", "WEB-Mux" is the two tokens web + mux)
     ('web', ('web', 'webdl', 'webrip', 'webhd', 'webdlrip', 'webmux', 'webmuxed')),
     ('hdtv', ('hdtv', 'hdtvrip', 'pdtv', 'sdtv', 'tvrip', 'dsr')),
-    ('dvd', ('dvdrip', 'dvdr', 'dvd', 'dvdfull', 'dvdremux')),
+    ('dvd', ('dvdrip', 'dvdr', 'dvd', 'dvdfull', 'dvdremux', 'dvd5', 'dvd9')),
     ('hdrip', ('hdrip',)),
     ('cam', ('cam', 'hdcam', 'camrip', 'ts', 'hdts', 'telesync', 'tc',
-             'telecine', 'screener', 'scr', 'dvdscr', 'dvdscreener')),
+             'telecine', 'screener', 'scr', 'dvdscr', 'dvdscreener', 'r5', 'workprint')),
 )
 
 _EDITION_TOKENS = {
     'extended': 'extended', 'uncut': 'extended', 'unrated': 'unrated',
     'theatrical': 'theatrical', 'imax': 'imax', 'remastered': 'remastered',
-    'directors': 'directors', 'dircut': 'directors', 'dc': None,  # ambiguous
+    'directors': 'directors', "director's": 'directors', 'director\u2019s': 'directors', 'dircut': 'directors',
+    'dc': None,  # ambiguous
 }
 _PROPER_TOKENS = ('proper', 'repack', 'rerip')
 
@@ -87,7 +91,17 @@ _NOT_GROUP = set(
     'multi', 'dual', 'audio', 'heb', 'hebrew', 'eng', 'english', 'subbed',
     'hebsub', 'hebsubs', '10bit', '8bit', 'hc', 'internal', 'complete',
     'lossless', 'clean',
+    # from the Telegram subtitle corpus (a trailing token that is a tag, never a group): iNT (INTERNAL), WS (widescreen),
+    # READNFO, DXVA, MULTiSUBS, QSubs (a Hebrew subtitle site), the subtitle file's encoding (-ANSI / -Unicode), the
+    # language of the subtitle or the audio, hearing-impaired tags, FullHD / FHD, dubbed
+    'int', 'ws', 'readnfo', 'dxva', 'multisubs', 'qsubs', 'ansi', 'unicode', 'utf8', 'he', 'it', 'sub', 'subs', 'hi', 'sdh',
+    'fullhd', 'fhd', 'dub', 'dubbed', 'french', 'german', 'italian', 'spanish', 'russian', 'arabic', 'hindi',
+    'korean', 'japanese', 'chinese', 'ita', 'fre', 'ger', 'spa', 'rus',
 }
+# Fragments of tags that a 64-character file name cut in the middle ("...720p.BRRip.x26", "...1080p.BluRa", "...H2"), a
+# season tag ("S01"), an episode tag, a disc count ("1CD", "CD2") and a channel count ("6CH") are no release group either.
+_NOT_GROUP_RE = re.compile(
+    r'^(?:s\d{1,2}|e\d{1,3}|s\d{1,2}e\d{1,3}|\d+x\d+|cd\d|\d+cd|\d+ch|[hx]2|[hx]26|blu|blur|blura|bdri|brri|dvdri|xvi)$')
 
 
 # Hyphenated TECHNICAL tags are not release groups. Before this, the scene
@@ -119,6 +133,7 @@ _SERVICE_TOKENS = {
     'hulu': 'hulu', 'pcok': 'pcok', 'pmtp': 'pmtp', 'stan': 'stan',
     'crav': 'crav', 'sho': 'sho', 'roku': 'roku', 'vudu': 'vudu',
     'mubi': 'mubi', 'itunes': 'itunes', 'pmnt': 'pmtp', 'shdr': 'shdr',
+    'cbs': 'cbs',
 }
 # Editions that change the CUT. One side tagged and the other not is not proof
 # of the same timeline (an untagged release is normally the theatrical cut).
@@ -132,6 +147,26 @@ SOURCE_SETS = tuple((cls, frozenset(toks)) for cls, toks in _SOURCE_CLASSES)
 _PROPER_SET = frozenset(_PROPER_TOKENS)
 _DOTS_RE = re.compile(r'\.+')
 _GROUP_RE = re.compile(r'[a-z0-9]+')
+_ALPHA_RE = re.compile(r'[a-z]{2,}')
+
+# A release group written as several dot-separated words ("-BEN.THE.MEN") keeps all of them: three alphabetic words whose
+# middle one is a joiner. Any other dotted tail names ONE group plus decoration ("-YTS.AM", "-RARBG.heb").
+_GROUP_JOINERS = frozenset({'the', 'of', 'and', 'de', 'la', 'van', 'von'})
+# Two spellings of ONE group (compared through group_key; the name itself is kept as written in the release).
+_GROUP_ALIASES = {'benthemen': 'btm'}
+# The subtitle file's own decoration after the group ("...x264-DON-Unicode", "...XviD-EVO-heb"): not part of the release.
+_TAIL_DECOR_RE = re.compile(r'(?<=[^\s-])-(?:ansi|unicode|utf-?8|heb|hebrew|he)\s*$', re.I)
+
+# The fine tag of a source token (the class is 'bluray', the tag is 'bluray' / 'remux' / 'bdrip'; 'web' / 'webrip' ...).
+_SOURCE_TAG_CANON = {
+    'blueray': 'bluray', 'bdremux': 'remux', 'blurayremux': 'remux', 'brrip': 'bdrip', 'brip': 'bdrip',
+    'webdl': 'web', 'webhd': 'web', 'webdlrip': 'webrip', 'webmuxed': 'webmux', 'hdtvrip': 'hdtv',
+    'hddvdrip': 'hddvd',
+}
+# Inside the 'bluray' class a DISC (BluRay, REMUX, BD25 ...) and a RE-ENCODE of one (BDRip / BRRip) are two masters.
+_DISC_TAGS = frozenset({'bluray', 'remux', 'bd25', 'bd50', 'bd66', 'bd100', 'hddvd'})
+# 'Blu-ray' / 'Blu.Ray' / 'Full.HD' normalise to two tokens: read them as the one tag they are.
+_SPLIT_TAGS = {('blu', 'ray'): 'bluray', ('full', 'hd'): 'fullhd'}
 _EPISODE_RE = re.compile(r'^s\d{1,2}e\d{1,3}$')
 _YEAR_RE = re.compile(r'^(?:19|20)\d{2}$')
 
@@ -255,7 +290,7 @@ def same_content(video_name, subtitle_name):
 # SYNC-NEUTRAL tokens: they describe the encode, not the timeline. Stripped
 # before the token tie-break so "1080p.x264" vs "720p.HEVC" costs nothing.
 _NEUTRAL_RE = re.compile(
-    r'^(?:\d{3,4}p|\d{3,4}x\d{3,4}|[hx]26[45]|\d+bit|hdr\d*|hdr10plus|dv|dovi'
+    r'^(?:\d{3,4}p|\d{3,4}x\d{3,4}|fullhd|fhd|[hx]26[45]|\d+bit|hdr\d*|hdr10plus|dv|dovi'
     r'|sdr|ddp?\d*|ddplus|e?ac3|aac\d*|dts|dtshd|dtsx|truehd|atmos|flac\d*|opus'
     r'|mp3|l?pcm|ma|hd|hevc|avc|av1|xvid|divx|uhd|4k|multi|dual|audio)$')
 _AUDIO_HEAD_RE = re.compile(r'^(?:dd|aac|e?ac3|dts|truehd|atmos|flac|opus)')
@@ -275,6 +310,8 @@ def _core_tokens(toks):
         if t in ('h', 'x') and i + 1 < n and toks[i + 1] in ('264', '265'):
             continue
         if t in ('264', '265') and prev in ('h', 'x'):
+            continue
+        if t == 'full' and i + 1 < n and toks[i + 1] == 'hd':
             continue
         if len(t) == 1 and t.isdigit() and _AUDIO_HEAD_RE.match(prev):
             continue
@@ -348,7 +385,57 @@ def is_group_token(cand):
     technical tag, a language / audio descriptor (DUAL, LOSSLESS, CLEAN ...), a number or a file size (550MB, 4GB)."""
     return bool(cand and cand not in _NOT_GROUP and cand not in _HYPHEN_TECH
                 and not cand.isdigit() and not _SIZE_TOKEN_RE.fullmatch(cand)
+                and not _NOT_GROUP_RE.fullmatch(cand)
                 and 2 <= len(cand) <= 20 and _GROUP_RE.fullmatch(cand))
+
+
+def _tail_parts(text):
+    """The words of what follows a hyphen ("BEN.THE.MEN", "[YTS.AM]", "DL.DDP5.1"), lower case."""
+    tail = _SEPS.sub('.', (text or '').strip().lower())
+    return [p for p in re.split(r'[.\[\]()]+', tail) if p]
+
+
+def _group_of_parts(parts):
+    """The release group named by the words after a hyphen, '' when they name none. One word is the group and the rest
+    is decoration ("YTS.AM", "RARBG.heb"); three alphabetic words around a joiner are ONE group ("BEN.THE.MEN")."""
+    if not parts:
+        return ''
+    cand = parts[0]
+    # "WEB-DL.DDP5.1.H.264": the hyphen joined a technical tag; the name carries no group at all.
+    if cand in _HYPHEN_TECH or any(_TRAILING_TECH_RE.fullmatch(p) for p in parts[1:]):
+        return ''
+    if (len(parts) >= 3 and parts[1] in _GROUP_JOINERS
+            and all(_ALPHA_RE.fullmatch(p) and p not in _NOT_GROUP and p not in _HYPHEN_TECH
+                    for p in (parts[0], parts[2]))):
+        joined = '.'.join(parts[:3])
+        if len(joined) <= 20:
+            return joined
+    return cand if is_group_token(cand) else ''
+
+
+def strip_tail_decor(name):
+    """`name` without the subtitle file's own decoration after the group ('...x264-DON-Unicode' -> '...x264-DON', '...-AMRAP-heb'
+    -> '...-AMRAP'), so the trailing '-GROUP' is the group. Pure string work."""
+    raw = name or ''
+    for _ in range(3):
+        stripped = _TAIL_DECOR_RE.sub('', raw)
+        if stripped == raw:
+            break
+        raw = stripped
+    return raw
+
+
+def tail_group(text):
+    """The release group (lower case; a multi-word one keeps its dots: 'ben.the.men') that the text after a hyphen of a release
+    name names, '' when it names none. Pure string work; the one reading of a trailing "-GROUP" for the scorer and the chooser."""
+    return _group_of_parts(_tail_parts(text))
+
+
+def group_key(group):
+    """The comparison key of a release group: dots dropped and the known spellings of one group joined ('BEN.THE.MEN' and
+    'BENTHEMEN' are 'BTM'). Two groups are the same group when their keys are equal."""
+    key = (group or '').lower().replace('.', '')
+    return _GROUP_ALIASES.get(key, key)
 
 
 def service_token(tok):
@@ -358,20 +445,38 @@ def service_token(tok):
     return _SERVICE_TOKENS.get(tok.lower(), '') if isinstance(tok, str) else ''
 
 
+def _merge_split_tags(toks):
+    """`toks` with the tags that normalisation split in two read as one ('blu', 'ray' -> 'bluray')."""
+    if 'ray' not in toks and 'hd' not in toks:
+        return toks
+    out, i, n = [], 0, len(toks)
+    while i < n:
+        merged = _SPLIT_TAGS.get(tuple(toks[i:i + 2]))
+        if merged:
+            out.append(merged)
+            i += 2
+        else:
+            out.append(toks[i])
+            i += 1
+    return tuple(out)
+
+
 def _parse(name):
-    toks = _toks(name)
+    toks = _merge_split_tags(_toks(name))
     tokset = set(toks)
     out = {'resolution': '', 'source': '', 'group': '', 'codec': '',
-           'edition': '', 'proper': False, 'service': ''}
+           'edition': '', 'proper': False, 'service': '', 'source_tags': ()}
 
     m = _RES_RE.search(normalize(name))
     if m:
-        r = m.group(1).lower()
+        r = re.sub(r'[ ._-]', '', m.group(1).lower())
         out['resolution'] = _RES_MAP.get(r, r if r.endswith('p') else '')
 
     for cls, cls_tokens in SOURCE_SETS:
         if tokset & cls_tokens:
             out['source'] = cls
+            out['source_tags'] = tuple(sorted(
+                {_SOURCE_TAG_CANON.get(t, t) for t in tokset & cls_tokens}))
             break
     # 'web' + 'dl'/'rip' appear as separate tokens after normalization;
     # the plain 'web' token above already catches them.
@@ -386,8 +491,11 @@ def _parse(name):
             out['codec'] = 'h' + toks[i + 1]
             break
 
-    for t in toks:
+    for i, t in enumerate(toks):
         e = _EDITION_TOKENS.get(t)
+        # "Director's.Cut" written as "Director s.Cut" / "Director.Cut"
+        if not e and t == 'director' and i + 1 < len(toks) and toks[i + 1] in ('s', 'cut'):
+            e = 'directors'
         if e:
             out['edition'] = e
             break
@@ -414,7 +522,8 @@ def _parse(name):
     # Group: the token after the LAST '-' in the raw name (scene convention
     # "...-NTb"), if it isn't a known technical tag. Fall back to the last
     # normalized token under the same filter.
-    raw = _strip_ext(name)
+    # "...x264-DON-Unicode" / "...XviD-EVO-heb": the subtitle file's own decoration after the group
+    raw = strip_tail_decor(_strip_ext(name))
     cand = ''
     from_hyphen = False
     head, _dash, rest = raw.rpartition('-')
@@ -422,16 +531,10 @@ def _parse(name):
     # separator on either side introduces an episode title, never a group.
     spaced = bool(_dash) and (head[-1:] in ' ._' or rest[:1] in ' ._')
     if _dash and not spaced:
-        tail = _SEPS.sub('.', rest.strip().lower())
-        parts = [p for p in re.split(r'[.\[\]()]+', tail) if p]
+        parts = _tail_parts(rest)
         if parts:
-            cand = parts[0]
+            cand = _group_of_parts(parts)
             from_hyphen = True
-            # "WEB-DL.DDP5.1.H.264": the hyphen joined a technical tag; the
-            # name carries no group at all.
-            if (cand in _HYPHEN_TECH
-                    or any(_TRAILING_TECH_RE.fullmatch(p) for p in parts[1:])):
-                cand = ''
     if not cand and toks and not from_hyphen:
         # Group-less scene-style names ("From.S04E10.1080p.ColdFilm") carry
         # the group as the last token AFTER a technical tag. Without one, the
@@ -441,8 +544,8 @@ def _parse(name):
                 if _RES_RE.fullmatch(t) or t in _CODEC_MAP
                 or any(t in cls_tokens for _c, cls_tokens in SOURCE_SETS)]
         if tech and tech[-1] < len(toks) - 1:
-            cand = toks[-1]
-    if is_group_token(cand):
+            cand = toks[-1] if is_group_token(toks[-1]) else ''
+    if cand:
         out['group'] = cand
     return out
 
@@ -587,6 +690,13 @@ _CEIL_SOURCE = 35
 _CEIL_PROPER = 40
 _CEIL_SAME_SOURCE = 79
 _CEIL_FUZZY = 65
+# The same-source tier never reaches 80: 80 and up is only for an exact name, a contained name and the same group
+# (he_sub_match.best_pct(floor=79) and the 80% gold of the chooser rely on it).
+_MAX_SOURCE_TIER = 78
+# Same-source adjustments (see _score): the exact source tag, a disc against a re-encode, the same named edition.
+_BONUS_SOURCE_TAG = 6
+_PENALTY_DISC_VS_RIP = 8
+_BONUS_SAME_EDITION = 8
 
 
 def _score(video_name, sub_name, floor=0, video_ep=''):
@@ -654,7 +764,8 @@ def _score(video_name, sub_name, floor=0, video_ep=''):
             'frame rate mismatch ({0} vs {1} fps)'.format(v_fps, s_fps)]
 
     same_source = bool(v['source'] and s['source'])  # equal if both set here
-    same_group = bool(v['group'] and s['group'] and v['group'] == s['group'])
+    same_group = bool(v['group'] and s['group']
+                      and group_key(v['group']) == group_key(s['group']))
     other_service = bool(v['service'] and s['service']
                          and v['service'] != s['service'])
     same_service = bool(v['service'] and s['service']
@@ -698,11 +809,25 @@ def _score(video_name, sub_name, floor=0, video_ep=''):
             return None
         pct = 55
         reasons.append('same source class ({0})'.format(v['source']))
+        # The same NAMED edition on both sides ("Extended" = "Extended"): the contradiction guards above already
+        # rejected two different ones, so this is positive evidence of one cut.
+        if v['edition'] and v['edition'] == s['edition']:
+            pct += _BONUS_SAME_EDITION
+            reasons.append('same edition ({0})'.format(v['edition']))
+        # The exact source tag (BluRay = BluRay, WEB-DL = WEB-DL) is closer than the class alone; inside the BluRay class a
+        # disc (BluRay / REMUX) against a re-encode of one (BDRip / BRRip) is another master.
+        v_tags, s_tags = set(v['source_tags']), set(s['source_tags'])
+        if v_tags & s_tags:
+            pct += _BONUS_SOURCE_TAG
+        elif v['source'] == 'bluray' and _is_disc(v_tags) != _is_disc(s_tags):
+            pct -= _PENALTY_DISC_VS_RIP
+            reasons.append('different source tag ({0} vs {1})'.format(
+                '/'.join(sorted(v_tags)), '/'.join(sorted(s_tags))))
         if same_service:
             pct += 6
             reasons.append('same streaming service ({0})'.format(
                 v['service'].upper()))
-        if v['group'] and s['group'] and v['group'] != s['group']:
+        if v['group'] and s['group'] and group_key(v['group']) != group_key(s['group']):
             pct -= 8
             reasons.append('different group')
         if other_service:
@@ -712,7 +837,7 @@ def _score(video_name, sub_name, floor=0, video_ep=''):
         if ratio < 0:
             ratio = _token_ratio(vt, st)
         pct += int(ratio * 15)   # token tie-break WITHIN the tier
-        return max(20, min(pct, 84)), TIER_SOURCE, reasons
+        return max(20, min(pct, _MAX_SOURCE_TIER)), TIER_SOURCE, reasons
 
     # Source unknown on at least one side (and groups don't match): token
     # similarity only, bounded so it can never outrank a structural match.
@@ -722,6 +847,11 @@ def _score(video_name, sub_name, floor=0, video_ep=''):
         ratio = _token_ratio(vt, st)
     pct = int(10 + ratio * 55)
     return min(pct, 79), TIER_FUZZY, reasons
+
+
+def _is_disc(tags):
+    """True when a set of BluRay-class source tags names a disc (BluRay, REMUX, BD25 ...), False for a re-encode (BDRip / BRRip)."""
+    return bool(tags & _DISC_TAGS)
 
 
 def match_pct(video_name, sub_name):
@@ -814,8 +944,9 @@ def explain(video_name, sub_name, video_ep=''):
                 else:
                     state = 'unknown'
             else:
+                same = (group_key(a) == group_key(b)) if key == 'group' else a == b
                 state = ('unknown' if not (a and b)
-                         else 'match' if a == b else 'mismatch')
+                         else 'match' if same else 'mismatch')
             facts.append((key, a, b, state))
         for key in ('resolution', 'codec'):
             facts.append((key, v[key], s[key], 'neutral'))

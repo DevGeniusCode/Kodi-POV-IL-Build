@@ -266,7 +266,9 @@ _REASON_HE = (
     ('release name contained', 'שם השחרור כלול בשם הכתובית'),
     ('same group + source', 'אותה קבוצת שחרור ואותו סוג מקור'),
     ('same group (source untagged)', 'אותה קבוצת שחרור (סוג המקור לא צוין)'),
-    ('same source class', 'אותו סוג מקור, קבוצת שחרור לא זהה'),
+    ('same source class', 'אותו סוג מקור'),
+    ('same edition', 'אותה מהדורה / גרסת חיתוך'),
+    ('different source tag', 'מקור שונה: דיסק מול קידוד מחדש'),
     ('same streaming service', 'אותו שירות סטרימינג'),
     ('different streaming service', 'שירות סטרימינג שונה'),
     ('different group', 'קבוצת שחרור שונה'),
@@ -294,7 +296,8 @@ def _why(explained, pct):
     for r in reasons or []:
         for key, he in _REASON_HE:
             if r.startswith(key):
-                out.append(he)
+                if he not in out:    # one line never says the same thing twice
+                    out.append(he)
                 break
     return ' · '.join(out[:3])
 
@@ -323,7 +326,7 @@ def _fact(key, a, b, state):
     ONE direction (Latin): the shared value, or 'yours vs subtitle's'."""
     pa, pb = _pretty(key, a), _pretty(key, b)
     if state == 'match':
-        return pa, 'תואם', GREEN
+        return (pa if pa == pb else '{0} = {1}'.format(pa, pb)), 'תואם', GREEN    # two spellings of one group: BEN.THE.MEN = BTM
     if state == 'mismatch':
         return '{0} vs {1}'.format(pa or '—', pb or '—'), 'שונה', RED
     if pa or pb:
@@ -358,8 +361,8 @@ def _fact(key, a, b, state):
 _SEP = r'[ ._-]?'
 _WORD_RE = re.compile(r'[A-Za-z0-9]+')
 _TOKEN_PATTERNS = (
-    ('res', re.compile(r'(?<![a-z0-9])(?:4320p|2160p|1440p|1080[pi]|720p|576p|480p|4k|uhd)(?![a-z0-9])', re.I)),
-    ('src', re.compile(r'(?<![a-z0-9])(?:hdcam|camrip|cam|hdts|telesync|ts|telecine|tc|dvd' + _SEP + r'scr(?:eener)?|screener|scr|r5|'
+    ('res', re.compile(r'(?<![a-z0-9])(?:4320p|2160p|1440p|1080[pi]|720p|576p|480p|4k|uhd|full' + _SEP + r'hd|fhd)(?![a-z0-9])', re.I)),
+    ('src', re.compile(r'(?<![a-z0-9])(?:hd' + _SEP + r'dvd(?:rip)?|dvd[59]|hdcam|camrip|cam|hdts|telesync|ts|telecine|tc|dvd' + _SEP + r'scr(?:eener)?|screener|scr|r5|'
                        r'workprint|web' + _SEP + r'mux(?:ed)?|web' + _SEP + r'dl|web' + _SEP + r'rip|webdl|webrip|web|'
                        r'(?:bd|blu' + _SEP + r'ray|dvd)' + _SEP + r'remux|blu' + _SEP + r'ray|bdrip|brrip|'
                        r'remux|hdtv|pdtv|sdtv|dvd' + _SEP + r'rip|dvdr|hdrip)(?![a-z0-9])', re.I)),
@@ -370,7 +373,7 @@ _TOKEN_PATTERNS = (
     # SxxEyy, a multi-episode file (S01E01E02, S01E01-E02, S01E01-02) is ONE token
     ('episode', re.compile(r'(?<![a-z0-9])s\d{1,2}e\d{1,3}(?:-?e\d{1,3})*(?:-\d{1,3})?(?![a-z0-9])', re.I)),
     ('fps', re.compile(r'(?<![0-9])(?<![0-9][.,])(?:23[.,]976|23[.,]98|24|25|29[.,]97|30|50|59[.,]94|60)' + _SEP + r'fps(?![a-z0-9])', re.I)),
-    ('edition', re.compile(r'(?<![a-z0-9])(?:extended(?:' + _SEP + r'(?:cut|edition|version))?|director(?:[\'’]?s)(?:' + _SEP
+    ('edition', re.compile(r'(?<![a-z0-9])(?:extended(?:' + _SEP + r'(?:cut|edition|version))?|director(?:[\'’ ]?s)(?:' + _SEP
                            + r'(?:cut|edition))?|director' + _SEP + r'cut|dircut|dc|unrated|uncut|theatrical(?:' + _SEP
                            + r'(?:cut|edition|version))?|imax(?:' + _SEP + r'edition)?|remastered|special' + _SEP + r'edition|'
                            r'criterion(?:' + _SEP + r'(?:collection|edition))?)(?![a-z0-9])', re.I)),
@@ -378,7 +381,7 @@ _TOKEN_PATTERNS = (
                          r'featurettes?|extras|bonus|deleted' + _SEP + r'scenes|recaps?|sample)(?![a-z0-9])', re.I)),
     ('tvstd', re.compile(r'(?<![a-z0-9])(?:pal|ntsc)(?![a-z0-9])', re.I)),
 )
-_GROUP_TAIL = re.compile(r'(?:-|\[)([A-Za-z0-9]{2,15})\]?\s*$')
+_GROUP_TAIL = re.compile(r'(?:-|\[)([A-Za-z0-9]{2,15}(?:\.[A-Za-z]{2,15}){0,2})\]?\s*$')
 _EXT_TAIL = re.compile(r'\.(?:srt|sub|ass|ssa|vtt|mkv|mp4|avi|m4v|ts)$', re.I)
 _YEAR_RE = re.compile(r'(?<![A-Za-z0-9])(?:19|20)\d{2}(?![A-Za-z0-9])')
 # Short words that are also title words ("Cam.2018", "DC.League.of.Super-Pets", "TS"): a tag only AFTER a technical anchor
@@ -392,7 +395,7 @@ _ANCHOR_CATS = frozenset({'res', 'src', 'hdr', 'codec', 'audio', 'episode', 'fps
 def _token_canon(cat, text):
     key = re.sub(r'[^a-z0-9+]', '', text.lower())
     if cat == 'res':
-        return '2160p' if key in ('4k', 'uhd') else ('1080p' if key == '1080i' else key)
+        return '2160p' if key in ('4k', 'uhd') else ('1080p' if key in ('1080i', 'fullhd', 'fhd') else key)
     if cat == 'src':
         if key in ('bluray', 'bdrip', 'brrip'):
             return 'bluray'
@@ -400,8 +403,10 @@ def _token_canon(cat, text):
             return 'remux'
         if key in ('webmux', 'webmuxed'):
             return 'webmux'    # ONE tag (scoring_matching.release reads it as source class web): never a green 'WEB' inside it
-        if key in ('dvdrip', 'dvdr'):
+        if key in ('dvdrip', 'dvdr', 'dvd5', 'dvd9'):
             return 'dvd'
+        if key in ('hddvd', 'hddvdrip'):
+            return 'hddvd'
         return 'dvdscr' if key == 'dvdscreener' else key
     if cat == 'hdr':
         return 'dv' if key in ('dv', 'dovi', 'dolbyvision') else ('hdr10+' if key in ('hdr10+', 'hdr10plus') else key)
@@ -464,10 +469,14 @@ def release_spans(name):
     for a, b, cat, text in deferred:
         if anchor is not None and a > anchor and free(a, b):
             take(a, b, cat, _token_canon(cat, text))
-    g = _GROUP_TAIL.search(body)
-    if (g and free(g.start(1), g.end(1))
-            and scoring_matching_release.is_group_token(g.group(1).lower())):
-        take(g.start(1), g.end(1), 'group', g.group(1).lower())
+    # the trailing "-GROUP": one word ("-YTS.AM" is the group YTS) or a multi-word group ("-BEN.THE.MEN"); the subtitle file's own
+    # decoration ("-Unicode", "-heb") is no part of it. The value is the group's KEY, so BEN.THE.MEN and BTM are one group.
+    g = _GROUP_TAIL.search(scoring_matching_release.strip_tail_decor(body))
+    if g:
+        group = scoring_matching_release.tail_group(g.group(1))
+        end = g.start(1) + len(group)
+        if group and free(g.start(1), end):
+            take(g.start(1), end, 'group', scoring_matching_release.group_key(group))
     # a streaming service sits among the technical tags: after the first resolution / source tag, or right before a
     # source tag ("AMZN.WEB-DL"); the same rule as scoring_matching.release (so "Mad.Max" is a title)
     tech = [a for a, _b, c, _v in spans if c in ('res', 'src')]
@@ -520,9 +529,9 @@ def shared_mask(release, playing, want=None):
 # the conflict facets of one token: (facet, class). Two tokens conflict when they carry the same facet with another class.
 _PRE_RETAIL = frozenset({'cam', 'hdcam', 'camrip', 'ts', 'hdts', 'telesync', 'tc', 'telecine', 'scr', 'screener', 'dvdscr',
                          'r5', 'workprint'})
-_RETAIL = frozenset({'webdl', 'webrip', 'webmux', 'web', 'bluray', 'remux', 'dvd', 'dvdremux'})
+_RETAIL = frozenset({'webdl', 'webrip', 'webmux', 'web', 'bluray', 'remux', 'dvd', 'dvdremux', 'hddvd'})
 _BROADCAST = frozenset({'hdtv', 'pdtv', 'sdtv'})
-_WEB_DISC = frozenset({'webdl', 'webrip', 'webmux', 'web', 'bluray', 'remux'})
+_WEB_DISC = frozenset({'webdl', 'webrip', 'webmux', 'web', 'bluray', 'remux', 'hddvd'})
 
 
 def _facets_of(cat, val):

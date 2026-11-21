@@ -167,7 +167,7 @@ def diversify_oracle_matches(ranked):
     for item in ranked or []:
         try:
             candidate, _tier, _pct, group, _rank = item
-            key = (group or '').strip().lower()
+            key = scoring_matching_release.group_key((group or '').strip())
             if not key:
                 key = 'nogroup:' + scoring_matching_release.normalize(
                     candidate.get('release') or '')

@@ -115,7 +115,7 @@ def diverse_human_alternatives(candidates, limit=6, info=None):
         except Exception:
             parsed = {}
         family = ((parsed.get('source') or '').lower(),
-                  (parsed.get('group') or '').lower(),
+                  scoring_matching_release.group_key(parsed.get('group')),
                   (parsed.get('edition') or '').lower(),
                   bool(parsed.get('proper')))
         if not any(family):
