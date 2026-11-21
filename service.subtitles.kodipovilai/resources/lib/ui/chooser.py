@@ -890,7 +890,8 @@ def _show():
             def onInit(self):
                 try:
                     self.setProperty('subs.brand', _title())
-                    self.setProperty('subs.head', video_context.release_name(self.info, 'chooser') or '')
+                    self.head_name = video_context.release_name(self.info, 'chooser') or ''
+                    self.setProperty('subs.head', self.head_name)
                     # the release the rows are compared with (the one the list was scored against)
                     self.playing = video_context.release_name(self.info, 'picker') or ''
                     self.playing_ep = chooser_rows.playing_episode(self.playing, self.info)
@@ -934,8 +935,11 @@ def _show():
                     except Exception as e:
                         _log('chooser job failed: {0}'.format(e), level='WARNING')
 
-            def _rows(self, items, want):
-                """PURE, any thread: the row dicts (chooser_rows) of `items`. No xbmcgui object is made here."""
+            def _rows(self, items, want, head=True):
+                """PURE, any thread: the row dicts (chooser_rows) of `items`. No xbmcgui object is made here. `head` = the header
+                shows the playing release (each row then carries it painted against its own subtitle); a manual search shows its
+                query there instead."""
+                head_name = getattr(self, 'head_name', '') if head else ''
                 rows = []
                 for c in items:
                     # One column per field (chooser_rows): the colours are baked
@@ -947,13 +951,13 @@ def _show():
                         rows.append(chooser_rows.build(
                             c, getattr(self, 'playing', ''), want=want,
                             ai=getattr(self, 'ai_ctx', None), prov=getattr(self, 'prov_allow', None),
-                            video_ep=getattr(self, 'playing_ep', '')))
+                            video_ep=getattr(self, 'playing_ep', ''), head_name=head_name))
                 return rows
 
             def _fill(self, items=None):
                 """Owner thread: show `items` (the window's own list by default)."""
                 items = self.items if items is None else items
-                self._apply(items, self._rows(items, self.want))
+                self._apply(items, self._rows(items, self.want, head=not self.manual))
 
             def _apply(self, items, rows):
                 """OWNER THREAD ONLY: the one place that makes xbmcgui.ListItem objects and touches list 100."""
@@ -1077,7 +1081,7 @@ def _show():
                     if not items:
                         items = [{'filename': 'לא נמצאו כתוביות לחיפוש הזה', 'language': '',
                                   'link': '', '_placeholder': True}]
-                    rows = self._rows(items, want)
+                    rows = self._rows(items, want, head=False)
                     head = manual.head(search_info)
                 except Exception as e:
                     _log('chooser manual rows failed: {0}'.format(e), level='WARNING')

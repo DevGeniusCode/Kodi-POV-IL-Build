@@ -17,13 +17,14 @@
      (p_prov, p_prov_src, p_translator, p_sync, p_uploader, p_date, p_downloads, p_fixed). The block and every one of its rows are
      always shown (a dash for an empty value) so the panel never changes shape. A community-pool row names "מאגר קהילתי" as its source.
      Positive only: a row without evidence has no badge and no "unverified" text.
+     LABELS. Every fixed text of this window is a string of strings.po (32700-32733, he_il and en_gb): $ADDON[service.subtitles.kodipovilai <id>].
      LAYOUT (1920 x 1080, margins 24 / 16): the left column runs from x = 24 to x = 1320, the edges of the list card, and EVERY
      element of it is flush with both: header row 1 = brand (left edge) | the searching status (window property subs.count,
      centred on the column) | the position counter (right edge); header row 2 = the playing release (subs.head) across the whole
      column. Under it, two separate dark cards on the left (the list, the colour legend, which ends left of the rightmost button
      column), the button bar (four equal columns, equal gaps, straight on the background, no card) and one card on the right
-     (the info panel, flush with the bottom of the button bar). The list is 8.5 rows high on purpose: the half row at the
-     bottom is the scroll hint.
+     (the info panel, flush with the bottom of the button bar, y = 1050). Vertical: list card y = 110-914, legend y = 926-978, bar
+     y = 990-1050, so both gaps are 12 px. The list is 8.5 rows high on purpose: the half row at the bottom is the scroll hint.
      Ids: list 100, manual search 202, back to the automatic list 203 (a TOGGLE PAIR with 202: the same slot, 203 is visible only
      while a manual result is shown, window property subs.manual, and 202 only while it is not), stop the translation process
      204 (labelled "עצור תהליך תרגום"), subtitle settings 205, cancel the automatic sync 206, back to the movie 201 (labelled
@@ -89,7 +90,7 @@
         <control type="label">
             <left>1352</left><top>16</top><width>290</width><height>48</height>
             <font>font13</font>
-            <label>סונכרנה אוטומטית</label>
+            <label>$ADDON[service.subtitles.kodipovilai 32710]</label>
             <textcolor>FF46C46A</textcolor>
             <align>right</align><aligny>center</aligny>
             <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
@@ -103,26 +104,38 @@
             <visible>!String.IsEmpty(Window(Home).Property(subs.sync.mode))</visible>
         </control>
 
-        <!-- Header row 2: the playing release across the whole column, x = 24 to x = 1320 (LTR, scrolls when longer) -->
+        <!-- Header row 2: the playing release across the whole column, x = 24 to x = 1320 (LTR, scrolls when longer). Painted against the
+             FOCUSED row: each row carries the property "head" (ui/chooser_rows.py: green = a token the subtitle shares, amber = a
+             difference SubSync can fix, red = a conflict, cyan = a source tag), so it follows the list with no Python on a focus change.
+             No "head" (a manual search shows its query, a placeholder row) = the plain window property subs.head. -->
+        <control type="label">
+            <left>24</left><top>66</top><width>1296</width><height>34</height>
+            <font>font13</font>
+            <label>$INFO[Container(100).ListItem.Property(head)]</label>
+            <textcolor>FFB8D6E8</textcolor>
+            <align>left</align><aligny>center</aligny><scroll>true</scroll>
+            <visible>!String.IsEmpty(Container(100).ListItem.Property(head))</visible>
+        </control>
         <control type="label">
             <left>24</left><top>66</top><width>1296</width><height>34</height>
             <font>font13</font>
             <label>$INFO[Window.Property(subs.head)]</label>
             <textcolor>FFB8D6E8</textcolor>
             <align>left</align><aligny>center</aligny><scroll>true</scroll>
+            <visible>String.IsEmpty(Container(100).ListItem.Property(head))</visible>
         </control>
 
         <!-- CARD 1: the results list (its own surface and frame) -->
         <control type="image">
-            <left>24</left><top>110</top><width>1296</width><height>796</height>
+            <left>24</left><top>110</top><width>1296</width><height>804</height>
             <texture colordiffuse="FF2B3238">white.png</texture>
         </control>
         <control type="image">
-            <left>25</left><top>111</top><width>1294</width><height>794</height>
+            <left>25</left><top>111</top><width>1294</width><height>802</height>
             <texture colordiffuse="FF0B0F13">white.png</texture>
         </control>
         <control type="list" id="100">
-            <left>32</left><top>118</top><width>1280</width><height>780</height>
+            <left>32</left><top>118</top><width>1280</width><height>788</height>
             <onleft>100</onleft>
             <onright condition="!String.IsEmpty(Window.Property(subs.manual))">203</onright><onright>202</onright>
             <onup>100</onup><ondown>205</ondown>
@@ -299,62 +312,62 @@
              rightmost button column (x = 1005), where the always-visible "בטל סנכרון אוטומטי" (206) sits above "עצור תהליך
              תרגום" (204): the same left edge and width as 204, the same top and height as this card -->
         <control type="image">
-            <left>24</left><top>914</top><width>969</width><height>52</height>
+            <left>24</left><top>926</top><width>969</width><height>52</height>
             <texture colordiffuse="FF2B3238">white.png</texture>
         </control>
         <control type="image">
-            <left>25</left><top>915</top><width>967</width><height>50</height>
+            <left>25</left><top>927</top><width>967</width><height>50</height>
             <texture colordiffuse="FF12171C">white.png</texture>
         </control>
         <control type="image">
-            <left>40</left><top>933</top><width>14</width><height>14</height>
+            <left>40</left><top>945</top><width>14</width><height>14</height>
             <texture colordiffuse="FFFFD700">white.png</texture>
         </control>
         <control type="label">
-            <left>60</left><top>925</top><width>150</width><height>30</height>
+            <left>60</left><top>937</top><width>150</width><height>30</height>
             <font>font12</font>
-            <label>התאמה גבוהה</label>
+            <label>$ADDON[service.subtitles.kodipovilai 32711]</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="image">
-            <left>218</left><top>933</top><width>14</width><height>14</height>
+            <left>218</left><top>945</top><width>14</width><height>14</height>
             <texture colordiffuse="FF7BE38C">white.png</texture>
         </control>
         <control type="label">
-            <left>238</left><top>925</top><width>170</width><height>30</height>
+            <left>238</left><top>937</top><width>170</width><height>30</height>
             <font>font12</font>
-            <label>התאמה בינונית</label>
+            <label>$ADDON[service.subtitles.kodipovilai 32712]</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="image">
-            <left>416</left><top>933</top><width>14</width><height>14</height>
+            <left>416</left><top>945</top><width>14</width><height>14</height>
             <texture colordiffuse="FFF0A93A">white.png</texture>
         </control>
         <control type="label">
-            <left>436</left><top>925</top><width>210</width><height>30</height>
+            <left>436</left><top>937</top><width>210</width><height>30</height>
             <font>font12</font>
-            <label>שפה זרה (תתורגם)</label>
+            <label>$ADDON[service.subtitles.kodipovilai 32713]</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="image">
-            <left>654</left><top>933</top><width>14</width><height>14</height>
+            <left>654</left><top>945</top><width>14</width><height>14</height>
             <texture colordiffuse="FFFF00FE">white.png</texture>
         </control>
         <control type="label">
-            <left>674</left><top>925</top><width>190</width><height>30</height>
+            <left>674</left><top>937</top><width>190</width><height>30</height>
             <font>font12</font>
-            <label>הכתובית הנוכחית</label>
+            <label>$ADDON[service.subtitles.kodipovilai 32714]</label>
             <textcolor>FF9AA0A6</textcolor>
             <aligny>center</aligny>
         </control>
         <control type="button" id="206">
-            <left>1005</left><top>914</top><width>315</width><height>52</height>
+            <left>1005</left><top>926</top><width>315</width><height>52</height>
             <texturefocus colordiffuse="FFD0594F">white.png</texturefocus>
             <texturenofocus colordiffuse="33D0594F">white.png</texturenofocus>
-            <label>[B]בטל סנכרון אוטומטי[/B]</label>
+            <label>[B]$ADDON[service.subtitles.kodipovilai 32709][/B]</label>
             <font>font12</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor><disabledcolor>FF6B737B</disabledcolor>
             <onleft>206</onleft><onright>206</onright><onup>100</onup><ondown>204</ondown>
@@ -368,20 +381,20 @@
              straight on the window background (no card around it). 202 and 203 share the third slot (203 only while subs.manual).
              204 stays visible and is enabled only while a live translation runs (Home property ai_subs.live_translate_active) -->
         <control type="button" id="205">
-            <left>24</left><top>982</top><width>315</width><height>60</height>
+            <left>24</left><top>990</top><width>315</width><height>60</height>
             <texturefocus colordiffuse="FF8FB4E0">white.png</texturefocus>
             <texturenofocus colordiffuse="338FB4E0">white.png</texturenofocus>
-            <label>[B]הגדרות כתוביות[/B]</label>
+            <label>[B]$ADDON[service.subtitles.kodipovilai 32704][/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
             <onleft>204</onleft><onright>201</onright><onup>100</onup><ondown>205</ondown>
             <onclick>Addon.OpenSettings(service.subtitles.kodipovilai)</onclick>
         </control>
         <control type="button" id="201">
-            <left>351</left><top>982</top><width>315</width><height>60</height>
+            <left>351</left><top>990</top><width>315</width><height>60</height>
             <texturefocus colordiffuse="FFD0594F">white.png</texturefocus>
             <texturenofocus colordiffuse="33D0594F">white.png</texturenofocus>
-            <label>[B]חזרה לסרט[/B]</label>
+            <label>[B]$ADDON[service.subtitles.kodipovilai 32705][/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FFFFFFFF</focusedcolor>
             <onleft>205</onleft>
@@ -389,10 +402,10 @@
             <onup>100</onup><ondown>201</ondown>
         </control>
         <control type="button" id="202">
-            <left>678</left><top>982</top><width>315</width><height>60</height>
+            <left>678</left><top>990</top><width>315</width><height>60</height>
             <texturefocus colordiffuse="FF46C46A">white.png</texturefocus>
             <texturenofocus colordiffuse="3346C46A">white.png</texturenofocus>
-            <label>[B]חיפוש כתוביות ידני[/B]</label>
+            <label>[B]$ADDON[service.subtitles.kodipovilai 32706][/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
             <onleft>201</onleft><onright>204</onright><onup>100</onup><ondown>202</ondown>
@@ -400,20 +413,20 @@
         </control>
         <!-- 203 "חזרה לרשימה": the toggle partner of 202, the exact same slot (x, y, width, height); visible only while a manual result is shown -->
         <control type="button" id="203">
-            <left>678</left><top>982</top><width>315</width><height>60</height>
+            <left>678</left><top>990</top><width>315</width><height>60</height>
             <texturefocus colordiffuse="FF8FE0FF">white.png</texturefocus>
             <texturenofocus colordiffuse="338FE0FF">white.png</texturenofocus>
-            <label>[B]חזרה לרשימה[/B]</label>
+            <label>[B]$ADDON[service.subtitles.kodipovilai 32708][/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor>
             <onleft>201</onleft><onright>204</onright><onup>100</onup><ondown>203</ondown>
             <visible>!String.IsEmpty(Window.Property(subs.manual))</visible>
         </control>
         <control type="button" id="204">
-            <left>1005</left><top>982</top><width>315</width><height>60</height>
+            <left>1005</left><top>990</top><width>315</width><height>60</height>
             <texturefocus colordiffuse="FFF0A93A">white.png</texturefocus>
             <texturenofocus colordiffuse="33F0A93A">white.png</texturenofocus>
-            <label>[B]עצור תהליך תרגום[/B]</label>
+            <label>[B]$ADDON[service.subtitles.kodipovilai 32707][/B]</label>
             <font>font13</font><align>center</align><aligny>center</aligny>
             <textcolor>FFF2F5F8</textcolor><focusedcolor>FF0B1A10</focusedcolor><disabledcolor>FF6B737B</disabledcolor>
             <onleft condition="!String.IsEmpty(Window.Property(subs.manual))">203</onleft><onleft>202</onleft>
@@ -476,7 +489,7 @@
             <!-- the full release filename: up to 5 lines (the wrapped text is built in ui/chooser_rows.py) -->
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]שם השחרור[/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]$ADDON[service.subtitles.kodipovilai 32700][/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>162</height>
@@ -489,50 +502,50 @@
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]איכות ומקור הכתובית[/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]$ADDON[service.subtitles.kodipovilai 32701][/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>אימות מקור</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32715]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_prov)]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>—</label><textcolor>FF6B737B</textcolor><align>left</align><aligny>center</aligny><visible>String.IsEmpty(Container(100).ListItem.Property(p_prov))</visible></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>לפי</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32716]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_prov_src)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>—</label><textcolor>FF6B737B</textcolor><align>left</align><aligny>center</aligny><visible>String.IsEmpty(Container(100).ListItem.Property(p_prov_src))</visible></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>מתרגם</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32717]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_translator)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>—</label><textcolor>FF6B737B</textcolor><align>left</align><aligny>center</aligny><visible>String.IsEmpty(Container(100).ListItem.Property(p_translator))</visible></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>סנכרון / תיקון</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32718]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_sync)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny><scroll>true</scroll></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>—</label><textcolor>FF6B737B</textcolor><align>left</align><aligny>center</aligny><visible>String.IsEmpty(Container(100).ListItem.Property(p_sync))</visible></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>הועלה ע"י</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32719]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_uploader)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny><scroll>true</scroll></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>—</label><textcolor>FF6B737B</textcolor><align>left</align><aligny>center</aligny><visible>String.IsEmpty(Container(100).ListItem.Property(p_uploader))</visible></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>תאריך</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32720]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>130</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_date)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>130</width><height>28</height><font>font12</font><label>—</label><textcolor>FF6B737B</textcolor><align>left</align><aligny>center</aligny><visible>String.IsEmpty(Container(100).ListItem.Property(p_date))</visible></control>
-                <control type="label"><left>320</left><top>0</top><width>104</width><height>28</height><font>font12</font><label>הורדות</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>320</left><top>0</top><width>104</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32721]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>430</left><top>0</top><width>110</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_downloads)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>430</left><top>0</top><width>110</width><height>28</height><font>font12</font><label>—</label><textcolor>FF6B737B</textcolor><align>left</align><aligny>center</aligny><visible>String.IsEmpty(Container(100).ListItem.Property(p_downloads))</visible></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>תיקון</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32722]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_fixed)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>—</label><textcolor>FF6B737B</textcolor><align>left</align><aligny>center</aligny><visible>String.IsEmpty(Container(100).ListItem.Property(p_fixed))</visible></control>
             </control>
@@ -543,47 +556,47 @@
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]פרטי התאמה[/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]$ADDON[service.subtitles.kodipovilai 32702][/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>פרק</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32723]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>240</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_episode)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>430</left><top>0</top><width>110</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_episode)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>מהדורה</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32724]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>240</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_edition)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>430</left><top>0</top><width>110</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_edition)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>קצב פריימים</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32725]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>240</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_fps)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>430</left><top>0</top><width>110</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_fps)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>סוג מקור</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32726]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>240</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_source)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>430</left><top>0</top><width>110</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_source)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>קבוצת שחרור</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32727]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>240</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_group)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>430</left><top>0</top><width>110</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_group)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>שירות סטרימינג</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32728]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>240</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_service)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>430</left><top>0</top><width>110</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_service)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>תזמון</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32729]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>240</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(f_timing)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
                 <control type="label"><left>430</left><top>0</top><width>110</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(fs_timing)]</label><textcolor>FFF2F5F8</textcolor><align>right</align><aligny>center</aligny></control>
             </control>
@@ -593,26 +606,26 @@
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]פרטי הכתובית[/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
+                <control type="label"><left>24</left><top>0</top><width>512</width><height>28</height><font>font12</font><label>[B]$ADDON[service.subtitles.kodipovilai 32703][/B]</label><textcolor>FF8FE0FF</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>ספק</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32730]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_provider)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>סוג</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32731]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_kind)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny><scroll>true</scroll></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>שפה</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32732]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_lang)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             <control type="group">
                 <width>560</width><height>28</height>
-                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>נגישות</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
+                <control type="label"><left>16</left><top>0</top><width>156</width><height>28</height><font>font12</font><label>$ADDON[service.subtitles.kodipovilai 32733]</label><textcolor>FF9AA0A6</textcolor><align>right</align><aligny>center</aligny></control>
                 <control type="label"><left>186</left><top>0</top><width>354</width><height>28</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(p_access)]</label><textcolor>FFF2F5F8</textcolor><align>left</align><aligny>center</aligny></control>
             </control>
             </control>

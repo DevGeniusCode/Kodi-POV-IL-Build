@@ -17,4 +17,14 @@
       <browser_back>Stop</browser_back>
     </appcommand>
   </FullscreenVideo>
+  <!-- Kodi POV IL: developer shortcuts, every window. F5 reloads the skin; F6 and Ctrl+Shift+D toggle debug logging
+       (Kodi's own default for Ctrl+Shift+D, written out here so it survives a keymap change). Same <global><keyboard>
+       shape the FENtastic helper (custom_actions.modify_keymap) edits, so the two never clash. -->
+  <global>
+    <keyboard>
+      <f5>ReloadSkin()</f5>
+      <f6>ToggleDebug</f6>
+      <d mod="ctrl,shift">ToggleDebug</d>
+    </keyboard>
+  </global>
 </keymap>

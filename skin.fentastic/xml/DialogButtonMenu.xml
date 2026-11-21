@@ -7,10 +7,10 @@
 			<centerleft>50%</centerleft>
 			<width>600</width>
 			<centertop>50%</centertop>
-			<height>700</height>
+			<height>420</height>
 			<include content="DialogBackgroundCommons">
 				<param name="width" value="600" />
-				<param name="height" value="560" />
+				<param name="height" value="420" />
 				<param name="header_label" value="$LOCALIZE[31072]" />
 				<param name="header_id" value="2" />
 				<param name="diffusetexture" value="masks/dialog-bg-squareish.png" />
@@ -20,7 +20,7 @@
 		<left>0</left>
 		<top>80</top>
 		<width>600</width>
-		<height>455</height>
+		<height>320</height>
 		<onleft>9000</onleft>
 		<onright>9000</onright>
 		<onup>9000</onup>
@@ -83,66 +83,43 @@
 			</control>
 		</focusedlayout>
 				<content>
-					<!-- KODI-RD-IL CHANGES -->
+					<!-- Exit and maintenance only. Settings, accounts, player, POV cache and skin switching live in the Quick Settings
+					     menu (Custom_1136_QuickSettings.xml). Kodi only auto-closes this menu for buttons, not list items, so every item
+					     runs Dialog.Close(shutdownmenu,true) first. No OS power items on purpose: the platform handles them. -->
 					<item>
-						<!-- CoreELEC only - Reboot to Android TV -->
-						<label>[B][COLOR blue]$LOCALIZE[700069][/COLOR][/B]</label>
-						<onclick>System.ExecWait("/usr/sbin/rebootfromnand")</onclick>
-						<onclick>Reset()</onclick>
-						<visible>System.PathExist("/usr/sbin/rebootfromnand")</visible>
-					</item>
-					<item>
-						<label>[B][COLOR blue]$LOCALIZE[13012][/COLOR][/B]</label>
-						<!-- Original - <onclick>Quit()</onclick> -->
-						<!-- Force Close Kodi Script:  -->
+						<!-- Exit Kodi (Wizard-native force close) -->
+						<label>[B][COLOR blue]יציאה מקודי[/COLOR][/B]</label>
+						<onclick>Dialog.Close(shutdownmenu,true)</onclick>
 						<onclick>RunPlugin(plugin://plugin.program.kodipovilwizard/?action=force_close)</onclick>
 						<visible>System.ShowExitButton</visible>
 					</item>
 					<item>
-						<!-- Open POV Settings  -->
-						<label>[B][COLOR blue]$LOCALIZE[700050][/COLOR][/B]</label>
-						<onclick>Addon.OpenSettings(plugin.video.pov)</onclick>
-					</item>
-					<item>
-						<!-- Clear POV Cache  -->
-						<label>[B][COLOR blue]$LOCALIZE[700052][/COLOR][/B]</label>
-						<onclick>PlayMedia(&quot;plugin://plugin.video.pov/?mode=clear_all_cache&amp;isFolder=false&amp;iconImage=https%3A%2F%2Fi.imgur.com%2FRDNxy36.png&quot;)</onclick>
-					</item>
-					<item>
-						<!-- Build Switch Skin  -->
-						<label>[B][COLOR blue]$LOCALIZE[700058][/COLOR][/B]</label>
-						<onclick>Dialog.Close(all)</onclick>
-						<onclick>PlayMedia(&quot;plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=build_switch_skin&quot;)</onclick>
-					</item>
-					<item>
-						<!-- KODI ANDORID/WINDOWS Update Check -->
-						<label>[B][COLOR blue]$LOCALIZE[700063][/COLOR][/B]</label>
-						<onclick>Dialog.Close(all)</onclick>
-						<onclick>PlayMedia(&quot;plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=kodi_version_update_check&amp;kodi_version_update_check_manual=true&quot;)</onclick>
-						<!-- Android/Windows only -->
-						<visible>false</visible>
-					</item>
-					<item>
-						<!-- Skin settings -->
-						<label>[B][COLOR blue]$LOCALIZE[700018][/COLOR][/B]</label>
-						<onclick>Dialog.Close(all)</onclick>
-						<onclick>ActivateWindow(SkinSettings.xml)</onclick>
-					</item>
-					<item>
 						<!-- Reload skin -->
-						<label>[B][COLOR blue]$LOCALIZE[700017][/COLOR][/B]</label>
-						<onclick>Dialog.Close(all)</onclick>
+						<label>[B][COLOR blue]רענון סקין[/COLOR][/B]</label>
+						<onclick>Dialog.Close(shutdownmenu,true)</onclick>
 						<onclick>ReloadSkin()</onclick>
 					</item>
-					<include>changeplayer_osd</include>
-					<!-- ##################### -->
+					<item>
+						<!-- Toggle the debug log -->
+						<label>[B][COLOR blue]הפעלת/כיבוי לוג דיבוג[/COLOR][/B]</label>
+						<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+						<onclick>ToggleDebug</onclick>
+					</item>
+					<item>
+						<!-- CoreELEC only - Reboot to Android TV -->
+						<label>[B][COLOR blue]$LOCALIZE[700069][/COLOR][/B]</label>
+						<onclick>Dialog.Close(shutdownmenu,true)</onclick>
+						<onclick>System.ExecWait("/usr/sbin/rebootfromnand")</onclick>
+						<onclick>Reset()</onclick>
+						<visible>System.PathExist("/usr/sbin/rebootfromnand")</visible>
+					</item>
 				</content>
 			</control>
 		<include content="UpDownArrows">
 			<param name="container_id" value="9000" />
 			<param name="posx" value="276" />
 			<param name="up_posy" value="-40" />
-			<param name="down_posy" value="500" />
+			<param name="down_posy" value="430" />
 			</include>
 		</control>
 	</controls>

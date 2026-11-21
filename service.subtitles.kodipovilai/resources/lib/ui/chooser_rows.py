@@ -381,6 +381,7 @@ _TOKEN_PATTERNS = (
                          r'featurettes?|extras|bonus|deleted' + _SEP + r'scenes|recaps?|sample)(?![a-z0-9])', re.I)),
     ('tvstd', re.compile(r'(?<![a-z0-9])(?:pal|ntsc)(?![a-z0-9])', re.I)),
 )
+_DISC_HEAD = re.compile(r'(?:bd|blu' + _SEP + r'ray)', re.I)
 _GROUP_TAIL = re.compile(r'(?:-|\[)([A-Za-z0-9]{2,15}(?:\.[A-Za-z]{2,15}){0,2})\]?\s*$')
 _EXT_TAIL = re.compile(r'\.(?:srt|sub|ass|ssa|vtt|mkv|mp4|avi|m4v|ts)$', re.I)
 _YEAR_RE = re.compile(r'(?<![A-Za-z0-9])(?:19|20)\d{2}(?![A-Za-z0-9])')
@@ -399,8 +400,6 @@ def _token_canon(cat, text):
     if cat == 'src':
         if key in ('bluray', 'bdrip', 'brrip'):
             return 'bluray'
-        if key in ('bdremux', 'blurayremux'):
-            return 'remux'
         if key in ('webmux', 'webmuxed'):
             return 'webmux'    # ONE tag (scoring_matching.release reads it as source class web): never a green 'WEB' inside it
         if key in ('dvdrip', 'dvdr', 'dvd5', 'dvd9'):
@@ -454,6 +453,13 @@ def release_spans(name):
         taken.append((a, b))
         spans.append((a, b, cat, val))
 
+    def take_disc_remux(a, b, text):
+        # 'BluRay.REMUX' / 'Blu-ray Remux' / 'BD.Remux' are TWO tokens, the disc and the remux: 'BluRay' is then green against a
+        # playing 'BluRay.x265' and against a playing 'BluRay.REMUX' alike (it was one 'remux' token, so the disc word never matched)
+        taken.append((a, b))
+        spans.append((a, a + _DISC_HEAD.match(text).end(), 'src', 'bluray'))
+        spans.append((a + text.lower().rfind('remux'), b, 'src', 'remux'))
+
     for cat, rx in _TOKEN_PATTERNS:
         for m in rx.finditer(body):
             a, b = m.start(), m.end()
@@ -463,7 +469,10 @@ def release_spans(name):
             if key in _AMBIGUOUS:
                 deferred.append((a, b, cat, m.group(0)))
             elif free(a, b):
-                take(a, b, cat, _token_canon(cat, m.group(0)))
+                if cat == 'src' and key in ('bdremux', 'blurayremux'):
+                    take_disc_remux(a, b, m.group(0))
+                else:
+                    take(a, b, cat, _token_canon(cat, m.group(0)))
     anchors = [a for a, _b, c, _v in spans if c in _ANCHOR_CATS] + [y.start() for y in _YEAR_RE.finditer(body) if y.start() > 0]
     anchor = min(anchors) if anchors else None
     for a, b, cat, text in deferred:
@@ -657,6 +666,20 @@ def release_mask(release, playing, want=None):
     return mask, shared, conflicts, fixable
 
 
+def head_mask(playing, release):
+    """One colour per character of the PLAYING release name `playing`, read against the subtitle's `release` (the row in
+    focus): the three layers of release_mask (RED = a conflict SubSync cannot fix, AMBER = one it typically can, MATCH = a
+    token both share), then CYAN for any source tag (WEB-DL, BluRay, REMUX ...) that is none of those."""
+    playing = playing or ''
+    mask = list(release_mask(playing, release)[0]) if (playing and release) else [None] * len(playing)
+    for a, b, cat, _v in release_spans(playing):
+        if cat == 'src':
+            for i in range(a, b):
+                if mask[i] is None:
+                    mask[i] = CYAN
+    return mask
+
+
 def _mask_color(flag):
     return flag if isinstance(flag, str) else (MATCH if flag else None)
 
@@ -836,22 +859,24 @@ def playing_episode(playing, info):
     return scoring_matching_release.fallback_episode(playing, info.get('season'), info.get('episode'))
 
 
-def build(c, playing, want=None, ai=None, prov=None, video_ep=''):
+def build(c, playing, want=None, ai=None, prov=None, video_ep='', head_name=''):
     """One candidate -> {'label', 'flag', 'props'}: the ListItem label, the flag
     image and every property the window XML binds (strings only, colours baked
     as BBCode like the rest of the window). `playing` is the playing release
     name ('' when unknown); `want` the release words of a manual query; `ai` the
     AI-availability context (no_ai_reason); `prov` the provenance Allowlist
-    (scoring_matching.provenance; None = only the studio forms count). Never raises."""
+    (scoring_matching.provenance; None = only the studio forms count). `head_name` is the playing release as the window's
+    header shows it: the row's 'head' property is that name painted against THIS subtitle (head_mask; '' = plain header).
+    Never raises."""
     try:
-        return _build(c, playing, want, ai, prov, video_ep)
+        return _build(c, playing, want, ai, prov, video_ep, head_name)
     except Exception:
         name = (c.get('filename') or '').strip() if isinstance(c, dict) else ''
         return {'label': name, 'flag': '',
                 'props': {'release': _c(WHITE, name), 'has_panel': ''}}
 
 
-def _build(c, playing, want=None, ai=None, prov=None, video_ep=''):
+def _build(c, playing, want=None, ai=None, prov=None, video_ep='', head_name=''):
     name = strip_bbcode(c.get('filename'))
     lang = (c.get('language') or '').strip()
     payload = decode_link_safe(c.get('link') or '') or {}
@@ -926,8 +951,11 @@ def _build(c, playing, want=None, ai=None, prov=None, video_ep=''):
                                         else ([], [], [], []))
     painted = bool(shared or conflicts or fixable)
     shown = '[B]{0}[/B]'.format(paint(primary, mask, WHITE)) if painted else '[B]{0}[/B]'.format(_c(WHITE, primary))
+    head_name = strip_bbcode(head_name)
+    head_prop = paint(head_name, head_mask(head_name, release)) if (head_name and release and primary == release) else ''
     props = {
         'release': shown,
+        'head': head_prop,
         'src': _c(provider_color(source_text), source_text) if source_text else '',
         'pct': '[B]{0}[/B]'.format(_c(color, '{0}%'.format(pct))) if pct is not None else '',
         'tier': _c(color, tier) if tier else '',
@@ -954,6 +982,8 @@ def _build(c, playing, want=None, ai=None, prov=None, video_ep=''):
     for key in _FACT_LABELS:
         f = facts.get(key)
         value, word, col = _fact(key, f[1], f[2], f[3]) if f else ('—', 'לא צוין', DIM)
+        if key == 'source' and f and f[3] == 'match':
+            value = _c(MATCH, value)    # the same green as the shared words of the release name
         props['f_' + key] = value
         props['fs_' + key] = _c(col, word)
     value, word, col = _timing(c, typ, embedded)
@@ -964,7 +994,7 @@ def _build(c, playing, want=None, ai=None, prov=None, video_ep=''):
 
 
 def no_release_text(typ, embedded):
-    """What the "שם השחרור" box says for a row that has no release name: what the subtitle IS."""
+    """What the "שם הכתובית" box says for a row that has no release name: what the subtitle IS."""
     if typ == 'embedded_sync':
         return EMBEDDED_SYNC_TITLE
     if embedded and typ in ('engine', 'embedded_ai'):

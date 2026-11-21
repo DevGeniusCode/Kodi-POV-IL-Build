@@ -4,31 +4,44 @@
 #
 # When the user picks "Pair from another device" in Connect
 # Services, this module:
-#   1. Picks a free port on the local machine.
+#   1. Picks a free port on the local machine and a random per-session
+#      secret path segment (10 hex chars).
 #   2. Starts a tiny http.server on 0.0.0.0:<port> bound to all
 #      interfaces (so it's reachable from LAN AND localhost).
 #   3. Returns the URL(s) + a shared dict the caller can poll for
-#      the submitted key.
-#   4. Serves GET / -- a minimal RTL Hebrew HTML form that takes
-#      an API key. Serves POST /submit -- stashes the key into
+#      the submitted key. Every URL carries the secret segment
+#      (http://<ip>:<port>/<secret>): the QR code encodes it, so scanning
+#      costs the user nothing, but another device on the LAN that only
+#      finds the open port gets a 404 and can neither read the form nor
+#      overwrite the key.
+#   4. Serves GET /<secret> -- a minimal RTL Hebrew HTML form that takes
+#      an API key. Serves POST /<secret> -- stashes the key into
 #      the shared dict and returns a "thanks" page.
 #   5. Caller calls shutdown() when done (key received or timed
 #      out) to free the port.
 #
 # Why localhost matters: a user running Kodi on their PHONE with
 # cellular data has no LAN at all. Showing them a 192.168 URL is
-# useless. But they CAN open http://localhost:<port> in the
+# useless. But they CAN open http://localhost:<port>/<secret> in the
 # phone's browser -- the HTTP server runs on the same device and
 # is reachable via the loopback interface regardless of network
-# state. So we always show BOTH the LAN URL and the localhost
-# URL; the user picks whichever applies.
+# state. So we always show the localhost URL as the fallback when no
+# LAN address was found.
+#
+# Start-up speed: http.server.HTTPServer.server_bind() calls
+# socket.getfqdn(), a reverse-DNS lookup that blocked for ~9.5 s on a
+# machine with a virtual / link-local adapter. _ThreadingServer overrides
+# server_bind so the server is up in milliseconds. The LAN address comes
+# from Kodi (xbmc.getIPAddress()), with UDP "connect" probes (no packets
+# sent, no DNS, no subprocess) as the fallback.
 #
 # No third-party deps -- only Python stdlib (http.server, socket,
-# threading). Validated against py3.8+ which is what Kodi 21
+# threading, secrets). Validated against py3.8+ which is what Kodi 21
 # ships.
 
 import http.server
 import re
+import secrets
 import socket
 import socketserver
 import threading
@@ -97,13 +110,18 @@ def _sanitize_key(raw):
     return cleaned
 
 
-# Form served on GET /. Plain UTF-8 HTML with inline CSS, RTL.
-# Submitted to POST /submit as application/x-www-form-urlencoded.
+# Form served on GET /<secret>. Plain UTF-8 HTML with inline CSS, RTL.
+# Submitted back to the SAME url (action="") as application/x-www-form-urlencoded,
+# so the secret segment is never repeated in the markup and the page works with
+# or without a trailing slash.
+# <meta name="referrer" content="no-referrer">: the page lives at the LAN address of the
+# Kodi box; the AI Studio link below must not hand that address to Google in the Referer header.
 _HTML_FORM = '''<!doctype html>
 <html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
   <title>__DIALOG_TITLE__ - Gemini API Key</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
@@ -114,6 +132,11 @@ _HTML_FORM = '''<!doctype html>
     h1 { margin: 0 0 8px 0; color: #ffd166; font-size: 1.4rem; }
     p { line-height: 1.6; color: #b7c4cf; font-size: 0.95rem; }
     label { display: block; margin-top: 16px; font-weight: bold; }
+    a.cta { display: block; margin: 10px 0 4px 0; padding: 14px; text-align: center;
+            font-size: 1.1rem; font-weight: bold; text-decoration: none;
+            color: #101820; background: #ffd166; border-radius: 8px; }
+    a.cta:active { background: #e0b54a; }
+    .dom { text-align: center; margin: 4px 0 0 0; font-size: 0.85rem; }
     input[type=password] { width: 100%; box-sizing: border-box; margin-top: 8px;
                        padding: 14px; font-size: 1.1rem; direction: ltr;
                        background: #0a0f15; color: #f6f1df;
@@ -130,19 +153,20 @@ _HTML_FORM = '''<!doctype html>
     .err { background: #351a1a; color: #e6a6a6; display: block !important; }
     .info { background: #14202c; color: #b7c4cf; display: block !important; }
     .small { font-size: 0.85rem; color: #b7c4cf; margin-top: 12px; }
-    code { background: #0a0f15; padding: 2px 6px; border-radius: 4px;
-           font-size: 0.9rem; direction: ltr; }
+    bdi { direction: ltr; unicode-bidi: isolate; color: #f6f1df; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>חיבור Gemini AI</h1>
+    <p>1. צור מפתח API חינמי ב-Google AI Studio (נפתח בלשונית חדשה):</p>
+    <a class="cta" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>
+    <p class="dom"><bdi dir="ltr">aistudio.google.com/apikey</bdi></p>
     <p>
-      הדבק כאן את ה-Gemini API key שיצרת ב-
-      <code>aistudio.google.com/apikey</code>. נוודא מול Google
+      2. העתק את המפתח, חזור לכאן והדבק אותו בשדה. נוודא מול Google
       שהמפתח תקין, ורק אז נשלח אותו ל-Kodi.
     </p>
-    <form method="POST" action="/submit" id="f">
+    <form method="POST" action="" id="f">
       <label for="key">Gemini API Key</label>
       <!--
         iOS/WebKit note: type=password suppresses the smart-punctuation /
@@ -245,8 +269,10 @@ form.addEventListener('submit', function (e) {
 # is FIRST-FOUR…LAST-FOUR + length, e.g. "AIza…9xY7 (39 chars)".
 # We deliberately do NOT show the full key (the page might be
 # screenshotted/photographed by support or shoulder-surfed).
+# The "back" links use href="" (the current URL): the form lives at the secret url this page was posted to.
 _HTML_DONE_OK = '''<!doctype html>
 <html lang="he" dir="rtl"><head><meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
 <title>נשלח</title>
 <style>body{{font-family:Arial,sans-serif;background:#101820;color:#f6f1df;
 text-align:center;padding:60px 20px}}h1{{color:#7fbf7f;font-size:2rem}}
@@ -256,19 +282,23 @@ display:inline-block;margin:8px;direction:ltr;font-size:1.1rem}}</style></head>
 <p>השרת קיבל:</p>
 <p><code>{fingerprint}</code></p>
 <p>ודא ש-{first4} ו-{last4} תואמים את ה-key המקורי שהעתקת.
-אם לא — לחץ <a href="/" style="color:#ffd166">חזור</a> והדבק שוב.</p>
+אם לא — לחץ <a href="" style="color:#ffd166">חזור</a> והדבק שוב.</p>
 <p>אפשר לסגור את הדף ולחזור ל-Kodi.</p></body></html>
 '''
 
 _HTML_DONE_EMPTY = '''<!doctype html>
 <html lang="he" dir="rtl"><head><meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
 <title>שגיאה</title>
 <style>body{font-family:Arial,sans-serif;background:#101820;color:#f6f1df;
 text-align:center;padding:60px 20px}h1{color:#bf7f7f;font-size:2rem}
 p{color:#b7c4cf}a{color:#ffd166}</style></head>
 <body><h1>שדה ריק</h1>
-<p>לא הוזן key. <a href="/">חזור לטופס</a>.</p></body></html>
+<p>לא הוזן key. <a href="">חזור לטופס</a>.</p></body></html>
 '''
+
+# A pasted key is ~60 bytes; a form post well past this is not ours.
+_MAX_BODY = 8192
 
 
 def _dialog_title():
@@ -280,36 +310,51 @@ def _dialog_title():
         return ''
 
 
-def _make_handler(state, html_form=_HTML_FORM):
+def _make_handler(state, secret):
     """Build a request-handler class that closes over `state`
-    (a dict the caller polls for the submitted key) and serves
-    `html_form` (defaults to the Gemini form; a caller can pass a
-    different service's form -- e.g. MDBList -- to reuse this
-    transport verbatim)."""
-    html_form = html_form.replace('__DIALOG_TITLE__', _dialog_title())
+    (a dict the caller polls for the submitted key) and the session
+    `secret`: only /<secret> (and /<secret>/) answers; every other
+    path is a 404, so a LAN device that finds the open port cannot
+    read the form or post a key."""
+    html_form = _HTML_FORM.replace('__DIALOG_TITLE__', _dialog_title())
+    route = '/' + secret
 
     class Handler(http.server.BaseHTTPRequestHandler):
+        timeout = 10   # a stalled client never parks a handler thread for long
+
         def _send(self, code, body, ctype='text/html; charset=utf-8'):
             data = body.encode('utf-8') if isinstance(body, str) else body
             self.send_response(code)
             self.send_header('Content-Type', ctype)
             self.send_header('Content-Length', str(len(data)))
             self.send_header('Cache-Control', 'no-store')
+            self.send_header('Referrer-Policy', 'no-referrer')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Connection', 'close')
             self.end_headers()
             self.wfile.write(data)
 
+        def _route_ok(self):
+            path = (self.path or '').split('?', 1)[0]
+            return path == route or path == route + '/'
+
         def do_GET(self):
-            path = (self.path or '/').split('?', 1)[0]
-            if path == '/' or path == '/index.html':
+            if self._route_ok():
                 self._send(200, html_form)
                 return
             self._send(404, '<h1>404</h1>')
 
         def do_POST(self):
-            if self.path != '/submit':
+            if not self._route_ok():
                 self._send(404, '<h1>404</h1>')
                 return
-            length = int(self.headers.get('Content-Length') or 0)
+            try:
+                length = int(self.headers.get('Content-Length') or 0)
+            except ValueError:
+                length = 0
+            if length <= 0 or length > _MAX_BODY:
+                self._send(400, '<h1>400</h1>')
+                return
             try:
                 raw = self.rfile.read(length).decode('utf-8',
                                                      errors='replace')
@@ -358,13 +403,20 @@ class _ThreadingServer(socketserver.ThreadingMixIn,
     daemon_threads = True
     allow_reuse_address = True
 
+    def server_bind(self):
+        """HTTPServer.server_bind() ends with socket.getfqdn(host): a reverse-DNS lookup that took ~9.5 s on a
+        machine with a virtual / link-local adapter, with the dialog not even open yet. Nothing here reads
+        server_name, so bind the socket and record the address without any lookup."""
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host
+        self.server_port = port
+
 
 def _is_private_lan_ip(ip):
     """True for the RFC 1918 ranges + 100.64/10 (CGNAT-ish, occasionally
     seen on home routers). Excludes 127/8 (loopback), 169.254/16
-    (link-local that means "DHCP failed"), VPN tunnel typical ranges
-    are NOT excluded because we want them surfaced -- the user can
-    pick which one matches their phone."""
+    (link-local that means "DHCP failed")."""
     if not ip or ip.startswith('127.') or ip.startswith('169.254.'):
         return False
     if ip.startswith('10.') or ip.startswith('192.168.'):
@@ -398,89 +450,32 @@ def _probe_outbound_ip(target):
         s.close()
 
 
-def _ips_from_subprocess():
-    """Enumerate IPv4 addresses on every interface using the `ip`
-    or `ifconfig` CLI. Reliable on Android (which always ships
-    `ip` via toybox), Linux desktops, and most BSDs. Returns an
-    empty list if neither command is available. This is the
-    cleanest way to catch IPs on interfaces that AREN'T the
-    default route -- a WiFi + Ethernet multi-NIC Android TV
-    where the user's phone might only reach one of them."""
-    import subprocess
-    out = ''
-    for cmd in (['ip', '-4', '-o', 'addr'],
-                ['ifconfig'], ['ifconfig', '-a']):
-        try:
-            out = subprocess.check_output(
-                cmd, stderr=subprocess.DEVNULL,
-                timeout=2).decode('utf-8', errors='replace')
-            if out:
-                break
-        except Exception:
-            continue
-    if not out:
-        return []
-    # IPv4 dotted-quad regex; tolerates `ip addr` ("inet 192.168.1.5/24")
-    # and ifconfig ("inet 192.168.1.5 netmask ...").
-    import re as _re
-    found = _re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', out)
-    # Dedupe preserving order.
-    seen, ips = set(), []
-    for ip in found:
-        if ip not in seen:
-            seen.add(ip)
-            ips.append(ip)
-    return ips
+def kodi_lan_ip():
+    """The LAN address Kodi itself reports for the active interface (xbmc.getIPAddress()), or '' when it is not a
+    private LAN address (loopback, 'Busy', empty, a public address) or Kodi is not there."""
+    try:
+        import xbmc
+        ip = (xbmc.getIPAddress() or '').strip()
+    except Exception:
+        return ''
+    return ip if _is_private_lan_ip(ip) else ''
 
 
 def get_lan_ips():
-    """Return ALL plausible LAN IPv4 addresses for this machine, in
-    priority order. The dialog shows every entry so a user with
-    multiple interfaces (WiFi + Ethernet on an Android TV, VPN
-    + WiFi on a laptop, etc.) can pick the one their phone is on
-    -- the single-IP heuristic in the older version would silently
-    pick the wrong interface for VPN/multi-NIC setups, leaving
-    the phone unable to reach the server."""
-    candidates = []
-
-    # 1. The "connect to 8.8.8.8" trick -- gives us the IP of the
-    #    interface used for the default route. PRIORITISED first
-    #    because in single-NIC cases this is always correct.
-    ip = _probe_outbound_ip('8.8.8.8')
-    if ip and ip not in candidates:
-        candidates.append(ip)
-
-    # 2. Subprocess-based interface enumeration -- catches IPs on
-    #    non-default-route interfaces (the case behind every
-    #    "phone says address not found" report when the user has
-    #    WiFi + Ethernet both up). `ip addr` on Android, `ifconfig`
-    #    on POSIX.
-    for ip in _ips_from_subprocess():
-        if ip and ip not in candidates:
-            candidates.append(ip)
-
-    # 3. Probe each private-LAN range -- in some routing-table
-    #    configurations a probe to a specific range binds to the
-    #    matching interface.
-    for probe_target in ('10.0.0.1', '192.168.1.1', '172.16.0.1',
-                         '100.64.0.1'):
-        ip = _probe_outbound_ip(probe_target)
-        if ip and ip not in candidates:
-            candidates.append(ip)
-
-    # 4. Hostname-based fallback (sometimes lists more interfaces).
-    try:
-        _, _, hostname_ips = socket.gethostbyname_ex(socket.gethostname())
-        for ip in hostname_ips:
-            if ip and ip not in candidates:
-                candidates.append(ip)
-    except Exception:
-        pass
-
-    # Keep only private-LAN-looking IPs -- VPN/Internet IPs would
-    # never be reachable from the phone anyway, and the user
-    # gets confused if we show them.
-    return [ip for ip in candidates if _is_private_lan_ip(ip)]
+    """The LAN IPv4 address(es) the phone should try, best first. Kodi's own address when it has one (one entry,
+    the interface Kodi is actually on). Otherwise the fallback: UDP "connect" probes to the default route and the
+    private ranges -- no packets, no DNS, no subprocess, about a millisecond each -- keeping the private addresses
+    they find (a multi-NIC box may list more than one)."""
+    ip = kodi_lan_ip()
+    if ip:
+        return [ip]
+    found = []
+    for target in ('8.8.8.8', '10.0.0.1', '192.168.1.1', '172.16.0.1',
+                   '100.64.0.1'):
+        ip = _probe_outbound_ip(target)
+        if ip and ip not in found and _is_private_lan_ip(ip):
+            found.append(ip)
+    return found
 
 
 def find_free_port(preferred=(8765, 8766, 8767, 8768, 8769)):
@@ -507,35 +502,37 @@ class PairServer:
     """Tiny wrapper so the caller can `with PairServer() as ps:`
     style use it. After construction:
       ps.port           -- the bound port number
+      ps.secret         -- the random per-session path segment
       ps.lan_ip         -- detected primary LAN IP or None
-      ps.lan_ips        -- list of ALL plausible LAN IPv4 addresses
-                           (one per interface). The dialog should
-                           show every entry because a user on
-                           Android-TV-with-Ethernet-AND-WiFi might
-                           need a different one than the
-                           default-route IP we'd otherwise pick.
-      ps.url_lan        -- 'http://<lan_ip>:<port>' or None
+      ps.lan_ips        -- list of LAN IPv4 addresses (Kodi's own one, or
+                           the probe fallback's)
+      ps.url_lan        -- 'http://<lan_ip>:<port>/<secret>' or None
                            (primary URL -- first entry of url_lans)
-      ps.url_lans       -- list of 'http://<ip>:<port>' for every IP
-      ps.url_local      -- 'http://localhost:<port>'
+      ps.url_lans       -- list of 'http://<ip>:<port>/<secret>' for every IP
+      ps.url_local      -- 'http://localhost:<port>/<secret>'
       ps.received_key() -- returns the submitted key or '' if none yet
       ps.shutdown()     -- stops the server thread (idempotent)
     """
 
-    def __init__(self, html_form=_HTML_FORM):
+    def __init__(self):
         self._state = {'received_key': None}
+        self.secret = secrets.token_hex(5)
         self.port = find_free_port()
         self.lan_ips = get_lan_ips()
         self.lan_ip = self.lan_ips[0] if self.lan_ips else None
-        handler = _make_handler(self._state, html_form)
+        handler = _make_handler(self._state, self.secret)
         self._server = _ThreadingServer(('', self.port), handler)
+        # poll_interval 0.1: shutdown() returns within ~0.1 s once the key has arrived.
         self._thread = threading.Thread(
-            target=self._server.serve_forever, daemon=True)
+            target=self._server.serve_forever,
+            kwargs={'poll_interval': 0.1}, daemon=True)
         self._thread.start()
-        self.url_lans = ['http://{0}:{1}'.format(ip, self.port)
+        self.url_lans = ['http://{0}:{1}/{2}'.format(ip, self.port,
+                                                     self.secret)
                          for ip in self.lan_ips]
         self.url_lan = self.url_lans[0] if self.url_lans else None
-        self.url_local = 'http://localhost:{0}'.format(self.port)
+        self.url_local = 'http://localhost:{0}/{1}'.format(self.port,
+                                                           self.secret)
         self._closed = False
 
     def received_key(self):

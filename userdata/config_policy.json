@@ -1,5 +1,5 @@
 {
-  "config_version": "2.0.20",
+  "config_version": "2.0.21",
   "_comment": "Declarative policy for how the wizard applies the shipped build-config (userdata/) onto a device. Bump config_version whenever ANY file in userdata/ changes -- that is what makes the wizard detect and apply the new config. 'fresh' is used on a clean/first install, 'update' on an existing device. Modes: replace (overwrite whole file), merge_id (per <setting id=...>, build value wins, other user settings untouched), merge_name (per <source><name>, add build's, keep user's), seed_if_absent (write only if the file does not already exist).",
   "files": [
     {
@@ -62,6 +62,13 @@
       "dest": "userdata/advancedsettings.xml",
       "fresh": "replace",
       "update": "replace"
+    },
+    {
+      "src": "keymaps/gen.xml",
+      "dest": "userdata/keymaps/gen.xml",
+      "fresh": "replace",
+      "update": "seed_if_absent",
+      "_note": "Global F5 = ReloadSkin(), F6 / Ctrl+Shift+D = ToggleDebug, and Back = Stop in fullscreen video. update=seed_if_absent: the FENtastic helper edits the device's gen.xml (trailer keys), so an update never overwrites one that exists."
     },
     {
       "src": "addon_data/plugin.video.umbrella/settings.xml",

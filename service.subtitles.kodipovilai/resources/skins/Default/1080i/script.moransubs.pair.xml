@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Gemini pairing dialog: a 1080i WindowXMLDialog opened by ui/settings_actions/gemini._PairDialog. Only the universal font12 /
+     font13 / font14 names and the add-on skin's white.png are used. Every fixed text is a strings.po label (ids 32740-32754,
+     read as $ADDON[service.subtitles.kodipovilai <id>]); the address, the countdown, the note in the QR card and the help-button label
+     are window properties the dialog sets (pair.url, pair.time, pair.qrnote, pair.helplabel), and the switches are pair.ready (the server
+     is up), pair.qr (a QR image exists), pair.nolan (no LAN address found) and pair.help (the help panel replaces the steps).
+
+     LAYOUT (1920 x 1080): a 1300 x 700 card centred on a dimmed screen. Left: a white 420 x 420 QR card. Right: three one-line steps, each
+     a number badge at the right edge (a separate control, so no digit shares a line with Hebrew) and its text right-aligned; step 2
+     is followed by the address in its own box (one direction per control). Pressing "connection problems?" swaps the steps for the help
+     text (same area, no overlap). Under both: a full-width progress bar, the countdown, and the two buttons.
+     Ids: title 100, QR image 101, address 102, progress 104, countdown 105, QR-card note 120, help text 161, cancel 200, problems 201.
+     The ids must match gemini._PairDialog. -->
+<window type="dialog">
+	<defaultcontrol always="true">200</defaultcontrol>
+	<controls>
+
+		<control type="image">
+			<left>0</left>
+			<top>0</top>
+			<width>1920</width>
+			<height>1080</height>
+			<texture colordiffuse="E60A0C10">white.png</texture>
+		</control>
+
+		<control type="group">
+			<left>310</left>
+			<top>190</top>
+
+			<!-- Card body and title bar -->
+			<control type="image">
+				<left>0</left>
+				<top>60</top>
+				<width>1300</width>
+				<height>640</height>
+				<texture colordiffuse="FF161B22">white.png</texture>
+			</control>
+			<control type="image">
+				<left>0</left>
+				<top>0</top>
+				<width>1300</width>
+				<height>60</height>
+				<texture colordiffuse="FF185F9D">white.png</texture>
+			</control>
+			<control type="label" id="100">
+				<left>20</left>
+				<top>0</top>
+				<width>1260</width>
+				<height>60</height>
+				<font>font14</font>
+				<textcolor>FFFFFFFF</textcolor>
+				<align>center</align>
+				<aligny>center</aligny>
+				<label>$ADDON[service.subtitles.kodipovilai 32740]</label>
+			</control>
+
+			<!-- QR card (left): the code, or a note while preparing / when there is no QR library -->
+			<control type="group">
+				<left>50</left>
+				<top>100</top>
+				<control type="image">
+					<left>0</left>
+					<top>0</top>
+					<width>420</width>
+					<height>420</height>
+					<texture colordiffuse="FFFFFFFF">white.png</texture>
+				</control>
+				<control type="image" id="101">
+					<left>20</left>
+					<top>20</top>
+					<width>380</width>
+					<height>380</height>
+					<aspectratio>keep</aspectratio>
+					<texture></texture>
+					<visible>!String.IsEmpty(Window.Property(pair.qr))</visible>
+				</control>
+				<control type="label" id="120">
+					<left>30</left>
+					<top>30</top>
+					<width>360</width>
+					<height>360</height>
+					<font>font13</font>
+					<textcolor>FF161B22</textcolor>
+					<align>center</align>
+					<aligny>center</aligny>
+					<wrapmultiline>true</wrapmultiline>
+					<label>$INFO[Window.Property(pair.qrnote)]</label>
+					<visible>String.IsEmpty(Window.Property(pair.qr))</visible>
+				</control>
+			</control>
+
+			<!-- Steps (right) -->
+			<control type="group" id="150">
+				<left>520</left>
+				<top>100</top>
+				<visible>String.IsEmpty(Window.Property(pair.help))</visible>
+
+				<!-- 1 -->
+				<control type="image">
+					<left>686</left>
+					<top>0</top>
+					<width>44</width>
+					<height>44</height>
+					<texture colordiffuse="FFFFD166">white.png</texture>
+				</control>
+				<control type="label">
+					<left>686</left>
+					<top>0</top>
+					<width>44</width>
+					<height>44</height>
+					<font>font14</font>
+					<textcolor>FF161B22</textcolor>
+					<align>center</align>
+					<aligny>center</aligny>
+					<label>1</label>
+				</control>
+				<control type="label">
+					<left>0</left>
+					<top>0</top>
+					<width>664</width>
+					<height>44</height>
+					<font>font13</font>
+					<textcolor>FFFFFFFF</textcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>$ADDON[service.subtitles.kodipovilai 32741]</label>
+				</control>
+
+				<!-- 2 + the address -->
+				<control type="image">
+					<left>686</left>
+					<top>90</top>
+					<width>44</width>
+					<height>44</height>
+					<texture colordiffuse="FFFFD166">white.png</texture>
+				</control>
+				<control type="label">
+					<left>686</left>
+					<top>90</top>
+					<width>44</width>
+					<height>44</height>
+					<font>font14</font>
+					<textcolor>FF161B22</textcolor>
+					<align>center</align>
+					<aligny>center</aligny>
+					<label>2</label>
+				</control>
+				<control type="label">
+					<left>0</left>
+					<top>90</top>
+					<width>664</width>
+					<height>44</height>
+					<font>font13</font>
+					<textcolor>FFFFFFFF</textcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>$ADDON[service.subtitles.kodipovilai 32742]</label>
+				</control>
+				<control type="image">
+					<left>0</left>
+					<top>146</top>
+					<width>730</width>
+					<height>60</height>
+					<texture colordiffuse="1F38BDF8">white.png</texture>
+					<visible>!String.IsEmpty(Window.Property(pair.ready))</visible>
+				</control>
+				<control type="label" id="102">
+					<left>16</left>
+					<top>146</top>
+					<width>698</width>
+					<height>60</height>
+					<font>font13</font>
+					<textcolor>FF38BDF8</textcolor>
+					<align>center</align>
+					<aligny>center</aligny>
+					<label>$INFO[Window.Property(pair.url)]</label>
+					<visible>!String.IsEmpty(Window.Property(pair.ready))</visible>
+				</control>
+				<control type="label">
+					<left>0</left>
+					<top>212</top>
+					<width>730</width>
+					<height>30</height>
+					<font>font12</font>
+					<textcolor>99FFFFFF</textcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>$ADDON[service.subtitles.kodipovilai 32754]</label>
+					<visible>!String.IsEmpty(Window.Property(pair.nolan))</visible>
+				</control>
+
+				<!-- 3 -->
+				<control type="image">
+					<left>686</left>
+					<top>270</top>
+					<width>44</width>
+					<height>44</height>
+					<texture colordiffuse="FFFFD166">white.png</texture>
+				</control>
+				<control type="label">
+					<left>686</left>
+					<top>270</top>
+					<width>44</width>
+					<height>44</height>
+					<font>font14</font>
+					<textcolor>FF161B22</textcolor>
+					<align>center</align>
+					<aligny>center</aligny>
+					<label>3</label>
+				</control>
+				<control type="label">
+					<left>0</left>
+					<top>270</top>
+					<width>664</width>
+					<height>44</height>
+					<font>font13</font>
+					<textcolor>FFFFFFFF</textcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>$ADDON[service.subtitles.kodipovilai 32743]</label>
+				</control>
+			</control>
+
+			<!-- Help panel (replaces the steps) -->
+			<control type="group" id="160">
+				<left>520</left>
+				<top>100</top>
+				<visible>!String.IsEmpty(Window.Property(pair.help))</visible>
+				<control type="label">
+					<left>0</left>
+					<top>0</top>
+					<width>730</width>
+					<height>44</height>
+					<font>font14</font>
+					<textcolor>FFFFD166</textcolor>
+					<align>right</align>
+					<aligny>center</aligny>
+					<label>$ADDON[service.subtitles.kodipovilai 32750]</label>
+				</control>
+				<control type="textbox" id="161">
+					<left>0</left>
+					<top>54</top>
+					<width>730</width>
+					<height>390</height>
+					<font>font12</font>
+					<textcolor>FFFFFFFF</textcolor>
+					<align>right</align>
+					<label>$ADDON[service.subtitles.kodipovilai 32753][CR][CR]$ADDON[service.subtitles.kodipovilai 32751][CR][CR]$ADDON[service.subtitles.kodipovilai 32752]</label>
+				</control>
+			</control>
+
+			<!-- Progress and countdown, full width -->
+			<control type="progress" id="104">
+				<left>50</left>
+				<top>556</top>
+				<width>1200</width>
+				<height>8</height>
+				<texturebg colordiffuse="33FFFFFF">white.png</texturebg>
+				<midtexture colordiffuse="FF38BDF8">white.png</midtexture>
+			</control>
+			<control type="label" id="105">
+				<left>50</left>
+				<top>572</top>
+				<width>1200</width>
+				<height>36</height>
+				<font>font12</font>
+				<textcolor>B3FFFFFF</textcolor>
+				<align>center</align>
+				<aligny>center</aligny>
+				<label>$ADDON[service.subtitles.kodipovilai 32745] $INFO[Window.Property(pair.time)]</label>
+			</control>
+
+			<!-- Buttons -->
+			<control type="button" id="201">
+				<left>700</left>
+				<top>622</top>
+				<width>280</width>
+				<height>56</height>
+				<label>$INFO[Window.Property(pair.helplabel)]</label>
+				<font>font13</font>
+				<textcolor>FFFFFFFF</textcolor>
+				<focusedcolor>FF0F172A</focusedcolor>
+				<align>center</align>
+				<aligny>center</aligny>
+				<texturefocus colordiffuse="FF38BDF8">white.png</texturefocus>
+				<texturenofocus colordiffuse="FF21262D">white.png</texturenofocus>
+				<onleft>201</onleft>
+				<onright>200</onright>
+				<onup>201</onup>
+				<ondown>201</ondown>
+			</control>
+			<control type="button" id="200">
+				<left>1000</left>
+				<top>622</top>
+				<width>250</width>
+				<height>56</height>
+				<label>$ADDON[service.subtitles.kodipovilai 32746]</label>
+				<font>font13</font>
+				<textcolor>FFFFFFFF</textcolor>
+				<focusedcolor>FF0F172A</focusedcolor>
+				<align>center</align>
+				<aligny>center</aligny>
+				<texturefocus colordiffuse="FF38BDF8">white.png</texturefocus>
+				<texturenofocus colordiffuse="FF21262D">white.png</texturenofocus>
+				<onleft>201</onleft>
+				<onright>200</onright>
+				<onup>200</onup>
+				<ondown>200</ondown>
+			</control>
+
+		</control>
+	</controls>
+</window>

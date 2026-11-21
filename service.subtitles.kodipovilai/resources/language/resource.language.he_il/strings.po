@@ -681,3 +681,199 @@ msgstr "מעלים ומתרגמים מהימנים נוספים"
 msgctxt "#32657"
 msgid "Extra names of Hebrew-subtitle uploaders or translators to highlight with a \"known uploader\" / \"known translator\" badge in the subtitle chooser, separated by commas (for example: First Name, another_handle). They are added to the built-in list. A badge only highlights a row: it never hides, reorders or blocks anything."
 msgstr "שמות נוספים של מעלים או מתרגמים של כתוביות בעברית, מופרדים בפסיקים (לדוגמה: שם ראשון, another_handle), שיסומנו בתגית \"מעלה מוביל\" או \"מתרגם מוכר\" בחלון בחירת הכתוביות. הם מתווספים לרשימה המובנית. התגית רק מדגישה שורה: היא אף פעם לא מסתירה, משנה סדר או חוסמת כלום."
+
+msgctxt "#32700"
+msgid "Subtitle name"
+msgstr "שם הכתובית"
+
+msgctxt "#32701"
+msgid "Subtitle quality and source"
+msgstr "איכות ומקור הכתובית"
+
+msgctxt "#32702"
+msgid "Match details"
+msgstr "פרטי התאמה"
+
+msgctxt "#32703"
+msgid "Subtitle details"
+msgstr "פרטי הכתובית"
+
+msgctxt "#32704"
+msgid "Subtitle settings"
+msgstr "הגדרות כתוביות"
+
+msgctxt "#32705"
+msgid "Back to the movie"
+msgstr "חזרה לסרט"
+
+msgctxt "#32706"
+msgid "Manual subtitle search"
+msgstr "חיפוש כתוביות ידני"
+
+msgctxt "#32707"
+msgid "Stop translation"
+msgstr "עצור תהליך תרגום"
+
+msgctxt "#32708"
+msgid "Back to the list"
+msgstr "חזרה לרשימה"
+
+msgctxt "#32709"
+msgid "Cancel auto-sync"
+msgstr "בטל סנכרון אוטומטי"
+
+msgctxt "#32710"
+msgid "Auto-synced"
+msgstr "סונכרנה אוטומטית"
+
+msgctxt "#32711"
+msgid "High match"
+msgstr "התאמה גבוהה"
+
+msgctxt "#32712"
+msgid "Medium match"
+msgstr "התאמה בינונית"
+
+msgctxt "#32713"
+msgid "Foreign language (will be translated)"
+msgstr "שפה זרה (תתורגם)"
+
+msgctxt "#32714"
+msgid "Current subtitle"
+msgstr "הכתובית הנוכחית"
+
+msgctxt "#32715"
+msgid "Source verification"
+msgstr "אימות מקור"
+
+msgctxt "#32716"
+msgid "By"
+msgstr "לפי"
+
+msgctxt "#32717"
+msgid "Translator"
+msgstr "מתרגם"
+
+msgctxt "#32718"
+msgid "Sync / fix"
+msgstr "סנכרון / תיקון"
+
+msgctxt "#32719"
+msgid "Uploaded by"
+msgstr "הועלה ע\"י"
+
+msgctxt "#32720"
+msgid "Date"
+msgstr "תאריך"
+
+msgctxt "#32721"
+msgid "Downloads"
+msgstr "הורדות"
+
+msgctxt "#32722"
+msgid "Fix"
+msgstr "תיקון"
+
+msgctxt "#32723"
+msgid "Episode"
+msgstr "פרק"
+
+msgctxt "#32724"
+msgid "Edition"
+msgstr "מהדורה"
+
+msgctxt "#32725"
+msgid "Frame rate"
+msgstr "קצב פריימים"
+
+msgctxt "#32726"
+msgid "Source type"
+msgstr "סוג מקור"
+
+msgctxt "#32727"
+msgid "Release group"
+msgstr "קבוצת שחרור"
+
+msgctxt "#32728"
+msgid "Streaming service"
+msgstr "שירות סטרימינג"
+
+msgctxt "#32729"
+msgid "Timing"
+msgstr "תזמון"
+
+msgctxt "#32730"
+msgid "Provider"
+msgstr "ספק"
+
+msgctxt "#32731"
+msgid "Type"
+msgstr "סוג"
+
+msgctxt "#32732"
+msgid "Language"
+msgstr "שפה"
+
+msgctxt "#32733"
+msgid "Accessibility"
+msgstr "נגישות"
+
+msgctxt "#32740"
+msgid "Gemini AI - connect from phone"
+msgstr "Gemini AI - התאמה מטלפון"
+
+msgctxt "#32741"
+msgid "Scan the code with your phone camera"
+msgstr "סרקו את הקוד במצלמת הטלפון"
+
+msgctxt "#32742"
+msgid "Or open this address in a browser:"
+msgstr "או פתחו בדפדפן את הכתובת:"
+
+msgctxt "#32743"
+msgid "Paste your API key on the page that opens"
+msgstr "הדביקו את מפתח ה-API בדף שנפתח"
+
+msgctxt "#32744"
+msgid "Preparing the connection..."
+msgstr "מכינים את החיבור..."
+
+msgctxt "#32745"
+msgid "Waiting for the key..."
+msgstr "ממתינים למפתח..."
+
+msgctxt "#32746"
+msgid "Cancel"
+msgstr "ביטול"
+
+msgctxt "#32747"
+msgid "Connection problems?"
+msgstr "בעיות בחיבור?"
+
+msgctxt "#32748"
+msgid "Back to the steps"
+msgstr "חזרה להוראות"
+
+msgctxt "#32749"
+msgid "No QR library here. Use the address."
+msgstr "אין ספריית QR. השתמשו בכתובת."
+
+msgctxt "#32750"
+msgid "Connection problems"
+msgstr "בעיות בחיבור"
+
+msgctxt "#32751"
+msgid "Android Chrome does not open the page? In Chrome settings turn off Always use secure connections, or try another browser (Firefox, Brave, Samsung Internet)."
+msgstr "ה-Chrome של אנדרואיד לא פותח את הדף? בהגדרות Chrome כבו את Always use secure connections, או נסו דפדפן אחר (Firefox, Brave, Samsung Internet)."
+
+msgctxt "#32752"
+msgid "iPhone shows error 400? Check that the fingerprint on the key-sent page matches the key you copied from AI Studio. If it matches and the key is still rejected, create a new key."
+msgstr "באייפון מופיעה שגיאה 400? בדקו שהטביעה בדף שנשלח המפתח זהה למפתח שהעתקתם מ-AI Studio. אם היא זהה והמפתח עדיין נדחה, צרו מפתח חדש."
+
+msgctxt "#32753"
+msgid "The phone and Kodi must be on the same Wi-Fi network."
+msgstr "הטלפון וקודי חייבים להיות באותה רשת Wi-Fi."
+
+msgctxt "#32754"
+msgid "No network address found - the page opens on this device only"
+msgstr "לא זוהתה כתובת רשת - הדף נפתח רק במכשיר הזה"

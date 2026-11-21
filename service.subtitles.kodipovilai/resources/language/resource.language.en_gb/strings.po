@@ -693,3 +693,199 @@ msgstr "Trusted uploaders and translators"
 msgctxt "#32657"
 msgid "Extra names of Hebrew-subtitle uploaders or translators to highlight with a \"known uploader\" / \"known translator\" badge in the subtitle chooser, separated by commas (for example: First Name, another_handle). They are added to the built-in list. A badge only highlights a row: it never hides, reorders or blocks anything."
 msgstr "Extra names of Hebrew-subtitle uploaders or translators to highlight with a \"known uploader\" / \"known translator\" badge in the subtitle chooser, separated by commas (for example: First Name, another_handle). They are added to the built-in list. A badge only highlights a row: it never hides, reorders or blocks anything."
+
+msgctxt "#32700"
+msgid "Subtitle name"
+msgstr "Subtitle name"
+
+msgctxt "#32701"
+msgid "Subtitle quality and source"
+msgstr "Subtitle quality and source"
+
+msgctxt "#32702"
+msgid "Match details"
+msgstr "Match details"
+
+msgctxt "#32703"
+msgid "Subtitle details"
+msgstr "Subtitle details"
+
+msgctxt "#32704"
+msgid "Subtitle settings"
+msgstr "Subtitle settings"
+
+msgctxt "#32705"
+msgid "Back to the movie"
+msgstr "Back to the movie"
+
+msgctxt "#32706"
+msgid "Manual subtitle search"
+msgstr "Manual subtitle search"
+
+msgctxt "#32707"
+msgid "Stop translation"
+msgstr "Stop translation"
+
+msgctxt "#32708"
+msgid "Back to the list"
+msgstr "Back to the list"
+
+msgctxt "#32709"
+msgid "Cancel auto-sync"
+msgstr "Cancel auto-sync"
+
+msgctxt "#32710"
+msgid "Auto-synced"
+msgstr "Auto-synced"
+
+msgctxt "#32711"
+msgid "High match"
+msgstr "High match"
+
+msgctxt "#32712"
+msgid "Medium match"
+msgstr "Medium match"
+
+msgctxt "#32713"
+msgid "Foreign language (will be translated)"
+msgstr "Foreign language (will be translated)"
+
+msgctxt "#32714"
+msgid "Current subtitle"
+msgstr "Current subtitle"
+
+msgctxt "#32715"
+msgid "Source verification"
+msgstr "Source verification"
+
+msgctxt "#32716"
+msgid "By"
+msgstr "By"
+
+msgctxt "#32717"
+msgid "Translator"
+msgstr "Translator"
+
+msgctxt "#32718"
+msgid "Sync / fix"
+msgstr "Sync / fix"
+
+msgctxt "#32719"
+msgid "Uploaded by"
+msgstr "Uploaded by"
+
+msgctxt "#32720"
+msgid "Date"
+msgstr "Date"
+
+msgctxt "#32721"
+msgid "Downloads"
+msgstr "Downloads"
+
+msgctxt "#32722"
+msgid "Fix"
+msgstr "Fix"
+
+msgctxt "#32723"
+msgid "Episode"
+msgstr "Episode"
+
+msgctxt "#32724"
+msgid "Edition"
+msgstr "Edition"
+
+msgctxt "#32725"
+msgid "Frame rate"
+msgstr "Frame rate"
+
+msgctxt "#32726"
+msgid "Source type"
+msgstr "Source type"
+
+msgctxt "#32727"
+msgid "Release group"
+msgstr "Release group"
+
+msgctxt "#32728"
+msgid "Streaming service"
+msgstr "Streaming service"
+
+msgctxt "#32729"
+msgid "Timing"
+msgstr "Timing"
+
+msgctxt "#32730"
+msgid "Provider"
+msgstr "Provider"
+
+msgctxt "#32731"
+msgid "Type"
+msgstr "Type"
+
+msgctxt "#32732"
+msgid "Language"
+msgstr "Language"
+
+msgctxt "#32733"
+msgid "Accessibility"
+msgstr "Accessibility"
+
+msgctxt "#32740"
+msgid "Gemini AI - connect from phone"
+msgstr "Gemini AI - connect from phone"
+
+msgctxt "#32741"
+msgid "Scan the code with your phone camera"
+msgstr "Scan the code with your phone camera"
+
+msgctxt "#32742"
+msgid "Or open this address in a browser:"
+msgstr "Or open this address in a browser:"
+
+msgctxt "#32743"
+msgid "Paste your API key on the page that opens"
+msgstr "Paste your API key on the page that opens"
+
+msgctxt "#32744"
+msgid "Preparing the connection..."
+msgstr "Preparing the connection..."
+
+msgctxt "#32745"
+msgid "Waiting for the key..."
+msgstr "Waiting for the key..."
+
+msgctxt "#32746"
+msgid "Cancel"
+msgstr "Cancel"
+
+msgctxt "#32747"
+msgid "Connection problems?"
+msgstr "Connection problems?"
+
+msgctxt "#32748"
+msgid "Back to the steps"
+msgstr "Back to the steps"
+
+msgctxt "#32749"
+msgid "No QR library here. Use the address."
+msgstr "No QR library here. Use the address."
+
+msgctxt "#32750"
+msgid "Connection problems"
+msgstr "Connection problems"
+
+msgctxt "#32751"
+msgid "Android Chrome does not open the page? In Chrome settings turn off Always use secure connections, or try another browser (Firefox, Brave, Samsung Internet)."
+msgstr "Android Chrome does not open the page? In Chrome settings turn off Always use secure connections, or try another browser (Firefox, Brave, Samsung Internet)."
+
+msgctxt "#32752"
+msgid "iPhone shows error 400? Check that the fingerprint on the key-sent page matches the key you copied from AI Studio. If it matches and the key is still rejected, create a new key."
+msgstr "iPhone shows error 400? Check that the fingerprint on the key-sent page matches the key you copied from AI Studio. If it matches and the key is still rejected, create a new key."
+
+msgctxt "#32753"
+msgid "The phone and Kodi must be on the same Wi-Fi network."
+msgstr "The phone and Kodi must be on the same Wi-Fi network."
+
+msgctxt "#32754"
+msgid "No network address found - the page opens on this device only"
+msgstr "No network address found - the page opens on this device only"

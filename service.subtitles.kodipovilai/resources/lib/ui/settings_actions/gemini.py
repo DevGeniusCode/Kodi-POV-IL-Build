@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later (additional terms: LICENSE.txt)
 # Settings actions of the Gemini key: connect (menu, QR pairing, typed key), test, usage, TMDb notice.
 
-import urllib.parse
 try:
     import xbmc
     import xbmcgui
@@ -166,230 +165,257 @@ def _gemini_menu_new(gemini, gemini_pair):
         _gemini_type_flow(gemini)
 
 
-class _PairWindow(xbmcgui.WindowDialog):
-    """Full-screen-ish dialog showing a real scannable QR image
-    (fetched from qrserver.com), the URL as fallback text, and a
-    countdown. The previous implementation used DialogProgress
-    which is text-only -- the QR was a URL printed as text, which
-    is useless for non-technical users.
+# ---- Pairing dialog: script.moransubs.pair.xml ------------------------
 
-    Closes on Back/Esc (cancellation) or via close() called
-    externally when the main flow detects the key arrived."""
+_PAIR_TIMEOUT = 300             # seconds the pairing page waits for the key
+_QR_FILE_PREFIX = 'moransubs_pair_qr_'
 
+
+def _L(strid):
+    """A strings.po label (ids 32740-32754 belong to the pairing dialog)."""
+    from resources.lib.core import kodi
+    return kodi.localised(strid)
+
+
+def _png_from_matrix(matrix, border=2, target=380):
+    """A grey-scale PNG of a QR module matrix, stdlib only (zlib + struct): no PIL needed. One module is a whole
+    number of pixels (as many as fit `target` px with the `border` quiet-zone modules); the image is built from byte
+    strings row by row, not pixel by pixel, so it takes a few milliseconds even on a Shield."""
+    import struct
+    import zlib
+    n = len(matrix) + 2 * border
+    scale = max(3, target // n)
+    white, black = b'\xff' * scale, b'\x00' * scale
+    side = [white] * border
+    blank = b'\x00' + b'\xff' * (n * scale)         # filter byte 0 + one all-white pixel row
+    rows = [blank] * (border * scale)
+    for mrow in matrix:
+        line = b'\x00' + b''.join(side + [black if c else white for c in mrow] + side)
+        rows.extend([line] * scale)
+    rows.extend([blank] * (border * scale))
+    side_px = n * scale
+
+    def chunk(tag, data):
+        body = tag + data
+        return struct.pack('>I', len(data)) + body + struct.pack('>I', zlib.crc32(body) & 0xFFFFFFFF)
+
+    return (b'\x89PNG\r\n\x1a\n'
+            + chunk(b'IHDR', struct.pack('>IIBBBBB', side_px, side_px, 8, 0, 0, 0, 0))
+            + chunk(b'IDAT', zlib.compress(b''.join(rows), 6))
+            + chunk(b'IEND', b''))
+
+
+def _remove_qr_files(path=None):
+    """Delete this session's QR PNG, or (no path) every leftover of a session that died."""
+    import glob
+    import os
+    try:
+        if path:
+            paths = [path]
+        else:
+            paths = glob.glob(os.path.join(xbmcvfs.translatePath('special://temp/'), _QR_FILE_PREFIX + '*.png'))
+        for p in paths:
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
+def _make_qr_png(data):
+    """Render `data` as a QR code in special://temp and return the PNG path, rendered locally by script.module.qrcode
+    (the matrix) + _png_from_matrix. '' when that module is not there or anything fails: the dialog then shows the
+    address only. Never raises."""
+    import os
+    import time
+    try:
+        import qrcode
+        from qrcode.constants import ERROR_CORRECT_M
+    except Exception:
+        return ''
+    try:
+        qr = qrcode.QRCode(version=None, error_correction=ERROR_CORRECT_M, box_size=1, border=0)
+        qr.add_data(data)
+        qr.make(fit=True)
+        png = _png_from_matrix(qr.get_matrix())
+        _remove_qr_files()
+        # A new name every session: Kodi's texture cache keys on the path, a reused name could show an old code.
+        path = os.path.join(xbmcvfs.translatePath('special://temp/'),
+                            '{0}{1}.png'.format(_QR_FILE_PREFIX, int(time.time() * 1000)))
+        with open(path, 'wb') as f:
+            f.write(png)
+        return path
+    except Exception:
+        return ''
+
+
+class _PairDialog(xbmcgui.WindowXMLDialog):
+    """The pairing dialog, a 1080i WindowXMLDialog (script.moransubs.pair.xml): title bar, a QR card, three steps, a progress
+    bar with the countdown, and two focusable buttons (cancel, "connection problems?" which swaps the steps for the help text).
+    Every text is a strings.po label read in the XML; the few variable ones (address, countdown, the note in the QR card, the
+    help-button label) and the visibility switches are window properties, so Python touches only two controls (QR image,
+    progress bar). All of it runs on the script thread. The dialog opens BEFORE the server starts: until set_details() the
+    QR card says "preparing".
+
+    Closes on Back / Esc (the help panel first, if it is open) or the cancel button; the caller also closes it when the key
+    arrived."""
+
+    XML_FILE = 'script.moransubs.pair.xml'
+    CTRL_QR = 101
+    CTRL_PROGRESS = 104
+    CTRL_CANCEL = 200
+    CTRL_PROBLEMS = 201
     ACTION_PREVIOUS_MENU = 10
     ACTION_NAV_BACK = 92
     ACTION_STOP = 13
 
     def __init__(self, *args, **kwargs):
-        # WindowDialog quirk: don't pass args to super, just init state
+        xbmcgui.WindowXMLDialog.__init__(self)
         self.cancelled = False
-        self._countdown_lbl = None
+        self._ready = False         # onInit has run, the controls exist
+        self._help = False
+        self._details = None        # (qr_path, url, no_lan) once the server is up
+        self._percent = 100
+        self._time = ''
 
-    def setup(self, qr_url, url_lines, instructions_header,
-              title_text='Gemini AI - התאמה מטלפון'):
-        # WindowDialog coordinate space is 1280x720 by default.
-        # Layout:
-        #   y=0-720    full-screen semi-opaque dark background
-        #   y=30-90    title
-        #   y=120-500  QR image (380x380, centered)
-        #   y=520-650  instruction text + URL fallback
-        #   y=670-700  countdown + cancel hint
+    def set_details(self, qr_path, url, no_lan):
+        self._details = (qr_path, url, no_lan)
+        if self._ready:
+            self._apply()
 
-        # Dim background so QR is readable and Kodi behind is muted.
-        bg_path = ('special://home/addons/service.subtitles.kodipovilai/'
-                   'resources/media/dark_bg.png')
-        bg = xbmcgui.ControlImage(0, 0, 1280, 720, bg_path,
-                                  colorDiffuse='EE000000', aspectRatio=2)
-        self.addControl(bg)
+    def update_time(self, seconds_left, total):
+        mm, ss = divmod(int(max(0, seconds_left)), 60)
+        self._time = '{0:02d}:{1:02d}'.format(mm, ss)
+        self._percent = int(100 * max(0, seconds_left) / float(total or 1))
+        if self._ready:
+            self._apply_time()
 
-        # Title bar. Passed in, because this window is shared by the Gemini and
-        # MDBList pair flows and used to say "Gemini AI" in both -- so someone
-        # connecting MDBList scanned a QR headed Gemini, opened a page headed
-        # MDBList, and reasonably concluded one of the two was wrong.
-        title = xbmcgui.ControlLabel(
-            340, 30, 600, 60,
-            '[B][COLOR=FFFFD166]' + title_text + '[/COLOR][/B]',
-            alignment=2 | 4, font='font30')
-        self.addControl(title)
-
-        # QR image (large, centered) -- this is the real fix. Kodi
-        # fetches the URL on first display and caches the PNG.
-        qr_size = 380
-        qr_x = (1280 - qr_size) // 2
-        qr = xbmcgui.ControlImage(qr_x, 110, qr_size, qr_size, qr_url,
-                                  aspectRatio=2)
-        self.addControl(qr)
-
-        # Instructions + URL fallback. Bigger font (font14 vs font13)
-        # because some users read this from across the room before
-        # typing the URL into their phone manually. The instructions
-        # header is now BOLD red to draw attention to the
-        # "include the yellow port" warning -- common failure mode
-        # for OEM Android scanners that truncate URLs at colons.
-        # We also include Android-Chrome-specific troubleshooting
-        # because modern Chrome (113+) defaults to "Always use
-        # secure connections" which refuses HTTP loads to private
-        # IPs -- failure is silent for the user, browser just
-        # spins or shows an error page. iOS doesn't do this so
-        # iPhone users typically don't hit it.
-        instr = xbmcgui.ControlTextBox(120, 480, 1040, 210, font='font13')
-        self.addControl(instr)
-        text = '[B]סרוק את ה-QR עם המצלמה של הטלפון[/B] '
-        text += '(אפליקציית מצלמה רגילה — לא צריך אפליקציה מיוחדת).\n\n'
-        text += ('[B][COLOR=FFBF7F7F]' + instructions_header
-                 + ':[/COLOR][/B]\n')
-        for line in url_lines:
-            text += '   • ' + line + '\n'
-        text += ('\n[B][COLOR=FFFFD166]ה-Chrome של אנדרואיד '
-                 'לא נפתח?[/COLOR][/B] כבה ב-Chrome: '
-                 'Settings → Privacy → "Always use secure '
-                 'connections", או נסה דפדפן אחר (Firefox/Brave/'
-                 'Samsung Internet). או חזור ל-Kodi ובחר "הזנה '
-                 'ידנית".\n')
-        text += ('[B][COLOR=FFFFD166]באייפון קיבלת 400?[/COLOR][/B] '
-                 'הסתכל ב-fingerprint בעמוד "ה-key נשלח" וודא '
-                 'שתואם בדיוק למפתח שהעתקת מ-AI Studio. אם תואם '
-                 'אבל עדיין נדחה — המפתח עצמו לא תקין; צור חדש.')
-        instr.setText(text)
-
-        # Countdown / cancel hint
-        self._countdown_lbl = xbmcgui.ControlLabel(
-            340, 668, 600, 30, '',
-            alignment=2 | 4, font='font12')
-        self.addControl(self._countdown_lbl)
-
-    def update_countdown(self, seconds_left):
-        if self._countdown_lbl is None:
-            return
-        try:
-            mm, ss = divmod(int(max(0, seconds_left)), 60)
-            self._countdown_lbl.setLabel(
-                '[COLOR=FFB7C4CF]ממתין לקבלת ה-key... '
-                '({0:02d}:{1:02d} עד פג תוקף)  •  '
-                'לביטול: Back[/COLOR]'.format(mm, ss))
-        except Exception:
-            pass
+    def onInit(self):
+        self._ready = True
+        self._apply()
+        self._apply_time()
 
     def onAction(self, action):
-        if action.getId() in (
-            self.ACTION_PREVIOUS_MENU,
-            self.ACTION_NAV_BACK,
-            self.ACTION_STOP,
-        ):
+        if action.getId() in (self.ACTION_PREVIOUS_MENU, self.ACTION_NAV_BACK, self.ACTION_STOP):
+            if self._help:
+                self._help = False
+                self._apply()
+                return
             self.cancelled = True
             self.close()
+            return
+        xbmcgui.WindowXMLDialog.onAction(self, action)
 
+    def onClick(self, control_id):
+        if control_id == self.CTRL_CANCEL:
+            self.cancelled = True
+            self.close()
+        elif control_id == self.CTRL_PROBLEMS:
+            self._help = not self._help
+            self._apply()
 
-def _run_pair_qr(ps, title_text='Gemini AI - התאמה מטלפון'):
-    """Show a scannable QR + URL fallback for an ALREADY-CREATED PairServer,
-    poll for the submitted key until it arrives / the user cancels / a 5-min
-    deadline, then shut the server down. Returns the submitted key (or '').
-    Shared verbatim by the Gemini and MDBList pair flows."""
-    import time as _time
-
-    # Primary URL: prefer LAN IP (works for other devices on the
-    # same WiFi AND on the same device's browser via localhost
-    # because the pair server binds 0.0.0.0). Fall back to
-    # localhost-only when LAN detection failed (e.g. cellular).
-    primary = ps.url_lan or ps.url_local
-    qr_url = ('https://api.qrserver.com/v1/create-qr-code/'
-              '?size=380x380&qzone=1&data=' +
-              _url_quote(primary))
-
-    # The QR encodes the full URL with port -- we've verified this
-    # with a real QR decoder. The text fallback below the QR is what
-    # we worry about, because some Android OEM camera apps (Samsung
-    # Bixby Vision, Xiaomi MIUI scanner) display the URL truncated
-    # at the colon -- the user sees "http://10.0.0.5" and types
-    # that, missing the port. So we render the port in a bright
-    # accent colour and add an explicit note about it.
-    def _highlight_port(url):
-        # url is 'http://host:port' or 'http://[v6]:port' etc.
-        # Find the LAST colon (port separator). If there's no port
-        # we just return the URL as-is.
-        if url.count(':') < 2:
-            return url
-        host_part, port_part = url.rsplit(':', 1)
-        # 8-digit AARRGGBB with FF alpha -- the old 6-digit form (ffd166) was
-        # parsed by Kodi as 0x00ffd166 (alpha 00 = fully TRANSPARENT), which
-        # made the port render invisible; the URL then looked portless. Bold
-        # too, so the port stays visible even if a skin mangles the colour.
-        return '{0}[B][COLOR=FFFFD166]:{1}[/COLOR][/B]'.format(host_part, port_part)
-
-    # Show EVERY detected LAN IP. On devices with multiple network
-    # interfaces (Android TV with WiFi+Ethernet, laptop with VPN+WiFi)
-    # the single default-route IP we used to pick can be on a
-    # different subnet from the user's phone -- the phone tries to
-    # reach it, fails with "address not found", and the user assumes
-    # the addon is broken. Listing all candidates lets them try each.
-    lan_urls = ps.url_lans or []
-    if lan_urls:
-        url_lines = []
-        if len(lan_urls) == 1:
-            url_lines.append('מטלפון אחר ב-WiFi:  '
-                             + _highlight_port(lan_urls[0]))
+    def _apply(self):
+        self.setProperty('pair.help', '1' if self._help else '')
+        self.setProperty('pair.helplabel', _L(32748) if self._help else _L(32747))
+        if self._details is None:
+            self.setProperty('pair.ready', '')
+            self.setProperty('pair.qr', '')
+            self.setProperty('pair.nolan', '')
+            self.setProperty('pair.url', '')
+            self.setProperty('pair.qrnote', _L(32744))
+            return
+        qr_path, url, no_lan = self._details
+        self.setProperty('pair.ready', '1')
+        self.setProperty('pair.url', url)
+        self.setProperty('pair.nolan', '1' if no_lan else '')
+        if qr_path:
+            self._safe(self.CTRL_QR, lambda c: c.setImage(qr_path, False))
+            self.setProperty('pair.qr', '1')
+            self.setProperty('pair.qrnote', '')
         else:
-            url_lines.append('מטלפון אחר ב-WiFi (נסה כל אחת עד שאחת '
-                             'תיפתח):')
-            for u in lan_urls:
-                url_lines.append('     • ' + _highlight_port(u))
-        url_lines.append('מאותו מכשיר:  '
-                         + _highlight_port(ps.url_local))
-        instructions_header = (
-            'או פתח את אחת מהכתובות בדפדפן (חובה כולל החלק הצהוב — '
-            'הפורט)')
-    else:
-        url_lines = (
-            'פתח בדפדפן:  ' + _highlight_port(ps.url_local),
-            '(לא זוהתה כתובת LAN -- נגיש רק מאותו מכשיר)',
-        )
-        instructions_header = (
-            'או פתח את הכתובת בדפדפן (חובה כולל החלק הצהוב — '
-            'הפורט)')
+            self.setProperty('pair.qr', '')
+            self.setProperty('pair.qrnote', _L(32749))
 
-    deadline = _time.time() + 300  # 5 min cap
-    window = None
-    try:
-        window = _PairWindow()
-        window.setup(qr_url, url_lines, instructions_header, title_text)
-        window.show()
+    def _apply_time(self):
+        self.setProperty('pair.time', self._time)
+        self._safe(self.CTRL_PROGRESS, lambda c: c.setPercent(float(self._percent)))
 
-        while _time.time() < deadline:
-            if window.cancelled:
-                break
-            key = ps.received_key()
-            if key:
-                break
-            window.update_countdown(deadline - _time.time())
-            xbmc.sleep(500)
-    finally:
+    def _safe(self, control_id, fn):
+        """Call fn(control); a control the skin file does not have is ignored."""
         try:
-            if window:
-                window.close()
-                del window
+            fn(self.getControl(control_id))
         except Exception:
             pass
-        ps.shutdown()
-
-    return ps.received_key()
 
 
-def _gemini_pair_flow(gemini, gemini_pair):
-    """Spin up the local pair server, show a scannable QR image in
-    a custom window, poll for the submitted key, validate."""
-    
+def _run_pair_dialog(gemini_pair):
+    """Open the pairing dialog at once, start the PairServer behind it, render the QR, then poll for the submitted key until
+    it arrives / the user cancels / Kodi aborts / the 5-minute deadline, and shut the server down. Returns the submitted key
+    ('' = cancelled, timed out or failed; a failure has been shown)."""
+    import time
+    from resources.lib.core import addon as core_addon
     try:
-        ps = gemini_pair.PairServer()
+        window = _PairDialog(_PairDialog.XML_FILE, core_addon.addon().getAddonInfo('path'), 'Default', '1080i')
+        window.show()
     except Exception as e:
         xbmcgui.Dialog().ok(
             dialogs_title(),
+            'נכשלה פתיחת חלון ההתאמה: {0}\n\n'
+            'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'.format(str(e)[:80]))
+        return ''
+
+    ps = None
+    qr_path = ''
+    key = ''
+    error = ''
+    try:
+        ps = gemini_pair.PairServer()
+        # The URL carries the session's secret segment, so the QR is the only place a LAN device can learn it.
+        primary = ps.url_lan or ps.url_local
+        qr_path = _make_qr_png(primary)
+        window.set_details(qr_path, primary, ps.url_lan is None)
+
+        monitor = xbmc.Monitor()
+        deadline = time.monotonic() + _PAIR_TIMEOUT
+        while not (window.cancelled or monitor.abortRequested()):
+            key = ps.received_key()
+            if key:
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            window.update_time(remaining, _PAIR_TIMEOUT)
+            xbmc.sleep(250)
+        if not key and not window.cancelled and ps is not None:
+            key = ps.received_key()
+    except Exception as e:
+        error = str(e)[:80]
+    finally:
+        if ps is not None:
+            ps.shutdown()
+        try:
+            window.close()
+        except Exception:
+            pass
+        del window
+        if qr_path:
+            _remove_qr_files(qr_path)
+
+    if error:
+        xbmcgui.Dialog().ok(
+            dialogs_title(),
             'נכשלה הפעלת שרת התאמה: {0}\n\n'
-            'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'
-            .format(str(e)[:80]))
-        return
-    key = _run_pair_qr(ps)
+            'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'.format(error))
+        return ''
+    return key
+
+
+def _gemini_pair_flow(gemini, gemini_pair):
+    """Open the pairing dialog (it starts the local pair server itself), wait for the key typed on the phone, validate."""
+    key = _run_pair_dialog(gemini_pair)
     if not key:
-        return  # user cancelled or timeout
+        return  # user cancelled, timeout or failure (already shown)
     _test_save_or_retry(gemini, key, retry_cb=None)
 
 
@@ -494,13 +520,6 @@ def _test_key_show_result(gemini, api_key):
         xbmcgui.Dialog().ok(
             'Gemini AI',
             '✗ שגיאה בלתי צפויה: {0}'.format(str(e)[:120]))
-
-
-def _url_quote(s):
-    try:
-        return urllib.parse.quote(s, safe='')
-    except Exception:
-        return s
 
 
 def handle_test_connection(_params):

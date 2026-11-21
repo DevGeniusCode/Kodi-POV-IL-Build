@@ -359,6 +359,17 @@
 				<textcolor>unfocused_text</textcolor>
 				<label>$INFO[ListItem.Label]</label>
 			</control>
+			<control type="label">
+				<right>25</right>
+				<top>25</top>
+				<width>230</width>
+				<height>70</height>
+				<align>right</align>
+				<aligny>center</aligny>
+				<font>font12</font>
+				<textcolor>unfocused_text</textcolor>
+				<label>$INFO[ListItem.Label2]</label>
+			</control>
 		</itemlayout>
 		<focusedlayout height="70" width="600">
 			<control type="image">
@@ -379,6 +390,17 @@
 				<!-- KODI-RD-IL CHANGES -->
 				<label>$INFO[ListItem.Label]</label>
 				<textcolor>focused_text</textcolor>
+			</control>
+			<control type="label">
+				<right>25</right>
+				<top>25</top>
+				<width>230</width>
+				<height>70</height>
+				<align>right</align>
+				<aligny>center</aligny>
+				<font>font12</font>
+				<textcolor>focused_text</textcolor>
+				<label>$INFO[ListItem.Label2]</label>
 			</control>
 		</focusedlayout>
 	</include>

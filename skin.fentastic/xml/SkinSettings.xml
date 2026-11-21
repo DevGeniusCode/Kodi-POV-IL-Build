@@ -314,6 +314,13 @@
 					<selected>!Skin.HasSetting(NoSearchResultsWindow)</selected>
 					<onclick>Skin.ToggleSetting(NoSearchResultsWindow)</onclick>
 				</control>
+				<control type="radiobutton" id="64715">
+					<label>תפריט חיפוש במסך הבית (במקום חיפוש ישיר)</label>
+					<include>DefaultSettingButton</include>
+					<selected>Skin.HasSetting(SearchHubOnHome)</selected>
+					<onclick>Skin.ToggleSetting(SearchHubOnHome)</onclick>
+					<visible>!Skin.HasSetting(NoSearchResultsWindow)</visible>
+				</control>
 				<control type="button" id="64702">
 					<label>התנהגות ברירת המחדל של סמל החיפוש במסך הבית</label>
 					<label2>$VAR[DefaultSearchWindowBehaviorVar]</label2>

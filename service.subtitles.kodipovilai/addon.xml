@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="service.subtitles.kodipovilai"
        name="MoranSubs"
-       version="0.3.114"
+       version="0.3.116"
        provider-name="MoranTheKing">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
@@ -10,6 +10,9 @@
          cleanup (encoding detection). optional=true so a missing chardet
          never blocks the add-on from loading. -->
     <import addon="script.module.chardet" version="4.0.0" optional="true"/>
+    <!-- Optional: the Gemini pairing dialog draws its QR code locally (matrix -> PNG in special://temp). Without it
+         the dialog shows the address only. optional=true so a missing module never blocks the add-on. -->
+    <import addon="script.module.qrcode" optional="true"/>
   </requires>
 
   <!-- Subtitle service entry point. Kodi calls default.py with

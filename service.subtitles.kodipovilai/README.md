@@ -45,6 +45,7 @@ service.subtitles.kodipovilai/
     ├── config/provenance_allowlist.json   the built-in provenance allowlist (studios, teams, translators, uploaders, syncers, never)
     ├── media/                         flags/ · overlay_bg.png · dark_bg.png · gemini.png   (ONE media tree)
     ├── skins/Default/1080i/script.moransubs.chooser.xml                           PINNED file name
+    ├── skins/Default/1080i/script.moransubs.pair.xml                              the Gemini pairing dialog (ui/settings_actions/gemini.py), strings 32740-32754
     └── lib/
         ├── pipeline.py                search() / resolve(): the ONLY route to fetching.service / ai_translation.service
         ├── he_sub_match.py            PINNED path, 5 API names, stdlib-only at module level (POV / Umbrella import it by bare name)

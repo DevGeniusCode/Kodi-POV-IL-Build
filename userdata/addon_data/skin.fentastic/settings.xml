@@ -81,6 +81,7 @@
     <setting id="movieresults" type="bool">true</setting>
     <setting id="nosearchresultswindow" type="bool">false</setting>
     <setting id="peopleresults" type="bool">false</setting>
+    <setting id="searchhubonhome" type="bool">true</setting>
     <setting id="searchinput" type="string"></setting>
     <setting id="SearchInputEncoded" type="string"></setting>
     <setting id="SearchInputTraktEncoded" type="string">&apos;none&apos;</setting>
